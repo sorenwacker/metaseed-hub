@@ -1,0 +1,292 @@
+"""SQLAlchemy models for metaseed-hub."""
+
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
+from uuid import uuid4
+
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from .mixins import SoftDeleteMixin, TimestampMixin
+
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+
+    type_annotation_map = {
+        dict[str, Any]: JSONB,
+    }
+
+
+class TeamRole(StrEnum):
+    """Role within a team."""
+
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+
+class Tenant(TimestampMixin, SoftDeleteMixin, Base):
+    """Multi-tenant organization."""
+
+    __tablename__ = "tenants"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+
+    # Relationships
+    teams: Mapped[list["Team"]] = relationship("Team", back_populates="tenant")
+    users: Mapped[list["User"]] = relationship("User", back_populates="tenant")
+    workspaces: Mapped[list["Workspace"]] = relationship(
+        "Workspace", back_populates="tenant"
+    )
+
+
+class Team(TimestampMixin, SoftDeleteMixin, Base):
+    """Team within a tenant."""
+
+    __tablename__ = "teams"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_teams_tenant_name"),
+        Index("ix_teams_tenant_id", "tenant_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="teams")
+    memberships: Mapped[list["TeamMembership"]] = relationship(
+        "TeamMembership", back_populates="team"
+    )
+
+
+class User(TimestampMixin, SoftDeleteMixin, Base):
+    """Application user linked to Keycloak."""
+
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"
+        ),
+        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        Index("ix_users_tenant_id", "tenant_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    keycloak_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
+    memberships: Mapped[list["TeamMembership"]] = relationship(
+        "TeamMembership", back_populates="user"
+    )
+    notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="user"
+    )
+
+
+class TeamMembership(Base):
+    """Association between users and teams with roles."""
+
+    __tablename__ = "team_memberships"
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    team_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("teams.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[TeamRole] = mapped_column(
+        Enum(TeamRole),
+        nullable=False,
+        default=TeamRole.MEMBER,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="memberships")
+    team: Mapped["Team"] = relationship("Team", back_populates="memberships")
+
+
+class Workspace(TimestampMixin, SoftDeleteMixin, Base):
+    """Workspace for organizing projects."""
+
+    __tablename__ = "workspaces"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_workspaces_tenant_name"),
+        Index("ix_workspaces_tenant_id", "tenant_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="workspaces")
+    projects: Mapped[list["Project"]] = relationship("Project", back_populates="workspace")
+
+
+class Project(TimestampMixin, SoftDeleteMixin, Base):
+    """Project containing metaseed data."""
+
+    __tablename__ = "projects"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_projects_workspace_name"),
+        Index("ix_projects_workspace_id", "workspace_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    profile: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="projects")
+    notes: Mapped[list["Note"]] = relationship("Note", back_populates="project")
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="project"
+    )
+
+
+class Note(TimestampMixin, Base):
+    """Notes attached to entities within a project."""
+
+    __tablename__ = "notes"
+    __table_args__ = (
+        Index("ix_notes_project_entity", "project_id", "entity_type", "entity_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    project: Mapped["Project"] = relationship("Project", back_populates="notes")
+    user: Mapped["User"] = relationship("User", back_populates="notes")
+
+
+class ChatMessage(TimestampMixin, Base):
+    """Real-time chat messages within a project."""
+
+    __tablename__ = "chat_messages"
+    __table_args__ = (
+        Index("ix_chat_messages_project_id", "project_id"),
+        Index("ix_chat_messages_created_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    project_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    project: Mapped["Project"] = relationship("Project", back_populates="chat_messages")
+    user: Mapped["User"] = relationship("User", back_populates="chat_messages")
+
+
+__all__ = [
+    "Base",
+    "ChatMessage",
+    "Note",
+    "Project",
+    "SoftDeleteMixin",
+    "Team",
+    "TeamMembership",
+    "TeamRole",
+    "Tenant",
+    "TimestampMixin",
+    "User",
+    "Workspace",
+]
