@@ -17,7 +17,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
-    "metaseed @ git+https://github.com/sdrwacker/metaseed.git",
+    # "metaseed @ git+ssh://git@github.com/sdrwacker/metaseed.git",  # TODO: add when repo exists
 ]
 
 [project.optional-dependencies]

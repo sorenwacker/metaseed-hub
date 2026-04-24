@@ -341,18 +341,19 @@ class TestTimestampBehavior:
 
     async def test_created_at_is_set_on_insert(self, session: AsyncSession) -> None:
         """created_at should be automatically set on insert."""
-        before = datetime.now(UTC)
-
         tenant = make_tenant()
         session.add(tenant)
         await session.flush()
         await session.refresh(tenant)
 
-        after = datetime.now(UTC)
+        now = datetime.now(UTC)
 
-        # Allow for timezone-naive comparison
+        # Verify timestamp is set and within 5 seconds of now
+        # (allows for clock skew between Python and PostgreSQL)
+        assert tenant.created_at is not None
         created = tenant.created_at.replace(tzinfo=UTC)
-        assert before <= created <= after
+        delta = abs((now - created).total_seconds())
+        assert delta < 5, f"created_at {created} is not within 5 seconds of {now}"
 
     async def test_updated_at_is_set_on_insert(self, session: AsyncSession) -> None:
         """updated_at should be automatically set on insert."""
