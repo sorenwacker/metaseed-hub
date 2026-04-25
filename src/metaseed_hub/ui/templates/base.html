@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Metaseed Hub{% endblock %}</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%234a7c59' rx='20' width='100' height='100'/></svg>">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <link rel="stylesheet" href="/hub-static/css/hub.css">
+    {% block head %}{% endblock %}
+</head>
+<body hx-headers='{"X-Requested-With": "XMLHttpRequest"}'>
+    <div class="hub-layout">
+        <header class="hub-header">
+            <a href="/" class="hub-logo">Metaseed Hub</a>
+            <nav class="hub-nav">
+                {% block nav %}{% endblock %}
+            </nav>
+            <div class="hub-user">
+                {% if user %}
+                <span class="hub-user-name">{{ user.name }}</span>
+                <a href="/auth/logout" class="btn btn-sm">Logout</a>
+                {% else %}
+                <a href="/auth/login" class="btn btn-primary btn-sm">Login</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="hub-main">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <div id="notification-container" class="notification-container"></div>
+
+    <script src="/hub-static/js/hub.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

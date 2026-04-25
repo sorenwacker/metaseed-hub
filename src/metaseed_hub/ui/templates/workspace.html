@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{{ workspace.name }} - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<a href="/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">{{ workspace.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="workspace-container">
+    <div class="page-header">
+        <h1>{{ workspace.name }}</h1>
+        <button class="btn btn-primary"
+                hx-get="/projects/new?workspace_id={{ workspace.id }}"
+                hx-target="#project-modal"
+                hx-swap="innerHTML">
+            + New Project
+        </button>
+    </div>
+
+    {% if workspace.description %}
+    <p class="workspace-description">{{ workspace.description }}</p>
+    {% endif %}
+
+    <div class="project-grid">
+        {% for project in projects %}
+        <a href="/projects/{{ project.id }}" class="project-card">
+            <h3>{{ project.name }}</h3>
+            <div class="project-meta">
+                <span class="profile-badge">{{ project.profile }} {{ project.version }}</span>
+                <span class="date">{{ project.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+        </a>
+        {% else %}
+        <div class="empty-state">
+            <p>No projects yet.</p>
+            <p>Create a project to start working with metadata.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="project-modal"></div>
+{% endblock %}

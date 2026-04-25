@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import FastAPI, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from metaseed.ui.app import STATIC_DIR as METASEED_STATIC
 
 from metaseed_hub import __version__
 from metaseed_hub.api import api_router
@@ -62,8 +64,25 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Mount metaseed static files
+    app.mount("/static", StaticFiles(directory=str(METASEED_STATIC)), name="static")
+
     # Include API routes
     app.include_router(api_router, prefix="/api")
+
+    # Include Hub UI routes
+    from metaseed_hub.ui.app import create_hub_app
+
+    hub_app = create_hub_app()
+    app.mount("/hub", hub_app)
+
+    # Redirect root to hub
+    from fastapi.responses import RedirectResponse
+
+    @app.get("/")
+    async def root():
+        """Redirect to hub UI."""
+        return RedirectResponse(url="/hub/")
 
     # WebSocket endpoint
     @app.websocket("/ws/{project_id}")

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} - Metaseed Hub{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+{% endblock %}
+
+{% block nav %}
+<a href="/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<a href="/workspaces/{{ project.workspace_id }}" class="nav-item">Workspace</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">{{ project.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="project-container">
+    <div class="project-header">
+        <div class="project-info">
+            <h1>{{ project.name }}</h1>
+            <span class="profile-badge">{{ project.profile }} {{ project.version }}</span>
+        </div>
+        <div class="project-actions">
+            {% for entity_type in root_types %}
+            <button class="btn btn-primary"
+                    hx-get="/projects/{{ project.id }}/form/{{ entity_type }}"
+                    hx-target="#editor"
+                    hx-swap="innerHTML">
+                + {{ entity_type }}
+            </button>
+            {% endfor %}
+            <a href="/projects/{{ project.id }}/export" class="btn" download>Export</a>
+        </div>
+    </div>
+
+    <div class="project-layout">
+        <aside class="project-sidebar">
+            <div class="sidebar-section">
+                <h3>Entities</h3>
+                <div id="entity-tree"
+                     hx-get="/projects/{{ project.id }}/tree"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading...
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Collaborators</h3>
+                <div id="presence-list">
+                    <div class="presence-item you">
+                        <span class="presence-dot"></span>
+                        {{ user.name }} (you)
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Chat</h3>
+                <div id="chat-container">
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <form id="chat-form" class="chat-form"
+                          hx-post="/projects/{{ project.id }}/chat"
+                          hx-target="#chat-messages"
+                          hx-swap="beforeend">
+                        <input type="text" name="message" placeholder="Type a message..." autocomplete="off">
+                        <button type="submit" class="btn btn-sm">Send</button>
+                    </form>
+                </div>
+            </div>
+        </aside>
+
+        <main class="project-editor" id="editor">
+            <div class="editor-placeholder">
+                <p>Select an entity from the sidebar or create a new one to start editing.</p>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// WebSocket connection for real-time collaboration
+const projectId = "{{ project.id }}";
+const wsUrl = `ws://${window.location.host}/ws/${projectId}?token=${getAuthToken()}`;
+
+function getAuthToken() {
+    // Get token from cookie or localStorage
+    return localStorage.getItem('auth_token') || '';
+}
+
+let ws;
+
+function connectWebSocket() {
+    ws = new WebSocket(wsUrl);
+
+    ws.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+    };
+
+    ws.onclose = function() {
+        // Reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+    };
+}
+
+function handleWebSocketMessage(data) {
+    switch(data.type) {
+        case 'presence':
+            updatePresence(data);
+            break;
+        case 'chat':
+            appendChatMessage(data);
+            break;
+        case 'update':
+            // Refresh the entity tree
+            htmx.trigger('#entity-tree', 'refresh');
+            break;
+    }
+}
+
+function updatePresence(data) {
+    const list = document.getElementById('presence-list');
+    // Update presence UI
+}
+
+function appendChatMessage(data) {
+    const messages = document.getElementById('chat-messages');
+    const msg = document.createElement('div');
+    msg.className = 'chat-message';
+    msg.innerHTML = `<strong>${data.user}:</strong> ${data.content}`;
+    messages.appendChild(msg);
+    messages.scrollTop = messages.scrollHeight;
+}
+
+// Connect on page load
+// connectWebSocket();
+</script>
+{% endblock %}
