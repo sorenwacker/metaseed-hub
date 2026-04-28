@@ -12,7 +12,10 @@
 <body hx-headers='{"X-Requested-With": "XMLHttpRequest"}'>
     <div class="hub-layout">
         <header class="hub-header">
-            <a href="/hub/" class="hub-logo">Metaseed Hub</a>
+            <a href="/hub/" class="hub-logo">
+                <img src="/hub/hub-static/images/metaseed-icon.svg" alt="" class="hub-logo-icon">
+                <span>Metaseed Hub</span>
+            </a>
             <nav class="hub-nav">
                 {% block nav %}{% endblock %}
             </nav>
