@@ -1,5 +1,5 @@
 <div class="entity-form">
-    <small style="color: red;">DEBUG: parent_id={{ parent_id|default('NONE') }}, node_id={{ node_id|default('NONE') }}</small>
+    <small style="color: red;">DEBUG: parent_id=[{{ parent_id }}] node_id=[{{ node_id }}]</small>
     {% if parent_id %}
     <button type="button" class="btn btn-sm back-btn"
             hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
@@ -203,14 +203,15 @@
             {% endif %}
             {% for field in nested_fields %}
             {% if node_id %}
-            <button type="button" class="nested-field-btn"
-                    hx-get="/hub/projects/{{ project_id }}/form/{{ field.item_type }}?parent_id={{ node_id }}&parent_field={{ field.name }}"
-                    hx-target="#editor"
-                    hx-swap="innerHTML">
+            <a class="nested-field-btn"
+               href="/hub/projects/{{ project_id }}/form/{{ field.item_type }}?parent_id={{ node_id }}&parent_field={{ field.name }}"
+               hx-get="/hub/projects/{{ project_id }}/form/{{ field.item_type }}?parent_id={{ node_id }}&parent_field={{ field.name }}"
+               hx-target="#editor"
+               hx-swap="innerHTML">
                 <span class="nested-field-icon">+</span>
                 <span class="nested-field-label">Add {{ field.name | replace("_", " ") | title }}</span>
                 <span class="nested-field-type">({{ field.item_type }})</span>
-            </button>
+            </a>
             {% else %}
             <button type="button" class="nested-field-btn" disabled>
                 <span class="nested-field-icon">+</span>
