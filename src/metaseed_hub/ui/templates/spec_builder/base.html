@@ -59,7 +59,10 @@
 
     <div class="spec-builder-body">
         <!-- Left sidebar -->
-        <aside class="spec-builder-sidebar">
+        <aside class="spec-builder-sidebar" id="left-sidebar">
+            <button class="sidebar-toggle" onclick="toggleLeftSidebar()" title="Toggle sidebar">
+                <span class="toggle-icon">&lsaquo;</span>
+            </button>
             <!-- Toolbox -->
             <div class="toolbox">
                 <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)">
@@ -68,10 +71,22 @@
                 </div>
             </div>
 
+            <!-- Sidebar tabs -->
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
+                    Profile
+                </button>
+                <button class="sidebar-tab" data-tab="rules" onclick="switchSidebarTab('rules')">
+                    Rules
+                    <span class="tab-badge">{{ spec.validation_rules|length }}</span>
+                </button>
+            </div>
+
             <!-- Sidebar scrollable content -->
             <div class="sidebar-content">
                 <!-- Profile Metadata -->
-                <div id="profile-metadata-panel"
+                <div id="profile-metadata-panel" class="sidebar-tab-content active"
+                     data-tab="metadata"
                      hx-get="/hub/spec-builder/profile-metadata"
                      hx-trigger="load"
                      hx-swap="innerHTML">
@@ -79,20 +94,13 @@
                 </div>
 
                 <!-- Advanced Rules -->
-                <details class="sidebar-section">
-                    <summary class="sidebar-section-header">
-                        Advanced Rules
-                        <span class="count-badge">{{ spec.validation_rules|length }}</span>
-                    </summary>
-                    <div class="sidebar-section-body">
-                        <div id="validation-rules-panel"
-                             hx-get="/hub/spec-builder/validation-rules"
-                             hx-trigger="load"
-                             hx-swap="innerHTML">
-                            Loading...
-                        </div>
-                    </div>
-                </details>
+                <div id="validation-rules-panel" class="sidebar-tab-content"
+                     data-tab="rules"
+                     hx-get="/hub/spec-builder/validation-rules"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading...
+                </div>
             </div>
         </aside>
 
@@ -117,7 +125,11 @@
             <div class="canvas-legend">
                 <span class="legend-item"><span class="legend-dot root"></span> Root Entity</span>
                 <span class="legend-item"><span class="legend-dot entity"></span> Entity</span>
+                <span class="legend-item"><span class="legend-dot hidden-legend"></span> Hidden</span>
                 <span class="legend-item"><span class="legend-line"></span> Relationship</span>
+                <button class="btn btn-sm" id="toggle-hidden-btn" onclick="toggleShowHidden()">
+                    Show All
+                </button>
             </div>
         </main>
 
@@ -125,7 +137,10 @@
         <aside class="spec-builder-editor" id="editor-panel">
             <div class="editor-header">
                 <h3 id="editor-title">Entity Editor</h3>
-                <button class="btn-close" onclick="closeEditorPanel()">&times;</button>
+                <div class="spec-editor-actions">
+                    <a id="entity-hide-btn" class="spec-editor-btn" onclick="hideSelectedEntity()">Hide</a>
+                    <a class="spec-editor-close" onclick="closeEditorPanel()">×</a>
+                </div>
             </div>
             <div class="editor-content" id="editor-content">
                 <div class="editor-placeholder">
@@ -257,6 +272,11 @@
     flex: 1;
     overflow: hidden;
     position: relative;
+    transition: grid-template-columns 0.2s ease;
+}
+
+.spec-builder-body.sidebar-collapsed {
+    grid-template-columns: 0 1fr;
 }
 
 /* Sidebar */
@@ -266,6 +286,55 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+    transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+.spec-builder-sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    border-right: none;
+}
+
+.spec-builder-sidebar.collapsed .sidebar-content,
+.spec-builder-sidebar.collapsed .toolbox {
+    display: none;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    top: 50%;
+    right: -12px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 48px;
+    background: white;
+    border: 1px solid var(--clr-border);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: background var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+    background: var(--clr-background);
+}
+
+.toggle-icon {
+    font-size: 1rem;
+    color: var(--clr-ink-light);
+    transition: transform 0.2s ease;
+}
+
+.spec-builder-sidebar.collapsed .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.spec-builder-sidebar.collapsed .sidebar-toggle {
+    right: -24px;
 }
 
 .toolbox {
@@ -318,28 +387,8 @@
     min-height: 0;
 }
 
-.sidebar-section {
-    border-bottom: 1px solid var(--clr-border);
-}
-
-.sidebar-section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-sm) var(--space-md);
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.8125rem;
-    color: var(--clr-ink-light);
-}
-
-.sidebar-section-header:hover {
-    color: var(--clr-ink);
-    background: white;
-}
-
 .count-badge {
-    background: var(--clr-primary);
+    background: var(--clr-moss);
     color: white;
     font-size: 0.6875rem;
     padding: 2px 6px;
@@ -347,8 +396,128 @@
     font-weight: 500;
 }
 
-.sidebar-section-body {
-    padding: var(--space-sm) var(--space-md) var(--space-md);
+/* Sidebar tab panels */
+.sidebar-tab-content {
+    padding: var(--space-md);
+    background: white;
+}
+
+/* Form row for 2 columns */
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+}
+
+/* Metadata form */
+.metadata-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.form-success {
+    background: var(--clr-success-bg);
+    color: var(--clr-success);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    margin-bottom: var(--space-sm);
+    text-align: center;
+}
+
+.btn-full {
+    width: 100%;
+}
+
+.required {
+    color: var(--clr-danger);
+}
+
+/* Validation rules list */
+.rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.rule-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm);
+    background: var(--clr-background);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.rule-item:hover {
+    border-color: var(--clr-primary);
+}
+
+.rule-item.active {
+    border-color: var(--clr-primary);
+    background: var(--clr-primary-bg);
+}
+
+.rule-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rule-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.rule-applies {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+.add-rule-form {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.add-rule-form .form-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.empty-state-sm {
+    padding: var(--space-md);
+    text-align: center;
+    color: var(--clr-ink-light);
+    font-size: 0.875rem;
+}
+
+.btn-icon-sm {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    color: var(--clr-ink-light);
+}
+
+.btn-icon-sm:hover {
+    background: var(--clr-background);
+}
+
+.btn-icon-sm.danger:hover {
+    background: var(--clr-danger-bg);
+    color: var(--clr-danger);
 }
 
 /* Canvas */
@@ -422,6 +591,11 @@
     border: 2px solid var(--clr-primary);
 }
 
+.legend-dot.hidden-legend {
+    background: #ccc;
+    border: 2px dashed #999;
+}
+
 .legend-line {
     width: 20px;
     height: 2px;
@@ -456,6 +630,13 @@
     overflow: hidden;
 }
 
+.spec-builder-editor *,
+.spec-builder-editor *::before,
+.spec-builder-editor *::after {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
 .spec-builder-editor.open {
     transform: translateX(0);
 }
@@ -464,34 +645,44 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-md) var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
     background: var(--clr-primary);
     color: white;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
 }
 
 .editor-header h3 {
     font-family: var(--font-display);
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 500;
     margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
 }
 
-.editor-header .btn-close {
-    color: white;
-    opacity: 0.7;
-}
 
-.editor-header .btn-close:hover {
-    opacity: 1;
-    background: transparent;
-}
 
 .editor-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--space-lg);
+    padding: var(--space-md);
+    position: relative;
+    z-index: 1;
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
+}
+
+.editor-content > * {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     box-sizing: border-box;
 }
 
@@ -691,12 +882,56 @@
     let edges = null;
     let selectedNode = null;
     let pendingPosition = null;
+    let hiddenEntities = new Set();
+    let showHiddenMode = false;
 
     // Initialize ERD on load
     document.addEventListener('DOMContentLoaded', initERD);
     if (document.readyState !== 'loading') {
         setTimeout(initERD, 50);
     }
+
+    // Left sidebar toggle
+    function toggleLeftSidebar() {
+        const sidebar = document.getElementById('left-sidebar');
+        const body = document.querySelector('.spec-builder-body');
+        sidebar.classList.toggle('collapsed');
+        body.classList.toggle('sidebar-collapsed');
+        // Re-fit graph after transition
+        setTimeout(() => {
+            if (network) network.fit({ animation: { duration: 200 } });
+        }, 250);
+    }
+
+    // Sidebar tab switching
+    function switchSidebarTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+        // Update tab content
+        document.querySelectorAll('.sidebar-tab-content').forEach(content => {
+            content.classList.toggle('active', content.dataset.tab === tabName);
+        });
+    }
+
+    // Auto-resize textareas
+    function autoResizeTextarea(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    }
+
+    // Apply auto-resize to all textareas
+    document.addEventListener('input', function(e) {
+        if (e.target.tagName === 'TEXTAREA') {
+            autoResizeTextarea(e.target);
+        }
+    });
+
+    // Initialize existing textareas after HTMX swaps
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        e.detail.elt.querySelectorAll('textarea').forEach(autoResizeTextarea);
+    });
 
     function initERD() {
         if (network) return;
@@ -859,6 +1094,8 @@
         htmx.ajax('GET', `/hub/spec-builder/entity/${entityName}`, {
             target: '#editor-content',
             swap: 'innerHTML'
+        }).then(() => {
+            setTimeout(updateHideButton, 50);
         });
     }
 
@@ -873,24 +1110,34 @@
     }
 
     function autoLayout() {
-        if (!network) return;
+        if (!network || !nodes) return;
 
         const nodeIds = nodes.getIds();
+        if (nodeIds.length === 0) return;
+
         const cols = Math.ceil(Math.sqrt(nodeIds.length));
-        const spacing = 200;
+        const spacing = 250;
 
         let sorted = [...nodeIds];
         if (rootEntity && sorted.includes(rootEntity)) {
             sorted = [rootEntity, ...sorted.filter(n => n !== rootEntity)];
         }
 
-        sorted.forEach((id, idx) => {
-            const col = idx % cols;
-            const row = Math.floor(idx / cols);
-            nodes.update({ id, x: col * spacing, y: row * spacing });
-        });
+        // Build batch update
+        const updates = sorted.map((id, idx) => ({
+            id: id,
+            x: (idx % cols) * spacing,
+            y: Math.floor(idx / cols) * spacing
+        }));
 
-        setTimeout(() => network.fit({ animation: true }), 100);
+        // Apply all position updates
+        nodes.update(updates);
+
+        // Force network to redraw and fit
+        network.redraw();
+        setTimeout(() => {
+            network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+        }, 50);
     }
 
     function zoomIn() {
@@ -982,6 +1229,98 @@
             hidePreview();
             closeEditorPanel();
         }
+        // H key to hide/show selected entity
+        if (e.key === 'h' && selectedNode && !e.target.matches('input, textarea')) {
+            toggleEntityVisibility(selectedNode);
+        }
     });
+
+    // Entity visibility functions
+    function toggleEntityVisibility(entityName) {
+        if (hiddenEntities.has(entityName)) {
+            hiddenEntities.delete(entityName);
+        } else {
+            hiddenEntities.add(entityName);
+        }
+        updateEntityVisibility();
+        updateHideButton();
+    }
+
+    function updateEntityVisibility() {
+        if (!nodes || !edges) return;
+
+        // Update nodes appearance
+        const nodeUpdates = [];
+        nodes.forEach(node => {
+            const isHidden = hiddenEntities.has(node.id);
+            const isRoot = node.id === rootEntity;
+
+            if (isHidden && !showHiddenMode) {
+                // Greyed out and semi-transparent
+                nodeUpdates.push({
+                    id: node.id,
+                    color: {
+                        background: '#e0e0e0',
+                        border: '#999',
+                        highlight: { background: '#d0d0d0', border: '#888' },
+                        hover: { background: '#d5d5d5', border: '#888' }
+                    },
+                    font: { color: '#999' },
+                    opacity: 0.5
+                });
+            } else {
+                // Normal appearance
+                nodeUpdates.push({
+                    id: node.id,
+                    color: {
+                        background: isRoot ? '#4a7c59' : '#ffffff',
+                        border: isRoot ? '#2d5a4a' : '#4a7c59',
+                        highlight: { background: '#87a878', border: '#4a7c59' },
+                        hover: { background: isRoot ? '#5a8c69' : '#f5f2ed', border: '#4a7c59' }
+                    },
+                    font: { color: isRoot ? '#fff' : '#2c3e35' },
+                    opacity: 1
+                });
+            }
+        });
+        nodes.update(nodeUpdates);
+
+        // Update edges - hide edges connected to hidden nodes
+        const edgeUpdates = [];
+        edges.forEach(edge => {
+            const fromHidden = hiddenEntities.has(edge.from);
+            const toHidden = hiddenEntities.has(edge.to);
+            const shouldHide = (fromHidden || toHidden) && !showHiddenMode;
+
+            edgeUpdates.push({
+                id: edge.id,
+                hidden: shouldHide,
+                color: shouldHide ? { color: '#ccc', highlight: '#ccc' } : { color: '#4a7c59', highlight: '#2d5a4a' }
+            });
+        });
+        edges.update(edgeUpdates);
+    }
+
+    function toggleShowHidden() {
+        showHiddenMode = !showHiddenMode;
+        const btn = document.getElementById('toggle-hidden-btn');
+        btn.textContent = showHiddenMode ? 'Hide Filtered' : 'Show All';
+        updateEntityVisibility();
+    }
+
+    function updateHideButton() {
+        const hideBtn = document.getElementById('entity-hide-btn');
+        if (hideBtn && selectedNode) {
+            const isHidden = hiddenEntities.has(selectedNode);
+            hideBtn.textContent = isHidden ? 'Show' : 'Hide';
+            hideBtn.title = isHidden ? 'Show this entity (H)' : 'Hide this entity (H)';
+        }
+    }
+
+    function hideSelectedEntity() {
+        if (selectedNode) {
+            toggleEntityVisibility(selectedNode);
+        }
+    }
 </script>
 {% endblock %}

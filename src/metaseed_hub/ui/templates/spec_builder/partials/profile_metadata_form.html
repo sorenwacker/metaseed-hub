@@ -1,94 +1,48 @@
 <form hx-post="/hub/spec-builder/profile-metadata"
       hx-target="#profile-metadata-panel"
       hx-swap="innerHTML"
-      class="sidebar-form">
+      class="metadata-form compact-form">
 
     {% if success %}
     <div class="form-success">Saved</div>
     {% endif %}
 
-    <div class="form-row">
-        <div class="form-group">
+    <div class="form-row-2">
+        <div class="form-group compact">
             <label class="form-label">Name <span class="required">*</span></label>
-            <input type="text" name="name" class="form-control" value="{{ spec.name or '' }}" placeholder="my-profile" required>
+            <input type="text" name="name" class="form-input" value="{{ spec.name or '' }}" placeholder="my-profile" required>
         </div>
-        <div class="form-group">
+        <div class="form-group compact">
             <label class="form-label">Version <span class="required">*</span></label>
-            <input type="text" name="version" class="form-control" value="{{ spec.version or '1.0' }}" placeholder="1.0" required>
+            <input type="text" name="version" class="form-input" value="{{ spec.version or '1.0' }}" placeholder="1.0" required>
         </div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group compact">
         <label class="form-label">Display Name</label>
-        <input type="text" name="display_name" class="form-control" value="{{ spec.display_name or '' }}" placeholder="My Profile">
+        <input type="text" name="display_name" class="form-input" value="{{ spec.display_name or '' }}" placeholder="My Profile">
     </div>
 
-    <div class="form-row">
-        <div class="form-group">
+    <div class="form-row-2">
+        <div class="form-group compact">
             <label class="form-label">Root Entity</label>
-            <input type="text" name="root_entity" class="form-control" value="{{ spec.root_entity or '' }}" placeholder="Investigation" list="entity-names">
+            <input type="text" name="root_entity" class="form-input" value="{{ spec.root_entity or '' }}" placeholder="Investigation" list="entity-names">
             <datalist id="entity-names">
                 {% for name in spec.entities.keys() %}
                 <option value="{{ name }}">
                 {% endfor %}
             </datalist>
         </div>
-        <div class="form-group">
+        <div class="form-group compact">
             <label class="form-label">Ontology</label>
-            <input type="text" name="ontology" class="form-control" value="{{ spec.ontology or '' }}" placeholder="PPEO">
+            <input type="text" name="ontology" class="form-input" value="{{ spec.ontology or '' }}" placeholder="PPEO">
         </div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group compact">
         <label class="form-label">Description</label>
-        <textarea name="description" class="form-control" rows="2" placeholder="Description...">{{ spec.description or '' }}</textarea>
+        <textarea name="description" class="form-input" rows="2" placeholder="Description...">{{ spec.description or '' }}</textarea>
     </div>
 
-    <button type="submit" class="btn btn-primary btn-sm btn-block">Update</button>
+    <button type="submit" class="btn btn-primary btn-sm btn-full">Update</button>
 </form>
-
-<style>
-.sidebar-form {
-    padding: var(--space-md);
-    overflow: hidden;
-}
-
-.sidebar-form .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-sm);
-}
-
-.sidebar-form .form-group {
-    margin-bottom: var(--space-sm);
-    min-width: 0;
-}
-
-.sidebar-form .form-label {
-    font-size: 0.75rem;
-    margin-bottom: 2px;
-    display: block;
-}
-
-.sidebar-form .form-control {
-    font-size: 0.875rem;
-    padding: var(--space-xs) var(--space-sm);
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-}
-
-.form-success {
-    background: var(--clr-success-bg);
-    color: var(--clr-success);
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
-    margin-bottom: var(--space-sm);
-    text-align: center;
-}
-
-.btn-block {
-    width: 100%;
-}
-</style>
