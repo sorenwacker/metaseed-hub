@@ -810,23 +810,48 @@ body {
     font-size: 0.875rem;
 }
 
+.field-optional,
 .field-advanced {
     margin-top: var(--space-sm);
     border: 1px solid var(--clr-parchment);
     border-radius: var(--radius-sm);
 }
 
+.field-optional summary,
 .field-advanced summary {
     padding: var(--space-sm);
     cursor: pointer;
     font-size: 0.875rem;
     color: var(--clr-ink-light);
+    list-style: none;
 }
 
+.field-optional summary::-webkit-details-marker,
+.field-advanced summary::-webkit-details-marker {
+    display: none;
+}
+
+.field-optional summary::before,
+.field-advanced summary::before {
+    content: '+';
+    display: inline-block;
+    width: 14px;
+    margin-right: var(--space-xs);
+    font-weight: bold;
+    color: var(--clr-moss);
+}
+
+.field-optional[open] summary::before,
+.field-advanced[open] summary::before {
+    content: '-';
+}
+
+.field-optional summary:hover,
 .field-advanced summary:hover {
     color: var(--clr-ink);
 }
 
+.field-optional-content,
 .field-advanced-content {
     padding: var(--space-sm);
     border-top: 1px solid var(--clr-parchment);
