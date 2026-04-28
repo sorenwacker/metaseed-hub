@@ -41,67 +41,11 @@
 <form hx-post="/hub/spec-builder/validation-rule"
       hx-target="#validation-rules-panel"
       hx-swap="innerHTML"
-      class="add-rule-form">
+      class="add-rule-form compact-form">
     <input type="text"
            name="name"
-           class="form-control"
+           class="form-input"
            placeholder="rule_name"
            required>
     <button type="submit" class="btn btn-primary btn-sm">+ Add</button>
 </form>
-
-<style>
-.rules-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-    margin-bottom: var(--space-sm);
-}
-
-.rule-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-sm);
-    background: var(--clr-background);
-    border: 1px solid var(--clr-border-light);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-}
-
-.rule-item:hover {
-    border-color: var(--clr-primary);
-}
-
-.rule-item.active {
-    border-color: var(--clr-primary);
-    background: var(--clr-primary-bg);
-}
-
-.rule-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.rule-name {
-    font-weight: 500;
-    font-size: 0.875rem;
-}
-
-.rule-applies {
-    font-size: 0.75rem;
-    color: var(--clr-ink-light);
-}
-
-.add-rule-form {
-    display: flex;
-    gap: var(--space-xs);
-}
-
-.add-rule-form input {
-    flex: 1;
-    min-width: 0;
-}
-</style>

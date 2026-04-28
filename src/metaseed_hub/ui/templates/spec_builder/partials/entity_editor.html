@@ -15,7 +15,7 @@
             <div class="form-group">
                 <label class="form-label">Description</label>
                 <textarea name="description"
-                          class="form-control"
+                          class="form-input"
                           rows="2"
                           placeholder="What this entity represents...">{{ entity.description or '' }}</textarea>
             </div>
@@ -23,7 +23,7 @@
                 <label class="form-label">Ontology Term</label>
                 <input type="text"
                        name="ontology_term"
-                       class="form-control"
+                       class="form-input"
                        value="{{ entity.ontology_term or '' }}"
                        placeholder="PPEO:entity">
             </div>
@@ -82,11 +82,11 @@
               class="add-field-form">
             <input type="text"
                    name="name"
-                   class="form-control"
+                   class="form-input"
                    placeholder="field_name"
                    required
                    pattern="[a-z_][a-z0-9_]*">
-            <select name="field_type" class="form-control">
+            <select name="field_type" class="form-input">
                 {% for ft in field_types %}
                 <option value="{{ ft }}">{{ ft }}</option>
                 {% endfor %}
@@ -129,186 +129,3 @@
         </button>
     </div>
 </div>
-
-<style>
-.entity-editor {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-}
-
-.editor-section {
-    border-bottom: 1px solid var(--clr-border-light);
-    padding-bottom: var(--space-md);
-}
-
-.editor-section:last-child {
-    border-bottom: none;
-}
-
-.editor-section-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--clr-ink-light);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--space-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-}
-
-.fields-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-    margin-bottom: var(--space-sm);
-}
-
-.field-item {
-    background: var(--clr-background);
-    border: 1px solid var(--clr-border-light);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-}
-
-.field-item:hover {
-    border-color: var(--clr-primary);
-}
-
-.field-item.editing {
-    border-color: var(--clr-primary);
-    background: var(--clr-primary-bg);
-}
-
-.field-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-sm);
-}
-
-.field-info {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-}
-
-.field-name {
-    font-weight: 500;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-}
-
-.field-type-badge {
-    font-size: 0.7rem;
-    padding: 1px 6px;
-    background: var(--clr-ink-lighter);
-    color: white;
-    border-radius: 8px;
-}
-
-.field-required {
-    color: var(--clr-error);
-    font-weight: bold;
-}
-
-.field-meta {
-    padding: 0 var(--space-sm) var(--space-sm);
-    font-size: 0.75rem;
-    color: var(--clr-ink-light);
-}
-
-.btn-icon-sm {
-    width: 20px;
-    height: 20px;
-    border: none;
-    background: transparent;
-    color: var(--clr-ink-light);
-    cursor: pointer;
-    border-radius: var(--radius-sm);
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.btn-icon-sm:hover {
-    background: var(--clr-error-bg);
-    color: var(--clr-error);
-}
-
-.add-field-form {
-    display: flex;
-    gap: var(--space-xs);
-}
-
-.add-field-form input {
-    flex: 1;
-}
-
-.add-field-form select {
-    width: 80px;
-}
-
-.relationships-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-}
-
-.relationship-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    font-size: 0.875rem;
-}
-
-.relationship-field {
-    font-family: var(--font-mono);
-}
-
-.relationship-arrow {
-    color: var(--clr-ink-light);
-}
-
-.relationship-target {
-    color: var(--clr-primary);
-    font-weight: 500;
-}
-
-.relationship-type {
-    font-size: 0.7rem;
-    padding: 1px 4px;
-    background: var(--clr-primary-bg);
-    color: var(--clr-primary);
-    border-radius: 4px;
-}
-
-.editor-danger {
-    padding-top: var(--space-md);
-}
-
-.empty-state-sm {
-    text-align: center;
-    padding: var(--space-md);
-    color: var(--clr-ink-light);
-    font-size: 0.875rem;
-}
-
-.alert {
-    padding: var(--space-sm);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-sm);
-    font-size: 0.875rem;
-}
-
-.alert-error {
-    background: var(--clr-error-bg);
-    color: var(--clr-error);
-}
-
-.alert-success {
-    background: var(--clr-success-bg);
-    color: var(--clr-success);
-}
-</style>
