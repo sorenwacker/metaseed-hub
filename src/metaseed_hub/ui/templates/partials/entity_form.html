@@ -1,4 +1,13 @@
 <div class="entity-form">
+    {% if parent_id %}
+    <button type="button" class="btn btn-sm back-btn"
+            hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
+            hx-target="#editor"
+            hx-swap="innerHTML">
+        &larr; Back to parent
+    </button>
+    {% endif %}
+
     {% if success %}
     <div class="success-message">{{ success }}</div>
     {% endif %}
@@ -20,6 +29,10 @@
         <input type="hidden" name="_entity_type" value="{{ entity_type }}">
         {% if node_id %}
         <input type="hidden" name="_node_id" value="{{ node_id }}">
+        {% endif %}
+        {% if parent_id %}
+        <input type="hidden" name="_parent_id" value="{{ parent_id }}">
+        <input type="hidden" name="_parent_field" value="{{ parent_field }}">
         {% endif %}
 
         {% if required_fields %}
@@ -182,15 +195,28 @@
         {% if nested_fields %}
         <div class="form-section">
             <h3 class="form-section-title">Related Entities</h3>
+            {% if not node_id %}
             <p class="form-help" style="margin-bottom: var(--space-md);">
                 Save this {{ entity_type }} first, then add related items.
             </p>
+            {% endif %}
             {% for field in nested_fields %}
+            {% if node_id %}
+            <button type="button" class="nested-field-btn"
+                    hx-get="/hub/projects/{{ project_id }}/form/{{ field.item_type }}?parent_id={{ node_id }}&parent_field={{ field.name }}"
+                    hx-target="#editor"
+                    hx-swap="innerHTML">
+                <span class="nested-field-icon">+</span>
+                <span class="nested-field-label">Add {{ field.name | replace("_", " ") | title }}</span>
+                <span class="nested-field-type">({{ field.item_type }})</span>
+            </button>
+            {% else %}
             <button type="button" class="nested-field-btn" disabled>
                 <span class="nested-field-icon">+</span>
                 <span class="nested-field-label">{{ field.name | replace("_", " ") | title }}</span>
                 <span class="nested-field-type">({{ field.item_type }})</span>
             </button>
+            {% endif %}
             {% endfor %}
         </div>
         {% endif %}

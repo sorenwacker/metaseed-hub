@@ -878,6 +878,16 @@ body {
     font-weight: 500;
 }
 
+/* Back button */
+.back-btn {
+    margin-bottom: var(--space-md);
+    color: var(--clr-ink-light);
+}
+
+.back-btn:hover {
+    color: var(--clr-ink);
+}
+
 /* Entity editor */
 .entity-editor {
     display: flex;
