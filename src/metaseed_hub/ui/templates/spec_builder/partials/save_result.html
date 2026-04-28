@@ -1,0 +1,20 @@
+{% if success %}
+<div class="notification notification-success">
+    {{ message or 'Saved successfully' }}
+</div>
+{% elif error %}
+<div class="notification notification-error">
+    {{ error }}
+</div>
+{% endif %}
+
+<script>
+// Auto-dismiss notification after 3 seconds
+setTimeout(function() {
+    const notification = document.querySelector('.notification:last-child');
+    if (notification) {
+        notification.style.opacity = '0';
+        setTimeout(() => notification.remove(), 300);
+    }
+}, 3000);
+</script>

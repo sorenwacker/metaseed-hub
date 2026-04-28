@@ -17,6 +17,7 @@ repos:
           - pydantic-settings
           - sqlalchemy[asyncio]
           - types-python-jose
+          - types-pyyaml
         args: [--ignore-missing-imports]
 
   - repo: local

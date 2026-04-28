@@ -1,0 +1,823 @@
+{% extends "base.html" %}
+
+{% block title %}Spec Builder{% if spec.name %} - {{ spec.name }}{% endif %} - Metaseed Hub{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<a href="/hub/spec-builder/reset" class="nav-item">Spec Builder</a>
+{% if spec.name %}
+<span class="nav-sep">/</span>
+<span class="nav-item active">{{ spec.name }}</span>
+{% endif %}
+{% if has_unsaved_changes %}
+<span class="unsaved-indicator" title="Unsaved changes">*</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="spec-builder-layout">
+    <!-- Header toolbar -->
+    <div class="spec-builder-toolbar">
+        <div class="toolbar-left">
+            {% if template_source %}
+            <span class="template-badge">
+                Cloned from {{ template_source[0] }} v{{ template_source[1] }}
+            </span>
+            {% endif %}
+            <span class="entity-count">
+                <strong>{{ spec.entities|length }}</strong> entities
+            </span>
+        </div>
+        <div class="toolbar-right">
+            <button class="btn btn-sm" onclick="autoLayout()">Auto Layout</button>
+            <button class="btn btn-sm"
+                    hx-get="/hub/spec-builder/preview"
+                    hx-target="#preview-content"
+                    hx-swap="innerHTML"
+                    onclick="showPreview()">
+                Preview YAML
+            </button>
+            <a href="/hub/spec-builder/export" class="btn btn-sm" download>Export</a>
+            <button class="btn btn-sm btn-primary"
+                    hx-post="/hub/spec-builder/save"
+                    hx-target="#notification-container"
+                    hx-swap="beforeend">
+                Save
+            </button>
+            <span class="toolbar-divider"></span>
+            <a href="/hub/spec-builder/reset" class="btn btn-sm"
+               onclick="return confirm('Start over? Any unsaved changes will be lost.')">
+                Start Over
+            </a>
+        </div>
+    </div>
+
+    <div class="spec-builder-body">
+        <!-- Left sidebar -->
+        <aside class="spec-builder-sidebar">
+            <!-- Toolbox -->
+            <div class="toolbox">
+                <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)">
+                    <span class="toolbox-icon">+</span>
+                    <span>New Entity</span>
+                </div>
+            </div>
+
+            <!-- Profile Metadata -->
+            <div id="profile-metadata-panel"
+                 hx-get="/hub/spec-builder/profile-metadata"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                Loading...
+            </div>
+
+            <!-- Advanced Rules -->
+            <details class="sidebar-section">
+                <summary class="sidebar-section-header">
+                    Advanced Rules
+                    <span class="count-badge">{{ spec.validation_rules|length }}</span>
+                </summary>
+                <div class="sidebar-section-body">
+                    <div id="validation-rules-panel"
+                         hx-get="/hub/spec-builder/validation-rules"
+                         hx-trigger="load"
+                         hx-swap="innerHTML">
+                        Loading...
+                    </div>
+                </div>
+            </details>
+        </aside>
+
+        <!-- Center: ERD Canvas -->
+        <main class="spec-builder-canvas">
+            <div class="canvas-toolbar">
+                <button class="btn btn-sm btn-primary" onclick="showAddEntityModal()">
+                    + Entity
+                </button>
+                <span class="toolbar-divider"></span>
+                <button class="btn btn-sm" onclick="zoomIn()">+</button>
+                <button class="btn btn-sm" onclick="zoomOut()">-</button>
+                <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
+            </div>
+            <div class="canvas-wrapper">
+                <div id="erd-canvas"
+                     ondrop="dropNewEntity(event)"
+                     ondragover="event.preventDefault()"
+                     ondblclick="addEntityAtPosition(event)">
+                </div>
+            </div>
+            <div class="canvas-legend">
+                <span class="legend-item"><span class="legend-dot root"></span> Root Entity</span>
+                <span class="legend-item"><span class="legend-dot entity"></span> Entity</span>
+                <span class="legend-item"><span class="legend-line"></span> Relationship</span>
+            </div>
+        </main>
+
+        <!-- Right: Entity Editor Panel -->
+        <aside class="spec-builder-editor" id="editor-panel">
+            <div class="editor-header">
+                <h3 id="editor-title">Entity Editor</h3>
+                <button class="btn-close" onclick="closeEditorPanel()">&times;</button>
+            </div>
+            <div class="editor-content" id="editor-content">
+                <div class="editor-placeholder">
+                    <p>Click an entity to edit its fields</p>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Preview Overlay -->
+<div class="preview-overlay hidden" id="preview-overlay" onclick="hidePreview(event)">
+    <div class="preview-modal">
+        <div class="preview-modal-header">
+            <h3>YAML Preview</h3>
+            <div class="preview-actions">
+                <a href="/hub/spec-builder/export" class="btn btn-sm" download>Download</a>
+                <button class="btn-close" onclick="hidePreview()">&times;</button>
+            </div>
+        </div>
+        <div class="preview-modal-content" id="preview-content">
+        </div>
+    </div>
+</div>
+
+<!-- Add Entity Modal -->
+<div class="modal-overlay hidden" id="add-entity-modal">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>Add Entity</h3>
+            <button class="btn-close" onclick="hideAddEntityModal()">&times;</button>
+        </div>
+        <form hx-post="/hub/spec-builder/entity"
+              hx-target="#editor-content"
+              hx-swap="innerHTML"
+              onsubmit="onEntityAdded()">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Entity Name <span class="required">*</span></label>
+                    <input type="text"
+                           name="name"
+                           id="new-entity-name"
+                           class="form-control"
+                           placeholder="MyEntity"
+                           pattern="[A-Z][A-Za-z0-9_]*"
+                           required
+                           autofocus>
+                    <span class="form-help">PascalCase (e.g., BiologicalMaterial)</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="hideAddEntityModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Entity</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Validation Rule Modal -->
+<div class="modal-overlay hidden" id="validation-rule-modal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+            <h3 id="rule-modal-title">Edit Rule</h3>
+            <button class="btn-close" onclick="hideRuleModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="rule-modal-content">
+            <!-- Rule form loaded via HTMX -->
+        </div>
+    </div>
+</div>
+
+<style>
+.spec-builder-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);
+    background: var(--clr-background);
+}
+
+.spec-builder-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-surface);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.toolbar-left, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--clr-border);
+    margin: 0 var(--space-xs);
+}
+
+.template-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: var(--clr-primary-bg);
+    color: var(--clr-primary);
+    border-radius: var(--radius-sm);
+}
+
+.entity-count {
+    color: var(--clr-ink-light);
+    font-size: 0.875rem;
+}
+
+.unsaved-indicator {
+    color: var(--clr-warning);
+    font-weight: bold;
+    margin-left: var(--space-xs);
+}
+
+.spec-builder-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.spec-builder-sidebar {
+    width: 280px;
+    background: var(--clr-surface);
+    border-right: 1px solid var(--clr-border);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.toolbox {
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.toolbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-primary-bg);
+    border: 2px dashed var(--clr-primary);
+    border-radius: var(--radius-md);
+    cursor: grab;
+    transition: all var(--transition-fast);
+}
+
+.toolbox-item:hover {
+    background: var(--clr-primary);
+    color: white;
+}
+
+.toolbox-icon {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.sidebar-section {
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.sidebar-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--clr-ink);
+}
+
+.sidebar-section-header:hover {
+    background: var(--clr-background);
+}
+
+.count-badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    background: var(--clr-ink-lighter);
+    color: white;
+    border-radius: 10px;
+    font-weight: normal;
+}
+
+.sidebar-section-body {
+    padding: var(--space-sm) var(--space-md) var(--space-md);
+}
+
+/* Canvas */
+.spec-builder-canvas {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--clr-background);
+    min-width: 0;
+}
+
+.canvas-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    background: var(--clr-surface);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.canvas-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+#erd-canvas {
+    width: 100%;
+    height: 100%;
+    background: var(--clr-background);
+}
+
+.canvas-legend {
+    display: flex;
+    gap: var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-surface);
+    border-top: 1px solid var(--clr-border);
+    font-size: 0.8rem;
+    color: var(--clr-ink-light);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.legend-dot.root {
+    background: var(--clr-primary);
+}
+
+.legend-dot.entity {
+    background: white;
+    border: 2px solid var(--clr-primary);
+}
+
+.legend-line {
+    width: 20px;
+    height: 2px;
+    background: var(--clr-primary);
+}
+
+.empty-canvas-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--clr-ink-light);
+    font-size: 1.1rem;
+}
+
+/* Editor Panel */
+.spec-builder-editor {
+    width: 350px;
+    background: var(--clr-surface);
+    border-left: 1px solid var(--clr-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transform: translateX(100%);
+    transition: transform var(--transition-normal);
+}
+
+.spec-builder-editor.open {
+    transform: translateX(0);
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.editor-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.editor-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-md);
+}
+
+.editor-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--clr-ink-light);
+}
+
+/* Preview Overlay */
+.preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.preview-overlay.hidden {
+    display: none;
+}
+
+.preview-modal {
+    background: var(--clr-surface);
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+}
+
+.preview-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.preview-modal-header h3 {
+    margin: 0;
+    font-family: var(--font-display);
+}
+
+.preview-actions {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+.preview-modal-content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-md);
+}
+
+.preview-modal-content pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ERD Data - convert spec to serializable format
+    const entities = {
+        {% for name, entity in spec.entities.items() %}
+        "{{ name }}": {
+            "ontology_term": {{ entity.ontology_term | tojson if entity.ontology_term else 'null' }},
+            "description": {{ entity.description | tojson if entity.description else '""' }},
+            "fields": [
+                {% for field in entity.fields %}
+                {
+                    "name": "{{ field.name }}",
+                    "type": "{{ field.type }}",
+                    "required": {{ 'true' if field.required else 'false' }},
+                    "items": {{ field.items | tojson if field.items else 'null' }},
+                    "reference": {{ field.reference | tojson if field.reference else 'null' }}
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+    const rootEntity = "{{ spec.root_entity }}";
+    const fieldTypes = {{ field_types | tojson | safe }};
+
+    let network = null;
+    let nodes = null;
+    let edges = null;
+    let selectedNode = null;
+    let pendingPosition = null;
+
+    // Initialize ERD on load
+    document.addEventListener('DOMContentLoaded', initERD);
+    if (document.readyState !== 'loading') {
+        setTimeout(initERD, 50);
+    }
+
+    function initERD() {
+        if (network) return;
+
+        const container = document.getElementById('erd-canvas');
+        if (!container) return;
+
+        const rect = container.getBoundingClientRect();
+        if (rect.height < 50) {
+            setTimeout(initERD, 200);
+            return;
+        }
+
+        const entityNames = Object.keys(entities);
+        if (entityNames.length === 0) {
+            container.innerHTML = '<div class="empty-canvas-message">Double-click to add an entity</div>';
+            return;
+        }
+
+        // Build nodes with table-like labels
+        const nodeData = [];
+        const edgeData = [];
+
+        entityNames.forEach(name => {
+            const entity = entities[name];
+            const isRoot = name === rootEntity;
+            const fields = entity.fields || [];
+
+            // Build multi-line label
+            let label = `<b>${name}</b>`;
+            if (isRoot) label += ' [ROOT]';
+            label += '\n────────────────';
+
+            fields.forEach(field => {
+                const req = field.required ? '*' : ' ';
+                const fk = ((field.type === 'entity' || field.type === 'list') && field.items) ? '→' : ' ';
+                label += `\n${req}${fk} ${field.name}: ${field.type}`;
+            });
+            if (fields.length === 0) {
+                label += '\n(no fields)';
+            }
+
+            const nodeHeight = 40 + fields.length * 16;
+            const nodeWidth = 200;
+
+            nodeData.push({
+                id: name,
+                label: label,
+                shape: 'box',
+                size: Math.max(nodeHeight, nodeWidth) / 2,
+                mass: 1 + fields.length * 0.3,
+                font: {
+                    face: 'monospace',
+                    size: 12,
+                    align: 'left',
+                    multi: 'html',
+                    color: isRoot ? '#fff' : '#2c3e35'
+                },
+                color: {
+                    background: isRoot ? '#4a7c59' : '#ffffff',
+                    border: isRoot ? '#2d5a4a' : '#4a7c59',
+                    highlight: { background: '#87a878', border: '#4a7c59' },
+                    hover: { background: isRoot ? '#5a8c69' : '#f5f2ed', border: '#4a7c59' }
+                },
+                borderWidth: 2,
+                margin: 15,
+                shadow: true
+            });
+
+            // Build edges for relationships
+            fields.forEach(field => {
+                if ((field.type === 'entity' || field.type === 'list') && field.items && entities[field.items]) {
+                    edgeData.push({
+                        from: name,
+                        to: field.items,
+                        label: field.name,
+                        arrows: { to: { enabled: true, type: 'arrow' } },
+                        color: { color: '#4a7c59', highlight: '#2d5a4a' },
+                        font: { size: 11, color: '#5a6b62', background: 'white', strokeWidth: 0 },
+                        smooth: { type: 'cubicBezier', roundness: 0.4 },
+                        width: 2
+                    });
+                }
+                if (field.reference) {
+                    const refParts = field.reference.split('.');
+                    const targetEntity = refParts[0];
+                    if (entities[targetEntity]) {
+                        edgeData.push({
+                            from: name,
+                            to: targetEntity,
+                            label: field.name,
+                            arrows: { to: { enabled: true, type: 'arrow' } },
+                            color: { color: '#7c4a6b', highlight: '#5a2d4a' },
+                            font: { size: 11, color: '#6b5a62', background: 'white', strokeWidth: 0 },
+                            smooth: { type: 'cubicBezier', roundness: 0.4 },
+                            width: 2,
+                            dashes: true
+                        });
+                    }
+                }
+            });
+        });
+
+        nodes = new vis.DataSet(nodeData);
+        edges = new vis.DataSet(edgeData);
+
+        const options = {
+            layout: { improvedLayout: true, randomSeed: 42 },
+            physics: {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: {
+                    gravitationalConstant: -100,
+                    centralGravity: 0.01,
+                    springLength: 200,
+                    springConstant: 0.08,
+                    damping: 0.5,
+                    avoidOverlap: 1
+                },
+                maxVelocity: 50,
+                minVelocity: 0.1,
+                stabilization: { enabled: true, iterations: 2000, updateInterval: 25 }
+            },
+            interaction: {
+                hover: true,
+                zoomView: true,
+                zoomSpeed: 0.5,
+                dragView: true,
+                dragNodes: true,
+                navigationButtons: false,
+                keyboard: { enabled: true, speed: { x: 10, y: 10, zoom: 0.05 } }
+            },
+            nodes: { shape: 'box', margin: 12, widthConstraint: { minimum: 180 } },
+            edges: { smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.4 } }
+        };
+
+        network = new vis.Network(container, { nodes, edges }, options);
+
+        network.on('click', function(params) {
+            if (params.nodes.length > 0) {
+                selectEntity(params.nodes[0]);
+            }
+        });
+
+        network.on('doubleClick', function(params) {
+            if (params.nodes.length === 0) {
+                showAddEntityModal();
+            }
+        });
+
+        network.once('stabilizationIterationsDone', () => {
+            network.setOptions({ physics: { enabled: false } });
+        });
+    }
+
+    function selectEntity(entityName) {
+        selectedNode = entityName;
+        document.getElementById('editor-title').textContent = entityName;
+        document.getElementById('editor-panel').classList.add('open');
+        htmx.ajax('GET', `/hub/spec-builder/entity/${entityName}`, {
+            target: '#editor-content',
+            swap: 'innerHTML'
+        });
+    }
+
+    function closeEditorPanel() {
+        document.getElementById('editor-panel').classList.remove('open');
+        if (network) network.unselectAll();
+        selectedNode = null;
+    }
+
+    function refreshGraph() {
+        htmx.ajax('GET', '/hub/spec-builder', { target: 'body', swap: 'innerHTML' });
+    }
+
+    function autoLayout() {
+        if (!network) return;
+
+        const nodeIds = nodes.getIds();
+        const cols = Math.ceil(Math.sqrt(nodeIds.length));
+        const spacing = 200;
+
+        let sorted = [...nodeIds];
+        if (rootEntity && sorted.includes(rootEntity)) {
+            sorted = [rootEntity, ...sorted.filter(n => n !== rootEntity)];
+        }
+
+        sorted.forEach((id, idx) => {
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            nodes.update({ id, x: col * spacing, y: row * spacing });
+        });
+
+        setTimeout(() => network.fit({ animation: true }), 100);
+    }
+
+    function zoomIn() {
+        if (network) {
+            const scale = network.getScale();
+            network.moveTo({ scale: scale * 1.15, animation: { duration: 200 } });
+        }
+    }
+
+    function zoomOut() {
+        if (network) {
+            const scale = network.getScale();
+            network.moveTo({ scale: scale / 1.15, animation: { duration: 200 } });
+        }
+    }
+
+    function fitGraph() {
+        if (network) {
+            network.fit({ animation: { duration: 300 } });
+        }
+    }
+
+    function showAddEntityModal() {
+        document.getElementById('add-entity-modal').classList.remove('hidden');
+        document.getElementById('new-entity-name').value = '';
+        document.getElementById('new-entity-name').focus();
+    }
+
+    function hideAddEntityModal() {
+        document.getElementById('add-entity-modal').classList.add('hidden');
+        pendingPosition = null;
+    }
+
+    function onEntityAdded() {
+        hideAddEntityModal();
+        document.getElementById('editor-panel').classList.add('open');
+        setTimeout(refreshGraph, 100);
+    }
+
+    function dragNewEntity(event) {
+        event.dataTransfer.setData('text/plain', 'new-entity');
+    }
+
+    function dropNewEntity(event) {
+        event.preventDefault();
+        if (event.dataTransfer.getData('text/plain') === 'new-entity') {
+            showAddEntityModal();
+        }
+    }
+
+    function addEntityAtPosition(event) {
+        if (event.target.id === 'erd-canvas' || event.target.tagName === 'CANVAS') {
+            showAddEntityModal();
+        }
+    }
+
+    function showPreview() {
+        document.getElementById('preview-overlay').classList.remove('hidden');
+    }
+
+    function hidePreview(event) {
+        if (!event || event.target.id === 'preview-overlay') {
+            document.getElementById('preview-overlay').classList.add('hidden');
+        }
+    }
+
+    function showRuleModal(ruleIdx, ruleName) {
+        document.getElementById('rule-modal-title').textContent = ruleName ? `Edit: ${ruleName}` : 'Edit Rule';
+        document.getElementById('validation-rule-modal').classList.remove('hidden');
+        htmx.ajax('GET', `/hub/spec-builder/validation-rule/${ruleIdx}`, {
+            target: '#rule-modal-content',
+            swap: 'innerHTML'
+        });
+    }
+
+    function hideRuleModal() {
+        document.getElementById('validation-rule-modal').classList.add('hidden');
+        htmx.ajax('GET', '/hub/spec-builder/validation-rules', {
+            target: '#validation-rules-panel',
+            swap: 'innerHTML'
+        });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideAddEntityModal();
+            hideRuleModal();
+            hidePreview();
+            closeEditorPanel();
+        }
+    });
+</script>
+{% endblock %}

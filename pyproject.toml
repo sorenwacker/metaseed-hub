@@ -18,6 +18,7 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
     "metaseed @ file:///Users/sdrwacker/workspace/metaseed",
+    "types-pyyaml>=6.0.12.20260408",
 ]
 
 [project.optional-dependencies]
@@ -69,5 +70,6 @@ dev = [
     "mypy>=1.20.2",
     "pytest-asyncio>=1.3.0",
     "types-python-jose>=3.5.0.20260408",
+    "types-pyyaml>=6.0.12.20260408",
     "vulture>=2.16",
 ]
