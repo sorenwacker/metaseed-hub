@@ -1,0 +1,80 @@
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="entities-list">
+    {% for name, entity in entities.items() %}
+    <div class="entity-list-item {% if name == editing_entity %}active{% endif %}"
+         hx-get="/hub/spec-builder/entity/{{ name }}"
+         hx-target="#editor-content"
+         hx-swap="innerHTML"
+         onclick="document.getElementById('editor-panel').classList.add('open')">
+        <div class="entity-info">
+            <span class="entity-name">
+                {{ name }}
+                {% if name == root_entity %}
+                <span class="root-badge">ROOT</span>
+                {% endif %}
+            </span>
+            <span class="entity-field-count">{{ entity.fields|length }} fields</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No entities yet</p>
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+.entities-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.entity-list-item {
+    padding: var(--space-sm);
+    background: var(--clr-background);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.entity-list-item:hover {
+    border-color: var(--clr-primary);
+}
+
+.entity-list-item.active {
+    border-color: var(--clr-primary);
+    background: var(--clr-primary-bg);
+}
+
+.entity-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.entity-name {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.root-badge {
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    background: var(--clr-primary);
+    color: white;
+    border-radius: 4px;
+    font-weight: normal;
+}
+
+.entity-field-count {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+</style>

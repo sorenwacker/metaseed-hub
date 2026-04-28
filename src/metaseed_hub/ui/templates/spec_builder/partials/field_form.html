@@ -1,0 +1,260 @@
+<div class="field-edit-form">
+    <form hx-put="/hub/spec-builder/entity/{{ entity_name }}/field/{{ field_idx }}"
+          hx-target="#editor-content"
+          hx-swap="innerHTML">
+
+        <div class="form-row-3">
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text"
+                       name="name"
+                       class="form-control"
+                       value="{{ field.name }}"
+                       required
+                       pattern="[a-z_][a-z0-9_]*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Type</label>
+                <select name="field_type" class="form-control">
+                    {% for ft in field_types %}
+                    <option value="{{ ft }}" {% if field.type == ft %}selected{% endif %}>{{ ft }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group form-group-checkbox">
+                <label class="form-checkbox">
+                    <input type="checkbox"
+                           name="required"
+                           value="true"
+                           {% if field.required %}checked{% endif %}>
+                    Required
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea name="description"
+                      class="form-control"
+                      rows="2">{{ field.description or '' }}</textarea>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label class="form-label">Items/Target</label>
+                <input type="text"
+                       name="items"
+                       class="form-control"
+                       value="{{ field.items or '' }}"
+                       placeholder="EntityName"
+                       list="entity-list">
+                <datalist id="entity-list">
+                    {% for ename in spec.entities.keys() %}
+                    <option value="{{ ename }}">
+                    {% endfor %}
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Codename</label>
+                <input type="text"
+                       name="codename"
+                       class="form-control"
+                       value="{{ field.codename or '' }}"
+                       placeholder="camelCase">
+            </div>
+        </div>
+
+        <details class="field-advanced">
+            <summary>Advanced Options</summary>
+            <div class="field-advanced-content">
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Ontology</label>
+                        <input type="text"
+                               name="ontology_term"
+                               class="form-control"
+                               value="{{ field.ontology_term or '' }}"
+                               placeholder="MIAPPE:DM-1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Unique Within</label>
+                        <select name="unique_within" class="form-control">
+                            <option value="">Not unique</option>
+                            <option value="parent" {% if field.unique_within == 'parent' %}selected{% endif %}>Parent entity</option>
+                            <option value="global" {% if field.unique_within == 'global' %}selected{% endif %}>Globally</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Parent Ref</label>
+                        <input type="text"
+                               name="parent_ref"
+                               class="form-control"
+                               value="{{ field.parent_ref or '' }}"
+                               placeholder="Entity.field">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reference</label>
+                        <input type="text"
+                               name="reference"
+                               class="form-control"
+                               value="{{ field.reference or '' }}"
+                               placeholder="Entity.field">
+                    </div>
+                </div>
+
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="form-label">Pattern</label>
+                        <input type="text"
+                               name="pattern"
+                               class="form-control"
+                               value="{{ field.constraints.pattern if field.constraints else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min</label>
+                        <input type="number"
+                               name="minimum"
+                               class="form-control"
+                               step="any"
+                               value="{{ field.constraints.minimum if field.constraints and field.constraints.minimum is not none else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max</label>
+                        <input type="number"
+                               name="maximum"
+                               class="form-control"
+                               step="any"
+                               value="{{ field.constraints.maximum if field.constraints and field.constraints.maximum is not none else '' }}">
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Min Length</label>
+                        <input type="number"
+                               name="min_length"
+                               class="form-control"
+                               min="0"
+                               value="{{ field.constraints.min_length if field.constraints and field.constraints.min_length else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Length</label>
+                        <input type="number"
+                               name="max_length"
+                               class="form-control"
+                               min="0"
+                               value="{{ field.constraints.max_length if field.constraints and field.constraints.max_length else '' }}">
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Min Items</label>
+                        <input type="number"
+                               name="min_items"
+                               class="form-control"
+                               min="0"
+                               value="{{ field.constraints.min_items if field.constraints and field.constraints.min_items else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Items</label>
+                        <input type="number"
+                               name="max_items"
+                               class="form-control"
+                               min="0"
+                               value="{{ field.constraints.max_items if field.constraints and field.constraints.max_items else '' }}">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Allowed Values (one per line)</label>
+                    <textarea name="enum_values"
+                              class="form-control"
+                              rows="2"
+                              placeholder="value1&#10;value2&#10;value3">{% if field.constraints and field.constraints.enum %}{{ field.constraints.enum|join('\n') }}{% endif %}</textarea>
+                </div>
+            </div>
+        </details>
+
+        <div class="field-form-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Save Field</button>
+            <button type="button"
+                    class="btn btn-sm"
+                    hx-get="/hub/spec-builder/entity/{{ entity_name }}"
+                    hx-target="#editor-content"
+                    hx-swap="innerHTML">
+                Cancel
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+.field-edit-form {
+    background: var(--clr-primary-bg);
+    border: 1px solid var(--clr-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+}
+
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-sm);
+}
+
+.form-row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: var(--space-sm);
+    align-items: end;
+}
+
+.form-group-checkbox {
+    display: flex;
+    align-items: center;
+    padding-bottom: var(--space-sm);
+}
+
+.form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.field-advanced {
+    margin-top: var(--space-sm);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-sm);
+}
+
+.field-advanced summary {
+    padding: var(--space-sm);
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+}
+
+.field-advanced summary:hover {
+    color: var(--clr-ink);
+}
+
+.field-advanced-content {
+    padding: var(--space-sm);
+    border-top: 1px solid var(--clr-border-light);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.field-form-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+</style>

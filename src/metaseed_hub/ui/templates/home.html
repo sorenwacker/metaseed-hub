@@ -10,12 +10,15 @@
 <div class="home-container">
     <div class="page-header">
         <h1>Your Workspaces</h1>
-        <button class="btn btn-primary"
-                hx-get="/hub/workspaces/new"
-                hx-target="#workspace-modal"
-                hx-swap="innerHTML">
-            + New Workspace
-        </button>
+        <div class="header-actions">
+            <a href="/hub/spec-builder" class="btn">Spec Builder</a>
+            <button class="btn btn-primary"
+                    hx-get="/hub/workspaces/new"
+                    hx-target="#workspace-modal"
+                    hx-swap="innerHTML">
+                + New Workspace
+            </button>
+        </div>
     </div>
 
     <div class="workspace-grid">

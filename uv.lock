@@ -1508,6 +1508,7 @@ dependencies = [
     { name = "python-keycloak" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "types-pyyaml" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
@@ -1529,6 +1530,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest-asyncio" },
     { name = "types-python-jose" },
+    { name = "types-pyyaml" },
     { name = "vulture" },
 ]
 
@@ -1552,6 +1554,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260408" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.13" },
     { name = "websockets", specifier = ">=14.0" },
@@ -1563,6 +1566,7 @@ dev = [
     { name = "mypy", specifier = ">=1.20.2" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "types-python-jose", specifier = ">=3.5.0.20260408" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260408" },
     { name = "vulture", specifier = ">=2.16" },
 ]
 
@@ -2760,6 +2764,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a1/b1/87cdb410d22913df39d7aad8864f94a4f5ad8d507ee07556888fdbe55e19/types_python_jose-3.5.0.20260408.tar.gz", hash = "sha256:3f8dccdc327bfffea7a81084ea1cea722fa499f13c1d04f7978b491dd36e0cf1", size = 11989, upload-time = "2026-04-08T04:34:10.577Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/83/df2b34e64f0a674935d718471cf10fb392a7e5bdb0e9e7c739885b62d274/types_python_jose-3.5.0.20260408-py3-none-any.whl", hash = "sha256:968d8a8eac1ff9da249d6335a2bb9f82288d59ba23afe91fcc2662eb9f485e2a", size = 14694, upload-time = "2026-04-08T04:34:09.747Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260408"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/73/b759b1e413c31034cc01ecdfb96b38115d0ab4db55a752a3929f0cd449fd/types_pyyaml-6.0.12.20260408.tar.gz", hash = "sha256:92a73f2b8d7f39ef392a38131f76b970f8c66e4c42b3125ae872b7c93b556307", size = 17735, upload-time = "2026-04-08T04:30:50.974Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/f0/c391068b86abb708882c6d75a08cd7d25b2c7227dab527b3a3685a3c635b/types_pyyaml-6.0.12.20260408-py3-none-any.whl", hash = "sha256:fbc42037d12159d9c801ebfcc79ebd28335a7c13b08a4cfbc6916df78fee9384", size = 20339, upload-time = "2026-04-08T04:30:50.113Z" },
 ]
 
 [[package]]

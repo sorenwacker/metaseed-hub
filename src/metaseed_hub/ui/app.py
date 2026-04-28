@@ -23,6 +23,7 @@ from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Project, Tenant, Workspace
+from metaseed_hub.ui.spec_builder_routes import create_spec_builder_router
 
 UI_DIR = Path(__file__).parent
 TEMPLATES_DIR = UI_DIR / "templates"
@@ -55,6 +56,10 @@ def create_hub_app() -> FastAPI:
 
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
+
+    # Add spec builder routes
+    spec_builder_router = create_spec_builder_router(templates)
+    app.include_router(spec_builder_router)
 
     # Store for project-specific metaseed app states
     project_states: dict[str, AppState] = {}

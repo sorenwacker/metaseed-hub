@@ -1,0 +1,106 @@
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if success %}
+<div class="alert alert-success">Rule updated</div>
+{% endif %}
+
+<div class="rules-list">
+    {% for rule in rules %}
+    <div class="rule-item {% if loop.index0 == editing_rule_idx %}active{% endif %}"
+         onclick="showRuleModal({{ loop.index0 }}, '{{ rule.name }}')">
+        <div class="rule-info">
+            <span class="rule-name">{{ rule.name }}</span>
+            <span class="rule-applies">
+                {% if rule.applies_to == 'all' %}
+                all entities
+                {% elif rule.applies_to is string %}
+                {{ rule.applies_to }}
+                {% else %}
+                {{ rule.applies_to|join(', ') }}
+                {% endif %}
+            </span>
+        </div>
+        <button class="btn-icon-sm danger"
+                hx-delete="/hub/spec-builder/validation-rule/{{ loop.index0 }}"
+                hx-target="#validation-rules-panel"
+                hx-swap="innerHTML"
+                hx-confirm="Delete rule '{{ rule.name }}'?"
+                onclick="event.stopPropagation();">
+            &times;
+        </button>
+    </div>
+    {% else %}
+    <div class="empty-state-sm">
+        <p>No validation rules</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Add rule form -->
+<form hx-post="/hub/spec-builder/validation-rule"
+      hx-target="#validation-rules-panel"
+      hx-swap="innerHTML"
+      class="add-rule-form">
+    <input type="text"
+           name="name"
+           class="form-control"
+           placeholder="rule_name"
+           required>
+    <button type="submit" class="btn btn-primary btn-sm">+ Add</button>
+</form>
+
+<style>
+.rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.rule-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm);
+    background: var(--clr-background);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.rule-item:hover {
+    border-color: var(--clr-primary);
+}
+
+.rule-item.active {
+    border-color: var(--clr-primary);
+    background: var(--clr-primary-bg);
+}
+
+.rule-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rule-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.rule-applies {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+.add-rule-form {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.add-rule-form input {
+    flex: 1;
+}
+</style>

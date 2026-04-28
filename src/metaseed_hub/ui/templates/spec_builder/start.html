@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Spec Builder - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">Spec Builder</span>
+{% endblock %}
+
+{% block content %}
+<div class="spec-builder-start">
+    <div class="welcome-section">
+        <h1>Create a Metadata Specification</h1>
+        <p>Build a custom specification from scratch or start with an existing template.</p>
+    </div>
+
+    <div class="start-options">
+        <a href="/hub/spec-builder/new" class="start-option-card">
+            <div class="start-option-icon">+</div>
+            <h3>Start from Scratch</h3>
+            <p>Create a new empty specification with your own entities and fields.</p>
+        </a>
+
+        <div class="start-option-card start-option-clone">
+            <div class="start-option-icon">~</div>
+            <h3>Clone Existing</h3>
+            <p>Start with an existing specification as a template.</p>
+
+            {% if templates %}
+            <div class="template-list">
+                {% for template in templates %}
+                <div class="template-item">
+                    <div class="template-info">
+                        <span class="template-name">{{ template.display_name }}</span>
+                        <span class="template-desc">{{ template.description[:80] }}{% if template.description|length > 80 %}...{% endif %}</span>
+                    </div>
+                    <div class="template-versions">
+                        {% for version in template.versions %}
+                        <a href="/hub/spec-builder/clone/{{ template.name }}/{{ version }}"
+                           class="btn btn-sm">
+                            v{{ version }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">No templates available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.spec-builder-start {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.welcome-section {
+    text-align: center;
+    margin-bottom: var(--space-xl);
+}
+
+.welcome-section h1 {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-sm);
+}
+
+.welcome-section p {
+    color: var(--clr-ink-light);
+    font-size: 1.1rem;
+}
+
+.start-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-lg);
+}
+
+.start-option-card {
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-fast);
+}
+
+a.start-option-card:hover {
+    border-color: var(--clr-primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.start-option-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--clr-primary-bg);
+    color: var(--clr-primary);
+    font-size: 1.5rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-md);
+}
+
+.start-option-card h3 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-xs);
+}
+
+.start-option-card > p {
+    color: var(--clr-ink-light);
+    margin-bottom: var(--space-md);
+}
+
+.template-list {
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--clr-border);
+    padding-top: var(--space-md);
+}
+
+.template-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--clr-border-light);
+}
+
+.template-item:last-child {
+    border-bottom: none;
+}
+
+.template-info {
+    flex: 1;
+}
+
+.template-name {
+    font-weight: 600;
+    color: var(--clr-ink);
+    display: block;
+}
+
+.template-desc {
+    font-size: 0.85rem;
+    color: var(--clr-ink-light);
+}
+
+.template-versions {
+    display: flex;
+    gap: var(--space-xs);
+}
+</style>
+{% endblock %}

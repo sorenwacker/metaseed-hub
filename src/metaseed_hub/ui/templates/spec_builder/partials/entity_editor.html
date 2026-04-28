@@ -1,0 +1,314 @@
+<div class="entity-editor">
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="alert alert-success">Saved</div>
+    {% endif %}
+
+    <!-- Entity metadata -->
+    <div class="editor-section">
+        <h4 class="editor-section-title">Details</h4>
+        <form hx-put="/hub/spec-builder/entity/{{ entity_name }}"
+              hx-target="#editor-content"
+              hx-swap="innerHTML">
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description"
+                          class="form-control"
+                          rows="2"
+                          placeholder="What this entity represents...">{{ entity.description or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ontology Term</label>
+                <input type="text"
+                       name="ontology_term"
+                       class="form-control"
+                       value="{{ entity.ontology_term or '' }}"
+                       placeholder="PPEO:entity">
+            </div>
+            <button type="submit" class="btn btn-sm">Update</button>
+        </form>
+    </div>
+
+    <!-- Fields list -->
+    <div class="editor-section">
+        <h4 class="editor-section-title">
+            Fields
+            <span class="count-badge">{{ entity.fields|length }}</span>
+        </h4>
+
+        <div class="fields-list">
+            {% for field in entity.fields %}
+            <div class="field-item {% if loop.index0 == editing_field_idx %}editing{% endif %}"
+                 id="field-card-{{ loop.index0 }}">
+                <div class="field-header"
+                     hx-get="/hub/spec-builder/entity/{{ entity_name }}/field/{{ loop.index0 }}"
+                     hx-target="#field-card-{{ loop.index0 }}"
+                     hx-swap="innerHTML">
+                    <div class="field-info">
+                        <span class="field-name">{{ field.name }}</span>
+                        <span class="field-type-badge">{{ field.type }}</span>
+                        {% if field.required %}
+                        <span class="field-required" title="Required">*</span>
+                        {% endif %}
+                    </div>
+                    <button class="btn-icon-sm danger"
+                            hx-delete="/hub/spec-builder/entity/{{ entity_name }}/field/{{ loop.index0 }}"
+                            hx-target="#editor-content"
+                            hx-swap="innerHTML"
+                            hx-confirm="Delete field '{{ field.name }}'?"
+                            onclick="event.stopPropagation();">
+                        &times;
+                    </button>
+                </div>
+                {% if field.items %}
+                <div class="field-meta">
+                    &rarr; {{ field.items }}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="empty-state-sm">
+                No fields yet
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Add field -->
+        <form hx-post="/hub/spec-builder/entity/{{ entity_name }}/field"
+              hx-target="#editor-content"
+              hx-swap="innerHTML"
+              class="add-field-form">
+            <input type="text"
+                   name="name"
+                   class="form-control"
+                   placeholder="field_name"
+                   required
+                   pattern="[a-z_][a-z0-9_]*">
+            <select name="field_type" class="form-control">
+                {% for ft in field_types %}
+                <option value="{{ ft }}">{{ ft }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm">+</button>
+        </form>
+    </div>
+
+    <!-- Relationships section -->
+    {% set relationships = [] %}
+    {% for field in entity.fields %}
+        {% if field.type in ['list', 'entity'] and field.items %}
+            {% set _ = relationships.append(field) %}
+        {% endif %}
+    {% endfor %}
+    {% if relationships %}
+    <div class="editor-section">
+        <h4 class="editor-section-title">Relationships</h4>
+        <div class="relationships-list">
+            {% for field in relationships %}
+            <div class="relationship-item">
+                <span class="relationship-field">{{ field.name }}</span>
+                <span class="relationship-arrow">&rarr;</span>
+                <span class="relationship-target">{{ field.items }}</span>
+                <span class="relationship-type">{{ field.type }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Delete entity -->
+    <div class="editor-section editor-danger">
+        <button class="btn btn-sm btn-danger"
+                hx-delete="/hub/spec-builder/entity/{{ entity_name }}"
+                hx-target="body"
+                hx-swap="innerHTML"
+                hx-confirm="Delete entity '{{ entity_name }}'? This will remove all fields and relationships.">
+            Delete Entity
+        </button>
+    </div>
+</div>
+
+<style>
+.entity-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.editor-section {
+    border-bottom: 1px solid var(--clr-border-light);
+    padding-bottom: var(--space-md);
+}
+
+.editor-section:last-child {
+    border-bottom: none;
+}
+
+.editor-section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--clr-ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.fields-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.field-item {
+    background: var(--clr-background);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.field-item:hover {
+    border-color: var(--clr-primary);
+}
+
+.field-item.editing {
+    border-color: var(--clr-primary);
+    background: var(--clr-primary-bg);
+}
+
+.field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm);
+}
+
+.field-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.field-name {
+    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.field-type-badge {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    background: var(--clr-ink-lighter);
+    color: white;
+    border-radius: 8px;
+}
+
+.field-required {
+    color: var(--clr-error);
+    font-weight: bold;
+}
+
+.field-meta {
+    padding: 0 var(--space-sm) var(--space-sm);
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+.btn-icon-sm {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: var(--clr-ink-light);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.btn-icon-sm:hover {
+    background: var(--clr-error-bg);
+    color: var(--clr-error);
+}
+
+.add-field-form {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.add-field-form input {
+    flex: 1;
+}
+
+.add-field-form select {
+    width: 80px;
+}
+
+.relationships-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.relationship-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.875rem;
+}
+
+.relationship-field {
+    font-family: var(--font-mono);
+}
+
+.relationship-arrow {
+    color: var(--clr-ink-light);
+}
+
+.relationship-target {
+    color: var(--clr-primary);
+    font-weight: 500;
+}
+
+.relationship-type {
+    font-size: 0.7rem;
+    padding: 1px 4px;
+    background: var(--clr-primary-bg);
+    color: var(--clr-primary);
+    border-radius: 4px;
+}
+
+.editor-danger {
+    padding-top: var(--space-md);
+}
+
+.empty-state-sm {
+    text-align: center;
+    padding: var(--space-md);
+    color: var(--clr-ink-light);
+    font-size: 0.875rem;
+}
+
+.alert {
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-sm);
+    font-size: 0.875rem;
+}
+
+.alert-error {
+    background: var(--clr-error-bg);
+    color: var(--clr-error);
+}
+
+.alert-success {
+    background: var(--clr-success-bg);
+    color: var(--clr-success);
+}
+</style>
