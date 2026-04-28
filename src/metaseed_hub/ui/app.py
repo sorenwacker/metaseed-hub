@@ -472,6 +472,8 @@ def create_hub_app() -> FastAPI:
         entity_type: str,
         session: Annotated[AsyncSession, Depends(get_session)],
         node_id: str | None = None,
+        parent_id: str | None = None,
+        parent_field: str | None = None,
     ) -> HTMLResponse:
         """Return form for creating or editing an entity."""
         user = await get_current_user_from_cookie(request)
@@ -532,6 +534,8 @@ def create_hub_app() -> FastAPI:
                 "project_id": project_id,
                 "entity_type": entity_type,
                 "node_id": node_id,
+                "parent_id": parent_id,
+                "parent_field": parent_field,
                 "description": helper.description,
                 "required_fields": required_fields,
                 "optional_fields": optional_fields,
@@ -554,6 +558,8 @@ def create_hub_app() -> FastAPI:
         form_data = await request.form()
         entity_type = str(form_data.get("_entity_type", ""))
         node_id = str(form_data.get("_node_id", "")) or None
+        parent_id = str(form_data.get("_parent_id", "")) or None
+        parent_field = str(form_data.get("_parent_field", "")) or None
 
         if not entity_type:
             return HTMLResponse("<div class='error'>Missing entity type</div>")
@@ -605,7 +611,9 @@ def create_hub_app() -> FastAPI:
                 success_msg = f"{entity_type} updated successfully."
             else:
                 # Create new node
-                node = state.add_node(entity_type, instance)
+                node = state.add_node(
+                    entity_type, instance, parent_id=parent_id, parent_field=parent_field
+                )
                 node_id = node.id
                 success_msg = f"{entity_type} created successfully."
 
