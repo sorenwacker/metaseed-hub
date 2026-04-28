@@ -489,21 +489,100 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(26, 58, 47, 0.5);
+    background: rgba(26, 58, 47, 0.6);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    animation: overlayFadeIn 0.2s ease;
+}
+
+@keyframes overlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .modal-content {
     background: white;
     border-radius: var(--radius-lg);
-    padding: var(--space-xl);
+    padding: 0;
     width: 100%;
     max-width: 480px;
     box-shadow: var(--shadow-lg);
     animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    position: relative;
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--clr-moss), var(--clr-sage), var(--clr-accent-light));
+}
+
+.modal-content h2 {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 500;
+    color: var(--clr-forest);
+    margin: 0;
+    padding: var(--space-lg) var(--space-xl);
+    padding-top: calc(var(--space-lg) + 4px);
+    border-bottom: 1px solid var(--clr-parchment);
+    background: var(--clr-ivory);
+}
+
+.modal-content form {
+    padding: var(--space-xl);
+}
+
+.modal-content .form-group {
+    display: block;
+    margin-right: 0;
+    margin-bottom: var(--space-lg);
+}
+
+.modal-content .form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: var(--space-xs);
+    color: var(--clr-ink);
+    font-size: 0.875rem;
+}
+
+.modal-content .form-group input,
+.modal-content .form-group select,
+.modal-content .form-group textarea {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 0.9375rem;
+    transition: all var(--transition-fast);
+}
+
+.modal-content .form-group input:focus,
+.modal-content .form-group select:focus,
+.modal-content .form-group textarea:focus {
+    outline: none;
+    border-color: var(--clr-moss);
+    box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.12);
+}
+
+.modal-content .form-actions {
+    padding: var(--space-lg) var(--space-xl);
+    background: var(--clr-ivory);
+    border-top: 1px solid var(--clr-parchment);
+    margin: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
 }
 
 @keyframes modalEnter {
@@ -515,14 +594,6 @@ body {
         opacity: 1;
         transform: scale(1) translateY(0);
     }
-}
-
-.modal-content h2 {
-    font-family: var(--font-display);
-    margin-bottom: var(--space-lg);
-    font-size: 1.25rem;
-    font-weight: 500;
-    color: var(--clr-forest);
 }
 
 /* Form Groups */
