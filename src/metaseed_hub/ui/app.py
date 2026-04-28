@@ -6,7 +6,7 @@ on top of the base metaseed entity editing UI.
 
 import secrets
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
-from metaseed.ui.state import AppState
+from metaseed.ui.state import AppState, TreeNode
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,170 @@ async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
         return None
 
 
+def serialize_tree(state: AppState) -> dict[str, Any]:
+    """Serialize AppState entity tree to JSON-compatible dict.
+
+    Args:
+        state: AppState with entity tree to serialize.
+
+    Returns:
+        Dictionary that can be stored as JSONB in database.
+    """
+
+    def serialize_node(node: TreeNode) -> dict[str, Any]:
+        node_data: dict[str, Any] = {
+            "id": node.id,
+            "entity_type": node.entity_type,
+            "label": node.label,
+            "parent_id": node.parent_id,
+            "data": {},
+        }
+        if node.instance and hasattr(node.instance, "model_dump"):
+            node_data["data"] = node.instance.model_dump(exclude_none=True)
+        if node.children:
+            node_data["children"] = [serialize_node(c) for c in node.children]
+        return node_data
+
+    return {
+        "profile": state.profile,
+        "version": state.version,
+        "tree": [serialize_node(n) for n in state.entity_tree],
+    }
+
+
+def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
+    """Deserialize JSON data into AppState entity tree.
+
+    Args:
+        state: AppState to populate.
+        data: Dictionary loaded from database JSONB.
+    """
+    if not data or "tree" not in data:
+        return
+
+    facade = state.get_or_create_facade()
+
+    def deserialize_node(
+        node_data: dict[str, Any],
+        parent_id: str | None = None,
+    ) -> TreeNode | None:
+        entity_type = node_data.get("entity_type")
+        if not entity_type:
+            return None
+
+        try:
+            helper = getattr(facade, entity_type)
+        except AttributeError:
+            return None
+
+        # Create instance from stored data
+        instance_data = node_data.get("data", {})
+        try:
+            instance = helper.create(**instance_data)
+        except Exception:
+            return None
+
+        node = TreeNode(
+            id=node_data.get("id", ""),
+            entity_type=entity_type,
+            instance=instance,
+            label=node_data.get("label", f"New {entity_type}"),
+            parent_id=parent_id,
+        )
+
+        # Recursively deserialize children
+        for child_data in node_data.get("children", []):
+            child = deserialize_node(child_data, parent_id=node.id)
+            if child:
+                node.children.append(child)
+                state.nodes_by_id[child.id] = child
+
+        return node
+
+    state.entity_tree = []
+    state.nodes_by_id = {}
+
+    for node_data in data.get("tree", []):
+        node = deserialize_node(node_data)
+        if node:
+            state.entity_tree.append(node)
+            state.nodes_by_id[node.id] = node
+
+
+def build_inline_tables(
+    state: AppState,
+    node_id: str,
+    nested_fields: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Build inline table data for nested fields of a node.
+
+    Args:
+        state: Application state containing nodes.
+        node_id: ID of the parent node.
+        nested_fields: List of nested field definitions.
+
+    Returns:
+        Dictionary mapping field names to table data.
+    """
+    if node_id not in state.nodes_by_id:
+        return {}
+
+    node = state.nodes_by_id[node_id]
+    facade = state.get_or_create_facade()
+    inline_tables = {}
+
+    for field in nested_fields:
+        field_name = field["name"]
+        item_type = field.get("item_type")
+        if not item_type:
+            continue
+
+        # Get helper for the nested entity type
+        try:
+            helper = getattr(facade, item_type)
+        except AttributeError:
+            continue
+
+        # Find children of this type under this node
+        children = [child for child in node.children if child.entity_type == item_type]
+
+        # Build columns from helper's simple fields (exclude nested)
+        columns = []
+        column_types = {}
+        for fname in helper.all_fields:
+            info = helper.field_info(fname)
+            is_nested = info.get("type") in ("list", "entity") and info.get("items")
+            if not is_nested:
+                columns.append(fname)
+                column_types[fname] = info.get("type", "string")
+
+        # Limit columns for display (show first 4 + identifier)
+        display_columns = columns[:5] if len(columns) > 5 else columns
+
+        # Build rows from children
+        rows = []
+        for idx, child in enumerate(children):
+            row_data = {"_idx": idx, "_node_id": child.id}
+            if hasattr(child.instance, "model_dump"):
+                data = child.instance.model_dump(exclude_none=True)
+                for col in display_columns:
+                    val = data.get(col, "")
+                    # Truncate long values for display
+                    if isinstance(val, str) and len(val) > 50:
+                        val = val[:47] + "..."
+                    row_data[col] = val
+            rows.append(row_data)
+
+        inline_tables[field_name] = {
+            "columns": display_columns,
+            "rows": rows,
+            "column_types": column_types,
+            "nested_entity_type": item_type,
+        }
+
+    return inline_tables
+
+
 def create_hub_app() -> FastAPI:
     """Create the Hub FastAPI application with extended UI.
 
@@ -64,11 +228,45 @@ def create_hub_app() -> FastAPI:
     # Store for project-specific metaseed app states
     project_states: dict[str, AppState] = {}
 
-    def get_project_state(project_id: str) -> AppState:
-        """Get or create AppState for a project."""
+    def get_project_state(project: Project) -> AppState:
+        """Get or create AppState for a project, loading from database if needed.
+
+        Args:
+            project: Project model with profile, version, and data fields.
+
+        Returns:
+            AppState populated with project's entity tree.
+        """
+        project_id = project.id
         if project_id not in project_states:
-            project_states[project_id] = AppState()
-        return project_states[project_id]
+            state = AppState()
+            state.profile = project.profile
+            state.version = project.version
+            # Load existing data from database
+            if project.data:
+                deserialize_tree(state, project.data)
+            project_states[project_id] = state
+        else:
+            state = project_states[project_id]
+            state.profile = project.profile
+            state.version = project.version
+        return state
+
+    async def save_project_state(
+        session: AsyncSession,
+        project: Project,
+        state: AppState,
+    ) -> None:
+        """Save AppState entity tree to database.
+
+        Args:
+            session: Database session.
+            project: Project model to update.
+            state: AppState with entity tree to save.
+        """
+        project.data = serialize_tree(state)
+        await session.commit()
+        await session.refresh(project)
 
     settings = get_settings()
     hub_base_url = f"{settings.app_url}/hub"
@@ -412,10 +610,8 @@ def create_hub_app() -> FastAPI:
         if not project:
             return RedirectResponse("/hub/")
 
-        # Get or create state for this project
-        state = get_project_state(project_id)
-        state.profile = project.profile
-        state.version = project.version
+        # Get or create state for this project (loads from database)
+        state = get_project_state(project)
 
         return templates.TemplateResponse(
             request=request,
@@ -440,7 +636,12 @@ def create_hub_app() -> FastAPI:
         if not user:
             return HTMLResponse(status_code=401)
 
-        state = get_project_state(project_id)
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return HTMLResponse("<div class='error'>Project not found</div>")
+
+        state = get_project_state(project)
         tree_data = state.get_tree_data()
 
         if not tree_data:
@@ -486,9 +687,7 @@ def create_hub_app() -> FastAPI:
         if not project:
             return HTMLResponse("<div class='error'>Project not found</div>")
 
-        state = get_project_state(project_id)
-        state.profile = project.profile
-        state.version = project.version
+        state = get_project_state(project)
         facade = state.get_or_create_facade()
 
         # Get entity helper
@@ -521,10 +720,12 @@ def create_hub_app() -> FastAPI:
 
         # Get current values if editing
         values: dict[str, object] = {}
+        inline_tables: dict[str, dict[str, Any]] = {}
         if node_id and node_id in state.nodes_by_id:
             node = state.nodes_by_id[node_id]
             if hasattr(node.instance, "model_dump"):
                 values = node.instance.model_dump(exclude_none=True)
+            inline_tables = build_inline_tables(state, node_id, nested_fields)
 
         return templates.TemplateResponse(
             request=request,
@@ -540,6 +741,7 @@ def create_hub_app() -> FastAPI:
                 "required_fields": required_fields,
                 "optional_fields": optional_fields,
                 "nested_fields": nested_fields,
+                "inline_tables": inline_tables,
                 "values": values,
             },
         )
@@ -570,9 +772,7 @@ def create_hub_app() -> FastAPI:
         if not project:
             return HTMLResponse("<div class='error'>Project not found</div>")
 
-        state = get_project_state(project_id)
-        state.profile = project.profile
-        state.version = project.version
+        state = get_project_state(project)
         facade = state.get_or_create_facade()
 
         try:
@@ -615,6 +815,9 @@ def create_hub_app() -> FastAPI:
                 node_id = node.id
                 success_msg = f"{entity_type} created successfully."
 
+            # Save to database
+            await save_project_state(session, project, state)
+
             # Re-render form with success message
             fields = []
             for field_name in helper.all_fields:
@@ -636,6 +839,9 @@ def create_hub_app() -> FastAPI:
             optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
             nested_fields = [f for f in fields if f["is_nested"]]
 
+            # Build inline tables for the saved entity
+            inline_tables = build_inline_tables(state, node_id, nested_fields)
+
             response = templates.TemplateResponse(
                 request=request,
                 name="partials/entity_form.html",
@@ -649,6 +855,7 @@ def create_hub_app() -> FastAPI:
                     "required_fields": required_fields,
                     "optional_fields": optional_fields,
                     "nested_fields": nested_fields,
+                    "inline_tables": inline_tables,
                     "values": instance.model_dump(exclude_none=True),
                     "success": success_msg,
                 },
@@ -679,6 +886,11 @@ def create_hub_app() -> FastAPI:
             optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
             nested_fields = [f for f in fields if f["is_nested"]]
 
+            # Build inline tables if editing existing entity
+            inline_tables = {}
+            if node_id:
+                inline_tables = build_inline_tables(state, node_id, nested_fields)
+
             return templates.TemplateResponse(
                 request=request,
                 name="partials/entity_form.html",
@@ -691,6 +903,7 @@ def create_hub_app() -> FastAPI:
                     "required_fields": required_fields,
                     "optional_fields": optional_fields,
                     "nested_fields": nested_fields,
+                    "inline_tables": inline_tables,
                     "values": values,
                     "error": str(e),
                 },
@@ -714,9 +927,7 @@ def create_hub_app() -> FastAPI:
         if not project:
             return HTMLResponse("<div class='error'>Project not found</div>")
 
-        state = get_project_state(project_id)
-        state.profile = project.profile
-        state.version = project.version
+        state = get_project_state(project)
 
         if node_id not in state.nodes_by_id:
             return HTMLResponse("<div class='error'>Entity not found</div>")
@@ -756,6 +967,9 @@ def create_hub_app() -> FastAPI:
         if hasattr(node.instance, "model_dump"):
             values = node.instance.model_dump(exclude_none=True)
 
+        # Build inline tables for nested fields
+        inline_tables = build_inline_tables(state, node_id, nested_fields)
+
         return templates.TemplateResponse(
             request=request,
             name="partials/entity_form.html",
@@ -764,10 +978,12 @@ def create_hub_app() -> FastAPI:
                 "project_id": project_id,
                 "entity_type": entity_type,
                 "node_id": node_id,
+                "parent_id": node.parent_id,
                 "description": helper.description,
                 "required_fields": required_fields,
                 "optional_fields": optional_fields,
                 "nested_fields": nested_fields,
+                "inline_tables": inline_tables,
                 "values": values,
             },
         )
@@ -784,13 +1000,22 @@ def create_hub_app() -> FastAPI:
         if not user:
             return HTMLResponse(status_code=401)
 
-        state = get_project_state(project_id)
+        # Load project
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return HTMLResponse("<div class='error'>Project not found</div>")
+
+        state = get_project_state(project)
 
         if node_id not in state.nodes_by_id:
             return HTMLResponse("<div class='error'>Entity not found</div>")
 
         # Delete the node
         state.delete_node(node_id)
+
+        # Save to database
+        await save_project_state(session, project, state)
 
         # Return updated tree
         tree_data = state.get_tree_data()
@@ -850,13 +1075,19 @@ def create_hub_app() -> FastAPI:
     async def project_metaseed_ui(
         request: Request,
         project_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Embedded metaseed UI for a project."""
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/")
 
-        state = get_project_state(project_id)
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return RedirectResponse("/hub/")
+
+        state = get_project_state(project)
 
         # Forward the request to metaseed's index
         # This is a simplified approach - in production you'd use proper sub-app mounting

@@ -1409,6 +1409,8 @@ textarea {
 
 /* Nested Fields */
 .nested-field-btn {
+    display: flex;
+    align-items: center;
     width: 100%;
     justify-content: flex-start;
     background: var(--clr-paper);
@@ -1419,6 +1421,9 @@ textarea {
     transition: all var(--transition-fast);
     margin-bottom: var(--space-sm);
     cursor: pointer;
+    text-decoration: none;
+    font-family: inherit;
+    font-size: inherit;
 }
 
 .nested-field-btn:hover:not(:disabled) {
@@ -1452,6 +1457,116 @@ textarea {
     color: var(--clr-ink-light);
     font-size: 0.8125rem;
     margin-left: var(--space-sm);
+}
+
+/* Inline Tables */
+.inline-table-section {
+    background: var(--clr-paper);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+    overflow: hidden;
+}
+
+.inline-table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-parchment);
+}
+
+.inline-table-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.inline-table-title h4 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--clr-ink);
+}
+
+.inline-table-icon {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+    transition: transform 0.2s ease;
+}
+
+.inline-table-count {
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+}
+
+.inline-table-content {
+    max-height: 400px;
+    overflow: auto;
+}
+
+.inline-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.inline-data-table th,
+.inline-data-table td {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.875rem;
+    text-align: left;
+    border-bottom: 1px solid var(--clr-parchment);
+}
+
+.inline-data-table thead th {
+    background: var(--clr-ivory);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.inline-data-table tbody tr:hover {
+    background: var(--clr-parchment);
+}
+
+.row-actions {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: flex-end;
+}
+
+.btn-icon {
+    background: none;
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-sm);
+    padding: var(--space-xs);
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--clr-ink);
+    transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+    background: var(--clr-parchment);
+    border-color: var(--clr-sage);
+}
+
+.btn-icon.danger:hover {
+    background: var(--clr-error-bg);
+    border-color: var(--clr-error);
+    color: var(--clr-error);
+}
+
+.text-muted {
+    color: var(--clr-ink-light);
+}
+
+.text-center {
+    text-align: center;
 }
 
 /* Success/Error Messages */
