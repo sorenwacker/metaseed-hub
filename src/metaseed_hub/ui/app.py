@@ -559,6 +559,7 @@ def create_hub_app() -> FastAPI:
         entity_type = str(form_data.get("_entity_type", ""))
         node_id = str(form_data.get("_node_id", "")) or None
         parent_id = str(form_data.get("_parent_id", "")) or None
+        # parent_field not used by add_node but kept for template
 
         if not entity_type:
             return HTMLResponse("<div class='error'>Missing entity type</div>")
@@ -643,6 +644,7 @@ def create_hub_app() -> FastAPI:
                     "project_id": project_id,
                     "entity_type": entity_type,
                     "node_id": node_id,
+                    "parent_id": parent_id,
                     "description": helper.description,
                     "required_fields": required_fields,
                     "optional_fields": optional_fields,
