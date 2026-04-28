@@ -841,6 +841,18 @@ body {
     margin-top: var(--space-md);
 }
 
+.related-entity-group {
+    background: var(--clr-paper);
+    padding: var(--space-sm);
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--clr-parchment);
+}
+
+.related-entity-group .form-label {
+    color: var(--clr-moss);
+    font-weight: 500;
+}
+
 /* Entity editor */
 .entity-editor {
     display: flex;
