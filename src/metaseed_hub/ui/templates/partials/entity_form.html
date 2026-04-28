@@ -1,4 +1,5 @@
 <div class="entity-form">
+    <!-- DEBUG: parent_id={{ parent_id }} -->
     {% if parent_id %}
     <button type="button" class="btn btn-sm back-btn"
             hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
