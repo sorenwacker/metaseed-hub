@@ -559,7 +559,6 @@ def create_hub_app() -> FastAPI:
         entity_type = str(form_data.get("_entity_type", ""))
         node_id = str(form_data.get("_node_id", "")) or None
         parent_id = str(form_data.get("_parent_id", "")) or None
-        parent_field = str(form_data.get("_parent_field", "")) or None
 
         if not entity_type:
             return HTMLResponse("<div class='error'>Missing entity type</div>")
@@ -611,9 +610,7 @@ def create_hub_app() -> FastAPI:
                 success_msg = f"{entity_type} updated successfully."
             else:
                 # Create new node
-                node = state.add_node(
-                    entity_type, instance, parent_id=parent_id, parent_field=parent_field
-                )
+                node = state.add_node(entity_type, instance, parent_id=parent_id)
                 node_id = node.id
                 success_msg = f"{entity_type} created successfully."
 
