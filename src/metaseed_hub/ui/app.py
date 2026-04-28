@@ -335,6 +335,61 @@ def create_hub_app() -> FastAPI:
 
         return RedirectResponse(f"/hub/projects/{project.id}", status_code=303)
 
+    @app.delete("/projects/{project_id}", response_class=HTMLResponse)
+    async def project_delete(
+        request: Request,
+        project_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Delete a project."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return HTMLResponse(status_code=401)
+
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+
+        if not project:
+            return HTMLResponse("<div class='error'>Project not found</div>")
+
+        workspace_id = project.workspace_id
+        await session.delete(project)
+        await session.commit()
+
+        # Return updated project grid
+        result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
+        projects = list(result.scalars().all())
+
+        html = '<div class="project-grid" id="project-grid">'
+        for p in projects:
+            html += f"""
+            <div class="project-card">
+                <a href="/hub/projects/{p.id}" class="project-card-link">
+                    <h3>{p.name}</h3>
+                    <div class="project-meta">
+                        <span class="profile-badge">{p.profile} {p.version}</span>
+                        <span class="date">{p.updated_at.strftime('%Y-%m-%d %H:%M')}</span>
+                    </div>
+                </a>
+                <button class="project-delete" title="Delete project"
+                        hx-delete="/hub/projects/{p.id}"
+                        hx-target="#project-grid"
+                        hx-swap="outerHTML"
+                        hx-confirm="Delete '{p.name}'? This cannot be undone.">
+                    &times;
+                </button>
+            </div>
+            """
+        if not projects:
+            html += """
+            <div class="empty-state">
+                <p>No projects yet.</p>
+                <p>Create a project to start working with metadata.</p>
+            </div>
+            """
+        html += "</div>"
+        return HTMLResponse(html)
+
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
     async def project_editor(
         request: Request,
