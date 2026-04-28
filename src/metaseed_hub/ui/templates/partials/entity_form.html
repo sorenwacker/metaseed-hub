@@ -1,0 +1,208 @@
+<div class="entity-form">
+    {% if success %}
+    <div class="success-message">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="error-message">{{ error }}</div>
+    {% endif %}
+
+    <h2>{{ "Edit" if node_id else "New" }} {{ entity_type }}</h2>
+    {% if description %}
+    <p class="entity-description">{{ description }}</p>
+    {% endif %}
+
+    <form method="post"
+          action="/hub/projects/{{ project_id }}/entities"
+          hx-post="/hub/projects/{{ project_id }}/entities"
+          hx-target="#editor"
+          hx-swap="innerHTML">
+        <input type="hidden" name="_entity_type" value="{{ entity_type }}">
+        {% if node_id %}
+        <input type="hidden" name="_node_id" value="{{ node_id }}">
+        {% endif %}
+
+        {% if required_fields %}
+        <div class="form-section">
+            <h3 class="form-section-title">Required Fields</h3>
+            <div class="form-section-fields">
+                {% for field in required_fields %}
+                <div class="form-group">
+                    <label class="form-label" for="{{ field.name }}">
+                        {{ field.name | replace("_", " ") | title }}
+                        <span class="required">*</span>
+                    </label>
+
+                    {% if field.type == "boolean" %}
+                    <select class="form-input" id="{{ field.name }}" name="{{ field.name }}" required>
+                        <option value="">Select...</option>
+                        <option value="true" {{ "selected" if values.get(field.name) == true else "" }}>Yes</option>
+                        <option value="false" {{ "selected" if values.get(field.name) == false else "" }}>No</option>
+                    </select>
+
+                    {% elif field.constraints and field.constraints.enum %}
+                    <select class="form-input" id="{{ field.name }}" name="{{ field.name }}" required>
+                        <option value="">Select...</option>
+                        {% for option in field.constraints.enum %}
+                        <option value="{{ option }}" {{ "selected" if values.get(field.name) == option else "" }}>
+                            {{ option }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    {% elif field.type == "integer" %}
+                    <input class="form-input" type="number" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.minimum is not none %}min="{{ field.constraints.minimum }}"{% endif %}
+                           {% if field.constraints.maximum is not none %}max="{{ field.constraints.maximum }}"{% endif %}
+                           {% endif %}
+                           required>
+
+                    {% elif field.type == "float" %}
+                    <input class="form-input" type="number" step="any" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.minimum is not none %}min="{{ field.constraints.minimum }}"{% endif %}
+                           {% if field.constraints.maximum is not none %}max="{{ field.constraints.maximum }}"{% endif %}
+                           {% endif %}
+                           required>
+
+                    {% elif field.type == "date" %}
+                    <input class="form-input" type="date" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}" required>
+
+                    {% elif field.type == "datetime" %}
+                    <input class="form-input" type="datetime-local" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}" required>
+
+                    {% elif field.type == "uri" %}
+                    <input class="form-input" type="url" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           placeholder="https://..." required>
+
+                    {% else %}
+                    <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern }}"{% endif %}
+                           {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
+                           {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
+                           {% endif %}
+                           required>
+                    {% endif %}
+
+                    {% if field.description %}
+                    <small class="form-help">{{ field.description }}</small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if nested_fields %}
+        <div class="form-section">
+            <h3 class="form-section-title">Related Entities</h3>
+            <p class="form-help" style="margin-bottom: var(--space-md);">
+                Save this {{ entity_type }} first, then add related items.
+            </p>
+            {% for field in nested_fields %}
+            <button type="button" class="nested-field-btn" disabled>
+                <span class="nested-field-icon">+</span>
+                <span class="nested-field-label">{{ field.name | replace("_", " ") | title }}</span>
+                <span class="nested-field-type">({{ field.item_type }})</span>
+            </button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if optional_fields %}
+        <div class="collapsible" id="optional-fields">
+            <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+                <span class="collapsible-icon">▶</span>
+                <span>Optional Fields ({{ optional_fields | length }})</span>
+            </div>
+            <div class="collapsible-content">
+                {% for field in optional_fields %}
+                <div class="form-group">
+                    <label class="form-label" for="{{ field.name }}">
+                        {{ field.name | replace("_", " ") | title }}
+                    </label>
+
+                    {% if field.type == "boolean" %}
+                    <select class="form-input" id="{{ field.name }}" name="{{ field.name }}">
+                        <option value="">Not specified</option>
+                        <option value="true" {{ "selected" if values.get(field.name) == true else "" }}>Yes</option>
+                        <option value="false" {{ "selected" if values.get(field.name) == false else "" }}>No</option>
+                    </select>
+
+                    {% elif field.constraints and field.constraints.enum %}
+                    <select class="form-input" id="{{ field.name }}" name="{{ field.name }}">
+                        <option value="">Select...</option>
+                        {% for option in field.constraints.enum %}
+                        <option value="{{ option }}" {{ "selected" if values.get(field.name) == option else "" }}>
+                            {{ option }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    {% elif field.type == "integer" %}
+                    <input class="form-input" type="number" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.minimum is not none %}min="{{ field.constraints.minimum }}"{% endif %}
+                           {% if field.constraints.maximum is not none %}max="{{ field.constraints.maximum }}"{% endif %}
+                           {% endif %}>
+
+                    {% elif field.type == "float" %}
+                    <input class="form-input" type="number" step="any" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.minimum is not none %}min="{{ field.constraints.minimum }}"{% endif %}
+                           {% if field.constraints.maximum is not none %}max="{{ field.constraints.maximum }}"{% endif %}
+                           {% endif %}>
+
+                    {% elif field.type == "date" %}
+                    <input class="form-input" type="date" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}">
+
+                    {% elif field.type == "datetime" %}
+                    <input class="form-input" type="datetime-local" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}">
+
+                    {% elif field.type == "uri" %}
+                    <input class="form-input" type="url" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           placeholder="https://...">
+
+                    {% else %}
+                    <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
+                           value="{{ values.get(field.name, '') }}"
+                           {% if field.constraints %}
+                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern }}"{% endif %}
+                           {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
+                           {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
+                           {% endif %}>
+                    {% endif %}
+
+                    {% if field.description %}
+                    <small class="form-help">{{ field.description }}</small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('editor').innerHTML='<div class=editor-placeholder><p>Select an entity or create a new one.</p></div>'">
+                Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">
+                {{ "Save Changes" if node_id else "Create " + entity_type }}
+            </button>
+        </div>
+    </form>
+</div>

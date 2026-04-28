@@ -63,3 +63,45 @@ engine  # noqa: F821
 setup_database  # noqa: F821
 connection  # noqa: F821
 session  # noqa: F821
+
+# FastAPI route handlers (registered via decorators)
+health_check  # noqa: F821
+readiness_check  # noqa: F821
+list_projects  # noqa: F821
+create_project  # noqa: F821
+get_project  # noqa: F821
+update_project  # noqa: F821
+delete_project  # noqa: F821
+root  # noqa: F821
+websocket_endpoint  # noqa: F821
+auth_login  # noqa: F821
+auth_callback  # noqa: F821
+auth_logout  # noqa: F821
+home  # noqa: F821
+workspace_new  # noqa: F821
+workspace_create  # noqa: F821
+workspace_detail  # noqa: F821
+project_new  # noqa: F821
+project_create  # noqa: F821
+project_editor  # noqa: F821
+project_tree  # noqa: F821
+project_entity_form  # noqa: F821
+project_entity_create  # noqa: F821
+project_entity_edit  # noqa: F821
+project_entity_delete  # noqa: F821
+privacy_policy  # noqa: F821
+acceptable_use_policy  # noqa: F821
+project_chat  # noqa: F821
+project_metaseed_ui  # noqa: F821
+
+# WebSocket manager methods called dynamically
+send_to_connection  # noqa: F821
+get_room_presence  # noqa: F821
+
+# Model fields used by SQLAlchemy ORM
+display_name  # noqa: F821
+team_id  # noqa: F821
+role  # noqa: F821
+entity_id  # noqa: F821
+content  # noqa: F821
+roles  # noqa: F821

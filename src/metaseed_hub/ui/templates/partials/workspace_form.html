@@ -1,0 +1,24 @@
+<div class="modal-overlay" onclick="this.parentElement.innerHTML=''">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2>New Workspace</h2>
+        <form method="post" action="/hub/workspaces">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required
+                       placeholder="My Workspace" autofocus>
+            </div>
+            <div class="form-group">
+                <label for="description">Description (optional)</label>
+                <textarea id="description" name="description" rows="3"
+                          placeholder="What is this workspace for?"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn"
+                        onclick="this.closest('.modal-overlay').parentElement.innerHTML=''">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Create Workspace</button>
+            </div>
+        </form>
+    </div>
+</div>

@@ -63,9 +63,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenants.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("tenant_id", "name", name="uq_teams_tenant_name"),
     )
@@ -92,13 +90,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenants.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"
-        ),
+        sa.UniqueConstraint("tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"),
         sa.UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
     )
     op.create_index("ix_users_tenant_id", "users", ["tenant_id"])
@@ -144,13 +138,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenants.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "tenant_id", "name", name="uq_workspaces_tenant_name"
-        ),
+        sa.UniqueConstraint("tenant_id", "name", name="uq_workspaces_tenant_name"),
     )
     op.create_index("ix_workspaces_tenant_id", "workspaces", ["tenant_id"])
 
@@ -181,13 +171,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["workspace_id"], ["workspaces.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "workspace_id", "name", name="uq_projects_workspace_name"
-        ),
+        sa.UniqueConstraint("workspace_id", "name", name="uq_projects_workspace_name"),
     )
     op.create_index("ix_projects_workspace_id", "projects", ["workspace_id"])
 
@@ -212,9 +198,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["project_id"], ["projects.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -243,9 +227,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["project_id"], ["projects.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

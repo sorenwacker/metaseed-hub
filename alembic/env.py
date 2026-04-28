@@ -18,6 +18,36 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Tables managed by our application
+OUR_TABLES = {
+    "tenants",
+    "teams",
+    "team_memberships",
+    "users",
+    "workspaces",
+    "projects",
+    "notes",
+    "chat_messages",
+    "alembic_version",
+}
+
+
+def include_object(
+    object: object,
+    name: str | None,
+    type_: str,
+    reflected: bool,
+    compare_to: object | None,
+) -> bool:
+    """Filter objects to only include our tables, not Keycloak's."""
+    if type_ == "table":
+        return name in OUR_TABLES if name else False
+    if type_ == "index" and hasattr(object, "table"):
+        return object.table.name in OUR_TABLES  # type: ignore[union-attr]
+    if type_ == "foreign_key_constraint" and hasattr(object, "parent"):
+        return object.parent.table.name in OUR_TABLES  # type: ignore[union-attr]
+    return True
+
 
 def get_url() -> str:
     """Get database URL from settings."""
@@ -39,6 +69,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -47,7 +78,11 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations with the given connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

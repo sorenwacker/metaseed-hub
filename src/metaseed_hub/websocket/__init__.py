@@ -57,7 +57,7 @@ class WebSocketManager:
         self._rooms: dict[str, Room] = {}
         self._redis: redis.Redis | None = None
         self._pubsub: redis.client.PubSub | None = None
-        self._listener_task: asyncio.Task | None = None
+        self._listener_task: asyncio.Task[None] | None = None
 
     async def connect_redis(self) -> None:
         """Connect to Redis for pub/sub."""

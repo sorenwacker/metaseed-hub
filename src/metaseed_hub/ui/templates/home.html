@@ -11,7 +11,7 @@
     <div class="page-header">
         <h1>Your Workspaces</h1>
         <button class="btn btn-primary"
-                hx-get="/workspaces/new"
+                hx-get="/hub/workspaces/new"
                 hx-target="#workspace-modal"
                 hx-swap="innerHTML">
             + New Workspace
@@ -20,7 +20,7 @@
 
     <div class="workspace-grid">
         {% for workspace in workspaces %}
-        <a href="/workspaces/{{ workspace.id }}" class="workspace-card">
+        <a href="/hub/workspaces/{{ workspace.id }}" class="workspace-card">
             <h3>{{ workspace.name }}</h3>
             {% if workspace.description %}
             <p>{{ workspace.description }}</p>

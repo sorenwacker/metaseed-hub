@@ -34,9 +34,9 @@ class KeycloakAuth:
             settings: Application settings containing Keycloak configuration.
         """
         self._settings = settings
-        self._jwks: dict | None = None
+        self._jwks: dict[str, list[dict[str, str]]] | None = None
 
-    async def get_jwks(self) -> dict:
+    async def get_jwks(self) -> dict[str, list[dict[str, str]]]:
         """Fetch JWKS from Keycloak.
 
         Returns:

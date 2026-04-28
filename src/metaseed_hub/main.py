@@ -80,7 +80,7 @@ def create_app() -> FastAPI:
     from fastapi.responses import RedirectResponse
 
     @app.get("/")
-    async def root():
+    async def root() -> RedirectResponse:
         """Redirect to hub UI."""
         return RedirectResponse(url="/hub/")
 

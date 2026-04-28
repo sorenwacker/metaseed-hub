@@ -10,18 +10,20 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
+        exclude: ^(alembic/|tests/|vulture_whitelist\.py|scripts/)
         additional_dependencies:
           - fastapi
           - pydantic
           - pydantic-settings
           - sqlalchemy[asyncio]
+          - types-python-jose
         args: [--ignore-missing-imports]
 
   - repo: local
     hooks:
       - id: vulture
         name: vulture
-        entry: vulture
+        entry: uv run vulture
         args: [src/, vulture_whitelist.py, --min-confidence=80]
         language: system
         types: [python]

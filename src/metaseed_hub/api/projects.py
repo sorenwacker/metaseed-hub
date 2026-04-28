@@ -60,9 +60,7 @@ async def list_projects(
     Returns:
         List of projects in the workspace.
     """
-    result = await session.execute(
-        select(Project).where(Project.workspace_id == workspace_id)
-    )
+    result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
     return list(result.scalars().all())
 
 
