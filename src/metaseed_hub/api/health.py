@@ -39,7 +39,7 @@ async def health_check() -> dict[str, Any]:
     try:
         import redis.asyncio as redis
 
-        client = redis.from_url(settings.redis_url)
+        client = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         await client.ping()
         status["services"]["redis"] = "healthy"
         await client.aclose()
