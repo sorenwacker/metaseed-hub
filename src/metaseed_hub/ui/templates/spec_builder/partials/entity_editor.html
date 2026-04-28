@@ -39,12 +39,23 @@
         </h4>
 
         <div class="fields-list">
+            {# Sort fields: regular fields first, then relationship fields #}
+            {% set regular_fields = [] %}
+            {% set relation_fields = [] %}
             {% for field in entity.fields %}
-            <div class="field-item {% if loop.index0 == editing_field_idx %}editing{% endif %}"
-                 id="field-card-{{ loop.index0 }}">
+                {% if field.type in ['list', 'entity'] and field.items %}
+                    {% set _ = relation_fields.append((loop.index0, field)) %}
+                {% else %}
+                    {% set _ = regular_fields.append((loop.index0, field)) %}
+                {% endif %}
+            {% endfor %}
+            {% set sorted_fields = regular_fields + relation_fields %}
+            {% for idx, field in sorted_fields %}
+            <div class="field-item {% if idx == editing_field_idx %}editing{% endif %}"
+                 id="field-card-{{ idx }}">
                 <div class="field-header"
-                     hx-get="/hub/spec-builder/entity/{{ entity_name }}/field/{{ loop.index0 }}"
-                     hx-target="#field-card-{{ loop.index0 }}"
+                     hx-get="/hub/spec-builder/entity/{{ entity_name }}/field/{{ idx }}"
+                     hx-target="#field-card-{{ idx }}"
                      hx-swap="innerHTML">
                     <div class="field-info">
                         <span class="field-name">{{ field.name }}</span>
@@ -54,7 +65,7 @@
                         {% endif %}
                     </div>
                     <button class="btn-icon-sm danger"
-                            hx-delete="/hub/spec-builder/entity/{{ entity_name }}/field/{{ loop.index0 }}"
+                            hx-delete="/hub/spec-builder/entity/{{ entity_name }}/field/{{ idx }}"
                             hx-target="#editor-content"
                             hx-swap="innerHTML"
                             hx-confirm="Delete field '{{ field.name }}'?"
