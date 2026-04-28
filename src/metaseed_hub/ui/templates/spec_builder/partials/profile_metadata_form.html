@@ -50,6 +50,7 @@
 <style>
 .sidebar-form {
     padding: var(--space-md);
+    overflow: hidden;
 }
 
 .sidebar-form .form-row {
@@ -60,16 +61,21 @@
 
 .sidebar-form .form-group {
     margin-bottom: var(--space-sm);
+    min-width: 0;
 }
 
 .sidebar-form .form-label {
     font-size: 0.75rem;
     margin-bottom: 2px;
+    display: block;
 }
 
 .sidebar-form .form-control {
     font-size: 0.875rem;
     padding: var(--space-xs) var(--space-sm);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .form-success {
