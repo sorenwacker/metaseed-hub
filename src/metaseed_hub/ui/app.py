@@ -1041,6 +1041,166 @@ def create_hub_app() -> FastAPI:
         html += "</ul>"
         return HTMLResponse(html)
 
+    @app.post(
+        "/projects/{project_id}/table/{parent_node_id}/{field_name}/row",
+        response_class=HTMLResponse,
+    )
+    async def add_table_row(
+        request: Request,
+        project_id: str,
+        parent_node_id: str,
+        field_name: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Add a new row to an inline table."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return HTMLResponse(status_code=401)
+
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return HTMLResponse("<tr><td>Project not found</td></tr>")
+
+        state = get_project_state(project)
+
+        if parent_node_id not in state.nodes_by_id:
+            return HTMLResponse("<tr><td>Parent entity not found</td></tr>")
+
+        parent_node = state.nodes_by_id[parent_node_id]
+        facade = state.get_or_create_facade()
+
+        # Get the nested entity type from the parent's field info
+        try:
+            parent_helper = getattr(facade, parent_node.entity_type)
+            field_info = parent_helper.field_info(field_name)
+            nested_type = field_info.get("items")
+            if not nested_type:
+                return HTMLResponse("<tr><td>Invalid field</td></tr>")
+
+            nested_helper = getattr(facade, nested_type)
+        except AttributeError:
+            return HTMLResponse("<tr><td>Unknown entity type</td></tr>")
+
+        # Create a new empty instance
+        instance = nested_helper.create()
+
+        # Add as child of parent
+        child_node = state.add_node(nested_type, instance, parent_id=parent_node_id)
+
+        # Save to database
+        await save_project_state(session, project, state)
+
+        # Get columns for display
+        columns = []
+        column_types = {}
+        for fname in nested_helper.all_fields:
+            info = nested_helper.field_info(fname)
+            is_nested = info.get("type") in ("list", "entity") and info.get("items")
+            if not is_nested:
+                columns.append(fname)
+                column_types[fname] = info.get("type", "string")
+        columns = columns[:5]
+
+        # Build row HTML
+        children_of_type = [c for c in parent_node.children if c.entity_type == nested_type]
+        row_idx = len(children_of_type) - 1
+        node_id = child_node.id
+        html = f'<tr id="row-{field_name}-{row_idx}" data-idx="{row_idx}" '
+        html += f'data-node-id="{node_id}">'
+        for col in columns:
+            col_type = column_types.get(col, "string")
+            if col_type in ("integer", "float"):
+                input_type = "number"
+            elif col_type == "date":
+                input_type = "date"
+            else:
+                input_type = "text"
+            step = 'step="any"' if col_type == "float" else ""
+            html += f"""<td class="editable-cell" data-col="{col}">
+                <span class="cell-display"></span>
+                <input type="{input_type}" class="cell-input" name="{col}" value="" {step}
+                       hx-post="/hub/projects/{project_id}/table/{child_node.id}/cell"
+                       hx-trigger="change, blur" hx-swap="none">
+            </td>"""
+        html += f"""<td class="row-actions">
+            <button type="button" class="btn-icon danger"
+                    hx-delete="/hub/projects/{project_id}/entity/{child_node.id}"
+                    hx-target="#row-{field_name}-{row_idx}"
+                    hx-swap="delete"
+                    hx-confirm="Delete this {nested_type}?"
+                    title="Delete">&#128465;</button>
+        </td></tr>"""
+
+        response = HTMLResponse(html)
+        response.headers["HX-Trigger"] = "entityChanged"
+        return response
+
+    @app.post("/projects/{project_id}/table/{node_id}/cell", response_class=HTMLResponse)
+    async def update_table_cell(
+        request: Request,
+        project_id: str,
+        node_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Update a single cell value in an inline table."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return HTMLResponse(status_code=401)
+
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return HTMLResponse(status_code=404)
+
+        state = get_project_state(project)
+
+        if node_id not in state.nodes_by_id:
+            return HTMLResponse(status_code=404)
+
+        node = state.nodes_by_id[node_id]
+        facade = state.get_or_create_facade()
+
+        try:
+            helper = getattr(facade, node.entity_type)
+        except AttributeError:
+            return HTMLResponse(status_code=400)
+
+        # Get form data (single field update)
+        form_data = await request.form()
+
+        # Get current values
+        current_values = {}
+        if hasattr(node.instance, "model_dump"):
+            current_values = node.instance.model_dump(exclude_none=True)
+
+        # Update with new values from form
+        for field_name, raw_value in form_data.items():
+            if raw_value is None or raw_value == "":
+                continue
+
+            raw_str = str(raw_value)
+            info = helper.field_info(field_name)
+            field_type = info.get("type", "string")
+
+            if field_type == "integer":
+                current_values[field_name] = int(raw_str)
+            elif field_type == "float":
+                current_values[field_name] = float(raw_str)
+            elif field_type == "boolean":
+                current_values[field_name] = raw_str.lower() == "true"
+            else:
+                current_values[field_name] = raw_str
+
+        # Create updated instance
+        instance = helper.create(**current_values)
+        state.update_node(node_id, instance)
+
+        # Save to database
+        await save_project_state(session, project, state)
+
+        return HTMLResponse(status_code=200)
+
     @app.post("/projects/{project_id}/chat", response_class=HTMLResponse)
     async def project_chat(
         request: Request,
