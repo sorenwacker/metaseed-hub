@@ -101,22 +101,6 @@
         </div>
         {% endif %}
 
-        {% if nested_fields %}
-        <div class="form-section">
-            <h3 class="form-section-title">Related Entities</h3>
-            <p class="form-help" style="margin-bottom: var(--space-md);">
-                Save this {{ entity_type }} first, then add related items.
-            </p>
-            {% for field in nested_fields %}
-            <button type="button" class="nested-field-btn" disabled>
-                <span class="nested-field-icon">+</span>
-                <span class="nested-field-label">{{ field.name | replace("_", " ") | title }}</span>
-                <span class="nested-field-type">({{ field.item_type }})</span>
-            </button>
-            {% endfor %}
-        </div>
-        {% endif %}
-
         {% if optional_fields %}
         <div class="collapsible" id="optional-fields">
             <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
@@ -192,6 +176,22 @@
                 </div>
                 {% endfor %}
             </div>
+        </div>
+        {% endif %}
+
+        {% if nested_fields %}
+        <div class="form-section">
+            <h3 class="form-section-title">Related Entities</h3>
+            <p class="form-help" style="margin-bottom: var(--space-md);">
+                Save this {{ entity_type }} first, then add related items.
+            </p>
+            {% for field in nested_fields %}
+            <button type="button" class="nested-field-btn" disabled>
+                <span class="nested-field-icon">+</span>
+                <span class="nested-field-label">{{ field.name | replace("_", " ") | title }}</span>
+                <span class="nested-field-type">({{ field.item_type }})</span>
+            </button>
+            {% endfor %}
         </div>
         {% endif %}
 
