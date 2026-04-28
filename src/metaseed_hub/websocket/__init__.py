@@ -62,7 +62,7 @@ class WebSocketManager:
     async def connect_redis(self) -> None:
         """Connect to Redis for pub/sub."""
         settings = get_settings()
-        self._redis = redis.from_url(settings.redis_url)
+        self._redis = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         self._pubsub = self._redis.pubsub()
 
     async def disconnect_redis(self) -> None:
