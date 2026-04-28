@@ -177,6 +177,9 @@ body {
 }
 
 .btn-primary:hover {
+    background: linear-gradient(135deg, var(--clr-forest-light) 0%, var(--clr-moss) 100%);
+    border-color: var(--clr-forest-light);
+    color: white;
     box-shadow: 0 4px 16px rgba(26, 58, 47, 0.35);
     transform: translateY(-1px);
 }
