@@ -651,7 +651,7 @@ def create_hub_app() -> FastAPI:
         html = "<ul class='entity-tree'>"
         for item in tree_data:
             item_id = item.get("id", "")
-            item_name = item.get("name", "Unnamed")
+            item_name = item.get("label") or item.get("name") or "Unnamed"
             item_type = item.get("type", "Entity")
             html += f"""<li class='entity-item'>
                 <span class='entity-type-badge'>{item_type}</span>
@@ -1026,7 +1026,7 @@ def create_hub_app() -> FastAPI:
         html = "<ul class='entity-tree'>"
         for item in tree_data:
             item_id = item.get("id", "")
-            item_name = item.get("name", "Unnamed")
+            item_name = item.get("label") or item.get("name") or "Unnamed"
             item_type = item.get("type", "Entity")
             html += f"""<li class='entity-item'>
                 <span class='entity-type-badge'>{item_type}</span>
