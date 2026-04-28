@@ -251,11 +251,15 @@
 
 /* Sidebar */
 .spec-builder-sidebar {
-    width: 280px;
+    width: 300px;
+    min-width: 300px;
     background: var(--clr-surface);
     border-right: 1px solid var(--clr-border);
     overflow-y: auto;
+    overflow-x: hidden;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .toolbox {
