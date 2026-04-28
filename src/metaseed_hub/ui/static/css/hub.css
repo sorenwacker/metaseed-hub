@@ -104,9 +104,9 @@ body {
 }
 
 .hub-logo-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
 }
 
 .hub-nav {
