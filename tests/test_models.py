@@ -83,9 +83,7 @@ class TestUserModel:
         with pytest.raises(IntegrityError):
             await session.flush()
 
-    async def test_user_keycloak_id_unique_per_tenant(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_user_keycloak_id_unique_per_tenant(self, session: AsyncSession) -> None:
         """User keycloak_id should be unique within a tenant."""
         tenant1 = make_tenant(slug="tenant-1")
         tenant2 = make_tenant(slug="tenant-2")
@@ -181,9 +179,7 @@ class TestTeamModel:
 class TestWorkspaceModel:
     """Tests for Workspace model constraints."""
 
-    async def test_workspace_name_unique_per_tenant(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_workspace_name_unique_per_tenant(self, session: AsyncSession) -> None:
         """Workspace name should be unique within a tenant."""
         tenant1 = make_tenant(slug="tenant-1")
         tenant2 = make_tenant(slug="tenant-2")
@@ -240,9 +236,7 @@ class TestWorkspaceModel:
 class TestProjectModel:
     """Tests for Project model constraints."""
 
-    async def test_project_name_unique_per_workspace(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_project_name_unique_per_workspace(self, session: AsyncSession) -> None:
         """Project name should be unique within a workspace."""
         tenant = make_tenant()
         session.add(tenant)
@@ -284,9 +278,7 @@ class TestProjectModel:
         assert project.created_at is not None
         assert project.updated_at is not None
 
-    async def test_project_updated_at_changes_on_update(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_project_updated_at_changes_on_update(self, session: AsyncSession) -> None:
         """Project updated_at should change when the project is modified."""
         tenant = make_tenant()
         session.add(tenant)

@@ -15,20 +15,21 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:5432/metaseed_hub"
+    database_url: str = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub"
 
     # Keycloak OIDC
-    keycloak_url: str = "http://localhost:8080"
+    keycloak_url: str = "http://localhost:7080"
     keycloak_realm: str = "metaseed"
     keycloak_client_id: str = "metaseed-hub"
-    keycloak_client_secret: str = ""
+    keycloak_client_secret: str = "metaseed-hub-dev-secret"
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:7379/0"
 
     # Application
     debug: bool = False
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:7300"]
+    app_url: str = "http://localhost:7001"
 
     @property
     def keycloak_issuer(self) -> str:

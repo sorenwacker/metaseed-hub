@@ -21,7 +21,7 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     Yields:
         AsyncSession for database operations.
     """
-    url = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:5432/metaseed_hub_test"
+    url = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub_test"
     engine = create_async_engine(url, echo=False)
 
     # Create tables

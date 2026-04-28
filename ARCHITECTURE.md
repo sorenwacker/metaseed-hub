@@ -274,34 +274,90 @@ WS /ws/{project_id}?token={jwt_token}
 5. Backend verifies JWT against Keycloak JWKS
 6. User info extracted from JWT claims
 
+## Hub UI
+
+The Hub provides an HTMX-powered interface for managing workspaces, projects, and entities.
+
+### UI Routes
+
+```
+/hub
+├── /                           Home - list workspaces
+├── /auth/login                 Redirect to Keycloak
+├── /auth/callback              OAuth callback
+├── /auth/logout                Logout
+├── /workspaces/new             Workspace creation form
+├── /workspaces                 POST create workspace
+├── /workspaces/{id}            Workspace detail - list projects
+├── /projects/new               Project creation form (dynamic profiles)
+├── /projects                   POST create project
+├── /projects/{id}              Project editor with entity tree
+├── /projects/{id}/tree         Entity tree (HTMX partial)
+├── /projects/{id}/form/{type}  Entity creation/edit form
+├── /projects/{id}/entities     POST create/update entity
+├── /projects/{id}/entity/{id}  Entity edit form
+└── /projects/{id}/chat         POST chat message
+```
+
+### Design System
+
+The UI uses metaseed's botanical design theme:
+- **Colors**: Forest greens, sage accents, parchment backgrounds
+- **Typography**: Fraunces (display), DM Sans (body)
+- **Components**: Cards with gradient borders, collapsible sections, inline-block fields
+
+### Entity Form Features
+
+- Dynamic form generation from metaseed specs
+- Required/Optional field sections
+- Collapsible optional fields
+- Nested entity placeholders
+- Real-time tree updates via HX-Trigger
+
 ## File Structure
 
 ```
 metaseed-hub/
 ├── src/metaseed_hub/
 │   ├── __init__.py
-│   ├── main.py              # FastAPI app
-│   ├── config.py            # Settings
+│   ├── main.py              # FastAPI app entry point
+│   ├── config.py            # Settings (Keycloak, DB, etc.)
+│   ├── database.py          # Centralized session management
 │   ├── api/
 │   │   ├── __init__.py      # Router registration
-│   │   ├── auth.py
-│   │   ├── teams.py
-│   │   ├── workspaces.py
-│   │   ├── projects.py
-│   │   └── notes.py
+│   │   └── projects.py      # Project CRUD API
 │   ├── auth/
-│   │   └── __init__.py      # Keycloak integration
+│   │   └── __init__.py      # Keycloak JWT verification
 │   ├── models/
-│   │   └── __init__.py      # SQLAlchemy models
-│   ├── services/
-│   │   ├── project.py       # Project business logic
-│   │   └── collaboration.py # Real-time sync
+│   │   ├── __init__.py      # SQLAlchemy models
+│   │   └── mixins.py        # Timestamp, SoftDelete mixins
 │   ├── websocket/
-│   │   └── __init__.py      # WebSocket handlers
-│   └── templates/           # Jinja2 templates (if using HTMX)
+│   │   └── __init__.py      # WebSocket connection manager
+│   └── ui/
+│       ├── app.py           # Hub UI FastAPI routes
+│       ├── static/
+│       │   ├── css/hub.css  # Botanical design system
+│       │   └── js/hub.js    # UI interactions
+│       └── templates/
+│           ├── base.html
+│           ├── home.html
+│           ├── workspace.html
+│           ├── project.html
+│           ├── login.html
+│           └── partials/
+│               ├── workspace_form.html
+│               ├── project_form.html
+│               └── entity_form.html
 ├── alembic/                  # Database migrations
+│   ├── env.py               # Migration config (filters Keycloak tables)
+│   └── versions/
 ├── tests/
-├── docker-compose.yml
+│   ├── conftest.py          # Async DB fixtures
+│   ├── factories.py         # Model factories
+│   └── test_models.py       # Model constraint tests
+├── .pre-commit-config.yaml  # ruff, mypy, vulture
+├── vulture_whitelist.py     # Dead code false positives
+├── docker-compose.yml       # PostgreSQL, Keycloak, Redis
 ├── pyproject.toml
 └── README.md
 ```

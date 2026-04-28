@@ -53,9 +53,7 @@ class Tenant(TimestampMixin, SoftDeleteMixin, Base):
     # Relationships
     teams: Mapped[list["Team"]] = relationship("Team", back_populates="tenant")
     users: Mapped[list["User"]] = relationship("User", back_populates="tenant")
-    workspaces: Mapped[list["Workspace"]] = relationship(
-        "Workspace", back_populates="tenant"
-    )
+    workspaces: Mapped[list["Workspace"]] = relationship("Workspace", back_populates="tenant")
 
 
 class Team(TimestampMixin, SoftDeleteMixin, Base):
@@ -91,9 +89,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
 
     __tablename__ = "users"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"
-        ),
+        UniqueConstraint("tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"),
         UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
         Index("ix_users_tenant_id", "tenant_id"),
     )
@@ -118,9 +114,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
         "TeamMembership", back_populates="user"
     )
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
-    chat_messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="user"
-    )
+    chat_messages: Mapped[list["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
 
 
 class TeamMembership(Base):
@@ -217,9 +211,7 @@ class Note(TimestampMixin, Base):
     """Notes attached to entities within a project."""
 
     __tablename__ = "notes"
-    __table_args__ = (
-        Index("ix_notes_project_entity", "project_id", "entity_type", "entity_id"),
-    )
+    __table_args__ = (Index("ix_notes_project_entity", "project_id", "entity_type", "entity_id"),)
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
