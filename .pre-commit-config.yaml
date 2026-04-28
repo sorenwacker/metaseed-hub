@@ -6,19 +6,14 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
         exclude: ^(alembic/|tests/|vulture_whitelist\.py|scripts/)
-        additional_dependencies:
-          - fastapi
-          - pydantic
-          - pydantic-settings
-          - sqlalchemy[asyncio]
-          - types-python-jose
-          - types-pyyaml
-        args: [--ignore-missing-imports]
 
   - repo: local
     hooks:
