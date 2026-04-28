@@ -262,6 +262,42 @@ body {
     margin-bottom: var(--space-sm);
 }
 
+.project-card {
+    position: relative;
+}
+
+.project-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.project-delete {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--clr-ink-light);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: all var(--transition-fast);
+}
+
+.project-card:hover .project-delete {
+    opacity: 1;
+}
+
+.project-delete:hover {
+    background: var(--clr-error-bg);
+    color: var(--clr-error);
+}
+
 .workspace-card p, .project-card p {
     color: var(--clr-ink-light);
     font-size: 0.875rem;
