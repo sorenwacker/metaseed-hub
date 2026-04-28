@@ -128,3 +128,93 @@ class HubWebSocket {
 
 // Export for use in templates
 window.HubWebSocket = HubWebSocket;
+
+// Editable cell handling
+document.addEventListener('click', function(e) {
+    const cell = e.target.closest('.editable-cell');
+    if (!cell) return;
+
+    // Don't activate if already editing
+    if (cell.classList.contains('editing')) return;
+
+    // Close any other editing cells
+    document.querySelectorAll('.editable-cell.editing').forEach(c => {
+        c.classList.remove('editing');
+    });
+
+    // Activate this cell
+    cell.classList.add('editing');
+    const input = cell.querySelector('.cell-input');
+    if (input) {
+        input.focus();
+        input.select();
+    }
+});
+
+// Handle blur to close editing
+document.addEventListener('focusout', function(e) {
+    const cell = e.target.closest('.editable-cell');
+    if (cell && cell.classList.contains('editing')) {
+        // Small delay to allow HTMX to process
+        setTimeout(() => {
+            cell.classList.remove('editing');
+            // Update display value
+            const input = cell.querySelector('.cell-input');
+            const display = cell.querySelector('.cell-display');
+            if (input && display) {
+                display.textContent = input.value;
+            }
+        }, 100);
+    }
+});
+
+// Handle Enter key to save and move to next cell
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.classList.contains('cell-input')) {
+        e.preventDefault();
+        const cell = e.target.closest('.editable-cell');
+        const row = cell.closest('tr');
+        const cells = Array.from(row.querySelectorAll('.editable-cell'));
+        const currentIdx = cells.indexOf(cell);
+
+        // Trigger change event to save
+        e.target.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // Move to next cell
+        if (currentIdx < cells.length - 1) {
+            cells[currentIdx + 1].click();
+        } else {
+            cell.classList.remove('editing');
+        }
+    } else if (e.key === 'Escape' && e.target.classList.contains('cell-input')) {
+        const cell = e.target.closest('.editable-cell');
+        cell.classList.remove('editing');
+    }
+});
+
+// Handle Tab key for cell navigation
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab' && e.target.classList.contains('cell-input')) {
+        const cell = e.target.closest('.editable-cell');
+        const row = cell.closest('tr');
+        const cells = Array.from(row.querySelectorAll('.editable-cell'));
+        const currentIdx = cells.indexOf(cell);
+
+        e.preventDefault();
+
+        // Trigger change to save current
+        e.target.dispatchEvent(new Event('change', { bubbles: true }));
+
+        if (e.shiftKey) {
+            // Move to previous cell
+            if (currentIdx > 0) {
+                setTimeout(() => cells[currentIdx - 1].click(), 50);
+            }
+        } else {
+            // Move to next cell
+            if (currentIdx < cells.length - 1) {
+                setTimeout(() => cells[currentIdx + 1].click(), 50);
+            }
+        }
+    }
+});

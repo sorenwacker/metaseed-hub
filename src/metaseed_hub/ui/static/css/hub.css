@@ -1533,6 +1533,51 @@ textarea {
     background: var(--clr-parchment);
 }
 
+/* Editable cells */
+.editable-cell {
+    position: relative;
+    cursor: text;
+    min-width: 80px;
+}
+
+.editable-cell .cell-display {
+    display: block;
+    padding: 2px 4px;
+    min-height: 1.4em;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+}
+
+.editable-cell:hover .cell-display {
+    background: var(--clr-ivory);
+    border-color: var(--clr-parchment);
+}
+
+.editable-cell .cell-input {
+    display: none;
+    width: 100%;
+    padding: 2px 4px;
+    font-size: inherit;
+    font-family: inherit;
+    border: 1px solid var(--clr-sage);
+    border-radius: var(--radius-sm);
+    background: white;
+}
+
+.editable-cell .cell-input:focus {
+    outline: none;
+    border-color: var(--clr-moss);
+    box-shadow: 0 0 0 2px rgba(var(--clr-moss-rgb), 0.2);
+}
+
+.editable-cell.editing .cell-display {
+    display: none;
+}
+
+.editable-cell.editing .cell-input {
+    display: block;
+}
+
 .row-actions {
     display: flex;
     gap: var(--space-xs);

@@ -2,6 +2,7 @@
 {% set table_data = inline_tables.get(field_name, {}) %}
 {% set columns = table_data.columns or [] %}
 {% set rows = table_data.rows or [] %}
+{% set column_types = table_data.column_types or {} %}
 {% set nested_entity_type = table_data.nested_entity_type or field.item_type %}
 
 <div class="inline-table-section" id="inline-table-{{ field_name }}">
@@ -13,38 +14,42 @@
         </div>
         {% if node_id %}
         <button type="button" class="btn btn-sm btn-primary"
-                hx-get="/hub/projects/{{ project_id }}/form/{{ nested_entity_type }}?parent_id={{ node_id }}&parent_field={{ field_name }}"
-                hx-target="#editor"
-                hx-swap="innerHTML">
-            + Add
+                hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/{{ field_name }}/row"
+                hx-target="#inline-table-body-{{ field_name }}"
+                hx-swap="beforeend">
+            + Add Row
         </button>
         {% endif %}
     </div>
     <div class="inline-table-content">
-        {% if rows|length > 0 %}
+        {% if columns|length > 0 %}
         <table class="data-table inline-data-table">
             <thead>
                 <tr>
                     {% for col in columns %}
                     <th>{{ col|replace('_', ' ')|title }}</th>
                     {% endfor %}
-                    <th style="width: 80px;">Actions</th>
+                    <th style="width: 60px;">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="inline-table-body-{{ field_name }}">
                 {% for row in rows %}
-                <tr id="row-{{ field_name }}-{{ row._idx }}">
+                <tr id="row-{{ field_name }}-{{ row._idx }}" data-idx="{{ row._idx }}" data-node-id="{{ row._node_id }}">
                     {% for col in columns %}
-                    <td>{{ row.get(col, '') }}</td>
+                    {% set col_type = column_types.get(col, 'string') %}
+                    <td class="editable-cell" data-col="{{ col }}">
+                        <span class="cell-display">{{ row.get(col, '') }}</span>
+                        <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% else %}text{% endif %}"
+                               class="cell-input"
+                               name="{{ col }}"
+                               value="{{ row.get(col, '') }}"
+                               {% if col_type == 'float' %}step="any"{% endif %}
+                               hx-post="/hub/projects/{{ project_id }}/table/{{ row._node_id }}/cell"
+                               hx-trigger="change, blur"
+                               hx-swap="none">
+                    </td>
                     {% endfor %}
                     <td class="row-actions">
-                        <button type="button" class="btn-icon"
-                                hx-get="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
-                                hx-target="#editor"
-                                hx-swap="innerHTML"
-                                title="Edit">
-                            &#9998;
-                        </button>
                         <button type="button" class="btn-icon danger"
                                 hx-delete="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
                                 hx-target="#row-{{ field_name }}-{{ row._idx }}"
@@ -58,8 +63,9 @@
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <p class="text-muted text-center" style="padding: 1rem;">No items yet. Click "+ Add" to create one.</p>
+        {% endif %}
+        {% if rows|length == 0 %}
+        <p class="text-muted text-center" style="padding: 1rem;">No items yet. Click "+ Add Row" to create one.</p>
         {% endif %}
     </div>
 </div>
