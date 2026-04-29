@@ -13,6 +13,16 @@
               hx-target="#editor-content"
               hx-swap="innerHTML">
             <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text"
+                       name="new_name"
+                       class="form-input"
+                       value="{{ entity_name }}"
+                       placeholder="EntityName"
+                       pattern="[A-Z][A-Za-z0-9_]*"
+                       required>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Description</label>
                 <textarea name="description"
                           class="form-input"
@@ -133,8 +143,7 @@
     <div class="editor-section editor-danger">
         <button class="btn btn-sm btn-danger"
                 hx-delete="/hub/spec-builder/entity/{{ entity_name }}"
-                hx-target="body"
-                hx-swap="innerHTML"
+                hx-on::after-request="window.location.href='/hub/spec-builder'"
                 hx-confirm="Delete entity '{{ entity_name }}'? This will remove all fields and relationships.">
             Delete Entity
         </button>

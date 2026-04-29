@@ -462,10 +462,11 @@ def create_spec_builder_router(
         request: Request,
         name: str,
         session: Annotated[AsyncSession, Depends(get_session)],
+        new_name: str = Form(""),
         description: str = Form(""),
         ontology_term: str = Form(""),
     ) -> HTMLResponse:
-        """Update entity metadata."""
+        """Update entity metadata including rename."""
         user_id, tenant_id = await get_user_context(request, session)
         builder = await load_or_create_state(session, user_id, tenant_id)
         if builder.spec is None:
@@ -477,6 +478,53 @@ def create_spec_builder_router(
         entity = builder.spec.entities[name]
         entity.description = description.strip()
         entity.ontology_term = ontology_term.strip() or None
+
+        # Handle rename
+        new_name = new_name.strip()
+        final_name = name
+        if new_name and new_name != name:
+            # Validate new name
+            error = validate_entity_name(new_name)
+            if error:
+                return templates.TemplateResponse(
+                    request,
+                    "spec_builder/partials/entity_editor.html",
+                    {
+                        "spec": builder.spec,
+                        "entity_name": name,
+                        "entity": entity,
+                        "editing_field_idx": None,
+                        "field_types": [t.value for t in FieldType],
+                        "error": error,
+                    },
+                )
+            if new_name in builder.spec.entities:
+                return templates.TemplateResponse(
+                    request,
+                    "spec_builder/partials/entity_editor.html",
+                    {
+                        "spec": builder.spec,
+                        "entity_name": name,
+                        "entity": entity,
+                        "editing_field_idx": None,
+                        "field_types": [t.value for t in FieldType],
+                        "error": f"Entity '{new_name}' already exists",
+                    },
+                )
+
+            # Rename: add with new name, remove old
+            builder.spec.entities[new_name] = entity
+            del builder.spec.entities[name]
+            final_name = new_name
+
+            # Update root_entity if it was this entity
+            if builder.spec.root_entity == name:
+                builder.spec.root_entity = new_name
+
+            # Update editing_entity if it was this entity
+            if builder.editing_entity == name:
+                builder.editing_entity = new_name
+
         builder.mark_changed()
         await save_state_to_db(session, builder, user_id, tenant_id)
 
@@ -485,7 +533,7 @@ def create_spec_builder_router(
             "spec_builder/partials/entity_editor.html",
             {
                 "spec": builder.spec,
-                "entity_name": name,
+                "entity_name": final_name,
                 "entity": entity,
                 "editing_field_idx": None,
                 "field_types": [t.value for t in FieldType],
