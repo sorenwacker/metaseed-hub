@@ -1,11 +1,64 @@
 /* Metaseed Hub JavaScript */
 
+// BroadcastChannel for cross-tab entity updates
+var entityUpdateChannel = null;
+try {
+    entityUpdateChannel = new BroadcastChannel('metaseed-entity-updates');
+} catch (e) {
+    console.log('BroadcastChannel not supported');
+}
+
 // HTMX configuration
 document.body.addEventListener('htmx:configRequest', function(evt) {
     // Add auth token to requests if available
     const token = localStorage.getItem('auth_token');
     if (token) {
         evt.detail.headers['Authorization'] = 'Bearer ' + token;
+    }
+
+    // For inline table cell edits, only send the specific field being edited
+    // This prevents HTMX from collecting all form fields from the parent form
+    const triggerEl = evt.detail.elt;
+    if (triggerEl && triggerEl.classList.contains('cell-input')) {
+        const fieldName = triggerEl.name;
+        const fieldValue = triggerEl.value;
+        // Clear all parameters and only include this field
+        evt.detail.parameters = {};
+        evt.detail.parameters[fieldName] = fieldValue;
+    }
+});
+
+// Broadcast entity changes to other tabs (e.g., graph view)
+// HTMX dispatches custom events for HX-Trigger headers
+document.body.addEventListener('entityChanged', function(evt) {
+    console.log('entityChanged event received, broadcasting to other tabs');
+    if (entityUpdateChannel) {
+        // Extract project ID from current URL
+        const match = window.location.pathname.match(/\/projects\/([^/]+)/);
+        if (match) {
+            entityUpdateChannel.postMessage({
+                type: 'entityChanged',
+                projectId: match[1]
+            });
+            console.log('Broadcasted entity change for project:', match[1]);
+        }
+    }
+});
+
+// Also listen for htmx:afterRequest to catch successful saves
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.successful && evt.detail.xhr) {
+        const trigger = evt.detail.xhr.getResponseHeader('HX-Trigger');
+        if (trigger && trigger.includes('entityChanged') && entityUpdateChannel) {
+            const match = window.location.pathname.match(/\/projects\/([^/]+)/);
+            if (match) {
+                entityUpdateChannel.postMessage({
+                    type: 'entityChanged',
+                    projectId: match[1]
+                });
+                console.log('Broadcasted entity change (via htmx:afterRequest) for project:', match[1]);
+            }
+        }
     }
 });
 
@@ -88,15 +141,20 @@ class HubWebSocket {
         const list = document.getElementById('presence-list');
         if (!list) return;
 
-        // Find or create presence item
-        let item = list.querySelector(`[data-user="${data.user_id}"]`);
+        // Sanitize user_id for selector (escape special chars)
+        const safeUserId = CSS.escape(data.user_id || '');
+        let item = list.querySelector(`[data-user="${safeUserId}"]`);
 
         if (data.action === 'joined') {
             if (!item) {
                 item = document.createElement('div');
                 item.className = 'presence-item';
                 item.dataset.user = data.user_id;
-                item.innerHTML = `<span class="presence-dot"></span>${data.user_name}`;
+                // Use DOM methods instead of innerHTML to prevent XSS
+                const dot = document.createElement('span');
+                dot.className = 'presence-dot';
+                item.appendChild(dot);
+                item.appendChild(document.createTextNode(data.user_name || 'Unknown'));
                 list.appendChild(item);
             }
         } else if (data.action === 'left' && item) {
@@ -110,7 +168,11 @@ class HubWebSocket {
 
         const msg = document.createElement('div');
         msg.className = 'chat-message';
-        msg.innerHTML = `<strong>${data.user}:</strong> ${data.content}`;
+        // Use DOM methods instead of innerHTML to prevent XSS
+        const strong = document.createElement('strong');
+        strong.textContent = (data.user || 'Unknown') + ':';
+        msg.appendChild(strong);
+        msg.appendChild(document.createTextNode(' ' + (data.content || '')));
         messages.appendChild(msg);
         messages.scrollTop = messages.scrollHeight;
     }
@@ -162,7 +224,14 @@ document.addEventListener('focusout', function(e) {
             const input = cell.querySelector('.cell-input');
             const display = cell.querySelector('.cell-display');
             if (input && display) {
-                display.textContent = input.value;
+                const newValue = input.value;
+                display.textContent = newValue || 'Click to edit';
+                // Update placeholder class
+                if (newValue) {
+                    display.classList.remove('placeholder');
+                } else {
+                    display.classList.add('placeholder');
+                }
             }
         }, 100);
     }

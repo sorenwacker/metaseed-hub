@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}Graph View - {{ project.name }} - Metaseed Hub{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+    .graph-page {
+        height: calc(100vh - 56px);
+        display: flex;
+        flex-direction: column;
+    }
+    .graph-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-md) var(--space-lg);
+        background: white;
+        border-bottom: 1px solid var(--clr-parchment);
+    }
+    .graph-info {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
+    }
+    .graph-info h1 {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--clr-forest);
+    }
+    .graph-controls {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+    }
+    .graph-control-label {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-size: 0.75rem;
+        color: var(--clr-ink-light);
+    }
+    .graph-control-label input[type="range"] {
+        width: 80px;
+    }
+    .graph-body {
+        flex: 1;
+        display: flex;
+        position: relative;
+        min-height: 0;
+    }
+    #graph-view {
+        flex: 1;
+        background: var(--clr-paper);
+        width: 100%;
+        height: 100%;
+        min-height: 400px;
+    }
+    .graph-legend {
+        position: absolute;
+        bottom: var(--space-lg);
+        left: var(--space-lg);
+        background: white;
+        border: 1px solid var(--clr-parchment);
+        border-radius: var(--radius-md);
+        padding: var(--space-md);
+        box-shadow: var(--shadow-md);
+        font-size: 0.8125rem;
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 10;
+    }
+    .graph-legend-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        padding: 2px 0;
+        cursor: pointer;
+    }
+    .graph-legend-item.legend-hidden {
+        opacity: 0.4;
+    }
+    .graph-legend-item input[type="checkbox"] {
+        margin: 0;
+    }
+    .graph-legend-label {
+        color: var(--clr-ink);
+    }
+    .graph-loading, .graph-empty, .graph-error {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--clr-ink-light);
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<a href="/hub/workspaces/{{ project.workspace_id }}" class="nav-item">Workspace</a>
+<span class="nav-sep">/</span>
+<a href="/hub/projects/{{ project.id }}" class="nav-item">{{ project.name }}</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">Graph</span>
+{% endblock %}
+
+{% block content %}
+<div class="graph-page">
+    <div class="graph-header">
+        <div class="graph-info">
+            <h1>{{ project.name }} - Entity Graph</h1>
+            <span class="profile-badge">{{ project.profile }} {{ project.version }}</span>
+        </div>
+        <div class="graph-controls">
+            <label class="graph-control-label">
+                Spacing
+                <input type="range" id="graph-spacing" min="50" max="500" value="100" oninput="updateGraphPhysics()">
+            </label>
+            <label class="graph-control-label">
+                Repulsion
+                <input type="range" id="graph-repulsion" min="-1000" max="-100" value="-500" oninput="updateGraphPhysics()">
+            </label>
+            <button id="graph-layout-btn" class="btn btn-sm" onclick="toggleGraphLayout()">Hierarchical</button>
+            <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
+            <a href="/hub/projects/{{ project.id }}" class="btn">Back to Editor</a>
+        </div>
+    </div>
+    <div class="graph-body">
+        <div id="graph-view">
+            <div class="graph-loading">Loading graph...</div>
+        </div>
+        <div id="graph-legend" class="graph-legend"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Graph state
+var graphNetwork = null;
+var graphData = null;
+var currentGraphLayout = 'physics';
+var allGraphNodes = [];
+var allGraphEdges = [];
+var visibleGroups = new Set();
+var entityDisplayMap = {};
+
+// Colors and shapes for entity types
+var GRAPH_COLORS = [
+    '#4a7c59', '#c17f59', '#5a7c8c', '#8c5a7c', '#7c8c5a',
+    '#5a8c7c', '#8c7c5a', '#7c5a8c', '#3b82f6', '#10b981'
+];
+var GRAPH_SHAPES = ['dot', 'square', 'diamond', 'triangle', 'triangleDown', 'star', 'hexagon'];
+var GRAPH_THEME = {
+    background: '#faf8f5',
+    text: '#2c3e35',
+    edge: '#87a878',
+    edgeHighlight: '#4a7c59'
+};
+
+function assignEntityDisplay(entityTypes) {
+    entityDisplayMap = {};
+    var types = Array.from(entityTypes);
+    types.forEach(function(type, index) {
+        entityDisplayMap[type] = {
+            color: GRAPH_COLORS[index % GRAPH_COLORS.length],
+            shape: GRAPH_SHAPES[index % GRAPH_SHAPES.length],
+            order: index
+        };
+    });
+}
+
+function getEntityDisplay(entityType) {
+    return entityDisplayMap[entityType] || { color: '#78716c', shape: 'dot', order: 99 };
+}
+
+function getLegendShapeSvg(shape, color) {
+    var size = 14, half = size / 2;
+    var svg = '<svg width="' + size + '" height="' + size + '" style="vertical-align: middle; margin-right: 4px;">';
+    switch (shape) {
+        case 'dot':
+            svg += '<circle cx="' + half + '" cy="' + half + '" r="' + (half - 1) + '" fill="' + color + '"/>';
+            break;
+        case 'square':
+            svg += '<rect x="1" y="1" width="' + (size - 2) + '" height="' + (size - 2) + '" fill="' + color + '"/>';
+            break;
+        case 'diamond':
+            svg += '<polygon points="' + half + ',1 ' + (size - 1) + ',' + half + ' ' + half + ',' + (size - 1) + ' 1,' + half + '" fill="' + color + '"/>';
+            break;
+        case 'triangle':
+            svg += '<polygon points="' + half + ',1 ' + (size - 1) + ',' + (size - 1) + ' 1,' + (size - 1) + '" fill="' + color + '"/>';
+            break;
+        default:
+            svg += '<circle cx="' + half + '" cy="' + half + '" r="' + (half - 1) + '" fill="' + color + '"/>';
+    }
+    svg += '</svg>';
+    return svg;
+}
+
+function buildGraphGroups() {
+    var groups = {};
+    for (var entityType in entityDisplayMap) {
+        var display = entityDisplayMap[entityType];
+        groups[entityType] = { color: display.color, shape: display.shape };
+    }
+    return groups;
+}
+
+function getGraphOptions(layout) {
+    var baseOptions = {
+        groups: buildGraphGroups(),
+        nodes: {
+            size: 18,
+            font: { size: 13, color: GRAPH_THEME.text, face: 'system-ui, sans-serif' },
+            borderWidth: 2,
+            shadow: { enabled: true, color: 'rgba(0,0,0,0.15)', size: 8, x: 2, y: 2 }
+        },
+        edges: {
+            arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+            color: { color: GRAPH_THEME.edge, highlight: GRAPH_THEME.edgeHighlight },
+            smooth: { type: 'cubicBezier', roundness: 0.4 },
+            width: 1.5
+        },
+        interaction: { hover: true, tooltipDelay: 150, zoomView: true, dragView: true, dragNodes: true },
+        layout: { randomSeed: 42 }
+    };
+
+    if (layout === 'hierarchical') {
+        return Object.assign({}, baseOptions, {
+            layout: {
+                hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed', levelSeparation: 120, nodeSpacing: 180 }
+            },
+            physics: { enabled: false }
+        });
+    } else {
+        var spacing = parseInt(document.getElementById('graph-spacing')?.value || 100);
+        var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -500);
+        return Object.assign({}, baseOptions, {
+            layout: { randomSeed: 42, hierarchical: { enabled: false } },
+            physics: {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: { gravitationalConstant: repulsion, centralGravity: 0.01, springLength: spacing, springConstant: 0.02, damping: 0.4 },
+                stabilization: false
+            }
+        });
+    }
+}
+
+function loadGraph() {
+    var graphView = document.getElementById('graph-view');
+    console.log('Graph container size:', graphView.offsetWidth, 'x', graphView.offsetHeight);
+    graphView.innerHTML = '<div class="graph-loading">Loading graph...</div>';
+
+    var apiUrl = '/hub/projects/{{ project.id }}/api/graph';
+    {% if node_id %}
+    apiUrl += '?node_id={{ node_id }}';
+    {% endif %}
+    fetch(apiUrl)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            console.log('Graph data received:', data.nodes?.length, 'nodes,', data.edges?.length, 'edges');
+            if (!data.nodes || data.nodes.length === 0) {
+                graphView.innerHTML = '<div class="graph-empty">No entities to display. Create entities first.</div>';
+                return;
+            }
+
+            allGraphNodes = data.nodes.slice();
+            allGraphEdges = data.edges.slice();
+
+            var entityTypes = new Set();
+            allGraphNodes.forEach(function(n) { entityTypes.add(n.group); });
+            assignEntityDisplay(entityTypes);
+
+            visibleGroups.clear();
+            allGraphNodes.forEach(function(n) { visibleGroups.add(n.group); });
+
+            // Size nodes based on edge count
+            var edgeCount = {};
+            data.edges.forEach(function(edge) {
+                edgeCount[edge.from] = (edgeCount[edge.from] || 0) + 1;
+                edgeCount[edge.to] = (edgeCount[edge.to] || 0) + 1;
+            });
+            var maxEdges = Math.max.apply(null, Object.values(edgeCount).concat([1]));
+            data.nodes.forEach(function(node) {
+                var display = getEntityDisplay(node.group);
+                node.color = display.color;
+                node.shape = display.shape;
+                var edges = edgeCount[node.id] || 0;
+                node.size = 12 + (edges / maxEdges) * 18;
+            });
+
+            renderGraph(data);
+            renderGraphLegend(data);
+        })
+        .catch(function(error) {
+            console.error('Error loading graph:', error);
+            graphView.innerHTML = '<div class="graph-error">Failed to load graph</div>';
+        });
+}
+
+function renderGraph(data) {
+    var container = document.getElementById('graph-view');
+    console.log('Rendering graph in container:', container.offsetWidth, 'x', container.offsetHeight);
+    container.innerHTML = '';
+    container.style.background = GRAPH_THEME.background;
+
+    graphData = {
+        nodes: new vis.DataSet(data.nodes),
+        edges: new vis.DataSet(data.edges)
+    };
+
+    try {
+        graphNetwork = new vis.Network(container, graphData, getGraphOptions(currentGraphLayout));
+        console.log('Graph network created successfully');
+
+        // Force a fit after stabilization
+        graphNetwork.once('stabilized', function() {
+            console.log('Graph stabilized, fitting view');
+            graphNetwork.fit();
+        });
+
+        // Double-click to open entity
+        graphNetwork.on('doubleClick', function(params) {
+            if (params.nodes.length > 0) {
+                window.open('/hub/projects/{{ project.id }}/entity/' + params.nodes[0], '_blank');
+            }
+        });
+    } catch (e) {
+        console.error('Error creating graph network:', e);
+    }
+}
+
+function renderGraphLegend(data) {
+    var legendContainer = document.getElementById('graph-legend');
+    var types = {};
+    data.nodes.forEach(function(node) {
+        if (node.group) {
+            if (!types[node.group]) {
+                var display = getEntityDisplay(node.group);
+                types[node.group] = { color: display.color, shape: display.shape, order: display.order, count: 0 };
+            }
+            types[node.group].count++;
+        }
+    });
+
+    var sortedTypes = Object.keys(types).sort(function(a, b) { return types[a].order - types[b].order; });
+    var html = '';
+    sortedTypes.forEach(function(type) {
+        var info = types[type];
+        var isVisible = visibleGroups.has(type);
+        html += '<label class="graph-legend-item' + (isVisible ? '' : ' legend-hidden') + '" data-type="' + type + '">';
+        html += '<input type="checkbox" ' + (isVisible ? 'checked' : '') + ' onchange="toggleNodeType(\'' + type + '\')">';
+        html += getLegendShapeSvg(info.shape, info.color);
+        html += '<span class="graph-legend-label">' + type + ' (' + info.count + ')</span></label>';
+    });
+    legendContainer.innerHTML = html;
+}
+
+function toggleNodeType(group) {
+    if (visibleGroups.has(group)) visibleGroups.delete(group);
+    else visibleGroups.add(group);
+    filterGraph();
+    var item = document.querySelector('.graph-legend-item[data-type="' + group + '"]');
+    if (item) item.classList.toggle('legend-hidden', !visibleGroups.has(group));
+}
+
+function filterGraph() {
+    if (!graphData || !allGraphNodes.length) return;
+    var visibleNodeIds = new Set();
+    var filteredNodes = allGraphNodes.filter(function(n) {
+        if (visibleGroups.has(n.group)) { visibleNodeIds.add(n.id); return true; }
+        return false;
+    });
+    var filteredEdges = allGraphEdges.filter(function(e) {
+        return visibleNodeIds.has(e.from) && visibleNodeIds.has(e.to);
+    });
+    filteredNodes.forEach(function(n) { n.color = getEntityDisplay(n.group).color; });
+    graphData.nodes.clear(); graphData.nodes.add(filteredNodes);
+    graphData.edges.clear(); graphData.edges.add(filteredEdges);
+    if (graphNetwork) graphNetwork.fit({ animation: { duration: 300 } });
+}
+
+function toggleGraphLayout() {
+    currentGraphLayout = currentGraphLayout === 'physics' ? 'hierarchical' : 'physics';
+    document.getElementById('graph-layout-btn').textContent = currentGraphLayout === 'physics' ? 'Hierarchical' : 'Physics';
+    if (graphNetwork && graphData) {
+        var container = document.getElementById('graph-view');
+        graphNetwork = new vis.Network(container, graphData, getGraphOptions(currentGraphLayout));
+    }
+}
+
+function updateGraphPhysics() {
+    if (!graphNetwork || currentGraphLayout !== 'physics') return;
+    var spacing = parseInt(document.getElementById('graph-spacing')?.value || 100);
+    var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -500);
+    graphNetwork.setOptions({
+        physics: { enabled: true, forceAtlas2Based: { springLength: spacing, gravitationalConstant: repulsion } }
+    });
+}
+
+function fitGraph() {
+    if (graphNetwork) graphNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+}
+
+// Load on page ready
+document.addEventListener('DOMContentLoaded', loadGraph);
+
+// Listen for entity changes from other tabs via BroadcastChannel
+var entityChannel = new BroadcastChannel('metaseed-entity-updates');
+entityChannel.onmessage = function(event) {
+    if (event.data.projectId === '{{ project.id }}' && event.data.type === 'entityChanged') {
+        console.log('Entity changed in another tab, reloading graph...');
+        loadGraph();
+    }
+};
+</script>
+{% endblock %}
