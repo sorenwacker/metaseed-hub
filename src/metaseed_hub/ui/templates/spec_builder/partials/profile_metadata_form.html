@@ -1,10 +1,11 @@
 <form hx-post="/hub/spec-builder/profile-metadata"
       hx-target="#profile-metadata-panel"
       hx-swap="innerHTML"
+      hx-trigger="change from:find input, change from:find textarea, change from:find select delay:300ms"
       class="metadata-form compact-form">
 
     {% if success %}
-    <div class="form-success">Saved</div>
+    <div class="form-success auto-hide">Saved</div>
     {% endif %}
 
     <div class="form-row-2">
@@ -26,7 +27,11 @@
     <div class="form-row-2">
         <div class="form-group compact">
             <label class="form-label">Root Entity</label>
-            <input type="text" name="root_entity" class="form-input" value="{{ spec.root_entity or '' }}" placeholder="Investigation" list="entity-names">
+            <input type="text" name="root_entity" class="form-input" value="{{ spec.root_entity or '' }}" placeholder="Investigation" list="entity-names"
+                   hx-post="/hub/spec-builder/profile-metadata"
+                   hx-trigger="change delay:300ms"
+                   hx-include="closest form"
+                   hx-on::after-request="setTimeout(() => window.location.href = '/hub/spec-builder', 100)">
             <datalist id="entity-names">
                 {% for name in spec.entities.keys() %}
                 <option value="{{ name }}">
@@ -43,6 +48,15 @@
         <label class="form-label">Description</label>
         <textarea name="description" class="form-input" rows="2" placeholder="Description...">{{ spec.description or '' }}</textarea>
     </div>
-
-    <button type="submit" class="btn btn-primary btn-sm btn-full">Update</button>
 </form>
+
+<style>
+.auto-hide {
+    animation: fadeOut 2s ease-in-out forwards;
+    animation-delay: 1s;
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; height: 0; padding: 0; margin: 0; }
+}
+</style>

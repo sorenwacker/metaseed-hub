@@ -63,14 +63,6 @@
             <button class="sidebar-toggle" onclick="toggleLeftSidebar()" title="Toggle sidebar">
                 <span class="toggle-icon">&lsaquo;</span>
             </button>
-            <!-- Toolbox -->
-            <div class="toolbox">
-                <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)">
-                    <span class="toolbox-icon">+</span>
-                    <span>New Entity</span>
-                </div>
-            </div>
-
             <!-- Sidebar tabs -->
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
@@ -176,7 +168,7 @@
         <form hx-post="/hub/spec-builder/entity"
               hx-target="#editor-content"
               hx-swap="innerHTML"
-              onsubmit="onEntityAdded()">
+              hx-on::after-request="onEntityAdded()">
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Entity Name <span class="required">*</span></label>
@@ -857,24 +849,24 @@
     // ERD Data - convert spec to serializable format
     const entities = {
         {% for name, entity in spec.entities.items() %}
-        "{{ name }}": {
-            "ontology_term": {{ entity.ontology_term | tojson if entity.ontology_term else 'null' }},
-            "description": {{ entity.description | tojson if entity.description else '""' }},
+        {{ name | tojson }}: {
+            "ontology_term": {{ entity.ontology_term | tojson }},
+            "description": {{ (entity.description or "") | tojson }},
             "fields": [
                 {% for field in entity.fields %}
                 {
-                    "name": "{{ field.name }}",
-                    "type": "{{ field.type }}",
-                    "required": {{ 'true' if field.required else 'false' }},
-                    "items": {{ field.items | tojson if field.items else 'null' }},
-                    "reference": {{ field.reference | tojson if field.reference else 'null' }}
+                    "name": {{ field.name | tojson }},
+                    "type": {{ field.type.value | tojson }},
+                    "required": {{ field.required | tojson }},
+                    "items": {{ field.items | tojson }},
+                    "reference": {{ field.reference | tojson }}
                 }{% if not loop.last %},{% endif %}
                 {% endfor %}
             ]
         }{% if not loop.last %},{% endif %}
         {% endfor %}
     };
-    const rootEntity = "{{ spec.root_entity }}";
+    const rootEntity = {{ spec.root_entity | tojson }};
     const fieldTypes = {{ field_types | tojson | safe }};
 
     let network = null;
@@ -1106,7 +1098,8 @@
     }
 
     function refreshGraph() {
-        htmx.ajax('GET', '/hub/spec-builder', { target: 'body', swap: 'innerHTML' });
+        // Navigate to spec builder main page (not /new which resets)
+        window.location.href = '/hub/spec-builder';
     }
 
     function autoLayout() {
@@ -1174,7 +1167,8 @@
     function onEntityAdded() {
         hideAddEntityModal();
         document.getElementById('editor-panel').classList.add('open');
-        setTimeout(refreshGraph, 100);
+        // Request has already completed, refresh immediately
+        refreshGraph();
     }
 
     function dragNewEntity(event) {
