@@ -268,12 +268,51 @@ class ChatMessage(TimestampMixin, Base):
     user: Mapped["User"] = relationship("User", back_populates="chat_messages")
 
 
+class SpecDraft(TimestampMixin, Base):
+    """User-defined specification drafts in the spec builder.
+
+    Stores the working state of a spec being built, allowing users to
+    save progress and resume later. Each user has at most one active draft.
+    """
+
+    __tablename__ = "spec_drafts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_spec_drafts_tenant_user"),
+        Index("ix_spec_drafts_tenant_id", "tenant_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False, default="0.1")
+    spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    template_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    user: Mapped["User"] = relationship("User")
+
+
 __all__ = [
     "Base",
     "ChatMessage",
     "Note",
     "Project",
     "SoftDeleteMixin",
+    "SpecDraft",
     "Team",
     "TeamMembership",
     "TeamRole",
