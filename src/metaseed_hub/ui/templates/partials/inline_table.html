@@ -4,6 +4,9 @@
 {% set rows = table_data.rows or [] %}
 {% set column_types = table_data.column_types or {} %}
 {% set nested_entity_type = table_data.nested_entity_type or field.item_type %}
+{% set is_primitive_list = table_data.is_primitive_list or false %}
+{% set inherited_columns = table_data.inherited_columns or [] %}
+{% set required_columns = table_data.required_columns or [] %}
 
 <div class="inline-table-section" id="inline-table-{{ field_name }}">
     <div class="inline-table-header">
@@ -22,24 +25,42 @@
         {% endif %}
     </div>
     <div class="inline-table-content">
-        {% if columns|length > 0 %}
         <table class="data-table inline-data-table">
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th>{{ col|replace('_', ' ')|title }}</th>
+                    <th>{{ col|replace('_', ' ')|title }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
                     {% endfor %}
+                    {% if columns|length > 0 %}
                     <th style="width: 60px;">Actions</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody id="inline-table-body-{{ field_name }}">
                 {% for row in rows %}
-                <tr id="row-{{ field_name }}-{{ row._idx }}" data-idx="{{ row._idx }}" data-node-id="{{ row._node_id }}">
+                <tr id="row-{{ field_name }}-{{ row._idx }}" data-idx="{{ row._idx }}" {% if row._node_id %}data-node-id="{{ row._node_id }}"{% endif %}>
                     {% for col in columns %}
                     {% set col_type = column_types.get(col, 'string') %}
+                    {% set cell_value = row.get(col, '') %}
+                    {% set is_inherited = col in inherited_columns %}
+                    {% if is_inherited %}
+                    <td class="readonly-cell" data-col="{{ col }}">
+                        <span class="cell-display inherited">{{ cell_value }}</span>
+                    </td>
+                    {% else %}
                     <td class="editable-cell" data-col="{{ col }}">
-                        <span class="cell-display">{{ row.get(col, '') }}</span>
-                        <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% else %}text{% endif %}"
+                        <span class="cell-display{% if not cell_value %} placeholder{% endif %}">{{ cell_value or 'Click to edit' }}</span>
+                        {% if is_primitive_list %}
+                        <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
+                               class="cell-input"
+                               name="value"
+                               value="{{ row.get(col, '') }}"
+                               {% if col_type == 'float' %}step="any"{% endif %}
+                               hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
+                               hx-trigger="change, blur"
+                               hx-swap="none">
+                        {% else %}
+                        <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
                                class="cell-input"
                                name="{{ col }}"
                                value="{{ row.get(col, '') }}"
@@ -47,9 +68,28 @@
                                hx-post="/hub/projects/{{ project_id }}/table/{{ row._node_id }}/cell"
                                hx-trigger="change, blur"
                                hx-swap="none">
+                        {% endif %}
                     </td>
+                    {% endif %}
                     {% endfor %}
                     <td class="row-actions">
+                        {% if is_primitive_list %}
+                        <button type="button" class="btn-icon danger"
+                                hx-delete="/hub/projects/{{ project_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
+                                hx-target="#row-{{ field_name }}-{{ row._idx }}"
+                                hx-swap="delete"
+                                hx-confirm="Delete this item?"
+                                title="Delete">
+                            &#128465;
+                        </button>
+                        {% else %}
+                        <button type="button" class="btn-icon"
+                                hx-get="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
+                                hx-target="#editor"
+                                hx-swap="innerHTML"
+                                title="Edit">
+                            &#9998;
+                        </button>
                         <button type="button" class="btn-icon danger"
                                 hx-delete="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
                                 hx-target="#row-{{ field_name }}-{{ row._idx }}"
@@ -58,13 +98,13 @@
                                 title="Delete">
                             &#128465;
                         </button>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% endif %}
-        {% if rows|length == 0 %}
+        {% if rows|length == 0 and columns|length == 0 %}
         <p class="text-muted text-center" style="padding: 1rem;">No items yet. Click "+ Add Row" to create one.</p>
         {% endif %}
     </div>
