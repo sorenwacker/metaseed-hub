@@ -17,7 +17,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
-    "metaseed @ file:///Users/sdrwacker/workspace/metaseed",
+    "metaseed @ git+https://github.com/sorenwacker/metaseed.git",
     "types-pyyaml>=6.0.12.20260408",
 ]
 
