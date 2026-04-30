@@ -38,6 +38,12 @@
     creates: "{{ app_dir }}/.local/bin/uv"
   tags: setup
 
+- name: Check if repo exists
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.git"
+  register: git_dir
+  tags: setup
+
 - name: Clone repository
   become_user: "{{ app_user }}"
   ansible.builtin.git:
@@ -46,6 +52,24 @@
     version: "{{ repo_branch }}"
     force: false
   register: git_result
+  when: not git_dir.stat.exists
+  tags: setup
+
+- name: Pull latest changes
+  become_user: "{{ app_user }}"
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version: "{{ repo_branch }}"
+    update: true
+  register: git_result
+  when: git_dir.stat.exists
+  tags: setup
+
+- name: Check if venv exists
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.venv"
+  register: venv_dir
   tags: setup
 
 - name: Install Python dependencies
@@ -54,7 +78,7 @@
     {{ app_dir }}/.local/bin/uv sync --frozen
   args:
     chdir: "{{ app_dir }}"
-  when: git_result.changed
+  when: not venv_dir.stat.exists or git_result.changed
   tags: setup
 
 - name: Create .env file
@@ -73,7 +97,7 @@
     {{ app_dir }}/.venv/bin/alembic upgrade head
   args:
     chdir: "{{ app_dir }}"
-  when: git_result.changed
+  when: not venv_dir.stat.exists or git_result.changed
   tags: setup
 
 - name: Install deploy script
