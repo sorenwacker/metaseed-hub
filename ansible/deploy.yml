@@ -3,24 +3,8 @@
   hosts: metaseed
   become: true
 
-  vars_prompt:
-    - name: db_password
-      prompt: "Database password"
-      private: true
-      default: "{{ lookup('env', 'DB_PASSWORD') }}"
-
-    - name: oidc_client_secret
-      prompt: "OIDC client secret (SURF SRAM)"
-      private: true
-      default: "{{ lookup('env', 'OIDC_CLIENT_SECRET') }}"
-
-    - name: secret_key
-      prompt: "Application secret key"
-      private: true
-      default: "{{ lookup('env', 'SECRET_KEY') }}"
+  vars_files:
+    - secrets.yml
 
   roles:
     - metaseed-hub
-
-  tags:
-    - deploy
