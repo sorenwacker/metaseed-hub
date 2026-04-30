@@ -63,19 +63,24 @@ def get_or_create_csrf_token(request: Request) -> str:
     return secrets.token_urlsafe(32)
 
 
-def validate_csrf_token(request: Request) -> bool:
-    """Validate CSRF token from header matches cookie.
+def validate_csrf_token(request: Request, form_token: str | None = None) -> bool:
+    """Validate CSRF token from header or form matches cookie.
+
+    Args:
+        request: The request object.
+        form_token: Optional CSRF token from form data.
 
     Returns True if valid, False otherwise.
     """
     cookie_token = request.cookies.get(CSRF_TOKEN_COOKIE)
-    header_token = request.headers.get("X-CSRF-Token")
+    # Check header first (for AJAX requests), then form data
+    token = request.headers.get("X-CSRF-Token") or form_token
 
-    if not cookie_token or not header_token:
+    if not cookie_token or not token:
         return False
 
     # Constant-time comparison to prevent timing attacks
-    return secrets.compare_digest(cookie_token, header_token)
+    return secrets.compare_digest(cookie_token, token)
 
 
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
@@ -590,13 +595,14 @@ def create_hub_app() -> FastAPI:
         session: Annotated[AsyncSession, Depends(get_session)],
         name: Annotated[str, Form()],
         description: Annotated[str | None, Form()] = None,
+        _csrf_token: Annotated[str | None, Form()] = None,
     ) -> RedirectResponse:
         """Create a new workspace."""
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/", status_code=302)
 
-        if not validate_csrf_token(request):
+        if not validate_csrf_token(request, _csrf_token):
             return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
 
         tenant = await get_or_create_tenant(session, user)
@@ -681,13 +687,14 @@ def create_hub_app() -> FastAPI:
         name: Annotated[str, Form()],
         profile: Annotated[str, Form()],
         version: Annotated[str, Form()],
+        _csrf_token: Annotated[str | None, Form()] = None,
     ) -> RedirectResponse:
         """Create a new project."""
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/", status_code=302)
 
-        if not validate_csrf_token(request):
+        if not validate_csrf_token(request, _csrf_token):
             url = f"/hub/workspaces/{workspace_id}?error=csrf_validation_failed"
             return RedirectResponse(url, status_code=302)
 
