@@ -1,0 +1,39 @@
+# Metaseed Hub deployment configuration
+
+app_name: metaseed-hub
+app_user: app
+app_group: app
+app_dir: /app
+repo_url: https://github.com/sorenwacker/metaseed-hub.git
+repo_branch: main
+
+# Python/uv settings
+python_version: "3.13"
+uv_version: "latest"
+
+# Service settings
+app_port: 8080
+app_workers: 2
+
+# Database
+db_name: metaseed_hub
+db_user: metaseed
+db_host: localhost
+db_port: 5432
+
+# Redis
+redis_host: localhost
+redis_port: 6379
+
+# OIDC (SURF SRAM)
+oidc_url: https://connect.surfconext.nl
+oidc_realm: sram
+oidc_client_id: metaseed-hub
+
+# Application URL
+app_url: https://metaseed.ewi.tudelft.nl
+
+# Nginx
+nginx_server_name: metaseed.ewi.tudelft.nl
+ssl_certificate: /etc/letsencrypt/live/metaseed.ewi.tudelft.nl/fullchain.pem
+ssl_certificate_key: /etc/letsencrypt/live/metaseed.ewi.tudelft.nl/privkey.pem

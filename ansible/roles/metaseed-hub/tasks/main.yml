@@ -1,0 +1,150 @@
+---
+- name: Create app user
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    group: "{{ app_group }}"
+    home: "{{ app_dir }}"
+    shell: /bin/bash
+    system: true
+  tags: setup
+
+- name: Create app directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  loop:
+    - "{{ app_dir }}"
+    - "{{ app_dir }}/logs"
+  tags: setup
+
+- name: Install system dependencies
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - postgresql-client
+    state: present
+    update_cache: true
+  tags: setup
+
+- name: Install uv
+  become_user: "{{ app_user }}"
+  ansible.builtin.shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: "{{ app_dir }}/.local/bin/uv"
+  tags: setup
+
+- name: Clone repository
+  become_user: "{{ app_user }}"
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version: "{{ repo_branch }}"
+    force: false
+  register: git_result
+  tags: setup
+
+- name: Install Python dependencies
+  become_user: "{{ app_user }}"
+  ansible.builtin.shell: |
+    {{ app_dir }}/.local/bin/uv sync --frozen
+  args:
+    chdir: "{{ app_dir }}"
+  when: git_result.changed
+  tags: setup
+
+- name: Create .env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0600"
+  notify: Restart metaseed-hub
+  tags: config
+
+- name: Run database migrations
+  become_user: "{{ app_user }}"
+  ansible.builtin.shell: |
+    {{ app_dir }}/.venv/bin/alembic upgrade head
+  args:
+    chdir: "{{ app_dir }}"
+  when: git_result.changed
+  tags: setup
+
+- name: Install deploy script
+  ansible.builtin.template:
+    src: deploy.sh.j2
+    dest: "{{ app_dir }}/deploy.sh"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  tags: setup
+
+- name: Install systemd service
+  ansible.builtin.template:
+    src: metaseed-hub.service.j2
+    dest: /etc/systemd/system/metaseed-hub.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart metaseed-hub
+  tags: setup
+
+- name: Install deploy service
+  ansible.builtin.template:
+    src: metaseed-deploy.service.j2
+    dest: /etc/systemd/system/metaseed-deploy.service
+    mode: "0644"
+  notify: Reload systemd
+  tags: setup
+
+- name: Install deploy timer
+  ansible.builtin.template:
+    src: metaseed-deploy.timer.j2
+    dest: /etc/systemd/system/metaseed-deploy.timer
+    mode: "0644"
+  notify: Reload systemd
+  tags: setup
+
+- name: Configure sudoers for deploy
+  ansible.builtin.copy:
+    content: |
+      # Allow app user to reload the service
+      {{ app_user }} ALL=(ALL) NOPASSWD: /bin/systemctl reload metaseed-hub
+      {{ app_user }} ALL=(ALL) NOPASSWD: /bin/systemctl restart metaseed-hub
+    dest: /etc/sudoers.d/metaseed-deploy
+    mode: "0440"
+    validate: "visudo -cf %s"
+  tags: setup
+
+- name: Enable and start services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop:
+    - metaseed-hub
+    - metaseed-deploy.timer
+  tags: setup
+
+- name: Install nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/metaseed-hub
+    mode: "0644"
+  notify: Reload nginx
+  tags: nginx
+
+- name: Enable nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/metaseed-hub
+    dest: /etc/nginx/sites-enabled/metaseed-hub
+    state: link
+  notify: Reload nginx
+  tags: nginx

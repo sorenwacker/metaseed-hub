@@ -1,0 +1,61 @@
+#!/bin/bash
+# Auto-deploy script - deploys new releases only
+# Runs via systemd timer
+
+set -euo pipefail
+
+APP_DIR="{{ app_dir }}"
+LOG_FILE="{{ app_dir }}/logs/deploy.log"
+LOCK_FILE="/tmp/metaseed-deploy.lock"
+VERSION_FILE="{{ app_dir }}/.deployed_version"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Prevent concurrent runs
+exec 200>"$LOCK_FILE"
+flock -n 200 || { log "Deploy already running, exiting"; exit 0; }
+
+cd "$APP_DIR"
+
+# Fetch tags
+git fetch origin --tags --quiet
+
+# Get latest release tag (semver format: v1.0.0)
+LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+
+if [ -z "$LATEST_TAG" ]; then
+    exit 0  # No releases yet
+fi
+
+# Check current deployed version
+CURRENT=""
+if [ -f "$VERSION_FILE" ]; then
+    CURRENT=$(cat "$VERSION_FILE")
+fi
+
+if [ "$CURRENT" = "$LATEST_TAG" ]; then
+    exit 0  # Already on latest release
+fi
+
+log "New release: $LATEST_TAG (current: ${CURRENT:-none})"
+
+# Checkout the release
+git checkout "$LATEST_TAG" --quiet
+
+# Install dependencies
+log "Installing dependencies..."
+{{ app_dir }}/.local/bin/uv sync --frozen --quiet
+
+# Run migrations
+log "Running migrations..."
+{{ app_dir }}/.venv/bin/alembic upgrade head
+
+# Save deployed version
+echo "$LATEST_TAG" > "$VERSION_FILE"
+
+# Reload app
+sudo /bin/systemctl reload metaseed-hub
+
+log "Deployed: $LATEST_TAG"
