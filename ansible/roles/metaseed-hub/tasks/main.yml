@@ -46,10 +46,19 @@
     append: true
   tags: setup
 
+- name: Create docker directory
+  ansible.builtin.file:
+    path: /opt/metaseed-docker
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  tags: setup
+
 - name: Create docker-compose file
   ansible.builtin.template:
     src: docker-compose.yml.j2
-    dest: "{{ app_dir }}/docker-compose.yml"
+    dest: /opt/metaseed-docker/docker-compose.yml
     owner: "{{ app_user }}"
     group: "{{ app_group }}"
     mode: "0600"
@@ -60,7 +69,7 @@
   ansible.builtin.shell: |
     docker-compose up -d
   args:
-    chdir: "{{ app_dir }}"
+    chdir: /opt/metaseed-docker
   tags: setup
 
 - name: Wait for PostgreSQL

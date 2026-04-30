@@ -485,6 +485,11 @@ def create_hub_app() -> FastAPI:
             )
 
         if token_response.status_code != 200:
+            import logging
+
+            logging.error(
+                f"Token exchange failed: {token_response.status_code} - {token_response.text}"
+            )
             return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
 
         tokens = token_response.json()
