@@ -80,15 +80,12 @@ def validate_csrf_token(request: Request) -> bool:
 
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
     """Extract and verify user from access token cookie."""
-    import logging
-
     token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     if not token:
         return None
     try:
         return await verify_token(token)
-    except Exception as e:
-        logging.error(f"Token verification failed: {e}")
+    except Exception:
         return None
 
 
@@ -488,11 +485,6 @@ def create_hub_app() -> FastAPI:
             )
 
         if token_response.status_code != 200:
-            import logging
-
-            logging.error(
-                f"Token exchange failed: {token_response.status_code} - {token_response.text}"
-            )
             return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
 
         tokens = token_response.json()
