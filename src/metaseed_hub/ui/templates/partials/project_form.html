@@ -2,7 +2,10 @@
     <div class="modal-content" onclick="event.stopPropagation()">
         <h2>New Project</h2>
         <form method="post" action="/hub/projects">
-            <input type="hidden" name="workspace_id" value="{{ workspace_id }}">
+            {% if csrf_token %}
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            {% endif %}
+            <input type="hidden" name="workspace_id" value="{{ workspace_id | e }}">
             <div class="form-group">
                 <label for="name">Name</label>
                 <input type="text" id="name" name="name" required

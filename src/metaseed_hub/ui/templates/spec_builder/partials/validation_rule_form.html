@@ -1,4 +1,4 @@
-<form hx-put="/hub/spec-builder/validation-rule/{{ rule_idx }}"
+<form hx-put="/hub/spec-builder/{{ draft_id }}/validation-rule/{{ rule_idx }}"
       hx-target="#validation-rules-panel"
       hx-swap="innerHTML"
       hx-on::after-request="hideRuleModal()"

@@ -314,6 +314,51 @@ The UI uses metaseed's botanical design theme:
 - Nested entity placeholders
 - Real-time tree updates via HX-Trigger
 
+### Graph Visualization
+
+The Hub includes a graph view for visualizing entity relationships using vis-network.
+
+**Access Points:**
+- **Project Graph**: Click "Graph View" button in project header (opens in new tab)
+- **Entity Graph**: Click "View in Graph" on entity form (shows entity and descendants)
+
+**API Endpoint:** `GET /projects/{id}/api/graph?node_id={optional}`
+
+Returns JSON for vis-network:
+```json
+{
+  "nodes": [{"id": "...", "label": "...", "group": "Investigation", "title": "..."}],
+  "edges": [{"from": "...", "to": "..."}]
+}
+```
+
+**Features:**
+- Color-coded entity types with legend
+- Toggle entity type visibility
+- Physics-based or hierarchical layout
+- Adjustable spacing and repulsion
+- Double-click node to open entity editor
+
+### Validation
+
+Entity validation happens at multiple levels:
+
+1. **Form submission**: Pydantic validation via `helper.create(**values)` when saving
+2. **Project validation**: "Verify" button validates all entities against schema
+3. **Export validation**: Full schema validation before export (planned)
+
+**Validation API:** `POST /projects/{id}/validate`
+
+Returns HTML with validation results:
+- Success: "All N entities are valid"
+- Errors: List of entities with validation errors, with links to edit each
+
+**Validation Checks:**
+- Required fields present
+- Type correctness (integer, float, boolean, etc.)
+- Constraints (min/max, pattern, enum values)
+- Nested entity validation
+
 ## File Structure
 
 ```

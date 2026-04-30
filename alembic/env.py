@@ -25,9 +25,12 @@ OUR_TABLES = {
     "team_memberships",
     "users",
     "workspaces",
+    "workspace_teams",
     "projects",
     "notes",
     "chat_messages",
+    "specs",
+    "spec_drafts",
     "alembic_version",
 }
 
@@ -44,8 +47,14 @@ def include_object(
         return name in OUR_TABLES if name else False
     if type_ == "index" and hasattr(object, "table"):
         return object.table.name in OUR_TABLES  # type: ignore[union-attr]
-    if type_ == "foreign_key_constraint" and hasattr(object, "parent"):
-        return object.parent.table.name in OUR_TABLES  # type: ignore[union-attr]
+    if type_ == "foreign_key_constraint":
+        # Handle both reflected and model-defined FKs
+        if hasattr(object, "parent") and hasattr(object.parent, "name"):
+            # Reflected FK - parent is the Table
+            return object.parent.name in OUR_TABLES  # type: ignore[union-attr]
+        if hasattr(object, "parent") and hasattr(object.parent, "table"):
+            # Model-defined FK - parent is the Column, parent.table is the Table
+            return object.parent.table.name in OUR_TABLES  # type: ignore[union-attr]
     return True
 
 

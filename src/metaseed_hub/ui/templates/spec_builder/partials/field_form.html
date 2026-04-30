@@ -1,5 +1,5 @@
 <div class="field-edit-form">
-    <form hx-put="/hub/spec-builder/entity/{{ entity_name }}/field/{{ field_idx }}"
+    <form hx-put="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ field_idx }}"
           hx-target="#editor-content"
           hx-swap="innerHTML">
 
@@ -187,7 +187,7 @@
             <button type="submit" class="btn btn-primary btn-sm">Save Field</button>
             <button type="button"
                     class="btn btn-sm"
-                    hx-get="/hub/spec-builder/entity/{{ entity_name }}"
+                    hx-get="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}"
                     hx-target="#editor-content"
                     hx-swap="innerHTML">
                 Cancel
