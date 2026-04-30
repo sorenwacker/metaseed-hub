@@ -17,11 +17,16 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub"
 
-    # Keycloak OIDC
-    keycloak_url: str = "http://localhost:7080"
-    keycloak_realm: str = "metaseed"
-    keycloak_client_id: str = "metaseed-hub"
-    keycloak_client_secret: str = "metaseed-hub-dev-secret"
+    # OIDC (supports Keycloak, SRAM, or any OIDC provider)
+    oidc_issuer: str = "http://localhost:7080/realms/metaseed"
+    oidc_client_id: str = "metaseed-hub"
+    oidc_client_secret: str = "metaseed-hub-dev-secret"
+
+    # Legacy Keycloak settings (for backwards compatibility)
+    keycloak_url: str = ""
+    keycloak_realm: str = ""
+    keycloak_client_id: str = ""
+    keycloak_client_secret: str = ""
 
     # Redis
     redis_url: str = "redis://localhost:7379/0"
@@ -33,19 +38,29 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-change-in-production"
 
     @property
-    def keycloak_issuer(self) -> str:
-        """Return the Keycloak issuer URL."""
-        return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
+    def effective_issuer(self) -> str:
+        """Return the OIDC issuer URL (supports legacy Keycloak config)."""
+        if self.oidc_issuer:
+            return self.oidc_issuer
+        # Fallback to legacy Keycloak config
+        if self.keycloak_url and self.keycloak_realm:
+            return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
+        return ""
 
     @property
-    def keycloak_jwks_url(self) -> str:
-        """Return the Keycloak JWKS URL."""
-        return f"{self.keycloak_issuer}/protocol/openid-connect/certs"
+    def effective_client_id(self) -> str:
+        """Return the OIDC client ID."""
+        return self.oidc_client_id or self.keycloak_client_id
 
     @property
-    def keycloak_token_url(self) -> str:
-        """Return the Keycloak token URL."""
-        return f"{self.keycloak_issuer}/protocol/openid-connect/token"
+    def effective_client_secret(self) -> str:
+        """Return the OIDC client secret."""
+        return self.oidc_client_secret or self.keycloak_client_secret
+
+    @property
+    def oidc_discovery_url(self) -> str:
+        """Return the OIDC discovery URL."""
+        return f"{self.effective_issuer}/.well-known/openid-configuration"
 
 
 @lru_cache

@@ -1,4 +1,4 @@
-"""Keycloak OIDC authentication integration."""
+"""OIDC authentication integration (supports Keycloak, SRAM, and other providers)."""
 
 from dataclasses import dataclass
 from typing import Annotated
@@ -17,27 +17,57 @@ security = HTTPBearer()
 class TokenUser:
     """User information extracted from JWT token."""
 
-    keycloak_id: str
+    sub: str  # Subject ID (provider-agnostic)
     email: str
     name: str
     roles: list[str]
     tenant_id: str | None = None
 
+    @property
+    def keycloak_id(self) -> str:
+        """Alias for backwards compatibility."""
+        return self.sub
 
-class KeycloakAuth:
-    """Keycloak OIDC authentication handler."""
+
+class OIDCAuth:
+    """OIDC authentication handler using discovery."""
 
     def __init__(self, settings: Settings) -> None:
         """Initialize with settings.
 
         Args:
-            settings: Application settings containing Keycloak configuration.
+            settings: Application settings containing OIDC configuration.
         """
         self._settings = settings
         self._jwks: dict[str, list[dict[str, str]]] | None = None
+        self._oidc_config: dict[str, str] | None = None
+
+    async def get_oidc_config(self) -> dict[str, str]:
+        """Fetch OIDC discovery document.
+
+        Returns:
+            OIDC configuration dictionary.
+
+        Raises:
+            HTTPException: If discovery document cannot be fetched.
+        """
+        if self._oidc_config is not None:
+            return self._oidc_config
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(self._settings.oidc_discovery_url)
+                response.raise_for_status()
+                self._oidc_config = response.json()
+                return self._oidc_config
+            except httpx.HTTPError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Failed to fetch OIDC discovery: {e}",
+                ) from e
 
     async def get_jwks(self) -> dict[str, list[dict[str, str]]]:
-        """Fetch JWKS from Keycloak.
+        """Fetch JWKS from OIDC provider.
 
         Returns:
             JWKS dictionary containing public keys.
@@ -48,9 +78,17 @@ class KeycloakAuth:
         if self._jwks is not None:
             return self._jwks
 
+        oidc_config = await self.get_oidc_config()
+        jwks_uri = oidc_config.get("jwks_uri")
+        if not jwks_uri:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OIDC provider does not provide jwks_uri",
+            )
+
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(self._settings.keycloak_jwks_url)
+                response = await client.get(jwks_uri)
                 response.raise_for_status()
                 self._jwks = response.json()
                 return self._jwks
@@ -64,7 +102,7 @@ class KeycloakAuth:
         """Verify JWT token and extract user information.
 
         Args:
-            token: JWT access token from Keycloak.
+            token: JWT access token from OIDC provider.
 
         Returns:
             TokenUser with extracted user information.
@@ -74,6 +112,7 @@ class KeycloakAuth:
         """
         try:
             jwks = await self.get_jwks()
+            oidc_config = await self.get_oidc_config()
 
             # Decode without verification first to get the key ID
             unverified_header = jwt.get_unverified_header(token)
@@ -93,20 +132,26 @@ class KeycloakAuth:
                 )
 
             # Verify and decode the token
+            issuer = oidc_config.get("issuer", self._settings.effective_issuer)
             payload = jwt.decode(
                 token,
                 rsa_key,
                 algorithms=["RS256"],
-                audience=self._settings.keycloak_client_id,
-                issuer=self._settings.keycloak_issuer,
+                audience=self._settings.effective_client_id,
+                issuer=issuer,
             )
 
-            # Extract user information
+            # Extract user information (provider-agnostic)
+            # Keycloak uses realm_access.roles, SRAM uses eduperson_entitlement
+            roles = payload.get("realm_access", {}).get("roles", [])
+            if not roles:
+                roles = payload.get("eduperson_entitlement", [])
+
             return TokenUser(
-                keycloak_id=payload.get("sub", ""),
+                sub=payload.get("sub", ""),
                 email=payload.get("email", ""),
                 name=payload.get("name", payload.get("preferred_username", "")),
-                roles=payload.get("realm_access", {}).get("roles", []),
+                roles=roles,
             )
 
         except JWTError as e:
@@ -116,33 +161,40 @@ class KeycloakAuth:
             ) from e
 
 
-_auth_instance: KeycloakAuth | None = None
+# Backwards compatibility aliases
+KeycloakAuth = OIDCAuth
+
+_auth_instance: OIDCAuth | None = None
 
 
-def get_keycloak_auth(settings: Settings = Depends(get_settings)) -> KeycloakAuth:
-    """Get or create KeycloakAuth instance.
+def get_oidc_auth(settings: Settings = Depends(get_settings)) -> OIDCAuth:
+    """Get or create OIDCAuth instance.
 
     Args:
         settings: Application settings.
 
     Returns:
-        KeycloakAuth instance.
+        OIDCAuth instance.
     """
     global _auth_instance
     if _auth_instance is None:
-        _auth_instance = KeycloakAuth(settings)
+        _auth_instance = OIDCAuth(settings)
     return _auth_instance
+
+
+# Backwards compatibility alias
+get_keycloak_auth = get_oidc_auth
 
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    auth: Annotated[KeycloakAuth, Depends(get_keycloak_auth)],
+    auth: Annotated[OIDCAuth, Depends(get_oidc_auth)],
 ) -> TokenUser:
     """FastAPI dependency to get the current authenticated user.
 
     Args:
         credentials: HTTP Bearer credentials from request.
-        auth: KeycloakAuth instance.
+        auth: OIDCAuth instance.
 
     Returns:
         TokenUser extracted from the JWT token.
@@ -158,13 +210,13 @@ security_optional = HTTPBearer(auto_error=False)
 
 async def get_current_user_optional(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security_optional)],
-    auth: Annotated[KeycloakAuth, Depends(get_keycloak_auth)],
+    auth: Annotated[OIDCAuth, Depends(get_oidc_auth)],
 ) -> TokenUser | None:
     """FastAPI dependency to get the current user if authenticated.
 
     Args:
         credentials: Optional HTTP Bearer credentials.
-        auth: KeycloakAuth instance.
+        auth: OIDCAuth instance.
 
     Returns:
         TokenUser if authenticated, None otherwise.
@@ -189,15 +241,17 @@ async def verify_token(token: str, settings: Settings | None = None) -> TokenUse
     """
     if settings is None:
         settings = get_settings()
-    auth = KeycloakAuth(settings)
+    auth = OIDCAuth(settings)
     return await auth.verify_token(token)
 
 
 __all__ = [
-    "KeycloakAuth",
+    "KeycloakAuth",  # Backwards compatibility alias
+    "OIDCAuth",
     "TokenUser",
     "get_current_user",
     "get_current_user_optional",
-    "get_keycloak_auth",
+    "get_keycloak_auth",  # Backwards compatibility alias
+    "get_oidc_auth",
     "verify_token",
 ]
