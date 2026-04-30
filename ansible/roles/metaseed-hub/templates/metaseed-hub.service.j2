@@ -1,0 +1,20 @@
+[Unit]
+Description=Metaseed Hub Application
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=exec
+User={{ app_user }}
+Group={{ app_group }}
+WorkingDirectory={{ app_dir }}
+Environment="PATH={{ app_dir }}/.local/bin:{{ app_dir }}/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile={{ app_dir }}/.env
+ExecStart={{ app_dir }}/.venv/bin/uvicorn metaseed_hub.main:app --host 127.0.0.1 --port {{ app_port }} --workers {{ app_workers }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
