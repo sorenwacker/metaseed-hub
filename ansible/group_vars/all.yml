@@ -26,9 +26,9 @@ redis_host: localhost
 redis_port: 6379
 
 # OIDC (SURF SRAM)
-oidc_url: https://connect.surfconext.nl
-oidc_realm: sram
-oidc_client_id: metaseed-hub
+oidc_url: https://proxy.sram.surf.nl
+oidc_realm: ""
+oidc_client_id: APP-CC24314E-7800-4E8F-8E8D-C8730A89B0BF
 
 # Application URL
 app_url: https://metaseed.ewi.tudelft.nl
