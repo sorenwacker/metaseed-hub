@@ -53,3 +53,21 @@ src/metaseed_hub/_version.py
 ansible/secrets.yml
 ansible/*.vault.yml
 docker-compose.yml
+
+# App user home directory files
+.ansible/
+.config/
+.local/
+.profile
+.zshrc
+deploy.sh
+logs/
+
+# App user home directory files
+.ansible/
+.config/
+.local/
+.profile
+.zshrc
+deploy.sh
+logs/
