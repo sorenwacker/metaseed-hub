@@ -1,6 +1,6 @@
 all:
   hosts:
     metaseed:
-      ansible_host: metaseed.ewi.tudelft.nl
+      ansible_host: metaseed.ewi
       ansible_user: "{{ lookup('env', 'ANSIBLE_USER') | default('sdrwacker', true) }}"
       ansible_become: true

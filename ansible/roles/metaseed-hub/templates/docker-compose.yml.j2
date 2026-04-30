@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: metaseed-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_password }}
+      POSTGRES_DB: {{ db_name }}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ db_user }} -d {{ db_name }}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: metaseed-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
