@@ -595,14 +595,14 @@ def create_hub_app() -> FastAPI:
         session: Annotated[AsyncSession, Depends(get_session)],
         name: Annotated[str, Form()],
         description: Annotated[str | None, Form()] = None,
-        _csrf_token: Annotated[str | None, Form()] = None,
+        csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
     ) -> RedirectResponse:
         """Create a new workspace."""
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/", status_code=302)
 
-        if not validate_csrf_token(request, _csrf_token):
+        if not validate_csrf_token(request, csrf_token):
             return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
 
         tenant = await get_or_create_tenant(session, user)
@@ -687,14 +687,14 @@ def create_hub_app() -> FastAPI:
         name: Annotated[str, Form()],
         profile: Annotated[str, Form()],
         version: Annotated[str, Form()],
-        _csrf_token: Annotated[str | None, Form()] = None,
+        csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
     ) -> RedirectResponse:
         """Create a new project."""
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/", status_code=302)
 
-        if not validate_csrf_token(request, _csrf_token):
+        if not validate_csrf_token(request, csrf_token):
             url = f"/hub/workspaces/{workspace_id}?error=csrf_validation_failed"
             return RedirectResponse(url, status_code=302)
 
