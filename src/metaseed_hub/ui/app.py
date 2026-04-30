@@ -35,6 +35,25 @@ ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 STATE_COOKIE = "metaseed_oauth_state"
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
 
+# OIDC discovery cache
+_oidc_config: dict[str, str] | None = None
+
+
+async def get_oidc_config() -> dict[str, str]:
+    """Fetch and cache OIDC discovery configuration."""
+    global _oidc_config
+    if _oidc_config is not None:
+        return _oidc_config
+
+    settings = get_settings()
+    discovery_url = settings.oidc_discovery_url
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(discovery_url)
+        response.raise_for_status()
+        _oidc_config = response.json()
+        return _oidc_config
+
 
 def get_or_create_csrf_token(request: Request) -> str:
     """Get existing CSRF token from cookie or create a new one."""
@@ -406,26 +425,27 @@ def create_hub_app() -> FastAPI:
 
     @app.get("/auth/login")
     async def auth_login(request: Request) -> RedirectResponse:
-        """Redirect to Keycloak login page."""
+        """Redirect to OIDC provider login page."""
+        oidc_config = await get_oidc_config()
         state = secrets.token_urlsafe(32)
         redirect_uri = f"{hub_base_url}/auth/callback"
 
         params = {
-            "client_id": settings.keycloak_client_id,
+            "client_id": settings.effective_client_id,
             "response_type": "code",
             "scope": "openid email profile",
             "redirect_uri": redirect_uri,
             "state": state,
         }
 
-        auth_url = f"{settings.keycloak_issuer}/protocol/openid-connect/auth?{urlencode(params)}"
+        auth_url = f"{oidc_config['authorization_endpoint']}?{urlencode(params)}"
 
         response = RedirectResponse(url=auth_url, status_code=302)
         response.set_cookie(
             key=STATE_COOKIE,
             value=state,
             httponly=True,
-            secure=False,  # Set True in production
+            secure=True,
             max_age=600,
         )
         return response
@@ -437,7 +457,7 @@ def create_hub_app() -> FastAPI:
         state: str | None = None,
         error: str | None = None,
     ) -> RedirectResponse:
-        """Handle OAuth callback from Keycloak."""
+        """Handle OAuth callback from OIDC provider."""
         if error:
             return RedirectResponse(url="/hub/?error=auth_failed", status_code=302)
 
@@ -449,15 +469,16 @@ def create_hub_app() -> FastAPI:
             return RedirectResponse(url="/hub/?error=no_code", status_code=302)
 
         # Exchange code for tokens
+        oidc_config = await get_oidc_config()
         redirect_uri = f"{hub_base_url}/auth/callback"
 
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
-                settings.keycloak_token_url,
+                oidc_config["token_endpoint"],
                 data={
                     "grant_type": "authorization_code",
-                    "client_id": settings.keycloak_client_id,
-                    "client_secret": settings.keycloak_client_secret,
+                    "client_id": settings.effective_client_id,
+                    "client_secret": settings.effective_client_secret,
                     "code": code,
                     "redirect_uri": redirect_uri,
                 },
@@ -475,7 +496,7 @@ def create_hub_app() -> FastAPI:
             key=ACCESS_TOKEN_COOKIE,
             value=access_token,
             httponly=True,
-            secure=False,  # Set True in production
+            secure=True,
             max_age=tokens.get("expires_in", 3600),
             path="/",
         )
@@ -483,15 +504,21 @@ def create_hub_app() -> FastAPI:
 
     @app.get("/auth/logout")
     async def auth_logout(request: Request) -> RedirectResponse:
-        """Logout and redirect to Keycloak logout."""
-        logout_url = f"{settings.keycloak_issuer}/protocol/openid-connect/logout"
-        params = {
-            "client_id": settings.keycloak_client_id,
-            "post_logout_redirect_uri": hub_base_url,
-        }
+        """Logout and redirect to OIDC provider logout."""
+        oidc_config = await get_oidc_config()
+        logout_url = oidc_config.get("end_session_endpoint")
 
-        response = RedirectResponse(url=f"{logout_url}?{urlencode(params)}", status_code=302)
+        response = RedirectResponse(url="/hub/", status_code=302)
         response.delete_cookie(key=ACCESS_TOKEN_COOKIE)
+
+        if logout_url:
+            params = {
+                "client_id": settings.effective_client_id,
+                "post_logout_redirect_uri": hub_base_url,
+            }
+            response = RedirectResponse(url=f"{logout_url}?{urlencode(params)}", status_code=302)
+            response.delete_cookie(key=ACCESS_TOKEN_COOKIE)
+
         return response
 
     @app.get("/privacy", response_class=HTMLResponse)
