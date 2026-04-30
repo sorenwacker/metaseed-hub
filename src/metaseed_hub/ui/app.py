@@ -796,11 +796,9 @@ def create_hub_app() -> FastAPI:
 
         metaseed_dir = Path(metaseed.__file__).parent
         possible_paths = [
+            Path("/app/examples") / project.profile / project.version,
             metaseed_dir / "examples" / project.profile / project.version,
             metaseed_dir.parent / "examples" / project.profile / project.version,
-            Path("/Users/sdrwacker/workspace/metaseed/examples")
-            / project.profile
-            / project.version,
         ]
 
         example_file = None
