@@ -48,3 +48,7 @@ Thumbs.db
 
 # Project specific
 src/metaseed_hub/_version.py
+
+# Ansible secrets
+ansible/secrets.yml
+ansible/*.vault.yml
