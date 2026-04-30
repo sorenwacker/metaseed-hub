@@ -80,12 +80,15 @@ def validate_csrf_token(request: Request) -> bool:
 
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
     """Extract and verify user from access token cookie."""
+    import logging
+
     token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     if not token:
         return None
     try:
         return await verify_token(token)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Token verification failed: {e}")
         return None
 
 
