@@ -9,7 +9,7 @@
     <!-- Entity metadata -->
     <div class="editor-section">
         <h4 class="editor-section-title">Details</h4>
-        <form hx-put="/hub/spec-builder/entity/{{ entity_name }}"
+        <form hx-put="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}"
               hx-target="#editor-content"
               hx-swap="innerHTML">
             <div class="form-group">
@@ -64,7 +64,7 @@
             <div class="field-item {% if idx == editing_field_idx %}editing{% endif %}"
                  id="field-card-{{ idx }}">
                 <div class="field-header"
-                     hx-get="/hub/spec-builder/entity/{{ entity_name }}/field/{{ idx }}"
+                     hx-get="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}"
                      hx-target="#field-card-{{ idx }}"
                      hx-swap="innerHTML">
                     <div class="field-info">
@@ -75,7 +75,7 @@
                         {% endif %}
                     </div>
                     <button class="btn-icon-sm danger"
-                            hx-delete="/hub/spec-builder/entity/{{ entity_name }}/field/{{ idx }}"
+                            hx-delete="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}"
                             hx-target="#editor-content"
                             hx-swap="innerHTML"
                             hx-confirm="Delete field '{{ field.name }}'?"
@@ -97,7 +97,7 @@
         </div>
 
         <!-- Add field -->
-        <form hx-post="/hub/spec-builder/entity/{{ entity_name }}/field"
+        <form hx-post="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field"
               hx-target="#editor-content"
               hx-swap="innerHTML"
               class="add-field-form">
@@ -142,10 +142,12 @@
     <!-- Delete entity -->
     <div class="editor-section editor-danger">
         <button class="btn btn-sm btn-danger"
-                hx-delete="/hub/spec-builder/entity/{{ entity_name }}"
-                hx-on::after-request="window.location.href='/hub/spec-builder'"
+                hx-delete="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}"
+                hx-swap="none"
+                hx-on::after-request="window.location.href='/hub/spec-builder/{{ draft_id }}'"
                 hx-confirm="Delete entity '{{ entity_name }}'? This will remove all fields and relationships.">
             Delete Entity
         </button>
     </div>
 </div>
+

@@ -1,17 +1,22 @@
 """Factory functions for creating test model instances."""
 
+from typing import Any
 from uuid import uuid4
 
 from metaseed_hub.models import (
     ChatMessage,
     Note,
     Project,
+    Spec,
+    SpecDraft,
+    SpecStatus,
     Team,
     TeamMembership,
     TeamRole,
     Tenant,
     User,
     Workspace,
+    WorkspaceTeam,
 )
 
 
@@ -206,4 +211,94 @@ def make_chat_message(
         project_id=project.id,
         user_id=user.id,
         content=content,
+    )
+
+
+def make_workspace_team(
+    *,
+    workspace: Workspace,
+    team: Team,
+) -> WorkspaceTeam:
+    """Create a WorkspaceTeam association for testing.
+
+    Args:
+        workspace: Workspace to associate with team.
+        team: Team to grant access to workspace.
+
+    Returns:
+        WorkspaceTeam model instance (not yet persisted).
+    """
+    return WorkspaceTeam(
+        workspace_id=workspace.id,
+        team_id=team.id,
+    )
+
+
+def make_spec(
+    *,
+    workspace: Workspace,
+    created_by: User,
+    name: str | None = None,
+    version: str = "1.0.0",
+    description: str | None = None,
+    spec_data: dict[str, Any] | None = None,
+    status: SpecStatus = SpecStatus.PUBLISHED,
+) -> Spec:
+    """Create a Spec instance for testing.
+
+    Args:
+        workspace: Parent workspace for the spec.
+        created_by: User who created the spec.
+        name: Spec name. Auto-generated if not provided.
+        version: Spec version.
+        description: Optional description.
+        spec_data: Optional spec data.
+        status: Spec status.
+
+    Returns:
+        Spec model instance (not yet persisted).
+    """
+    return Spec(
+        workspace_id=workspace.id,
+        created_by_id=created_by.id,
+        name=name or f"Spec{uuid4().hex[:8]}",
+        version=version,
+        description=description,
+        spec_data=spec_data or {},
+        status=status,
+    )
+
+
+def make_spec_draft(
+    *,
+    workspace: Workspace,
+    user: User,
+    name: str | None = None,
+    version: str = "0.1",
+    spec_data: dict[str, Any] | None = None,
+    source_spec: Spec | None = None,
+    template_source: str | None = None,
+) -> SpecDraft:
+    """Create a SpecDraft instance for testing.
+
+    Args:
+        workspace: Parent workspace for the draft.
+        user: User who owns the draft.
+        name: Draft name. Auto-generated if not provided.
+        version: Draft version.
+        spec_data: Optional spec data.
+        source_spec: Optional source spec (for editing published specs).
+        template_source: Optional template source identifier.
+
+    Returns:
+        SpecDraft model instance (not yet persisted).
+    """
+    return SpecDraft(
+        workspace_id=workspace.id,
+        user_id=user.id,
+        source_spec_id=source_spec.id if source_spec else None,
+        name=name or f"Draft{uuid4().hex[:8]}",
+        version=version,
+        spec_data=spec_data or {},
+        template_source=template_source,
     )

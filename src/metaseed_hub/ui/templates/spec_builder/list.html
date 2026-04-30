@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Spec Builder - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Workspaces</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">Spec Builder</span>
+{% endblock %}
+
+{% block content %}
+<div class="spec-list-page">
+    <div class="page-header">
+        <div class="header-content">
+            <h1>Specifications</h1>
+            <p>Create and manage metadata specifications for your workspaces.</p>
+        </div>
+        <a href="/hub/spec-builder/new" class="btn btn-primary">
+            + New Specification
+        </a>
+    </div>
+
+    <!-- Drafts Section -->
+    <section class="spec-section">
+        <h2>My Drafts</h2>
+        {% if drafts %}
+        <div class="spec-grid">
+            {% for draft in drafts %}
+            <a href="/hub/spec-builder/{{ draft.id }}" class="spec-card draft">
+                <div class="spec-card-header">
+                    <span class="spec-badge draft">Draft</span>
+                    <span class="spec-workspace">{{ draft.workspace.name }}</span>
+                </div>
+                <h3 class="spec-name">{{ draft.name or "Untitled" }}</h3>
+                <p class="spec-version">v{{ draft.version }}</p>
+                <div class="spec-meta">
+                    <span class="spec-date" title="{{ draft.updated_at }}">
+                        Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No drafts yet. Create a new specification to get started.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Published Specs Section -->
+    <section class="spec-section">
+        <h2>Published Specifications</h2>
+        {% if specs %}
+        <div class="spec-grid">
+            {% for spec in specs %}
+            <div class="spec-card published">
+                <div class="spec-card-header">
+                    <span class="spec-badge published">Published</span>
+                    <span class="spec-workspace">{{ spec.workspace.name }}</span>
+                </div>
+                <h3 class="spec-name">{{ spec.name }}</h3>
+                <p class="spec-version">v{{ spec.version }}</p>
+                {% if spec.description %}
+                <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
+                {% endif %}
+                <div class="spec-meta">
+                    <span class="spec-author">by {{ spec.created_by.display_name if spec.created_by else 'Unknown' }}</span>
+                    <span class="spec-date" title="{{ spec.created_at }}">
+                        {{ spec.created_at.strftime('%Y-%m-%d') }}
+                    </span>
+                </div>
+                <div class="spec-actions">
+                    <a href="/hub/spec-builder/spec/{{ spec.id }}" class="btn btn-sm">View</a>
+                    <form action="/hub/spec-builder/spec/{{ spec.id }}/edit" method="POST" class="inline-form">
+                        <button type="submit" class="btn btn-sm">Edit</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No published specifications yet.</p>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+<style>
+.spec-list-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.header-content h1 {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-xs);
+}
+
+.header-content p {
+    color: var(--clr-ink-light);
+    margin: 0;
+}
+
+.spec-section {
+    margin-bottom: var(--space-xl);
+}
+
+.spec-section h2 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-md);
+}
+
+.spec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-lg);
+}
+
+.spec-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    text-decoration: none;
+    color: inherit;
+    transition: all var(--transition-fast);
+}
+
+a.spec-card:hover {
+    border-color: var(--clr-primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.spec-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-sm);
+}
+
+.spec-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.spec-badge.draft {
+    background: var(--clr-warning-bg);
+    color: var(--clr-warning);
+}
+
+.spec-badge.published {
+    background: var(--clr-success-bg);
+    color: var(--clr-success);
+}
+
+.spec-workspace {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+.spec-name {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    color: var(--clr-ink);
+    margin: 0 0 var(--space-xs);
+}
+
+.spec-version {
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+    margin: 0 0 var(--space-sm);
+}
+
+.spec-description {
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+    margin: 0 0 var(--space-md);
+    flex: 1;
+}
+
+.spec-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+    margin-top: auto;
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--clr-border-light);
+}
+
+.spec-actions {
+    display: flex;
+    gap: var(--space-xs);
+    margin-top: var(--space-md);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--clr-border-light);
+}
+
+.inline-form {
+    display: inline;
+}
+
+.empty-state {
+    padding: var(--space-xl);
+    text-align: center;
+    color: var(--clr-ink-light);
+    background: var(--clr-background);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--clr-border);
+}
+</style>
+{% endblock %}

@@ -16,7 +16,15 @@
     <div class="error-message">{{ error }}</div>
     {% endif %}
 
-    <h2>{{ "Edit" if node_id else "New" }} {{ entity_type }}</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
+        <h2>{{ "Edit" if node_id else "New" }} {{ entity_type }}</h2>
+        {% if node_id %}
+        <a href="/hub/projects/{{ project_id }}/graph?node_id={{ node_id }}"
+           class="btn btn-sm" target="_blank" title="View this entity and its children in graph">
+            View in Graph
+        </a>
+        {% endif %}
+    </div>
     {% if description %}
     <p class="entity-description">{{ description }}</p>
     {% endif %}
@@ -25,14 +33,18 @@
           action="/hub/projects/{{ project_id }}/entities"
           hx-post="/hub/projects/{{ project_id }}/entities"
           hx-target="#editor"
-          hx-swap="innerHTML">
-        <input type="hidden" name="_entity_type" value="{{ entity_type }}">
+          hx-swap="innerHTML"
+          autocomplete="off">
+        {% if csrf_token %}
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        <input type="hidden" name="_entity_type" value="{{ entity_type | e }}">
         {% if node_id %}
-        <input type="hidden" name="_node_id" value="{{ node_id }}">
+        <input type="hidden" name="_node_id" value="{{ node_id | e }}">
         {% endif %}
         {% if parent_id %}
-        <input type="hidden" name="_parent_id" value="{{ parent_id }}">
-        <input type="hidden" name="_parent_field" value="{{ parent_field }}">
+        <input type="hidden" name="_parent_id" value="{{ parent_id | e }}">
+        <input type="hidden" name="_parent_field" value="{{ parent_field | e }}">
         {% endif %}
 
         {% if required_fields %}
@@ -98,7 +110,7 @@
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                            value="{{ values.get(field.name, '') }}"
                            {% if field.constraints %}
-                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern }}"{% endif %}
+                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
                            {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
                            {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
                            {% endif %}
@@ -177,7 +189,7 @@
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                            value="{{ values.get(field.name, '') }}"
                            {% if field.constraints %}
-                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern }}"{% endif %}
+                           {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
                            {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
                            {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
                            {% endif %}>

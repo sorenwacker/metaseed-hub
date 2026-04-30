@@ -37,6 +37,14 @@ class TeamRole(StrEnum):
     MEMBER = "member"
 
 
+class SpecStatus(StrEnum):
+    """Status of a published specification."""
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
 class Tenant(TimestampMixin, SoftDeleteMixin, Base):
     """Multi-tenant organization."""
 
@@ -82,6 +90,7 @@ class Team(TimestampMixin, SoftDeleteMixin, Base):
     memberships: Mapped[list["TeamMembership"]] = relationship(
         "TeamMembership", back_populates="team"
     )
+    workspaces: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="team")
 
 
 class User(TimestampMixin, SoftDeleteMixin, Base):
@@ -148,6 +157,41 @@ class TeamMembership(Base):
     team: Mapped["Team"] = relationship("Team", back_populates="memberships")
 
 
+class WorkspaceTeam(Base):
+    """Association between workspaces and teams for access control.
+
+    Links workspaces to teams, enabling team-based access to workspace resources.
+    A workspace can be accessible to multiple teams, and a team can access
+    multiple workspaces.
+    """
+
+    __tablename__ = "workspace_teams"
+    __table_args__ = (
+        Index("ix_workspace_teams_workspace_id", "workspace_id"),
+        Index("ix_workspace_teams_team_id", "team_id"),
+    )
+
+    workspace_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    team_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("teams.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="teams")
+    team: Mapped["Team"] = relationship("Team", back_populates="workspaces")
+
+
 class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     """Workspace for organizing projects."""
 
@@ -173,6 +217,9 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="workspaces")
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="workspace")
+    teams: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="workspace")
+    specs: Mapped[list["Spec"]] = relationship("Spec", back_populates="workspace")
+    spec_drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="workspace")
 
 
 class Project(TimestampMixin, SoftDeleteMixin, Base):
@@ -268,17 +315,18 @@ class ChatMessage(TimestampMixin, Base):
     user: Mapped["User"] = relationship("User", back_populates="chat_messages")
 
 
-class SpecDraft(TimestampMixin, Base):
-    """User-defined specification drafts in the spec builder.
+class Spec(TimestampMixin, SoftDeleteMixin, Base):
+    """Published specification that belongs to a workspace.
 
-    Stores the working state of a spec being built, allowing users to
-    save progress and resume later. Each user has at most one active draft.
+    Represents a finalized specification accessible to all team members
+    with access to the workspace. Supports versioning for tracking changes.
     """
 
-    __tablename__ = "spec_drafts"
+    __tablename__ = "specs"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "user_id", name="uq_spec_drafts_tenant_user"),
-        Index("ix_spec_drafts_tenant_id", "tenant_id"),
+        UniqueConstraint("workspace_id", "name", "version", name="uq_specs_workspace_name_version"),
+        Index("ix_specs_workspace_id", "workspace_id"),
+        Index("ix_specs_created_by_id", "created_by_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -286,9 +334,57 @@ class SpecDraft(TimestampMixin, Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    tenant_id: Mapped[str] = mapped_column(
+    workspace_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[SpecStatus] = mapped_column(
+        Enum(SpecStatus),
+        nullable=False,
+        default=SpecStatus.PUBLISHED,
+    )
+    created_by_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="specs")
+    created_by: Mapped["User"] = relationship("User")
+    drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="source_spec")
+
+
+class SpecDraft(TimestampMixin, Base):
+    """User-defined specification drafts in the spec builder.
+
+    Stores the working state of a spec being built, allowing users to
+    save progress and resume later. Users can have multiple drafts within
+    a workspace, each with a unique name.
+    """
+
+    __tablename__ = "spec_drafts"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "user_id", "name", name="uq_spec_drafts_workspace_user_name"
+        ),
+        Index("ix_spec_drafts_workspace_id", "workspace_id"),
+        Index("ix_spec_drafts_user_id", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(
@@ -296,14 +392,20 @@ class SpecDraft(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    source_spec_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("specs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False, default="0.1")
     spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     template_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
-    tenant: Mapped["Tenant"] = relationship("Tenant")
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="spec_drafts")
     user: Mapped["User"] = relationship("User")
+    source_spec: Mapped["Spec | None"] = relationship("Spec", back_populates="drafts")
 
 
 __all__ = [
@@ -312,7 +414,9 @@ __all__ = [
     "Note",
     "Project",
     "SoftDeleteMixin",
+    "Spec",
     "SpecDraft",
+    "SpecStatus",
     "Team",
     "TeamMembership",
     "TeamRole",
@@ -320,4 +424,5 @@ __all__ = [
     "TimestampMixin",
     "User",
     "Workspace",
+    "WorkspaceTeam",
 ]

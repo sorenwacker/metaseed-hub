@@ -5,11 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Metaseed Hub{% endblock %}</title>
     <link rel="icon" href="/hub/hub-static/images/metaseed-icon.svg" type="image/svg+xml">
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"
+            integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
+            crossorigin="anonymous"></script>
     <link rel="stylesheet" href="/hub/hub-static/css/hub.css">
+    {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     {% block head %}{% endblock %}
 </head>
-<body hx-headers='{"X-Requested-With": "XMLHttpRequest"}'>
+<body hx-headers='{"X-Requested-With": "XMLHttpRequest"{% if csrf_token %}, "X-CSRF-Token": "{{ csrf_token }}"{% endif %}}'>
     <div class="hub-layout">
         <header class="hub-header">
             <a href="/hub/" class="hub-logo">

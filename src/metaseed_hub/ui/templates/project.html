@@ -30,12 +30,23 @@
                 + {{ entity_type }}
             </button>
             {% endfor %}
+            <button class="btn"
+                    hx-post="/hub/projects/{{ project.id }}/validate"
+                    hx-target="#validation-results"
+                    hx-swap="innerHTML"
+                    title="Validate all entities against schema">Verify</button>
+            <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view in new tab">Graph View</a>
             <a href="/hub/projects/{{ project.id }}/export" class="btn" download>Export</a>
         </div>
     </div>
 
-    <div class="project-layout">
-        <aside class="project-sidebar">
+    <div id="validation-results"></div>
+
+    <div class="project-layout" id="project-layout">
+        <aside class="project-sidebar" id="project-sidebar">
+            <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+                <span class="toggle-icon">&#9664;</span>
+            </button>
             <div class="sidebar-section">
                 <h3>Entities</h3>
                 <div id="entity-tree"
@@ -82,6 +93,14 @@
 
 {% block scripts %}
 <script>
+// Sidebar toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('project-sidebar');
+    const layout = document.getElementById('project-layout');
+    sidebar.classList.toggle('collapsed');
+    layout.classList.toggle('sidebar-collapsed');
+}
+
 // WebSocket connection for real-time collaboration
 const projectId = "{{ project.id }}";
 const wsUrl = `ws://${window.location.host}/ws/${projectId}?token=${getAuthToken()}`;

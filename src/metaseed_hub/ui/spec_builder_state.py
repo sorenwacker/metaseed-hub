@@ -19,56 +19,89 @@ from metaseed.specs.schema import (
 )
 
 
+def _field_to_dict(f: FieldSpec) -> dict[str, Any]:
+    """Convert a FieldSpec to a JSON-serializable dict."""
+    field_dict: dict[str, Any] = {
+        "name": f.name,
+        "type": f.type.value,
+        "required": f.required,
+    }
+    if f.description:
+        field_dict["description"] = f.description
+    if f.codename:
+        field_dict["codename"] = f.codename
+    if f.items:
+        field_dict["items"] = f.items
+    if f.ontology_term:
+        field_dict["ontology_term"] = f.ontology_term
+    if f.parent_ref:
+        field_dict["parent_ref"] = f.parent_ref
+    if f.unique_within:
+        field_dict["unique_within"] = f.unique_within
+    if f.reference:
+        field_dict["reference"] = f.reference
+    if f.constraints:
+        constraints: dict[str, Any] = {}
+        if f.constraints.pattern:
+            constraints["pattern"] = f.constraints.pattern
+        if f.constraints.min_length is not None:
+            constraints["min_length"] = f.constraints.min_length
+        if f.constraints.max_length is not None:
+            constraints["max_length"] = f.constraints.max_length
+        if f.constraints.minimum is not None:
+            constraints["minimum"] = f.constraints.minimum
+        if f.constraints.maximum is not None:
+            constraints["maximum"] = f.constraints.maximum
+        if f.constraints.min_items is not None:
+            constraints["min_items"] = f.constraints.min_items
+        if f.constraints.max_items is not None:
+            constraints["max_items"] = f.constraints.max_items
+        if f.constraints.enum:
+            constraints["enum"] = f.constraints.enum
+        if constraints:
+            field_dict["constraints"] = constraints
+    return field_dict
+
+
+def _rule_to_dict(rule: ValidationRuleSpec) -> dict[str, Any]:
+    """Convert a ValidationRuleSpec to a JSON-serializable dict."""
+    rule_dict: dict[str, Any] = {
+        "name": rule.name,
+        "description": rule.description,
+        "applies_to": rule.applies_to,
+    }
+    if rule.field:
+        rule_dict["field"] = rule.field
+    if rule.condition:
+        rule_dict["condition"] = rule.condition
+    if rule.pattern:
+        rule_dict["pattern"] = rule.pattern
+    if rule.minimum is not None:
+        rule_dict["minimum"] = rule.minimum
+    if rule.maximum is not None:
+        rule_dict["maximum"] = rule.maximum
+    if rule.enum:
+        rule_dict["enum"] = rule.enum
+    if rule.reference:
+        rule_dict["reference"] = rule.reference
+    if rule.unique_within:
+        rule_dict["unique_within"] = rule.unique_within
+    if rule.min_items is not None:
+        rule_dict["min_items"] = rule.min_items
+    if rule.max_items is not None:
+        rule_dict["max_items"] = rule.max_items
+    return rule_dict
+
+
 def spec_to_dict(spec: ProfileSpec) -> dict[str, Any]:
     """Convert ProfileSpec to a JSON-serializable dict."""
     entities = {}
     for name, entity in spec.entities.items():
-        fields = []
-        for f in entity.fields:
-            field_dict: dict[str, Any] = {
-                "name": f.name,
-                "type": f.type.value,
-                "required": f.required,
-            }
-            if f.description:
-                field_dict["description"] = f.description
-            if f.items:
-                field_dict["items"] = f.items
-            if f.ontology_term:
-                field_dict["ontology_term"] = f.ontology_term
-            if f.constraints:
-                constraints: dict[str, Any] = {}
-                if f.constraints.min_length is not None:
-                    constraints["min_length"] = f.constraints.min_length
-                if f.constraints.max_length is not None:
-                    constraints["max_length"] = f.constraints.max_length
-                if f.constraints.minimum is not None:
-                    constraints["minimum"] = f.constraints.minimum
-                if f.constraints.maximum is not None:
-                    constraints["maximum"] = f.constraints.maximum
-                if f.constraints.pattern:
-                    constraints["pattern"] = f.constraints.pattern
-                if f.constraints.enum:
-                    constraints["enum"] = f.constraints.enum
-                if constraints:
-                    field_dict["constraints"] = constraints
-            fields.append(field_dict)
         entities[name] = {
             "ontology_term": entity.ontology_term,
             "description": entity.description,
-            "fields": fields,
+            "fields": [_field_to_dict(f) for f in entity.fields],
         }
-
-    rules = []
-    for rule in spec.validation_rules:
-        rules.append(
-            {
-                "name": rule.name,
-                "description": rule.description,
-                "expression": rule.expression,
-                "level": rule.level,
-            }
-        )
 
     return {
         "name": spec.name,
@@ -78,53 +111,67 @@ def spec_to_dict(spec: ProfileSpec) -> dict[str, Any]:
         "ontology": spec.ontology,
         "root_entity": spec.root_entity,
         "entities": entities,
-        "validation_rules": rules,
+        "validation_rules": [_rule_to_dict(r) for r in spec.validation_rules],
     }
+
+
+def _dict_to_field(f: dict[str, Any]) -> FieldSpec:
+    """Convert a dict back to FieldSpec."""
+    constraints = None
+    if f.get("constraints"):
+        c = f["constraints"]
+        constraints = Constraints(
+            pattern=c.get("pattern"),
+            min_length=c.get("min_length"),
+            max_length=c.get("max_length"),
+            minimum=c.get("minimum"),
+            maximum=c.get("maximum"),
+            min_items=c.get("min_items"),
+            max_items=c.get("max_items"),
+            enum=c.get("enum"),
+        )
+    return FieldSpec(
+        name=f["name"],
+        codename=f.get("codename"),
+        type=FieldType(f["type"]),
+        required=f.get("required", False),
+        description=f.get("description") or "",
+        ontology_term=f.get("ontology_term"),
+        constraints=constraints,
+        items=f.get("items"),
+        parent_ref=f.get("parent_ref"),
+        unique_within=f.get("unique_within"),
+        reference=f.get("reference"),
+    )
+
+
+def _dict_to_rule(r: dict[str, Any]) -> ValidationRuleSpec:
+    """Convert a dict back to ValidationRuleSpec."""
+    return ValidationRuleSpec(
+        name=r["name"],
+        description=r.get("description", ""),
+        applies_to=r.get("applies_to", "all"),
+        field=r.get("field"),
+        condition=r.get("condition"),
+        pattern=r.get("pattern"),
+        minimum=r.get("minimum"),
+        maximum=r.get("maximum"),
+        enum=r.get("enum"),
+        reference=r.get("reference"),
+        unique_within=r.get("unique_within"),
+        min_items=r.get("min_items"),
+        max_items=r.get("max_items"),
+    )
 
 
 def dict_to_spec(data: dict[str, Any]) -> ProfileSpec:
     """Convert a dict back to ProfileSpec."""
     entities = {}
     for name, entity_data in data.get("entities", {}).items():
-        fields = []
-        for f in entity_data.get("fields", []):
-            constraints = None
-            if f.get("constraints"):
-                c = f["constraints"]
-                constraints = Constraints(
-                    min_length=c.get("min_length"),
-                    max_length=c.get("max_length"),
-                    minimum=c.get("minimum"),
-                    maximum=c.get("maximum"),
-                    pattern=c.get("pattern"),
-                    enum=c.get("enum"),
-                )
-            fields.append(
-                FieldSpec(
-                    name=f["name"],
-                    type=FieldType(f["type"]),
-                    required=f.get("required", False),
-                    description=f.get("description"),
-                    items=f.get("items"),
-                    ontology_term=f.get("ontology_term"),
-                    constraints=constraints,
-                )
-            )
         entities[name] = EntityDefSpec(
             ontology_term=entity_data.get("ontology_term"),
             description=entity_data.get("description", ""),
-            fields=fields,
-        )
-
-    rules = []
-    for r in data.get("validation_rules", []):
-        rules.append(
-            ValidationRuleSpec(
-                name=r["name"],
-                description=r.get("description", ""),
-                expression=r["expression"],
-                level=r.get("level", "error"),
-            )
+            fields=[_dict_to_field(f) for f in entity_data.get("fields", [])],
         )
 
     return ProfileSpec(
@@ -135,7 +182,7 @@ def dict_to_spec(data: dict[str, Any]) -> ProfileSpec:
         ontology=data.get("ontology"),
         root_entity=data.get("root_entity"),
         entities=entities,
-        validation_rules=rules,
+        validation_rules=[_dict_to_rule(r) for r in data.get("validation_rules", [])],
     )
 
 
