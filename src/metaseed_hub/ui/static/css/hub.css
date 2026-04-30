@@ -302,14 +302,14 @@ body {
     right: var(--space-sm);
     width: 24px;
     height: 24px;
-    border: none;
-    background: transparent;
+    border: 1px solid var(--clr-border);
+    background: var(--clr-surface);
     color: var(--clr-ink-light);
     font-size: 1.25rem;
     line-height: 1;
     cursor: pointer;
     border-radius: var(--radius-sm);
-    opacity: 0;
+    opacity: 0.7;
     transition: all var(--transition-fast);
 }
 

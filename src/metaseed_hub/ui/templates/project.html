@@ -31,6 +31,10 @@
             </button>
             {% endfor %}
             <button class="btn"
+                    hx-post="/hub/projects/{{ project.id }}/load-example"
+                    hx-confirm="Load example data? This will replace current data."
+                    title="Load example data for this profile">Load Example</button>
+            <button class="btn"
                     hx-post="/hub/projects/{{ project.id }}/validate"
                     hx-target="#validation-results"
                     hx-swap="innerHTML"
