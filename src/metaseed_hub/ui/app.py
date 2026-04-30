@@ -768,6 +768,87 @@ def create_hub_app() -> FastAPI:
         html += "</div>"
         return HTMLResponse(html)
 
+    @app.post("/projects/{project_id}/load-example", response_class=HTMLResponse)
+    async def project_load_example(
+        request: Request,
+        project_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Response:
+        """Load example data into a project."""
+        from pathlib import Path
+
+        import yaml
+
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return HTMLResponse(status_code=401)
+
+        if not validate_csrf_token(request):
+            return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+
+        result = await session.execute(select(Project).where(Project.id == project_id))
+        project = result.scalar_one_or_none()
+        if not project:
+            return HTMLResponse("<div class='error'>Project not found</div>")
+
+        # Find examples directory - check multiple locations
+        import metaseed
+
+        metaseed_dir = Path(metaseed.__file__).parent
+        possible_paths = [
+            metaseed_dir / "examples" / project.profile / project.version,
+            metaseed_dir.parent / "examples" / project.profile / project.version,
+            Path("/Users/sdrwacker/workspace/metaseed/examples")
+            / project.profile
+            / project.version,
+        ]
+
+        example_file = None
+        for examples_dir in possible_paths:
+            if examples_dir.exists():
+                yaml_files = list(examples_dir.glob("*.yaml"))
+                if yaml_files:
+                    example_file = yaml_files[0]
+                    break
+
+        if not example_file:
+            msg = f"No example available for {project.profile} v{project.version}"
+            return HTMLResponse(f"<div class='error'>{msg}</div>")
+
+        try:
+            example_data = yaml.safe_load(example_file.read_text(encoding="utf-8"))
+        except yaml.YAMLError as e:
+            return HTMLResponse(f"<div class='error'>Error loading example: {e}</div>")
+
+        # Load example into project state
+        state = get_project_state(project)
+        state.reset()
+
+        from metaseed.models import get_model
+        from metaseed.specs.loader import SpecLoader
+
+        loader = SpecLoader(profile=project.profile)
+        spec = loader.load_profile(project.version, project.profile)
+        root_entity = spec.root_entity or "Investigation"
+
+        try:
+            Model = get_model(root_entity, project.version, profile=project.profile)
+            instance = Model(**example_data)
+            state.add_node(root_entity, instance)
+
+            # Save to database
+            from sqlalchemy.orm.attributes import flag_modified
+
+            project.data = serialize_tree(state)
+            flag_modified(project, "data")
+            session.add(project)
+            await session.commit()
+
+        except Exception as e:
+            return HTMLResponse(f"<div class='error'>Error creating entity: {e}</div>")
+
+        return RedirectResponse(f"/hub/projects/{project_id}", status_code=303)
+
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
     async def project_editor(
         request: Request,
