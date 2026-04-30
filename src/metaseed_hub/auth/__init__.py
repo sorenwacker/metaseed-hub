@@ -133,10 +133,15 @@ class OIDCAuth:
 
             # Verify and decode the token
             issuer = oidc_config.get("issuer", self._settings.effective_issuer)
+            # Support all common signing algorithms
+            supported_algs = oidc_config.get(
+                "id_token_signing_alg_values_supported",
+                ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"],
+            )
             payload = jwt.decode(
                 token,
                 rsa_key,
-                algorithms=["RS256"],
+                algorithms=supported_algs,
                 audience=self._settings.effective_client_id,
                 issuer=issuer,
             )
