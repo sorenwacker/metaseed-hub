@@ -12,12 +12,25 @@
 <div class="workspace-container">
     <div class="page-header">
         <h1>{{ workspace.name }}</h1>
-        <button class="btn btn-primary"
-                hx-get="/hub/projects/new?workspace_id={{ workspace.id }}"
-                hx-target="#project-modal"
-                hx-swap="innerHTML">
-            + New Project
-        </button>
+        <div class="header-actions">
+            <button class="btn"
+                    hx-get="/hub/workspaces/{{ workspace.id }}/edit"
+                    hx-target="#workspace-modal"
+                    hx-swap="innerHTML">
+                Edit
+            </button>
+            <button class="btn btn-danger"
+                    hx-delete="/hub/workspaces/{{ workspace.id }}"
+                    hx-confirm="Delete '{{ workspace.name }}' and all its projects? This cannot be undone.">
+                Delete
+            </button>
+            <button class="btn btn-primary"
+                    hx-get="/hub/projects/new?workspace_id={{ workspace.id }}"
+                    hx-target="#project-modal"
+                    hx-swap="innerHTML">
+                + New Project
+            </button>
+        </div>
     </div>
 
     {% if workspace.description %}
@@ -52,4 +65,5 @@
 </div>
 
 <div id="project-modal"></div>
+<div id="workspace-modal"></div>
 {% endblock %}

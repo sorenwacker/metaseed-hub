@@ -6,7 +6,9 @@ on top of the base metaseed entity editing UI.
 
 import re
 import secrets
+import subprocess
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -39,8 +41,61 @@ CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
 _oidc_config: dict[str, str] | None = None
 
 
+@lru_cache(maxsize=1)
+def get_version_info() -> dict[str, str]:
+    """Get version information from git.
+
+    Returns:
+        Dictionary with commit hash and branch name.
+    """
+    info = {"commit": "unknown", "branch": "unknown", "short_commit": "unknown"}
+
+    try:
+        # Get short commit hash
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=UI_DIR,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            info["short_commit"] = result.stdout.strip()
+
+        # Get full commit hash
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=UI_DIR,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            info["commit"] = result.stdout.strip()
+
+        # Get branch name
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=UI_DIR,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            info["branch"] = result.stdout.strip()
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+
+    return info
+
+
 async def get_oidc_config() -> dict[str, str]:
-    """Fetch and cache OIDC discovery configuration."""
+    """Fetch and cache OIDC discovery configuration.
+
+    Raises:
+        HTTPException: If OIDC provider is unreachable or misconfigured.
+    """
     global _oidc_config
     if _oidc_config is not None:
         return _oidc_config
@@ -48,11 +103,26 @@ async def get_oidc_config() -> dict[str, str]:
     settings = get_settings()
     discovery_url = settings.oidc_discovery_url
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(discovery_url)
-        response.raise_for_status()
-        _oidc_config = response.json()
-        return _oidc_config
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(discovery_url)
+            response.raise_for_status()
+            _oidc_config = response.json()
+            return _oidc_config
+    except httpx.ConnectError:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail=f"OIDC provider not reachable at {settings.effective_issuer}",
+        )
+    except httpx.HTTPStatusError as e:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=503,
+            detail=f"OIDC discovery failed: {e.response.status_code} from {discovery_url}",
+        )
 
 
 def get_or_create_csrf_token(request: Request) -> str:
@@ -155,8 +225,15 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         instance_data = node_data.get("data", {})
         try:
             instance = helper.create(**instance_data)
-        except Exception:
-            return None
+        except Exception as e:
+            import logging
+
+            logging.warning(f"Failed to create {entity_type} with data {instance_data}: {e}")
+            # Create empty instance to preserve node structure
+            try:
+                instance = helper.create()
+            except Exception:
+                return None
 
         node = TreeNode(
             id=node_data.get("id", ""),
@@ -183,6 +260,79 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         if node:
             state.entity_tree.append(node)
             state.nodes_by_id[node.id] = node
+
+
+def build_entity_form_context(
+    state: AppState,
+    helper: Any,
+    node_id: str | None = None,
+    parent_id: str | None = None,
+) -> dict[str, Any]:
+    """Build form context for entity editing.
+
+    Args:
+        state: Application state containing nodes.
+        helper: Entity helper from facade.
+        node_id: ID of the entity being edited (None for new entities).
+        parent_id: ID of the parent entity (for nested entities).
+
+    Returns:
+        Dictionary with form context including fields and values.
+    """
+    # Build field data for template
+    fields = []
+    for field_name in helper.all_fields:
+        info = helper.field_info(field_name)
+        fields.append(
+            {
+                "name": field_name,
+                "type": info.get("type", "string"),
+                "required": info.get("required", False),
+                "description": info.get("description", ""),
+                "constraints": info.get("constraints"),
+                "item_type": info.get("items"),
+                "is_nested": info.get("type") in ("list", "entity")
+                and info.get("items") is not None,
+            }
+        )
+
+    # Determine inherited field to hide (e.g., investigation_id when parent is Investigation)
+    inherited_field = None
+    if parent_id and parent_id in state.nodes_by_id:
+        parent_node = state.nodes_by_id[parent_id]
+        inherited_field = f"{parent_node.entity_type.lower()}_id"
+
+    # Separate required, optional, and nested fields (excluding inherited field)
+    required_fields = [
+        f for f in fields if f["required"] and not f["is_nested"] and f["name"] != inherited_field
+    ]
+    optional_fields = [
+        f
+        for f in fields
+        if not f["required"] and not f["is_nested"] and f["name"] != inherited_field
+    ]
+    nested_fields = [f for f in fields if f["is_nested"]]
+
+    # Get current values if editing existing entity
+    values: dict[str, object] = {}
+    if node_id and node_id in state.nodes_by_id:
+        node = state.nodes_by_id[node_id]
+        if hasattr(node.instance, "model_dump"):
+            values = node.instance.model_dump(exclude_none=True)
+
+    # Build inline tables for nested fields
+    inline_tables = {}
+    if node_id:
+        inline_tables = build_inline_tables(state, node_id, nested_fields)
+
+    return {
+        "description": helper.description,
+        "required_fields": required_fields,
+        "optional_fields": optional_fields,
+        "nested_fields": nested_fields,
+        "inline_tables": inline_tables,
+        "values": values,
+    }
 
 
 def build_inline_tables(
@@ -319,19 +469,30 @@ def create_hub_app() -> FastAPI:
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+    def unauthorized_response() -> HTMLResponse:
+        """Return a user-friendly unauthorized response for HTMX requests."""
+        return HTMLResponse(
+            """<div class="error-message" style="padding: 1rem;">
+                <strong>Session expired.</strong>
+                Please <a href="/hub/auth/login" target="_top">log in again</a> to continue.
+            </div>""",
+            status_code=401,
+        )
+
     def render_template(
         request: Request,
         name: str,
         context: dict[str, Any],
         status_code: int = 200,
     ) -> Response:
-        """Render template with CSRF token included.
+        """Render template with CSRF token and version info included.
 
-        Automatically adds CSRF token to context and sets cookie.
+        Automatically adds CSRF token and version info to context and sets cookie.
         """
         csrf_token = get_or_create_csrf_token(request)
         context["csrf_token"] = csrf_token
         context["request"] = request
+        context["version_info"] = get_version_info()
 
         response = templates.TemplateResponse(
             request=request,
@@ -370,6 +531,27 @@ def create_hub_app() -> FastAPI:
 
     templates.env.filters["escape_pattern"] = escape_pattern_hyphen
 
+    def humanize_field_name(name: str) -> str:
+        """Convert camelCase or snake_case field name to human-readable format.
+
+        Examples:
+            occurrenceID -> Occurrence ID
+            basisOfRecord -> Basis Of Record
+            unique_id -> Unique Id
+        """
+        if not name:
+            return name
+        # First replace underscores with spaces
+        name = name.replace("_", " ")
+        # Insert space before uppercase letters (for camelCase)
+        result = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
+        # Handle consecutive uppercase (like ID, URL)
+        result = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", result)
+        # Title case and return
+        return result.title()
+
+    templates.env.filters["humanize"] = humanize_field_name
+
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
 
@@ -390,18 +572,13 @@ def create_hub_app() -> FastAPI:
             AppState populated with project's entity tree.
         """
         project_id = project.id
-        if project_id not in project_states:
-            state = AppState()
-            state.profile = project.profile
-            state.version = project.version
-            # Load existing data from database
-            if project.data:
-                deserialize_tree(state, project.data)
-            project_states[project_id] = state
-        else:
-            state = project_states[project_id]
-            state.profile = project.profile
-            state.version = project.version
+        # Always reload from database to ensure fresh data
+        state = AppState()
+        state.profile = project.profile
+        state.version = project.version
+        if project.data:
+            deserialize_tree(state, project.data)
+        project_states[project_id] = state
         return state
 
     async def save_project_state(
@@ -419,9 +596,8 @@ def create_hub_app() -> FastAPI:
         from sqlalchemy.orm.attributes import flag_modified
 
         project.data = serialize_tree(state)
-        # Explicitly mark JSONB field as modified for SQLAlchemy change detection
         flag_modified(project, "data")
-        session.add(project)  # Ensure project is in session
+        session.add(project)
         await session.commit()
         await session.refresh(project)
 
@@ -450,7 +626,8 @@ def create_hub_app() -> FastAPI:
             key=STATE_COOKIE,
             value=state,
             httponly=True,
-            secure=True,
+            secure=not settings.debug,
+            samesite="lax",
             max_age=600,
         )
         return response
@@ -501,7 +678,8 @@ def create_hub_app() -> FastAPI:
             key=ACCESS_TOKEN_COOKIE,
             value=access_token,
             httponly=True,
-            secure=True,
+            secure=not settings.debug,
+            samesite="lax",
             max_age=tokens.get("expires_in", 3600),
             path="/",
         )
@@ -581,7 +759,7 @@ def create_hub_app() -> FastAPI:
         """Return workspace creation form."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         return render_template(
             request=request,
@@ -647,6 +825,98 @@ def create_hub_app() -> FastAPI:
             },
         )
 
+    @app.get("/workspaces/{workspace_id}/edit", response_class=HTMLResponse)
+    async def workspace_edit_form(
+        request: Request,
+        workspace_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Response:
+        """Return workspace edit form."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return unauthorized_response()
+
+        result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        workspace = result.scalar_one_or_none()
+        if not workspace:
+            return HTMLResponse("<div class='error'>Workspace not found</div>")
+
+        return render_template(
+            request=request,
+            name="partials/workspace_form.html",
+            context={
+                "user": user,
+                "workspace": workspace,
+            },
+        )
+
+    @app.put("/workspaces/{workspace_id}", response_class=HTMLResponse)
+    async def workspace_update(
+        request: Request,
+        workspace_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        name: Annotated[str, Form()],
+        description: Annotated[str | None, Form()] = None,
+        csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+    ) -> Response:
+        """Update a workspace."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return unauthorized_response()
+
+        if not validate_csrf_token(request, csrf_token):
+            return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+
+        result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        workspace = result.scalar_one_or_none()
+        if not workspace:
+            return HTMLResponse("<div class='error'>Workspace not found</div>")
+
+        workspace.name = name
+        workspace.description = description
+        session.add(workspace)
+        await session.commit()
+
+        response = HTMLResponse(status_code=200)
+        response.headers["HX-Redirect"] = f"/hub/workspaces/{workspace_id}"
+        return response
+
+    @app.delete("/workspaces/{workspace_id}", response_class=HTMLResponse)
+    async def workspace_delete(
+        request: Request,
+        workspace_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Delete a workspace and all its projects."""
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            return unauthorized_response()
+
+        if not validate_csrf_token(request):
+            return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+
+        result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        workspace = result.scalar_one_or_none()
+        if not workspace:
+            return HTMLResponse("<div class='error'>Workspace not found</div>")
+
+        # Delete all projects in workspace first
+        await session.execute(select(Project).where(Project.workspace_id == workspace_id))
+        projects = (
+            (await session.execute(select(Project).where(Project.workspace_id == workspace_id)))
+            .scalars()
+            .all()
+        )
+        for project in projects:
+            await session.delete(project)
+
+        await session.delete(workspace)
+        await session.commit()
+
+        response = HTMLResponse(status_code=200)
+        response.headers["HX-Redirect"] = "/hub/"
+        return response
+
     @app.get("/projects/new", response_class=HTMLResponse)
     async def project_new(
         request: Request,
@@ -655,17 +925,33 @@ def create_hub_app() -> FastAPI:
         """Return project creation form."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         # Get available profiles and versions from metaseed
         loader = SpecLoader()
         profiles_data = []
         for profile_name in loader.list_profiles():
             versions = loader.list_versions(profile_name)
+            # Get profile metadata from first available version
+            display_name = profile_name
+            description = ""
+            root_entity = "Investigation"
+            if versions:
+                try:
+                    spec = loader.load_profile(versions[0], profile_name)
+                    display_name = spec.display_name or profile_name
+                    description = spec.description or ""
+                    root_entity = spec.root_entity or "Investigation"
+                except Exception:
+                    pass
             profiles_data.append(
                 {
                     "name": profile_name,
+                    "display_name": display_name,
+                    "description": description,
+                    "root_entity": root_entity,
                     "versions": versions,
+                    "latest_version": versions[0] if versions else "",
                 }
             )
 
@@ -688,8 +974,14 @@ def create_hub_app() -> FastAPI:
         profile: Annotated[str, Form()],
         version: Annotated[str, Form()],
         csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+        load_example: Annotated[str | None, Form()] = None,
     ) -> RedirectResponse:
         """Create a new project."""
+        import metaseed
+        import yaml
+        from metaseed.models import get_model
+        from metaseed.specs.loader import SpecLoader
+
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse("/hub/", status_code=302)
@@ -707,6 +999,42 @@ def create_hub_app() -> FastAPI:
         )
         session.add(project)
         await session.commit()
+        await session.refresh(project)
+
+        # Load example data if requested
+        import logging
+
+        logging.info(
+            f"project_create: load_example={load_example!r}, profile={profile}, version={version}"
+        )
+        if load_example == "true":
+            examples_dir = Path(metaseed.__file__).parent / "examples"
+            version_dir = examples_dir / profile / version
+            yaml_files = list(version_dir.glob("*.yaml")) if version_dir.exists() else []
+
+            if yaml_files:
+                try:
+                    example_data = yaml.safe_load(yaml_files[0].read_text(encoding="utf-8"))
+                    loader = SpecLoader(profile=profile)
+                    spec = loader.load_profile(version, profile)
+                    root_entity = spec.root_entity or "Investigation"
+
+                    state = get_project_state(project)
+                    state.reset()
+                    Model = get_model(root_entity, version, profile=profile)
+                    instance = Model(**example_data)
+                    state.add_node(root_entity, instance)
+
+                    from sqlalchemy.orm.attributes import flag_modified
+
+                    project.data = serialize_tree(state)
+                    flag_modified(project, "data")
+                    session.add(project)
+                    await session.commit()
+                except Exception as e:
+                    import logging
+
+                    logging.exception(f"Failed to load example data: {e}")
 
         return RedirectResponse(f"/hub/projects/{project.id}", status_code=303)
 
@@ -719,7 +1047,7 @@ def create_hub_app() -> FastAPI:
         """Delete a project."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
@@ -774,14 +1102,15 @@ def create_hub_app() -> FastAPI:
         project_id: str,
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
-        """Load example data into a project."""
-        from pathlib import Path
-
+        """Load example data into a project from YAML files."""
+        import metaseed
         import yaml
+        from metaseed.models import get_model
+        from metaseed.specs.loader import SpecLoader
 
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
@@ -791,43 +1120,33 @@ def create_hub_app() -> FastAPI:
         if not project:
             return HTMLResponse("<div class='error'>Project not found</div>")
 
-        # Find examples directory - check multiple locations
-        import metaseed
+        # Find example YAML file
+        examples_dir = Path(metaseed.__file__).parent / "examples"
+        version_dir = examples_dir / project.profile / project.version
 
-        metaseed_dir = Path(metaseed.__file__).parent
-        possible_paths = [
-            Path("/app/examples") / project.profile / project.version,
-            metaseed_dir / "examples" / project.profile / project.version,
-            metaseed_dir.parent / "examples" / project.profile / project.version,
-        ]
-
-        example_file = None
-        for examples_dir in possible_paths:
-            if examples_dir.exists():
-                yaml_files = list(examples_dir.glob("*.yaml"))
-                if yaml_files:
-                    example_file = yaml_files[0]
-                    break
-
-        if not example_file:
+        if not version_dir.exists():
             msg = f"No example available for {project.profile} v{project.version}"
             return HTMLResponse(f"<div class='error'>{msg}</div>")
 
+        yaml_files = list(version_dir.glob("*.yaml"))
+        if not yaml_files:
+            msg = f"No example file found for {project.profile} v{project.version}"
+            return HTMLResponse(f"<div class='error'>{msg}</div>")
+
+        example_file = yaml_files[0]
         try:
             example_data = yaml.safe_load(example_file.read_text(encoding="utf-8"))
         except yaml.YAMLError as e:
             return HTMLResponse(f"<div class='error'>Error loading example: {e}</div>")
 
-        # Load example into project state
-        state = get_project_state(project)
-        state.reset()
-
-        from metaseed.models import get_model
-        from metaseed.specs.loader import SpecLoader
-
+        # Load spec to get root entity
         loader = SpecLoader(profile=project.profile)
         spec = loader.load_profile(project.version, project.profile)
         root_entity = spec.root_entity or "Investigation"
+
+        # Load example into project state
+        state = get_project_state(project)
+        state.reset()
 
         try:
             Model = get_model(root_entity, project.version, profile=project.profile)
@@ -845,7 +1164,10 @@ def create_hub_app() -> FastAPI:
         except Exception as e:
             return HTMLResponse(f"<div class='error'>Error creating entity: {e}</div>")
 
-        return RedirectResponse(f"/hub/projects/{project_id}", status_code=303)
+        # Use HX-Redirect for HTMX to do a full page redirect
+        response = HTMLResponse(status_code=200)
+        response.headers["HX-Redirect"] = f"/hub/projects/{project_id}"
+        return response
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
     async def project_editor(
@@ -887,7 +1209,7 @@ def create_hub_app() -> FastAPI:
         """Return entity tree for a project."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         result = await session.execute(select(Project).where(Project.id == project_id))
         project = result.scalar_one_or_none()
@@ -932,9 +1254,8 @@ def create_hub_app() -> FastAPI:
         """Return form for creating or editing an entity."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
-        # Load project to get profile/version
         result = await session.execute(select(Project).where(Project.id == project_id))
         project = result.scalar_one_or_none()
         if not project:
@@ -943,42 +1264,12 @@ def create_hub_app() -> FastAPI:
         state = get_project_state(project)
         facade = state.get_or_create_facade()
 
-        # Get entity helper
         try:
             helper = getattr(facade, entity_type)
         except AttributeError:
             return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
 
-        # Build field data for template
-        fields = []
-        for field_name in helper.all_fields:
-            info = helper.field_info(field_name)
-            fields.append(
-                {
-                    "name": field_name,
-                    "type": info.get("type", "string"),
-                    "required": info.get("required", False),
-                    "description": info.get("description", ""),
-                    "constraints": info.get("constraints"),
-                    "item_type": info.get("items"),
-                    "is_nested": info.get("type") in ("list", "entity")
-                    and info.get("items") is not None,
-                }
-            )
-
-        # Separate required, optional, and nested fields
-        required_fields = [f for f in fields if f["required"] and not f["is_nested"]]
-        optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
-        nested_fields = [f for f in fields if f["is_nested"]]
-
-        # Get current values if editing
-        values: dict[str, object] = {}
-        inline_tables: dict[str, dict[str, Any]] = {}
-        if node_id and node_id in state.nodes_by_id:
-            node = state.nodes_by_id[node_id]
-            if hasattr(node.instance, "model_dump"):
-                values = node.instance.model_dump(exclude_none=True)
-            inline_tables = build_inline_tables(state, node_id, nested_fields)
+        form_context = build_entity_form_context(state, helper, node_id, parent_id)
 
         return render_template(
             request=request,
@@ -989,12 +1280,7 @@ def create_hub_app() -> FastAPI:
                 "node_id": node_id,
                 "parent_id": parent_id,
                 "parent_field": parent_field,
-                "description": helper.description,
-                "required_fields": required_fields,
-                "optional_fields": optional_fields,
-                "nested_fields": nested_fields,
-                "inline_tables": inline_tables,
-                "values": values,
+                **form_context,
             },
         )
 
@@ -1007,7 +1293,7 @@ def create_hub_app() -> FastAPI:
         """Create or update an entity."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
@@ -1036,10 +1322,34 @@ def create_hub_app() -> FastAPI:
             return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
 
         # Collect form values, converting types as needed
-        values: dict[str, str | int | float | bool] = {}
+        values: dict[str, str | int | float | bool | None] = {}
+
+        import logging
+
+        logging.info(f"Entity create/update: entity_type={entity_type}, node_id={node_id}")
+        logging.info(f"Form data keys: {list(form_data.keys())}")
+
+        # If updating existing node, start with existing values
+        existing_node = state.nodes_by_id.get(node_id) if node_id else None
+        logging.info(f"Existing node: {existing_node is not None}")
+        if existing_node and hasattr(existing_node.instance, "model_dump"):
+            existing_data = existing_node.instance.model_dump(exclude_none=True)
+            # Copy non-nested existing values
+            for field_name in helper.all_fields:
+                info = helper.field_info(field_name)
+                if info.get("type") not in ("list", "entity") and field_name in existing_data:
+                    values[field_name] = existing_data[field_name]
+
+        # Override with form values
         for field_name in helper.all_fields:
             raw_value = form_data.get(field_name)
-            if raw_value is None or raw_value == "":
+            if raw_value is None:
+                continue
+            if raw_value == "":
+                # Empty string clears the field (but keep inherited fields)
+                if field_name in values and field_name.endswith("_id"):
+                    continue
+                values[field_name] = None
                 continue
 
             raw_str = str(raw_value)
@@ -1056,9 +1366,15 @@ def create_hub_app() -> FastAPI:
             else:
                 values[field_name] = raw_str
 
+        # Remove None values for create
+        values = {k: v for k, v in values.items() if v is not None}
+        logging.info(f"Final values for create: {values}")
+
         # Create or update instance
         try:
             instance = helper.create(**values)
+            if hasattr(instance, "model_dump"):
+                logging.info(f"Created instance: {instance.model_dump(exclude_none=True)}")
 
             if node_id and node_id in state.nodes_by_id:
                 # Update existing node
@@ -1081,29 +1397,10 @@ def create_hub_app() -> FastAPI:
             # Save to database
             await save_project_state(session, project, state)
 
-            # Re-render form with success message
-            fields = []
-            for field_name in helper.all_fields:
-                info = helper.field_info(field_name)
-                fields.append(
-                    {
-                        "name": field_name,
-                        "type": info.get("type", "string"),
-                        "required": info.get("required", False),
-                        "description": info.get("description", ""),
-                        "constraints": info.get("constraints"),
-                        "item_type": info.get("items"),
-                        "is_nested": info.get("type") in ("list", "entity")
-                        and info.get("items") is not None,
-                    }
-                )
-
-            required_fields = [f for f in fields if f["required"] and not f["is_nested"]]
-            optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
-            nested_fields = [f for f in fields if f["is_nested"]]
-
-            # Build inline tables for the saved entity
-            inline_tables = build_inline_tables(state, node_id, nested_fields)
+            # Build form context with updated values from saved instance
+            form_context = build_entity_form_context(state, helper, node_id, parent_id)
+            # Override values with the freshly saved instance data
+            form_context["values"] = instance.model_dump(exclude_none=True)
 
             response = render_template(
                 request=request,
@@ -1113,45 +1410,21 @@ def create_hub_app() -> FastAPI:
                     "entity_type": entity_type,
                     "node_id": node_id,
                     "parent_id": parent_id,
-                    "description": helper.description,
-                    "required_fields": required_fields,
-                    "optional_fields": optional_fields,
-                    "nested_fields": nested_fields,
-                    "inline_tables": inline_tables,
-                    "values": instance.model_dump(exclude_none=True),
                     "success": success_msg,
+                    **form_context,
                 },
             )
-            # Trigger tree refresh via HTMX
             response.headers["HX-Trigger"] = "entityChanged"
             return response
 
         except Exception as e:
-            # Re-render form with error
-            fields = []
-            for field_name in helper.all_fields:
-                info = helper.field_info(field_name)
-                fields.append(
-                    {
-                        "name": field_name,
-                        "type": info.get("type", "string"),
-                        "required": info.get("required", False),
-                        "description": info.get("description", ""),
-                        "constraints": info.get("constraints"),
-                        "item_type": info.get("items"),
-                        "is_nested": info.get("type") in ("list", "entity")
-                        and info.get("items") is not None,
-                    }
-                )
+            import logging
 
-            required_fields = [f for f in fields if f["required"] and not f["is_nested"]]
-            optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
-            nested_fields = [f for f in fields if f["is_nested"]]
+            logging.exception(f"Error creating/updating {entity_type}")
 
-            # Build inline tables if editing existing entity
-            inline_tables = {}
-            if node_id:
-                inline_tables = build_inline_tables(state, node_id, nested_fields)
+            # Build form context and preserve submitted values for error display
+            form_context = build_entity_form_context(state, helper, node_id, parent_id)
+            form_context["values"] = values  # Keep submitted values for user to correct
 
             return render_template(
                 request=request,
@@ -1160,13 +1433,9 @@ def create_hub_app() -> FastAPI:
                     "project_id": project_id,
                     "entity_type": entity_type,
                     "node_id": node_id,
-                    "description": helper.description,
-                    "required_fields": required_fields,
-                    "optional_fields": optional_fields,
-                    "nested_fields": nested_fields,
-                    "inline_tables": inline_tables,
-                    "values": values,
+                    "parent_id": parent_id,
                     "error": str(e),
+                    **form_context,
                 },
             )
 
@@ -1180,9 +1449,8 @@ def create_hub_app() -> FastAPI:
         """Return form for editing an existing entity."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
-        # Load project to get profile/version
         result = await session.execute(select(Project).where(Project.id == project_id))
         project = result.scalar_one_or_none()
         if not project:
@@ -1202,34 +1470,7 @@ def create_hub_app() -> FastAPI:
         except AttributeError:
             return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
 
-        # Build field data
-        fields = []
-        for field_name in helper.all_fields:
-            info = helper.field_info(field_name)
-            fields.append(
-                {
-                    "name": field_name,
-                    "type": info.get("type", "string"),
-                    "required": info.get("required", False),
-                    "description": info.get("description", ""),
-                    "constraints": info.get("constraints"),
-                    "item_type": info.get("items"),
-                    "is_nested": info.get("type") in ("list", "entity")
-                    and info.get("items") is not None,
-                }
-            )
-
-        required_fields = [f for f in fields if f["required"] and not f["is_nested"]]
-        optional_fields = [f for f in fields if not f["required"] and not f["is_nested"]]
-        nested_fields = [f for f in fields if f["is_nested"]]
-
-        # Get current values from the node
-        values: dict[str, object] = {}
-        if hasattr(node.instance, "model_dump"):
-            values = node.instance.model_dump(exclude_none=True)
-
-        # Build inline tables for nested fields
-        inline_tables = build_inline_tables(state, node_id, nested_fields)
+        form_context = build_entity_form_context(state, helper, node_id, node.parent_id)
 
         return render_template(
             request=request,
@@ -1239,12 +1480,7 @@ def create_hub_app() -> FastAPI:
                 "entity_type": entity_type,
                 "node_id": node_id,
                 "parent_id": node.parent_id,
-                "description": helper.description,
-                "required_fields": required_fields,
-                "optional_fields": optional_fields,
-                "nested_fields": nested_fields,
-                "inline_tables": inline_tables,
-                "values": values,
+                **form_context,
             },
         )
 
@@ -1258,7 +1494,7 @@ def create_hub_app() -> FastAPI:
         """Delete an entity."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
@@ -1318,7 +1554,7 @@ def create_hub_app() -> FastAPI:
         """Add a new row to an inline table."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<tr><td>CSRF validation failed</td></tr>", status_code=403)
@@ -1535,30 +1771,21 @@ def create_hub_app() -> FastAPI:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Update a single cell value in an inline table."""
-        print(f"DEBUG update_table_cell: project_id={project_id}, node_id={node_id}")
-
         user = await get_current_user_from_cookie(request)
         if not user:
-            print("DEBUG update_table_cell: No user - 401")
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
-            cookie = request.cookies.get(CSRF_TOKEN_COOKIE)
-            header = request.headers.get("X-CSRF-Token")
-            print(f"DEBUG update_table_cell: CSRF failed - cookie={cookie}, header={header}")
             return HTMLResponse(status_code=403)
 
         result = await session.execute(select(Project).where(Project.id == project_id))
         project = result.scalar_one_or_none()
         if not project:
-            print("DEBUG update_table_cell: Project not found - 404")
             return HTMLResponse(status_code=404)
 
         state = get_project_state(project)
-        print(f"DEBUG update_table_cell: nodes_by_id keys = {list(state.nodes_by_id.keys())}")
 
         if node_id not in state.nodes_by_id:
-            print(f"DEBUG update_table_cell: Node {node_id} not found in state - 404")
             return HTMLResponse(status_code=404)
 
         node = state.nodes_by_id[node_id]
@@ -1567,27 +1794,20 @@ def create_hub_app() -> FastAPI:
         try:
             helper = getattr(facade, node.entity_type)
         except AttributeError:
-            print(f"DEBUG update_table_cell: Entity type {node.entity_type} not found - 400")
             return HTMLResponse(status_code=400)
 
-        # Get form data (single field update)
         form_data = await request.form()
-        print(f"DEBUG update_table_cell: form_data = {dict(form_data)}")
 
         # Get current values
         current_values = {}
         if hasattr(node.instance, "model_dump"):
             current_values = node.instance.model_dump(exclude_none=True)
-        print(f"DEBUG update_table_cell: current_values = {current_values}")
 
-        # Update with new values from form (skip internal fields like _csrf_token)
-        updated_fields = []
+        # Update with new values from form
         for field_name, raw_value in form_data.items():
             if field_name.startswith("_"):
-                print(f"DEBUG update_table_cell: skipping internal field {field_name}")
                 continue
             if raw_value is None or raw_value == "":
-                print(f"DEBUG update_table_cell: skipping empty field {field_name}")
                 continue
 
             raw_str = str(raw_value)
@@ -1602,20 +1822,11 @@ def create_hub_app() -> FastAPI:
                 current_values[field_name] = raw_str.lower() == "true"
             else:
                 current_values[field_name] = raw_str
-            updated_fields.append(field_name)
 
-        print(f"DEBUG update_table_cell: updated fields = {updated_fields}")
-        print(f"DEBUG update_table_cell: final values = {current_values}")
-
-        # Create updated instance
         instance = helper.create(**current_values)
         state.update_node(node_id, instance)
-
-        # Save to database
         await save_project_state(session, project, state)
-        print("DEBUG update_table_cell: saved successfully")
 
-        # Return success with entityChanged trigger for graph updates
         return Response(
             status_code=200,
             headers={"HX-Trigger": "entityChanged"},
@@ -1636,7 +1847,7 @@ def create_hub_app() -> FastAPI:
         """Update a primitive list item value."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse(status_code=403)
@@ -1697,7 +1908,7 @@ def create_hub_app() -> FastAPI:
         """Delete a primitive list item."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse(status_code=403)
@@ -1750,7 +1961,7 @@ def create_hub_app() -> FastAPI:
         """Post a chat message."""
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
@@ -1770,7 +1981,7 @@ def create_hub_app() -> FastAPI:
 
         user = await get_current_user_from_cookie(request)
         if not user:
-            return HTMLResponse(status_code=401)
+            return unauthorized_response()
 
         if not validate_csrf_token(request):
             return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)

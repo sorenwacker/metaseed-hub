@@ -508,6 +508,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/hub/hub-static/js/graph-config.js"></script>
 <script>
     // ERD Data
     const entities = {
@@ -581,11 +582,7 @@
         const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
         const options = {
             layout: { hierarchical: false },
-            physics: {
-                enabled: true,
-                solver: 'forceAtlas2Based',
-                forceAtlas2Based: { gravitationalConstant: -50, springLength: 150 }
-            },
+            physics: GraphConfig.getPhysicsConfig(),
             interaction: { hover: true, zoomView: true, dragView: true }
         };
 

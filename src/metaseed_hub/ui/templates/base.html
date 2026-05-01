@@ -39,6 +39,12 @@
 
     <div id="notification-container" class="notification-container"></div>
 
+    <footer class="hub-footer">
+        <span class="version-info" title="Branch: {{ version_info.branch if version_info else 'unknown' }}">
+            {{ version_info.short_commit if version_info else 'dev' }}
+        </span>
+    </footer>
+
     <script src="/hub/hub-static/js/hub.js"></script>
     {% block scripts %}{% endblock %}
 </body>

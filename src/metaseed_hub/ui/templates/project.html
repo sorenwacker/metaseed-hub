@@ -87,8 +87,48 @@
         </aside>
 
         <main class="project-editor" id="editor">
-            <div class="editor-placeholder">
-                <p>Select an entity from the sidebar or create a new one to start editing.</p>
+            <div class="editor-welcome">
+                <h2>Get Started</h2>
+
+                <div class="welcome-panels">
+                    <div class="welcome-panel">
+                        <h3>Create Entity</h3>
+                        <p class="panel-desc">Add a new root entity to this project</p>
+                        <div class="panel-actions">
+                            {% for entity_type in root_types %}
+                            <button class="btn btn-outline"
+                                    hx-get="/hub/projects/{{ project.id }}/form/{{ entity_type }}"
+                                    hx-target="#editor"
+                                    hx-swap="innerHTML">
+                                + {{ entity_type }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="welcome-panel">
+                        <h3>Examples</h3>
+                        <p class="panel-desc">Load example data to explore the structure</p>
+                        <div class="panel-actions">
+                            <button class="btn btn-outline"
+                                    hx-post="/hub/projects/{{ project.id }}/load-example"
+                                    hx-confirm="Load example data? This will replace current data.">
+                                Load {{ project.profile }} Example
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="welcome-panel">
+                        <h3>Import</h3>
+                        <p class="panel-desc">Import existing data from a file</p>
+                        <div class="panel-actions">
+                            <label class="btn btn-outline btn-file">
+                                Import JSON/YAML
+                                <input type="file" accept=".json,.yaml,.yml" hidden>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

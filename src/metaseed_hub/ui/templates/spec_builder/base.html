@@ -76,14 +76,6 @@
                 <span class="toggle-icon">&lsaquo;</span>
             </button>
 
-            <!-- Toolbox - New Entity drag target -->
-            <div class="toolbox">
-                <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)" title="Drag to canvas or double-click canvas to add">
-                    <span class="toolbox-icon">+</span>
-                    <span>New Entity</span>
-                </div>
-            </div>
-
             <!-- Sidebar tabs -->
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
@@ -203,12 +195,12 @@
                     <input type="text"
                            name="name"
                            id="new-entity-name"
-                           class="form-control"
+                           class="form-input"
                            placeholder="MyEntity"
                            pattern="[A-Z][A-Za-z0-9_]*"
                            required
                            autofocus>
-                    <span class="form-help">PascalCase (e.g., BiologicalMaterial)</span>
+                    <small class="form-help">PascalCase (e.g., BiologicalMaterial)</small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -316,8 +308,7 @@
     border-right: none;
 }
 
-.spec-builder-sidebar.collapsed .sidebar-content,
-.spec-builder-sidebar.collapsed .toolbox {
+.spec-builder-sidebar.collapsed .sidebar-content {
     display: none;
 }
 
@@ -355,49 +346,6 @@
 
 .spec-builder-sidebar.collapsed .sidebar-toggle {
     right: -24px;
-}
-
-.toolbox {
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--clr-border);
-    background: white;
-}
-
-.toolbox-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    background: var(--clr-background);
-    border: 2px dashed var(--clr-primary);
-    border-radius: var(--radius-md);
-    cursor: grab;
-    transition: all var(--transition-fast);
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: var(--clr-primary);
-}
-
-.toolbox-item:hover {
-    background: var(--clr-success-bg);
-    border-style: solid;
-}
-
-.toolbox-item:active {
-    cursor: grabbing;
-}
-
-.toolbox-icon {
-    width: 22px;
-    height: 22px;
-    background: var(--clr-primary);
-    color: white;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.875rem;
 }
 
 .sidebar-content {
@@ -900,5 +848,6 @@
     const rootEntity = {{ spec.root_entity | tojson }};
     const fieldTypes = {{ field_types | tojson | safe }};
 </script>
+<script src="/hub/hub-static/js/graph-config.js"></script>
 <script src="/hub/hub-static/js/spec-builder.js"></script>
 {% endblock %}

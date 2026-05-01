@@ -139,6 +139,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/hub/hub-static/js/graph-config.js"></script>
 <script>
 // Graph state
 var graphNetwork = null;
@@ -237,16 +238,15 @@ function getGraphOptions(layout) {
             physics: { enabled: false }
         });
     } else {
-        var spacing = parseInt(document.getElementById('graph-spacing')?.value || 100);
-        var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -500);
+        var spacing = parseInt(document.getElementById('graph-spacing')?.value || 200);
+        var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -100);
         return Object.assign({}, baseOptions, {
             layout: { randomSeed: 42, hierarchical: { enabled: false } },
-            physics: {
-                enabled: true,
-                solver: 'forceAtlas2Based',
-                forceAtlas2Based: { gravitationalConstant: repulsion, centralGravity: 0.01, springLength: spacing, springConstant: 0.02, damping: 0.4 },
-                stabilization: false
-            }
+            physics: GraphConfig.getPhysicsConfig({
+                gravitationalConstant: repulsion,
+                springLength: spacing,
+                stabilization: { enabled: false }
+            })
         });
     }
 }
@@ -396,10 +396,14 @@ function toggleGraphLayout() {
 
 function updateGraphPhysics() {
     if (!graphNetwork || currentGraphLayout !== 'physics') return;
-    var spacing = parseInt(document.getElementById('graph-spacing')?.value || 100);
-    var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -500);
+    var spacing = parseInt(document.getElementById('graph-spacing')?.value || 200);
+    var repulsion = parseInt(document.getElementById('graph-repulsion')?.value || -100);
     graphNetwork.setOptions({
-        physics: { enabled: true, forceAtlas2Based: { springLength: spacing, gravitationalConstant: repulsion } }
+        physics: GraphConfig.getPhysicsConfig({
+            gravitationalConstant: repulsion,
+            springLength: spacing,
+            stabilization: { enabled: false }
+        })
     });
 }
 

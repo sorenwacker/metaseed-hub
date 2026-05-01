@@ -466,6 +466,147 @@ class TestFieldUpdates:
         assert loaded_node.instance.model_dump()["title"] == "Updated Title"
 
 
+class TestInlineTablePersistence:
+    """Tests for inline table (child entity) persistence."""
+
+    def test_add_child_via_add_node(self) -> None:
+        """Adding a child via add_node should link it to parent correctly."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Add parent node
+        parent = state.add_node(
+            "Investigation",
+            MockInstance({"unique_id": "inv-1", "title": "Parent"}),
+        )
+        parent.label = "Parent"
+
+        # Add child node (like add_table_row does)
+        child = state.add_node(
+            "Study",
+            MockInstance({"unique_id": "study-1", "title": "Child Study"}),
+            parent_id=parent.id,
+        )
+        child.label = "Child Study"
+
+        # Verify child is in parent's children
+        assert len(parent.children) == 1
+        assert parent.children[0].id == child.id
+
+        # Verify child is in nodes_by_id
+        assert child.id in state.nodes_by_id
+
+        # Serialize and verify structure
+        serialized = serialize_tree(state)
+        assert len(serialized["tree"]) == 1
+        parent_data = serialized["tree"][0]
+        assert len(parent_data.get("children", [])) == 1
+        assert parent_data["children"][0]["id"] == child.id
+
+    def test_child_survives_round_trip(self) -> None:
+        """Child nodes should persist through serialize/deserialize cycle."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Create parent with child
+        parent = state.add_node(
+            "Investigation",
+            MockInstance({"unique_id": "inv-1", "title": "Parent"}),
+        )
+        child = state.add_node(
+            "Study",
+            MockInstance({"unique_id": "study-1", "study_id": "inv-1", "title": "Child"}),
+            parent_id=parent.id,
+        )
+
+        # Serialize
+        serialized = serialize_tree(state)
+
+        # Deserialize into new state (simulates server restart)
+        new_state = AppState()
+        new_state.profile = "miappe"
+        new_state.version = "1.1"
+        deserialize_tree(new_state, serialized)
+
+        # Verify parent exists
+        assert len(new_state.entity_tree) == 1
+        loaded_parent = new_state.entity_tree[0]
+        assert loaded_parent.id == parent.id
+
+        # Verify child exists and is linked
+        assert len(loaded_parent.children) == 1
+        loaded_child = loaded_parent.children[0]
+        assert loaded_child.id == child.id
+        assert loaded_child.parent_id == parent.id
+
+        # Verify both are in nodes_by_id
+        assert parent.id in new_state.nodes_by_id
+        assert child.id in new_state.nodes_by_id
+
+    def test_update_parent_preserves_children(self) -> None:
+        """Updating parent instance should not affect children."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Create parent with child
+        parent = state.add_node(
+            "Investigation",
+            MockInstance({"unique_id": "inv-1", "title": "Original Parent"}),
+        )
+        child = state.add_node(
+            "Study",
+            MockInstance({"unique_id": "study-1", "title": "Child Study"}),
+            parent_id=parent.id,
+        )
+
+        # Update parent instance (simulates form save)
+        state.update_node(
+            parent.id,
+            MockInstance({"unique_id": "inv-1", "title": "Updated Parent"}),
+        )
+
+        # Verify child still exists
+        assert len(parent.children) == 1
+        assert parent.children[0].id == child.id
+
+        # Serialize and verify child is still there
+        serialized = serialize_tree(state)
+        parent_data = serialized["tree"][0]
+        assert parent_data["data"]["title"] == "Updated Parent"
+        assert len(parent_data.get("children", [])) == 1
+        assert parent_data["children"][0]["data"]["title"] == "Child Study"
+
+
 class TestValidation:
     """Tests for entity validation via metaseed."""
 
