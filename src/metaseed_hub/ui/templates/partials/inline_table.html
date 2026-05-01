@@ -12,7 +12,7 @@
     <div class="inline-table-header">
         <div class="inline-table-title">
             <span class="inline-table-icon">&#9660;</span>
-            <h4>{{ field_name|replace('_', ' ')|title }}</h4>
+            <h4>{{ field_name|humanize }}</h4>
             <span class="inline-table-count">({{ rows|length }} items)</span>
         </div>
         {% if node_id %}
@@ -29,7 +29,7 @@
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th>{{ col|replace('_', ' ')|title }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
+                    <th>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
                     {% endfor %}
                     {% if columns|length > 0 %}
                     <th style="width: 60px;">Actions</th>

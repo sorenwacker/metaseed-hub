@@ -1,5 +1,12 @@
 /* Metaseed Hub JavaScript */
 
+// Prevent scroll wheel from changing number input values
+document.addEventListener('wheel', function(e) {
+    if (e.target.type === 'number') {
+        e.target.blur();
+    }
+}, { passive: true });
+
 // BroadcastChannel for cross-tab entity updates
 var entityUpdateChannel = null;
 try {
@@ -7,6 +14,32 @@ try {
 } catch (e) {
     console.log('BroadcastChannel not supported');
 }
+
+// Debug form submissions
+document.body.addEventListener('htmx:beforeRequest', function(evt) {
+    console.log('HTMX beforeRequest:', evt.detail.elt.tagName, evt.detail.path);
+});
+
+// Debug form validation
+document.addEventListener('submit', function(evt) {
+    console.log('Form submit event:', evt.target.action);
+    const form = evt.target;
+    if (!form.checkValidity()) {
+        console.log('Form is invalid');
+        // Find which fields are invalid
+        form.querySelectorAll(':invalid').forEach(field => {
+            console.log('Invalid field:', field.name, field.validationMessage);
+        });
+    }
+}, true);
+
+document.body.addEventListener('htmx:responseError', function(evt) {
+    console.error('HTMX responseError:', evt.detail);
+});
+
+document.body.addEventListener('htmx:sendError', function(evt) {
+    console.error('HTMX sendError:', evt.detail);
+});
 
 // HTMX configuration
 document.body.addEventListener('htmx:configRequest', function(evt) {

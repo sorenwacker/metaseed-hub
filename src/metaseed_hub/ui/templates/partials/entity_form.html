@@ -54,7 +54,7 @@
                 {% for field in required_fields %}
                 <div class="form-group">
                     <label class="form-label" for="{{ field.name }}">
-                        {{ field.name | replace("_", " ") | title }}
+                        {{ field.name | humanize }}
                         <span class="required">*</span>
                     </label>
 
@@ -136,7 +136,7 @@
                 {% for field in optional_fields %}
                 <div class="form-group">
                     <label class="form-label" for="{{ field.name }}">
-                        {{ field.name | replace("_", " ") | title }}
+                        {{ field.name | humanize }}
                     </label>
 
                     {% if field.type == "boolean" %}
@@ -214,7 +214,7 @@
             {% for field in nested_fields %}
             <button type="button" class="nested-field-btn" disabled>
                 <span class="nested-field-icon">+</span>
-                <span class="nested-field-label">{{ field.name | replace("_", " ") | title }}</span>
+                <span class="nested-field-label">{{ field.name | humanize }}</span>
                 <span class="nested-field-type">({{ field.item_type }})</span>
             </button>
             {% endfor %}

@@ -9,7 +9,7 @@
             <label class="form-label">Name <span class="required">*</span></label>
             <input type="text"
                    name="name"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.name }}"
                    required>
         </div>
@@ -18,7 +18,7 @@
             <label class="form-label">Description</label>
             <input type="text"
                    name="description"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.description or '' }}"
                    placeholder="What this rule validates...">
         </div>
@@ -27,7 +27,7 @@
             <label class="form-label">Applies To</label>
             <input type="text"
                    name="applies_to"
-                   class="form-control"
+                   class="form-input"
                    value="{% if rule.applies_to == 'all' %}all{% elif rule.applies_to is string %}{{ rule.applies_to }}{% else %}{{ rule.applies_to|join(', ') }}{% endif %}"
                    placeholder="all or Entity1, Entity2"
                    list="entities-datalist">
@@ -37,14 +37,14 @@
                 <option value="{{ ename }}">
                 {% endfor %}
             </datalist>
-            <span class="form-help">"all" or comma-separated entity names</span>
+            <small class="form-help">"all" or comma-separated entity names</small>
         </div>
 
         <div class="form-group">
             <label class="form-label">Field</label>
             <input type="text"
                    name="field"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.field or '' }}"
                    placeholder="field_name">
         </div>
@@ -53,17 +53,17 @@
             <label class="form-label">Condition</label>
             <input type="text"
                    name="condition"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.condition or '' }}"
                    placeholder="end_date >= start_date">
-            <span class="form-help">Logical expression using field names</span>
+            <small class="form-help">Logical expression using field names</small>
         </div>
 
         <div class="form-group">
             <label class="form-label">Pattern</label>
             <input type="text"
                    name="pattern"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.pattern or '' }}"
                    placeholder="^[A-Za-z]+$">
         </div>
@@ -72,7 +72,7 @@
             <label class="form-label">Minimum</label>
             <input type="number"
                    name="minimum"
-                   class="form-control"
+                   class="form-input"
                    step="any"
                    value="{{ rule.minimum if rule.minimum is not none else '' }}">
         </div>
@@ -81,7 +81,7 @@
             <label class="form-label">Maximum</label>
             <input type="number"
                    name="maximum"
-                   class="form-control"
+                   class="form-input"
                    step="any"
                    value="{{ rule.maximum if rule.maximum is not none else '' }}">
         </div>
@@ -90,17 +90,17 @@
             <label class="form-label">Reference</label>
             <input type="text"
                    name="reference"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.reference or '' }}"
                    placeholder="Entity.field">
-            <span class="form-help">Entity.field for integrity checks</span>
+            <small class="form-help">Entity.field for integrity checks</small>
         </div>
 
         <div class="form-group">
             <label class="form-label">Unique Within</label>
             <input type="text"
                    name="unique_within"
-                   class="form-control"
+                   class="form-input"
                    value="{{ rule.unique_within or '' }}"
                    placeholder="parent">
         </div>
@@ -109,7 +109,7 @@
             <label class="form-label">Min Items</label>
             <input type="number"
                    name="min_items"
-                   class="form-control"
+                   class="form-input"
                    min="0"
                    value="{{ rule.min_items if rule.min_items is not none else '' }}">
         </div>
@@ -118,7 +118,7 @@
             <label class="form-label">Max Items</label>
             <input type="number"
                    name="max_items"
-                   class="form-control"
+                   class="form-input"
                    min="0"
                    value="{{ rule.max_items if rule.max_items is not none else '' }}">
         </div>
@@ -126,7 +126,7 @@
         <div class="form-group span-2">
             <label class="form-label">Enum Values (one per line)</label>
             <textarea name="enum_values"
-                      class="form-control"
+                      class="form-input"
                       rows="2"
                       placeholder="value1&#10;value2">{% if rule.enum %}{{ rule.enum|join('\n') }}{% endif %}</textarea>
         </div>
