@@ -822,5 +822,6 @@ var showAllEntities = SpecBuilder.showAllEntities;
 var closeEditorPanel = SpecBuilder.closeEditorPanel;
 var onEntityAdded = SpecBuilder.onEntityAdded;
 var hideSelectedEntity = SpecBuilder.hideSelectedEntity;
+var dragNewEntity = SpecBuilder.dragNewEntity;
 var dropNewEntity = SpecBuilder.dropNewEntity;
 var addEntityAtPosition = SpecBuilder.addEntityAtPosition;
