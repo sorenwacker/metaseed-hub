@@ -2587,6 +2587,54 @@ a.spec-editor-close:hover {
     right: -24px;
 }
 
+.spec-builder-sidebar.collapsed .toolbox {
+    display: none;
+}
+
+/* Toolbox for dragging new entities */
+.toolbox {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--clr-border);
+    background: white;
+}
+
+.toolbox-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-background);
+    border: 2px dashed var(--clr-primary);
+    border-radius: var(--radius-md);
+    cursor: grab;
+    transition: all var(--transition-fast);
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--clr-primary);
+}
+
+.toolbox-item:hover {
+    background: var(--clr-success-bg);
+    border-style: solid;
+}
+
+.toolbox-item:active {
+    cursor: grabbing;
+}
+
+.toolbox-icon {
+    width: 22px;
+    height: 22px;
+    background: var(--clr-primary);
+    color: white;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+}
+
 .sidebar-content {
     flex: 1;
     overflow-y: auto;

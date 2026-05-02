@@ -932,7 +932,17 @@ def create_hub_app() -> FastAPI:
         profiles_data = []
         for profile_name in loader.list_profiles():
             versions = loader.list_versions(profile_name)
-            # Get profile metadata from first available version
+
+            # Sort versions in descending order (newest first)
+            # Use tuple comparison for semver-like sorting
+            def version_key(v: str) -> tuple[int, ...]:
+                try:
+                    return tuple(int(x) for x in v.split("."))
+                except ValueError:
+                    return (0,)
+
+            versions = sorted(versions, key=version_key, reverse=True)
+            # Get profile metadata from latest version
             display_name = profile_name
             description = ""
             root_entity = "Investigation"

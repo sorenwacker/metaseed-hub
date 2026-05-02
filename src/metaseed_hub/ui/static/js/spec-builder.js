@@ -820,3 +820,7 @@ var hideEntity = SpecBuilder.hideEntity;
 var showEntity = SpecBuilder.showEntity;
 var showAllEntities = SpecBuilder.showAllEntities;
 var closeEditorPanel = SpecBuilder.closeEditorPanel;
+var onEntityAdded = SpecBuilder.onEntityAdded;
+var hideSelectedEntity = SpecBuilder.hideSelectedEntity;
+var dropNewEntity = SpecBuilder.dropNewEntity;
+var addEntityAtPosition = SpecBuilder.addEntityAtPosition;

@@ -76,6 +76,14 @@
                 <span class="toggle-icon">&lsaquo;</span>
             </button>
 
+            <!-- Toolbox - New Entity drag target -->
+            <div class="toolbox">
+                <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)" title="Drag to canvas or double-click canvas to add">
+                    <span class="toolbox-icon">+</span>
+                    <span>New Entity</span>
+                </div>
+            </div>
+
             <!-- Sidebar tabs -->
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
