@@ -459,8 +459,10 @@ body {
     flex: 1;
     display: grid;
     grid-template-columns: 280px 1fr;
+    grid-template-rows: 1fr;
     gap: var(--space-md);
     min-height: 0;
+    overflow: hidden;
 }
 
 .project-sidebar {
@@ -471,6 +473,7 @@ body {
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-sm);
+    height: 100%;
     max-height: 100%;
 }
 
@@ -497,6 +500,13 @@ body {
 
 .sidebar-section:last-child {
     border-bottom: none;
+}
+
+/* Limit height of collaborators and chat sections */
+.sidebar-section:nth-child(2),
+.sidebar-section:nth-child(3) {
+    max-height: 150px;
+    overflow-y: auto;
 }
 
 .sidebar-section h3 {
