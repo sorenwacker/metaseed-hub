@@ -1735,7 +1735,14 @@ textarea {
 .row-actions {
     display: flex;
     gap: var(--space-xs);
-    justify-content: flex-end;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-xs);
+}
+
+td.row-actions {
+    vertical-align: middle;
+    text-align: center;
 }
 
 .btn-icon {

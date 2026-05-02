@@ -224,6 +224,21 @@ class HubWebSocket {
 // Export for use in templates
 window.HubWebSocket = HubWebSocket;
 
+// Helper to update cell display from input value
+function updateCellDisplay(cell) {
+    const input = cell.querySelector('.cell-input');
+    const display = cell.querySelector('.cell-display');
+    if (input && display) {
+        const newValue = input.value;
+        display.textContent = newValue || 'Click to edit';
+        if (newValue) {
+            display.classList.remove('placeholder');
+        } else {
+            display.classList.add('placeholder');
+        }
+    }
+}
+
 // Editable cell handling
 document.addEventListener('click', function(e) {
     const cell = e.target.closest('.editable-cell');
@@ -232,8 +247,9 @@ document.addEventListener('click', function(e) {
     // Don't activate if already editing
     if (cell.classList.contains('editing')) return;
 
-    // Close any other editing cells
+    // Close any other editing cells and update their display
     document.querySelectorAll('.editable-cell.editing').forEach(c => {
+        updateCellDisplay(c);
         c.classList.remove('editing');
     });
 
@@ -252,20 +268,8 @@ document.addEventListener('focusout', function(e) {
     if (cell && cell.classList.contains('editing')) {
         // Small delay to allow HTMX to process
         setTimeout(() => {
+            updateCellDisplay(cell);
             cell.classList.remove('editing');
-            // Update display value
-            const input = cell.querySelector('.cell-input');
-            const display = cell.querySelector('.cell-display');
-            if (input && display) {
-                const newValue = input.value;
-                display.textContent = newValue || 'Click to edit';
-                // Update placeholder class
-                if (newValue) {
-                    display.classList.remove('placeholder');
-                } else {
-                    display.classList.add('placeholder');
-                }
-            }
         }, 100);
     }
 });
@@ -282,8 +286,10 @@ document.addEventListener('keydown', function(e) {
         // Trigger change event to save
         e.target.dispatchEvent(new Event('change', { bubbles: true }));
 
-        // Move to next cell
+        // Update display and move to next cell
+        updateCellDisplay(cell);
         if (currentIdx < cells.length - 1) {
+            cell.classList.remove('editing');
             cells[currentIdx + 1].click();
         } else {
             cell.classList.remove('editing');
