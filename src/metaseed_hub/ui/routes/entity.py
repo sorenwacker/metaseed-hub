@@ -303,6 +303,12 @@ async def project_entity_edit(
 
     form_context = build_entity_form_context(state, helper, node_id, node.parent_id)
 
+    # Debug: show what values are being passed to template
+    values = form_context.get("values", {})
+    logger.info(f"entity_edit: values has {len(values)} keys: {list(values.keys())[:10]}")
+    if "phone" in values:
+        logger.info(f"  phone value: {values['phone']}")
+
     return _render_template(
         request=request,
         name="partials/entity_form.html",

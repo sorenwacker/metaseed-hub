@@ -196,10 +196,16 @@ def create_nested_nodes(
                 child_node = state.add_node(nested_type, child_instance, parent_id=parent_node.id)
 
                 # Set label from common identifier fields
-                for label_field in ("title", "name", "unique_id", "alias", "id"):
+                label_set = False
+                for label_field in ("title", "name", "unique_id", "alias", "id", "identifier"):
                     if item_data.get(label_field):
                         child_node.label = str(item_data[label_field])
+                        label_set = True
                         break
+                # Special case for Person: combine first_name and last_name
+                if not label_set and item_data.get("first_name") or item_data.get("last_name"):
+                    parts = [item_data.get("first_name", ""), item_data.get("last_name", "")]
+                    child_node.label = " ".join(p for p in parts if p)
 
                 # Recursively process this child's nested fields
                 create_nested_nodes(state, facade, child_node, nested_type, item_data)
@@ -383,6 +389,26 @@ def build_inline_tables(
                         val = val[:47] + "..."
                     row_data[col] = val
             rows.append(row_data)
+
+        # If no children found, check if instance has this field as primitive list
+        # This handles cases where schema expects entities but data has plain values
+        if not rows and hasattr(node.instance, "model_dump"):
+            parent_data = node.instance.model_dump(exclude_none=True)
+            field_data = parent_data.get(field_name, [])
+            if isinstance(field_data, list) and field_data:
+                first_item = field_data[0]
+                # If items are primitives (not dicts), display as primitive list
+                if not isinstance(first_item, dict):
+                    for idx, val in enumerate(field_data):
+                        rows.append({"_idx": idx, "value": str(val)})
+                    inline_tables[field_name] = {
+                        "columns": ["value"],
+                        "rows": rows,
+                        "column_types": {"value": "string"},
+                        "nested_entity_type": item_type,
+                        "is_primitive_list": True,
+                    }
+                    continue
 
         # Determine which columns are inherited (reference to parent)
         parent_type_lower = node.entity_type.lower()
