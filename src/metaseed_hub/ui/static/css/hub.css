@@ -1288,23 +1288,33 @@ textarea {
     border-top: 1px solid var(--clr-parchment);
 }
 
-/* Entity Tree */
-/* Entity Tree - Clean hierarchical display */
+/* Entity Tree - Collapsible hierarchical display */
 .entity-tree {
     list-style: none;
     padding: 0;
     margin: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     flex: 1;
     min-height: 0;
 }
 
-.entity-tree > li {
+.tree-node {
     border-bottom: 1px solid var(--clr-parchment);
 }
 
-.entity-tree > li:last-child {
+.tree-node:last-child {
     border-bottom: none;
+}
+
+/* Collapsed state - hide children */
+.tree-node.collapsed > .entity-children {
+    display: none;
+}
+
+/* Expanded state - rotate arrow */
+.tree-node:not(.collapsed) > .entity-item .tree-expand {
+    transform: rotate(90deg);
 }
 
 .entity-children {
@@ -1312,11 +1322,11 @@ textarea {
     padding: 0;
     margin: 0;
     margin-left: var(--space-md);
-    border-left: 1px solid var(--clr-parchment);
+    border-left: 2px solid var(--clr-parchment);
 }
 
-.entity-children .entity-item {
-    padding-left: var(--space-sm);
+.entity-children .tree-node {
+    border-bottom: none;
 }
 
 .entity-item {
@@ -1324,12 +1334,32 @@ textarea {
     align-items: center;
     gap: var(--space-xs);
     padding: var(--space-xs) var(--space-sm);
-    cursor: pointer;
     transition: background var(--transition-fast);
 }
 
 .entity-item:hover {
     background: var(--clr-background);
+}
+
+/* Expand/collapse button */
+.tree-expand {
+    background: none;
+    border: none;
+    color: var(--clr-ink-light);
+    cursor: pointer;
+    font-size: 0.625rem;
+    padding: 2px;
+    width: 1rem;
+    height: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.tree-expand:hover {
+    color: var(--clr-primary);
 }
 
 .entity-type-badge {

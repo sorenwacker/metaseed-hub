@@ -1271,9 +1271,7 @@ def create_hub_app() -> FastAPI:
             children = item.get("children", [])
             has_children = bool(children)
             is_nested = item.get("is_nested", False)
-
-            indent_class = f"depth-{min(depth, 3)}"
-            expand_class = "has-children" if has_children else ""
+            child_count = len(children)
 
             # For nested items, link to form with parent context
             if is_nested:
@@ -1286,15 +1284,24 @@ def create_hub_app() -> FastAPI:
                 click_url = f"/hub/projects/{project_id}/entity/{item_id}"
                 delete_url = f"/hub/projects/{project_id}/entity/{item_id}"
 
-            html = f"""<li class='entity-item {indent_class} {expand_class}'>
-                <span class='entity-type-badge'>{item_type}</span>
-                <a href='#' class='entity-name'
-                   hx-get='{click_url}'
-                   hx-target='#editor'>{item_name}</a>
-                <button class='entity-delete' title='Delete'
-                        hx-delete='{delete_url}'
-                        hx-target='#entity-tree'
-                        hx-confirm='Delete this {item_type}?'>x</button>"""
+            # Expand button for items with children
+            expand_btn = ""
+            if has_children:
+                expand_btn = f"""<button class='tree-expand' onclick='toggleTreeNode(this)'
+                    title='{child_count} nested items'>▶</button>"""
+
+            html = f"""<li class='tree-node{"" if depth == 0 else " collapsed"}'>
+                <div class='entity-item'>
+                    {expand_btn}
+                    <span class='entity-type-badge'>{item_type}</span>
+                    <a href='#' class='entity-name'
+                       hx-get='{click_url}'
+                       hx-target='#editor'>{item_name}</a>
+                    <button class='entity-delete' title='Delete'
+                            hx-delete='{delete_url}'
+                            hx-target='#entity-tree'
+                            hx-confirm='Delete this {item_type}?'>×</button>
+                </div>"""
 
             if children:
                 html += "<ul class='entity-children'>"

@@ -326,3 +326,21 @@ document.addEventListener('keydown', function(e) {
         }
     }
 });
+
+// Tree expand/collapse
+function toggleTreeNode(btn) {
+    var node = btn.closest('.tree-node');
+    if (node) {
+        node.classList.toggle('collapsed');
+    }
+}
+
+// Toggle sidebar
+function toggleSidebar() {
+    var sidebar = document.getElementById('project-sidebar');
+    var layout = document.getElementById('project-layout');
+    if (sidebar && layout) {
+        sidebar.classList.toggle('collapsed');
+        layout.classList.toggle('sidebar-collapsed');
+    }
+}
