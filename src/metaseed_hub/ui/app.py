@@ -1273,17 +1273,16 @@ def create_hub_app() -> FastAPI:
             from sqlalchemy.orm.attributes import flag_modified
 
             project.data = serialize_tree(state)
-            # Debug: log what we're saving
-            logging.info(f"Saving tree with {len(state.entity_tree)} root nodes")
+            # Debug: print what we're saving
+            print(f"DEBUG Saving tree with {len(state.entity_tree)} root nodes")
             for n in state.entity_tree:
                 if n.instance:
                     data = n.instance.model_dump(exclude_none=True)
-                    logging.info(f"  {n.entity_type} '{n.label}': {len(data)} fields")
-                    logging.info(f"    Fields: {list(data.keys())[:5]}...")
-                for c in n.children:
+                    print(f"  {n.entity_type} '{n.label}': {len(data)} fields")
+                for c in n.children[:3]:  # First 3 children
                     if c.instance:
                         cdata = c.instance.model_dump(exclude_none=True)
-                        logging.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
+                        print(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
 
             flag_modified(project, "data")
             session.add(project)
@@ -1642,15 +1641,13 @@ def create_hub_app() -> FastAPI:
         entity_type = node.entity_type
         facade = state.get_or_create_facade()
 
-        # Debug: log what's in the node instance
-        import logging
-
+        # Debug: print what's in the node instance
         if node.instance and hasattr(node.instance, "model_dump"):
             instance_data = node.instance.model_dump(exclude_none=True)
-            logging.info(f"Edit {entity_type} '{node.label}': {len(instance_data)} fields")
-            logging.info(f"  Data: {instance_data}")
+            print(f"DEBUG Edit {entity_type} '{node.label}': {len(instance_data)} fields")
+            print(f"  Data: {instance_data}")
         else:
-            logging.warning(f"Edit {entity_type} '{node.label}': NO INSTANCE DATA")
+            print(f"DEBUG Edit {entity_type} '{node.label}': NO INSTANCE DATA")
 
         try:
             helper = getattr(facade, entity_type)
