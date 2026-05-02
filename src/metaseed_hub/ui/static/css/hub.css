@@ -2481,10 +2481,16 @@ a.spec-editor-close:hover {
 }
 
 .toolbar-left,
+.toolbar-center,
 .toolbar-right {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+}
+
+.toolbar-center {
+    flex: 1;
+    justify-content: center;
 }
 
 .toolbar-divider {

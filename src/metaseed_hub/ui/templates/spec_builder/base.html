@@ -30,46 +30,37 @@
     <!-- Header toolbar -->
     <div class="spec-builder-toolbar">
         <div class="toolbar-left">
+            <span class="entity-count">{{ spec.entities|length }} entities</span>
             {% if template_source %}
-            <span class="template-badge">
-                Cloned from {{ template_source[0] }} v{{ template_source[1] }}
-            </span>
+            <span class="template-badge">from {{ template_source[0] }} v{{ template_source[1] }}</span>
             {% endif %}
-            <span class="entity-count">
-                <strong>{{ spec.entities|length }}</strong> entities
-            </span>
         </div>
-        <div class="toolbar-right">
-            <button class="btn btn-sm" onclick="autoLayout()">Auto Layout</button>
+        <div class="toolbar-center">
+            <button class="btn btn-sm" onclick="autoLayout()" title="Auto-arrange entities">Layout</button>
+            <button class="btn btn-sm" onclick="toggleLeftSidebar()" title="Toggle sidebar">Sidebar</button>
             <button class="btn btn-sm"
                     hx-get="/hub/spec-builder/{{ draft_id }}/preview"
                     hx-target="#preview-content"
                     hx-swap="innerHTML"
-                    onclick="showPreview()">
-                Preview YAML
-            </button>
-            <a href="/hub/spec-builder/{{ draft_id }}/export" class="btn btn-sm" download>Export</a>
+                    onclick="showPreview()"
+                    title="Preview YAML output">Preview</button>
+            <a href="/hub/spec-builder/{{ draft_id }}/export" class="btn btn-sm" download title="Download YAML">Export</a>
+        </div>
+        <div class="toolbar-right">
+            <a href="/hub/spec-builder/{{ draft_id }}/reset" class="btn btn-sm"
+               onclick="return confirm('Clear all entities and start fresh?')"
+               title="Reset specification">New</a>
             <button class="btn btn-sm btn-primary"
                     hx-post="/hub/spec-builder/{{ draft_id }}/save"
                     hx-target="#notification-container"
-                    hx-swap="beforeend">
-                Save Draft
-            </button>
+                    hx-swap="beforeend"
+                    title="Save draft">Save</button>
             <button class="btn btn-sm btn-success"
                     hx-post="/hub/spec-builder/{{ draft_id }}/publish"
                     hx-target="#notification-container"
                     hx-swap="beforeend"
-                    onclick="return confirm('Publish this specification? It will be visible to all workspace members.')">
-                Publish
-            </button>
-            <span class="toolbar-divider"></span>
-            <a href="/hub/spec-builder/{{ draft_id }}/reset" class="btn btn-sm"
-               onclick="return confirm('Start over? This will clear all entities and reset the specification.')">
-                Start Over
-            </a>
-            <a href="/hub/spec-builder" class="btn btn-sm">
-                Back to List
-            </a>
+                    onclick="return confirm('Publish this specification?')"
+                    title="Publish to workspace">Publish</button>
         </div>
     </div>
 
@@ -200,7 +191,7 @@
         <form hx-post="/hub/spec-builder/{{ draft_id }}/entity"
               hx-target="#editor-content"
               hx-swap="innerHTML"
-              hx-on::after-request="onEntityAdded()">
+              hx-on:htmx:after-request="onEntityAdded(event)">
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Entity Name <span class="required">*</span></label>
