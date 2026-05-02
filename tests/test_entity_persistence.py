@@ -607,6 +607,171 @@ class TestInlineTablePersistence:
         assert parent_data["children"][0]["data"]["title"] == "Child Study"
 
 
+class TestExampleLoading:
+    """Tests for loading example data with nested entities."""
+
+    def test_nested_items_become_child_nodes(self) -> None:
+        """Nested items in example data should become child TreeNodes."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Simulate loading example with nested data
+        # Parent node
+        parent = state.add_node(
+            "Investigation",
+            MockInstance(
+                {
+                    "unique_id": "inv-001",
+                    "title": "Test Investigation",
+                }
+            ),
+        )
+
+        # Add nested items as child nodes (like the fixed load_example does)
+        nested_items = [
+            {"unique_id": "study-001", "title": "Study 1"},
+            {"unique_id": "study-002", "title": "Study 2"},
+        ]
+        for item_data in nested_items:
+            state.add_node(
+                "Study",
+                MockInstance(item_data),
+                parent_id=parent.id,
+            )
+
+        # Verify children were created
+        assert len(parent.children) == 2
+        assert parent.children[0].entity_type == "Study"
+        assert parent.children[1].entity_type == "Study"
+
+        # Verify serialization includes children
+        serialized = serialize_tree(state)
+        parent_data = serialized["tree"][0]
+        assert len(parent_data.get("children", [])) == 2
+        assert parent_data["children"][0]["data"]["title"] == "Study 1"
+        assert parent_data["children"][1]["data"]["title"] == "Study 2"
+
+    def test_nested_items_survive_round_trip(self) -> None:
+        """Nested items should persist through save/load cycle."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Create parent with nested children
+        parent = state.add_node(
+            "Investigation",
+            MockInstance({"unique_id": "inv-001", "title": "Parent"}),
+        )
+        for i in range(3):
+            state.add_node(
+                "Study",
+                MockInstance({"unique_id": f"study-{i}", "title": f"Study {i}"}),
+                parent_id=parent.id,
+            )
+
+        # Serialize (save to DB)
+        serialized = serialize_tree(state)
+
+        # Deserialize into new state (load from DB)
+        new_state = AppState()
+        new_state.profile = "miappe"
+        new_state.version = "1.1"
+        deserialize_tree(new_state, serialized)
+
+        # Verify parent exists
+        assert len(new_state.entity_tree) == 1
+        loaded_parent = new_state.entity_tree[0]
+
+        # Verify all children exist
+        assert len(loaded_parent.children) == 3
+        for i, child in enumerate(loaded_parent.children):
+            assert child.entity_type == "Study"
+            assert child.instance.model_dump()["title"] == f"Study {i}"
+
+    def test_deeply_nested_items(self) -> None:
+        """Deeply nested items (3+ levels) should work correctly."""
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        state.entity_tree = []
+        state.nodes_by_id = {}
+
+        class MockInstance:
+            def __init__(self, data: dict):
+                self._data = data
+
+            def model_dump(self, exclude_none: bool = False) -> dict:
+                return self._data
+
+        # Create 3-level hierarchy: Investigation -> Study -> ObservationUnit
+        investigation = state.add_node(
+            "Investigation",
+            MockInstance({"unique_id": "inv-001", "title": "Investigation"}),
+        )
+        study = state.add_node(
+            "Study",
+            MockInstance({"unique_id": "study-001", "title": "Study"}),
+            parent_id=investigation.id,
+        )
+        obs_unit = state.add_node(
+            "ObservationUnit",
+            MockInstance({"unique_id": "ou-001", "title": "Observation Unit"}),
+            parent_id=study.id,
+        )
+
+        # Verify hierarchy
+        assert len(investigation.children) == 1
+        assert investigation.children[0].id == study.id
+        assert len(study.children) == 1
+        assert study.children[0].id == obs_unit.id
+
+        # Serialize and verify structure
+        serialized = serialize_tree(state)
+        inv_data = serialized["tree"][0]
+        assert len(inv_data["children"]) == 1
+
+        study_data = inv_data["children"][0]
+        assert study_data["entity_type"] == "Study"
+        assert len(study_data["children"]) == 1
+
+        ou_data = study_data["children"][0]
+        assert ou_data["entity_type"] == "ObservationUnit"
+
+        # Round trip
+        new_state = AppState()
+        new_state.profile = "miappe"
+        new_state.version = "1.1"
+        deserialize_tree(new_state, serialized)
+
+        # Verify 3-level hierarchy restored
+        loaded_inv = new_state.entity_tree[0]
+        loaded_study = loaded_inv.children[0]
+        loaded_ou = loaded_study.children[0]
+
+        assert loaded_inv.entity_type == "Investigation"
+        assert loaded_study.entity_type == "Study"
+        assert loaded_ou.entity_type == "ObservationUnit"
+
+
 class TestValidation:
     """Tests for entity validation via metaseed."""
 
