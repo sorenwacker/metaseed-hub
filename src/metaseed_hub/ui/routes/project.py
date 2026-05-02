@@ -18,6 +18,7 @@ from metaseed_hub.ui.helpers import (
     create_nested_nodes,
     get_or_create_csrf_token,
     get_project_state,
+    get_tree_data_from_nodes,
     serialize_tree,
     validate_csrf_token,
 )
@@ -415,7 +416,7 @@ async def project_tree(
         return HTMLResponse("<div class='error'>Project not found</div>")
 
     state = get_project_state(project, project_states)
-    tree_data = state.get_tree_data()
+    tree_data = get_tree_data_from_nodes(state)
 
     if not tree_data:
         return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>")

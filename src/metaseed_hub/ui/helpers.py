@@ -405,6 +405,36 @@ def build_inline_tables(
     return inline_tables
 
 
+def get_tree_data_from_nodes(state: AppState) -> list[dict[str, Any]]:
+    """Get tree data from actual TreeNode children, not instance data.
+
+    Unlike AppState.get_tree_data() which extracts nested items from
+    instance.model_dump(), this function uses the actual TreeNode.children
+    hierarchy that we build with create_nested_nodes().
+
+    Args:
+        state: AppState with populated entity_tree and nodes_by_id.
+
+    Returns:
+        List of tree item dicts with proper IDs that exist in nodes_by_id.
+    """
+
+    def node_to_dict(node: TreeNode) -> dict[str, Any]:
+        """Convert TreeNode to dict including actual children."""
+        result = {
+            "id": node.id,
+            "entity_type": node.entity_type,
+            "label": node.label,
+            "parent_id": node.parent_id,
+            "has_children": bool(node.children),
+            "children": [node_to_dict(c) for c in node.children],
+            "is_nested": False,  # All TreeNodes have real IDs
+        }
+        return result
+
+    return [node_to_dict(n) for n in state.entity_tree]
+
+
 def get_project_state(project: Project, project_states: dict[str, AppState]) -> AppState:
     """Get or create AppState for a project, loading from database if needed.
 
