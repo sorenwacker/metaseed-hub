@@ -4,9 +4,12 @@ Adds authentication, project management, and collaboration features
 on top of the base metaseed entity editing UI.
 """
 
+import copy
+import logging
 import re
 import secrets
 import subprocess
+import sys
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -28,6 +31,15 @@ from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Project, Tenant, Workspace
 from metaseed_hub.ui.spec_builder_routes import create_spec_builder_router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+)
+logger = logging.getLogger("metaseed_hub")
 
 UI_DIR = Path(__file__).parent
 TEMPLATES_DIR = UI_DIR / "templates"
@@ -226,9 +238,7 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         try:
             instance = helper.create(**instance_data)
         except Exception as e:
-            import logging
-
-            logging.error(
+            logger.error(
                 f"Failed to create {entity_type} from stored data: {e}\n"
                 f"Data keys: {list(instance_data.keys())}"
             )
@@ -236,7 +246,7 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
             try:
                 instance = helper.create()
             except Exception as e2:
-                logging.error(f"Failed to create empty {entity_type}: {e2}")
+                logger.error(f"Failed to create empty {entity_type}: {e2}")
                 return None
 
         node = TreeNode(
@@ -264,6 +274,71 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         if node:
             state.entity_tree.append(node)
             state.nodes_by_id[node.id] = node
+
+
+def create_nested_nodes(
+    state: AppState,
+    facade: Any,
+    parent_node: TreeNode,
+    entity_type: str,
+    data: dict[str, Any],
+) -> None:
+    """Recursively create child TreeNodes for nested entity data.
+
+    This function processes nested fields (like studies, protocols, samples)
+    in entity data and creates corresponding TreeNode children.
+
+    Args:
+        state: AppState to add nodes to.
+        facade: ProfileFacade for creating entity instances.
+        parent_node: Parent TreeNode to attach children to.
+        entity_type: Type name of the parent entity.
+        data: Raw dict data containing nested entity fields.
+    """
+    try:
+        helper = getattr(facade, entity_type)
+    except AttributeError:
+        logger.warning(f"No helper for {entity_type}")
+        return
+
+    for field_name in helper.nested_fields:
+        field_data = data.get(field_name)
+        if not field_data:
+            continue
+
+        items = field_data if isinstance(field_data, list) else [field_data]
+        field_info = helper.field_info(field_name)
+        nested_type = field_info.get("items")
+
+        # Only process entity types (uppercase names), skip primitives
+        if not nested_type or not nested_type[0].isupper():
+            continue
+
+        nested_helper = getattr(facade, nested_type, None)
+        if not nested_helper:
+            logger.warning(f"No helper for nested type {nested_type}")
+            continue
+
+        for item_data in items:
+            # Skip non-dict items (primitives like strings)
+            if not isinstance(item_data, dict):
+                continue
+
+            try:
+                child_instance = nested_helper.create(**item_data)
+                child_node = state.add_node(nested_type, child_instance, parent_id=parent_node.id)
+
+                # Set label from common identifier fields
+                for label_field in ("title", "name", "unique_id", "alias", "id"):
+                    if item_data.get(label_field):
+                        child_node.label = str(item_data[label_field])
+                        break
+
+                # Recursively process this child's nested fields
+                create_nested_nodes(state, facade, child_node, nested_type, item_data)
+
+            except Exception as e:
+                logger.error(f"Failed to create {nested_type}: {e}")
 
 
 def build_entity_form_context(
@@ -1016,9 +1091,7 @@ def create_hub_app() -> FastAPI:
         await session.refresh(project)
 
         # Load example data if requested
-        import logging
-
-        logging.info(
+        logger.info(
             f"project_create: load_example={load_example!r}, profile={profile}, version={version}"
         )
         if load_example == "true":
@@ -1029,6 +1102,9 @@ def create_hub_app() -> FastAPI:
             if yaml_files:
                 try:
                     example_data = yaml.safe_load(yaml_files[0].read_text(encoding="utf-8"))
+                    # Deep copy to prevent Pydantic from modifying the original dict
+                    example_data_copy = copy.deepcopy(example_data)
+
                     loader = SpecLoader(profile=profile)
                     spec = loader.load_profile(version, profile)
                     root_entity = spec.root_entity or "Investigation"
@@ -1045,53 +1121,8 @@ def create_hub_app() -> FastAPI:
                     node = state.add_node(root_entity, instance)
                     state.editing_node_id = node.id
 
-                    # Recursively create child tree nodes for nested items
-                    def create_nested_nodes(
-                        parent_node: TreeNode,
-                        entity_type: str,
-                        data: dict[str, Any],
-                    ) -> None:
-                        try:
-                            helper = getattr(facade, entity_type)
-                        except AttributeError:
-                            return
-                        for field_name in helper.nested_fields:
-                            if data.get(field_name):
-                                items = data[field_name]
-                                if isinstance(items, dict):
-                                    items = [items]
-                                if isinstance(items, list):
-                                    field_info = helper.field_info(field_name)
-                                    nested_type = field_info.get("items")
-                                    # Only process entity types (uppercase), skip primitives
-                                    if nested_type and nested_type[0].isupper():
-                                        nested_helper = getattr(facade, nested_type, None)
-                                        if nested_helper:
-                                            for item_data in items:
-                                                # Skip non-dict items (primitives)
-                                                if not isinstance(item_data, dict):
-                                                    continue
-                                                child = nested_helper.create(**item_data)
-                                                child_node = state.add_node(
-                                                    nested_type, child, parent_id=parent_node.id
-                                                )
-                                                # Set label from name/title/id fields
-                                                label_fields = (
-                                                    "title",
-                                                    "name",
-                                                    "unique_id",
-                                                    "alias",
-                                                    "id",
-                                                )
-                                                for lf in label_fields:
-                                                    if item_data.get(lf):
-                                                        child_node.label = str(item_data[lf])
-                                                        break
-                                                create_nested_nodes(
-                                                    child_node, nested_type, item_data
-                                                )
-
-                    create_nested_nodes(node, root_entity, example_data)
+                    # Create nested child nodes from the unmodified copy
+                    create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
                     from sqlalchemy.orm.attributes import flag_modified
 
@@ -1100,9 +1131,7 @@ def create_hub_app() -> FastAPI:
                     session.add(project)
                     await session.commit()
                 except Exception as e:
-                    import logging
-
-                    logging.exception(f"Failed to load example data: {e}")
+                    logger.exception(f"Failed to load example data: {e}")
 
         return RedirectResponse(f"/hub/projects/{project.id}", status_code=303)
 
@@ -1207,6 +1236,9 @@ def create_hub_app() -> FastAPI:
         except yaml.YAMLError as e:
             return HTMLResponse(f"<div class='error'>Error loading example: {e}</div>")
 
+        # Deep copy to prevent Pydantic from modifying the original dict
+        example_data_copy = copy.deepcopy(example_data)
+
         # Load spec to get root entity
         loader = SpecLoader(profile=project.profile)
         spec = loader.load_profile(project.version, project.profile)
@@ -1226,73 +1258,31 @@ def create_hub_app() -> FastAPI:
             node = state.add_node(root_entity, instance)
             state.editing_node_id = node.id
 
-            # Recursively create child tree nodes for nested items
-            def create_nested_nodes(
-                parent_node: TreeNode,
-                entity_type: str,
-                data: dict[str, Any],
-            ) -> None:
-                """Recursively create child nodes for nested items."""
-                try:
-                    helper = getattr(facade, entity_type)
-                except AttributeError:
-                    return
-
-                for field_name in helper.nested_fields:
-                    if data.get(field_name):
-                        items = data[field_name]
-                        if isinstance(items, dict):
-                            items = [items]
-                        if isinstance(items, list):
-                            field_info = helper.field_info(field_name)
-                            nested_type = field_info.get("items")
-                            # Only process entity types (uppercase), skip primitives
-                            if nested_type and nested_type[0].isupper():
-                                nested_helper = getattr(facade, nested_type, None)
-                                if nested_helper:
-                                    for item_data in items:
-                                        # Skip non-dict items (primitives like strings)
-                                        if not isinstance(item_data, dict):
-                                            continue
-                                        child = nested_helper.create(**item_data)
-                                        child_node = state.add_node(
-                                            nested_type, child, parent_id=parent_node.id
-                                        )
-                                        # Set label from name/title/id fields
-                                        for lf in ("title", "name", "unique_id", "alias", "id"):
-                                            if item_data.get(lf):
-                                                child_node.label = str(item_data[lf])
-                                                break
-                                        create_nested_nodes(child_node, nested_type, item_data)
-
-            create_nested_nodes(node, root_entity, example_data)
+            # Create nested child nodes from the unmodified copy
+            create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
             # Save to database
-            import logging
-
             from sqlalchemy.orm.attributes import flag_modified
 
             project.data = serialize_tree(state)
-            # Debug: print what we're saving
-            print(f"DEBUG Saving tree with {len(state.entity_tree)} root nodes")
+            logger.info(f"Saving tree with {len(state.entity_tree)} root nodes")
             for n in state.entity_tree:
                 if n.instance:
                     data = n.instance.model_dump(exclude_none=True)
-                    print(f"  {n.entity_type} '{n.label}': {len(data)} fields")
-                for c in n.children[:3]:  # First 3 children
+                    logger.info(f"  {n.entity_type} '{n.label}': {len(data)} fields")
+                for c in n.children[:3]:
                     if c.instance:
                         cdata = c.instance.model_dump(exclude_none=True)
-                        print(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
+                        logger.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
 
             flag_modified(project, "data")
             session.add(project)
             await session.commit()
 
         except Exception as e:
-            import logging
             import traceback
 
-            logging.exception(f"Failed to load example: {e}")
+            logger.exception(f"Failed to load example: {e}")
             tb = traceback.format_exc()
             error_html = f"""
             <div class='notification error' style='user-select: text;'>
@@ -1500,14 +1490,12 @@ def create_hub_app() -> FastAPI:
         # Collect form values, converting types as needed
         values: dict[str, str | int | float | bool | None] = {}
 
-        import logging
-
-        logging.info(f"Entity create/update: entity_type={entity_type}, node_id={node_id}")
-        logging.info(f"Form data keys: {list(form_data.keys())}")
+        logger.info(f"Entity create/update: entity_type={entity_type}, node_id={node_id}")
+        logger.info(f"Form data keys: {list(form_data.keys())}")
 
         # If updating existing node, start with existing values
         existing_node = state.nodes_by_id.get(node_id) if node_id else None
-        logging.info(f"Existing node: {existing_node is not None}")
+        logger.info(f"Existing node: {existing_node is not None}")
         if existing_node and hasattr(existing_node.instance, "model_dump"):
             existing_data = existing_node.instance.model_dump(exclude_none=True)
             # Copy non-nested existing values
@@ -1544,13 +1532,13 @@ def create_hub_app() -> FastAPI:
 
         # Remove None values for create
         values = {k: v for k, v in values.items() if v is not None}
-        logging.info(f"Final values for create: {values}")
+        logger.info(f"Final values for create: {values}")
 
         # Create or update instance
         try:
             instance = helper.create(**values)
             if hasattr(instance, "model_dump"):
-                logging.info(f"Created instance: {instance.model_dump(exclude_none=True)}")
+                logger.info(f"Created instance: {instance.model_dump(exclude_none=True)}")
 
             if node_id and node_id in state.nodes_by_id:
                 # Update existing node
@@ -1594,9 +1582,7 @@ def create_hub_app() -> FastAPI:
             return response
 
         except Exception as e:
-            import logging
-
-            logging.exception(f"Error creating/updating {entity_type}")
+            logger.exception(f"Error creating/updating {entity_type}")
 
             # Build form context and preserve submitted values for error display
             form_context = build_entity_form_context(state, helper, node_id, parent_id)
@@ -1641,13 +1627,13 @@ def create_hub_app() -> FastAPI:
         entity_type = node.entity_type
         facade = state.get_or_create_facade()
 
-        # Debug: print what's in the node instance
+        # Log what's in the node instance
         if node.instance and hasattr(node.instance, "model_dump"):
             instance_data = node.instance.model_dump(exclude_none=True)
-            print(f"DEBUG Edit {entity_type} '{node.label}': {len(instance_data)} fields")
-            print(f"  Data: {instance_data}")
+            logger.info(f"Edit {entity_type} '{node.label}': {len(instance_data)} fields")
+            logger.debug(f"  Data: {instance_data}")
         else:
-            print(f"DEBUG Edit {entity_type} '{node.label}': NO INSTANCE DATA")
+            logger.warning(f"Edit {entity_type} '{node.label}': NO INSTANCE DATA")
 
         try:
             helper = getattr(facade, entity_type)
