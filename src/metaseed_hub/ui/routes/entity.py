@@ -266,7 +266,20 @@ async def project_entity_edit(
     """Return form for editing an existing entity."""
     project = await get_project_by_id(project_id, session)
 
+    # Debug: check what's in project.data
+    if project.data:
+        tree = project.data.get("tree", [])
+        logger.info(f"entity_edit: project.data has {len(tree)} root nodes")
+        if tree:
+            first = tree[0]
+            children_count = len(first.get("children", []))
+            logger.info(f"  First: {first.get('entity_type')} with {children_count} children")
+    else:
+        logger.warning("entity_edit: project.data is empty!")
+
     state = get_project_state(project, project_states)
+
+    logger.info(f"entity_edit: state has {len(state.nodes_by_id)} nodes, looking for {node_id}")
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
