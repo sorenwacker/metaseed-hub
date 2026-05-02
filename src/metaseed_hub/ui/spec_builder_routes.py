@@ -898,6 +898,38 @@ def create_spec_builder_router(
             },
         )
 
+    @router.get("/{draft_id}/reset")
+    async def reset_draft(
+        request: Request,
+        draft_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> RedirectResponse:
+        """Reset a draft to empty state."""
+        user_id, _tenant_id = await get_user_context(request, session)
+
+        builder, draft = await load_state_for_draft(session, draft_id, user_id)
+
+        # Create fresh empty spec
+        builder.spec = ProfileSpec(
+            name=draft.name,
+            version=draft.version,
+            root_entity="",
+            entities={},
+            validation_rules=[],
+        )
+
+        # Save to database
+        draft.spec_data = builder.to_dict()
+        await session.commit()
+
+        # Clear cache
+        _state_cache.pop(draft_id, None)
+
+        return RedirectResponse(
+            url=f"/hub/spec-builder/{draft_id}",
+            status_code=303,
+        )
+
     # -------------------------------------------------------------------------
     # View and edit published specs
     # -------------------------------------------------------------------------
