@@ -1,5 +1,5 @@
 #!/bin/bash
-# Auto-deploy script - deploys new releases only
+# Auto-deploy script - deploys new commits on main branch
 # Runs via systemd timer
 
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR="{{ app_dir }}"
 LOG_FILE="{{ app_dir }}/logs/deploy.log"
 LOCK_FILE="/tmp/metaseed-deploy.lock"
-VERSION_FILE="{{ app_dir }}/.deployed_version"
+COMMIT_FILE="{{ app_dir }}/.deployed_commit"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -19,30 +19,29 @@ flock -n 200 || { log "Deploy already running, exiting"; exit 0; }
 
 cd "$APP_DIR"
 
-# Fetch tags
-git fetch origin --tags --quiet
+# Fetch latest from origin
+git fetch origin --quiet
 
-# Get latest release tag (semver format: v1.0.0)
-LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+# Get latest commit on main
+LATEST=$(git rev-parse origin/main)
 
-if [ -z "$LATEST_TAG" ]; then
-    exit 0  # No releases yet
-fi
-
-# Check current deployed version
+# Check current deployed commit
 CURRENT=""
-if [ -f "$VERSION_FILE" ]; then
-    CURRENT=$(cat "$VERSION_FILE")
+if [ -f "$COMMIT_FILE" ]; then
+    CURRENT=$(cat "$COMMIT_FILE")
 fi
 
-if [ "$CURRENT" = "$LATEST_TAG" ]; then
-    exit 0  # Already on latest release
+if [ "$CURRENT" = "$LATEST" ]; then
+    exit 0  # Already on latest commit
 fi
 
-log "New release: $LATEST_TAG (current: ${CURRENT:-none})"
+SHORT_LATEST=$(echo "$LATEST" | cut -c1-7)
+SHORT_CURRENT=$(echo "$CURRENT" | cut -c1-7)
+log "New commit: $SHORT_LATEST (current: ${SHORT_CURRENT:-none})"
 
-# Checkout the release
-git checkout "$LATEST_TAG" --quiet
+# Pull latest changes
+git checkout main --quiet
+git pull origin main --quiet
 
 # Install dependencies
 log "Installing dependencies..."
@@ -52,10 +51,10 @@ log "Installing dependencies..."
 log "Running migrations..."
 {{ app_dir }}/.venv/bin/alembic upgrade head
 
-# Save deployed version
-echo "$LATEST_TAG" > "$VERSION_FILE"
+# Save deployed commit
+echo "$LATEST" > "$COMMIT_FILE"
 
-# Reload app
-sudo /bin/systemctl reload metaseed-hub
+# Restart app
+sudo /bin/systemctl restart metaseed-hub
 
-log "Deployed: $LATEST_TAG"
+log "Deployed: $SHORT_LATEST"
