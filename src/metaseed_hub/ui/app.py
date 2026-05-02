@@ -228,11 +228,15 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         except Exception as e:
             import logging
 
-            logging.warning(f"Failed to create {entity_type} with data {instance_data}: {e}")
+            logging.error(
+                f"Failed to create {entity_type} from stored data: {e}\n"
+                f"Data keys: {list(instance_data.keys())}"
+            )
             # Create empty instance to preserve node structure
             try:
                 instance = helper.create()
-            except Exception:
+            except Exception as e2:
+                logging.error(f"Failed to create empty {entity_type}: {e2}")
                 return None
 
         node = TreeNode(
