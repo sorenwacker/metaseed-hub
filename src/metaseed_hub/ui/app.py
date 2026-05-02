@@ -1270,17 +1270,29 @@ def create_hub_app() -> FastAPI:
             item_type = item.get("entity_type") or item.get("type", "Entity")
             children = item.get("children", [])
             has_children = bool(children)
+            is_nested = item.get("is_nested", False)
 
             indent_class = f"depth-{min(depth, 3)}"
             expand_class = "has-children" if has_children else ""
 
+            # For nested items, link to form with parent context
+            if is_nested:
+                field_name = item.get("field_name", "")
+                idx = item.get("idx", 0)
+                base = f"/hub/projects/{project_id}"
+                click_url = f"{base}/form/{item_type}?parent_field={field_name}&idx={idx}"
+                delete_url = f"{base}/nested/{field_name}/{idx}"
+            else:
+                click_url = f"/hub/projects/{project_id}/entity/{item_id}"
+                delete_url = f"/hub/projects/{project_id}/entity/{item_id}"
+
             html = f"""<li class='entity-item {indent_class} {expand_class}'>
                 <span class='entity-type-badge'>{item_type}</span>
                 <a href='#' class='entity-name'
-                   hx-get='/hub/projects/{project_id}/entity/{item_id}'
+                   hx-get='{click_url}'
                    hx-target='#editor'>{item_name}</a>
                 <button class='entity-delete' title='Delete'
-                        hx-delete='/hub/projects/{project_id}/entity/{item_id}'
+                        hx-delete='{delete_url}'
                         hx-target='#entity-tree'
                         hx-confirm='Delete this {item_type}?'>x</button>"""
 

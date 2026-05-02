@@ -1280,10 +1280,31 @@ textarea {
     list-style: none;
     padding: 0;
     margin: 0;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .entity-tree li {
     padding: var(--space-xs) 0;
+}
+
+.entity-children {
+    list-style: none;
+    padding-left: var(--space-md);
+    margin: 0;
+}
+
+.entity-item.depth-1 {
+    padding-left: var(--space-sm);
+}
+
+.entity-item.depth-2 {
+    padding-left: var(--space-md);
+}
+
+.entity-item.depth-3 {
+    padding-left: var(--space-lg);
 }
 
 .entity-item {
