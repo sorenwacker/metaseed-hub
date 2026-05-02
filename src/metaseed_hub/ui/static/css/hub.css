@@ -619,6 +619,45 @@ body {
     box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.12);
 }
 
+/* Chat Page (full page view) */
+.chat-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px);
+    padding: 0;
+}
+
+.chat-page .chat-header {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--clr-parchment);
+    background: white;
+}
+
+.chat-page .chat-header h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--clr-forest);
+}
+
+.chat-page .chat-messages {
+    flex: 1;
+    padding: var(--space-lg);
+    overflow-y: auto;
+    background: var(--clr-paper);
+}
+
+.chat-page .chat-placeholder {
+    color: var(--clr-ink-light);
+}
+
+.chat-page .chat-form {
+    padding: var(--space-md) var(--space-lg);
+    border-top: 1px solid var(--clr-parchment);
+    background: white;
+    margin-top: 0;
+}
+
 /* Modal */
 .modal-overlay {
     position: fixed;
