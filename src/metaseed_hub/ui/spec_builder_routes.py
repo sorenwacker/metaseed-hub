@@ -125,7 +125,7 @@ async def get_user_context(
         HTTPException 401 if user is not authenticated (API routes)
         LoginRequiredRedirectError if redirect_on_unauthorized=True (page routes)
     """
-    from metaseed_hub.ui.app import get_current_user_from_cookie
+    from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 
     token_user = await get_current_user_from_cookie(request)
 
