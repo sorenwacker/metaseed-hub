@@ -1041,24 +1041,37 @@ def create_hub_app() -> FastAPI:
                     node = state.add_node(root_entity, instance)
                     state.editing_node_id = node.id
 
-                    # Create child tree nodes for nested items
-                    helper = getattr(facade, root_entity)
-                    for field_name in helper.nested_fields:
-                        if example_data.get(field_name):
-                            items = example_data[field_name]
-                            if isinstance(items, dict):
-                                items = [items]
-                            if isinstance(items, list):
-                                field_info = helper.field_info(field_name)
-                                nested_type = field_info.get("items")
-                                if nested_type and nested_type[0].isupper():
-                                    nested_helper = getattr(facade, nested_type, None)
-                                    if nested_helper:
-                                        for item_data in items:
-                                            child_instance = nested_helper.create(**item_data)
-                                            state.add_node(
-                                                nested_type, child_instance, parent_id=node.id
-                                            )
+                    # Recursively create child tree nodes for nested items
+                    def create_nested_nodes(
+                        parent_node: TreeNode,
+                        entity_type: str,
+                        data: dict[str, Any],
+                    ) -> None:
+                        try:
+                            helper = getattr(facade, entity_type)
+                        except AttributeError:
+                            return
+                        for field_name in helper.nested_fields:
+                            if data.get(field_name):
+                                items = data[field_name]
+                                if isinstance(items, dict):
+                                    items = [items]
+                                if isinstance(items, list):
+                                    field_info = helper.field_info(field_name)
+                                    nested_type = field_info.get("items")
+                                    if nested_type and nested_type[0].isupper():
+                                        nested_helper = getattr(facade, nested_type, None)
+                                        if nested_helper:
+                                            for item_data in items:
+                                                child = nested_helper.create(**item_data)
+                                                child_node = state.add_node(
+                                                    nested_type, child, parent_id=parent_node.id
+                                                )
+                                                create_nested_nodes(
+                                                    child_node, nested_type, item_data
+                                                )
+
+                    create_nested_nodes(node, root_entity, example_data)
 
                     from sqlalchemy.orm.attributes import flag_modified
 
@@ -1193,24 +1206,38 @@ def create_hub_app() -> FastAPI:
             node = state.add_node(root_entity, instance)
             state.editing_node_id = node.id
 
-            # Create child tree nodes for nested items
-            helper = getattr(facade, root_entity)
-            for field_name in helper.nested_fields:
-                if example_data.get(field_name):
-                    items = example_data[field_name]
-                    if isinstance(items, dict):
-                        items = [items]
-                    if isinstance(items, list):
-                        # Get the nested entity type
-                        field_info = helper.field_info(field_name)
-                        nested_type = field_info.get("items")
-                        if nested_type and nested_type[0].isupper():
-                            # It's an entity type, create child nodes
-                            nested_helper = getattr(facade, nested_type, None)
-                            if nested_helper:
-                                for item_data in items:
-                                    child_instance = nested_helper.create(**item_data)
-                                    state.add_node(nested_type, child_instance, parent_id=node.id)
+            # Recursively create child tree nodes for nested items
+            def create_nested_nodes(
+                parent_node: TreeNode,
+                entity_type: str,
+                data: dict[str, Any],
+            ) -> None:
+                """Recursively create child nodes for nested items."""
+                try:
+                    helper = getattr(facade, entity_type)
+                except AttributeError:
+                    return
+
+                for field_name in helper.nested_fields:
+                    if data.get(field_name):
+                        items = data[field_name]
+                        if isinstance(items, dict):
+                            items = [items]
+                        if isinstance(items, list):
+                            field_info = helper.field_info(field_name)
+                            nested_type = field_info.get("items")
+                            if nested_type and nested_type[0].isupper():
+                                nested_helper = getattr(facade, nested_type, None)
+                                if nested_helper:
+                                    for item_data in items:
+                                        child = nested_helper.create(**item_data)
+                                        child_node = state.add_node(
+                                            nested_type, child, parent_id=parent_node.id
+                                        )
+                                        # Recursively process this child's nested items
+                                        create_nested_nodes(child_node, nested_type, item_data)
+
+            create_nested_nodes(node, root_entity, example_data)
 
             # Save to database
             from sqlalchemy.orm.attributes import flag_modified
