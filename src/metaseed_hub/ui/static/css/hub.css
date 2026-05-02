@@ -1807,6 +1807,17 @@ textarea {
     top: var(--space-md);
     right: var(--space-md);
     z-index: 1001;
+    pointer-events: none;
+}
+
+.notification-container > * {
+    pointer-events: auto;
+}
+
+/* Empty modal containers should not block clicks */
+#workspace-modal:empty,
+#project-modal:empty {
+    display: none;
 }
 
 /* Policy Pages */
