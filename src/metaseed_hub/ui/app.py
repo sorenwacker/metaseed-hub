@@ -1031,9 +1031,25 @@ def create_hub_app() -> FastAPI:
 
                     state = get_project_state(project)
                     state.reset()
+                    state.profile = profile
+                    state.version = version
+                    state.facade = None
+                    facade = state.get_or_create_facade()
+
                     Model = get_model(root_entity, version, profile=profile)
                     instance = Model(**example_data)
-                    state.add_node(root_entity, instance)
+                    node = state.add_node(root_entity, instance)
+                    state.editing_node_id = node.id
+
+                    # Populate nested items from example data
+                    helper = getattr(facade, root_entity)
+                    for field_name in helper.nested_fields:
+                        if example_data.get(field_name):
+                            items = example_data[field_name]
+                            if isinstance(items, list):
+                                state.current_nested_items[field_name] = list(items)
+                            elif isinstance(items, dict):
+                                state.current_nested_items[field_name] = [items]
 
                     from sqlalchemy.orm.attributes import flag_modified
 
@@ -1157,11 +1173,26 @@ def create_hub_app() -> FastAPI:
         # Load example into project state
         state = get_project_state(project)
         state.reset()
+        state.profile = project.profile
+        state.version = project.version
+        state.facade = None
+        facade = state.get_or_create_facade()
 
         try:
             Model = get_model(root_entity, project.version, profile=project.profile)
             instance = Model(**example_data)
-            state.add_node(root_entity, instance)
+            node = state.add_node(root_entity, instance)
+            state.editing_node_id = node.id
+
+            # Populate nested items from example data
+            helper = getattr(facade, root_entity)
+            for field_name in helper.nested_fields:
+                if example_data.get(field_name):
+                    items = example_data[field_name]
+                    if isinstance(items, list):
+                        state.current_nested_items[field_name] = list(items)
+                    elif isinstance(items, dict):
+                        state.current_nested_items[field_name] = [items]
 
             # Save to database
             from sqlalchemy.orm.attributes import flag_modified
