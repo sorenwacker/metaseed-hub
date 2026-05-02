@@ -1276,6 +1276,7 @@ textarea {
 }
 
 /* Entity Tree */
+/* Entity Tree - Clean hierarchical display */
 .entity-tree {
     list-style: none;
     padding: 0;
@@ -1285,73 +1286,60 @@ textarea {
     min-height: 0;
 }
 
-.entity-tree li {
-    padding: var(--space-xs) 0;
+.entity-tree > li {
+    border-bottom: 1px solid var(--clr-parchment);
+}
+
+.entity-tree > li:last-child {
+    border-bottom: none;
 }
 
 .entity-children {
     list-style: none;
-    padding-left: var(--space-md);
+    padding: 0;
     margin: 0;
+    margin-left: var(--space-md);
+    border-left: 1px solid var(--clr-parchment);
 }
 
-.entity-item.depth-1 {
+.entity-children .entity-item {
     padding-left: var(--space-sm);
-}
-
-.entity-item.depth-2 {
-    padding-left: var(--space-md);
-}
-
-.entity-item.depth-3 {
-    padding-left: var(--space-lg);
 }
 
 .entity-item {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) 0;
-    border-bottom: 1px solid var(--clr-parchment);
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    cursor: pointer;
     transition: background var(--transition-fast);
 }
 
-.entity-item:last-child {
-    border-bottom: none;
-}
-
 .entity-item:hover {
-    background: var(--clr-ivory);
-    margin: 0 calc(var(--space-sm) * -1);
-    padding-left: var(--space-sm);
-    padding-right: var(--space-sm);
-    border-radius: var(--radius-sm);
+    background: var(--clr-background);
 }
 
 .entity-type-badge {
-    font-size: 0.5625rem;
+    font-size: 0.625rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: var(--clr-parchment);
+    letter-spacing: 0.03em;
     color: var(--clr-ink-light);
-    padding: 0.125rem var(--space-sm);
-    border-radius: var(--radius-sm);
     flex-shrink: 0;
-    font-weight: 500;
+    min-width: 4.5rem;
 }
 
 .entity-name {
     flex: 1;
     color: var(--clr-ink);
     text-decoration: none;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .entity-name:hover {
-    color: var(--clr-moss);
+    color: var(--clr-primary);
 }
 
 .entity-delete {
@@ -1373,16 +1361,6 @@ textarea {
 .entity-delete:hover {
     background: var(--clr-error-bg);
     color: var(--clr-error);
-}
-
-.entity-tree a {
-    color: var(--clr-ink);
-    text-decoration: none;
-    font-size: 0.875rem;
-}
-
-.entity-tree a:hover {
-    color: var(--clr-moss);
 }
 
 /* Entity Form - Card Style */
