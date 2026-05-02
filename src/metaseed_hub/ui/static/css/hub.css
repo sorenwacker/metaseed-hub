@@ -471,19 +471,32 @@ body {
     display: flex;
     flex-direction: column;
     box-shadow: var(--shadow-sm);
+    max-height: 100%;
 }
 
 .sidebar-section {
     border-bottom: 1px solid var(--clr-parchment);
     padding: var(--space-md);
+    flex-shrink: 0;
+}
+
+/* Entities section - scrollable */
+.sidebar-section:first-child {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-section:first-child #entity-tree {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
 }
 
 .sidebar-section:last-child {
     border-bottom: none;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
 }
 
 .sidebar-section h3 {
