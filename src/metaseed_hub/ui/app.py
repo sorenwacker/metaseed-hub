@@ -1059,10 +1059,14 @@ def create_hub_app() -> FastAPI:
                                 if isinstance(items, list):
                                     field_info = helper.field_info(field_name)
                                     nested_type = field_info.get("items")
+                                    # Only process entity types (uppercase), skip primitives
                                     if nested_type and nested_type[0].isupper():
                                         nested_helper = getattr(facade, nested_type, None)
                                         if nested_helper:
                                             for item_data in items:
+                                                # Skip non-dict items (primitives)
+                                                if not isinstance(item_data, dict):
+                                                    continue
                                                 child = nested_helper.create(**item_data)
                                                 child_node = state.add_node(
                                                     nested_type, child, parent_id=parent_node.id
@@ -1226,15 +1230,18 @@ def create_hub_app() -> FastAPI:
                         if isinstance(items, list):
                             field_info = helper.field_info(field_name)
                             nested_type = field_info.get("items")
+                            # Only process entity types (uppercase), skip primitives
                             if nested_type and nested_type[0].isupper():
                                 nested_helper = getattr(facade, nested_type, None)
                                 if nested_helper:
                                     for item_data in items:
+                                        # Skip non-dict items (primitives like strings)
+                                        if not isinstance(item_data, dict):
+                                            continue
                                         child = nested_helper.create(**item_data)
                                         child_node = state.add_node(
                                             nested_type, child, parent_id=parent_node.id
                                         )
-                                        # Recursively process this child's nested items
                                         create_nested_nodes(child_node, nested_type, item_data)
 
             create_nested_nodes(node, root_entity, example_data)
@@ -1248,7 +1255,19 @@ def create_hub_app() -> FastAPI:
             await session.commit()
 
         except Exception as e:
-            return HTMLResponse(f"<div class='error'>Error creating entity: {e}</div>")
+            import logging
+            import traceback
+
+            logging.exception(f"Failed to load example: {e}")
+            tb = traceback.format_exc()
+            error_html = f"""
+            <div class='notification error' style='user-select: text;'>
+                <strong>Error loading example:</strong>
+                <pre style='white-space: pre-wrap; font-size: 0.75rem; margin-top: 0.5rem;'>{e}
+
+{tb}</pre>
+            </div>"""
+            return HTMLResponse(error_html)
 
         # Use HX-Redirect for HTMX to do a full page redirect
         response = HTMLResponse(status_code=200)
