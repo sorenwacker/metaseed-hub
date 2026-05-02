@@ -21,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Tenant, Workspace
 from metaseed_hub.ui.dependencies import (
+    AuthRequiredError,
     OptionalUser,
     get_or_create_csrf_token,
+    handle_auth_required_error,
 )
 from metaseed_hub.ui.helpers import (
     CSRF_TOKEN_COOKIE,
@@ -111,6 +113,9 @@ def create_hub_app() -> FastAPI:
         FastAPI application with hub routes and mounted metaseed UI.
     """
     app = FastAPI(title="Metaseed Hub")
+
+    # Register exception handler for auth redirects
+    app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 

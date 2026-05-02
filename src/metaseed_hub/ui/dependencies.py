@@ -4,7 +4,7 @@ import secrets
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,14 @@ from metaseed_hub.models import Project
 
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
+
+
+class AuthRequiredError(Exception):
+    """Raised when authentication is required but user is not authenticated."""
+
+    def __init__(self, is_htmx: bool = False) -> None:
+        self.is_htmx = is_htmx
+        super().__init__("Authentication required")
 
 
 def get_or_create_csrf_token(request: Request) -> str:
@@ -39,18 +47,31 @@ async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
 
 
 async def require_user(request: Request) -> TokenUser:
-    """Require authenticated user, raise 401 if not authenticated.
+    """Require authenticated user, redirect to login if not authenticated.
 
     Use as a FastAPI dependency to protect routes.
+    Raises AuthRequiredError which is handled by the app exception handler.
     """
     user = await get_current_user_from_cookie(request)
     if not user:
-        raise HTTPException(
+        is_htmx = request.headers.get("HX-Request") == "true"
+        raise AuthRequiredError(is_htmx=is_htmx)
+    return user
+
+
+def handle_auth_required_error(request: Request, exc: Exception) -> Response:
+    """Handle AuthRequiredError by redirecting to login.
+
+    For HTMX requests, returns 401 with HX-Redirect header.
+    For regular requests, returns 302 redirect.
+    """
+    if isinstance(exc, AuthRequiredError) and exc.is_htmx:
+        return Response(
+            content="Session expired",
             status_code=401,
-            detail="Authentication required",
             headers={"HX-Redirect": "/hub/auth/login"},
         )
-    return user
+    return RedirectResponse(url="/hub/auth/login", status_code=302)
 
 
 def unauthorized_response() -> HTMLResponse:
