@@ -1071,6 +1071,18 @@ def create_hub_app() -> FastAPI:
                                                 child_node = state.add_node(
                                                     nested_type, child, parent_id=parent_node.id
                                                 )
+                                                # Set label from name/title/id fields
+                                                label_fields = (
+                                                    "title",
+                                                    "name",
+                                                    "unique_id",
+                                                    "alias",
+                                                    "id",
+                                                )
+                                                for lf in label_fields:
+                                                    if item_data.get(lf):
+                                                        child_node.label = str(item_data[lf])
+                                                        break
                                                 create_nested_nodes(
                                                     child_node, nested_type, item_data
                                                 )
@@ -1242,6 +1254,11 @@ def create_hub_app() -> FastAPI:
                                         child_node = state.add_node(
                                             nested_type, child, parent_id=parent_node.id
                                         )
+                                        # Set label from name/title/id fields
+                                        for lf in ("title", "name", "unique_id", "alias", "id"):
+                                            if item_data.get(lf):
+                                                child_node.label = str(item_data[lf])
+                                                break
                                         create_nested_nodes(child_node, nested_type, item_data)
 
             create_nested_nodes(node, root_entity, example_data)
