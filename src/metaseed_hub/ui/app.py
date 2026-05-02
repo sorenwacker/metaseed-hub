@@ -1232,13 +1232,18 @@ def create_hub_app() -> FastAPI:
         if not tree_data:
             return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>")
 
-        # Render tree with entity types and actions
-        html = "<ul class='entity-tree'>"
-        for item in tree_data:
+        def render_tree_item(item: dict[str, Any], depth: int = 0) -> str:
+            """Recursively render tree item and its children."""
             item_id = item.get("id", "")
             item_name = item.get("label") or item.get("name") or "Unnamed"
-            item_type = item.get("type", "Entity")
-            html += f"""<li class='entity-item'>
+            item_type = item.get("entity_type") or item.get("type", "Entity")
+            children = item.get("children", [])
+            has_children = bool(children)
+
+            indent_class = f"depth-{min(depth, 3)}"
+            expand_class = "has-children" if has_children else ""
+
+            html = f"""<li class='entity-item {indent_class} {expand_class}'>
                 <span class='entity-type-badge'>{item_type}</span>
                 <a href='#' class='entity-name'
                    hx-get='/hub/projects/{project_id}/entity/{item_id}'
@@ -1246,8 +1251,21 @@ def create_hub_app() -> FastAPI:
                 <button class='entity-delete' title='Delete'
                         hx-delete='/hub/projects/{project_id}/entity/{item_id}'
                         hx-target='#entity-tree'
-                        hx-confirm='Delete this {item_type}?'>x</button>
-            </li>"""
+                        hx-confirm='Delete this {item_type}?'>x</button>"""
+
+            if children:
+                html += "<ul class='entity-children'>"
+                for child in children:
+                    html += render_tree_item(child, depth + 1)
+                html += "</ul>"
+
+            html += "</li>"
+            return html
+
+        # Render tree with entity types and actions
+        html = "<ul class='entity-tree'>"
+        for item in tree_data:
+            html += render_tree_item(item)
         html += "</ul>"
         return HTMLResponse(html)
 
