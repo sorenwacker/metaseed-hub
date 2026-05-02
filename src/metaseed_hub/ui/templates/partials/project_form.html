@@ -60,11 +60,19 @@ async function createProject(profile, version) {
         return;
     }
 
+    // Find and disable the clicked button, show loading state
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
     const csrfToken = document.getElementById('csrf-token')?.value || '';
     const workspaceId = document.getElementById('workspace-id')?.value || '';
 
     if (!workspaceId) {
         alert('Error: workspace ID not found');
+        btn.disabled = false;
+        btn.textContent = originalText;
         return;
     }
 
@@ -92,13 +100,23 @@ async function createProject(profile, version) {
         } else {
             const text = await response.text();
             alert('Error creating project: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     } catch (error) {
         alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
 async function createProjectWithExample(profile, version) {
+    // Find and disable the clicked button, show loading state
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
     const name = document.getElementById('project-name').value || `${profile} Example`;
     document.getElementById('project-name').value = name;
 
@@ -107,6 +125,8 @@ async function createProjectWithExample(profile, version) {
 
     if (!workspaceId) {
         alert('Error: workspace ID not found');
+        btn.disabled = false;
+        btn.textContent = originalText;
         return;
     }
 
@@ -137,9 +157,13 @@ async function createProjectWithExample(profile, version) {
         } else {
             const text = await response.text();
             alert('Error creating project: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     } catch (error) {
         alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 </script>
