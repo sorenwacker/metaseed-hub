@@ -483,30 +483,49 @@ body {
     flex-shrink: 0;
 }
 
-/* Entities section - scrollable */
-.sidebar-section:first-child {
+/* Full-height sidebar section (entities) */
+.sidebar-section-full {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    border-bottom: none;
 }
 
-.sidebar-section:first-child #entity-tree {
+.sidebar-section-full #entity-tree {
     overflow-y: auto;
     overflow-x: hidden;
     flex: 1;
     min-height: 0;
 }
 
-.sidebar-section:last-child {
-    border-bottom: none;
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-sm);
 }
 
-/* Limit height of collaborators and chat sections */
-.sidebar-section:nth-child(2),
-.sidebar-section:nth-child(3) {
-    max-height: 150px;
-    overflow-y: auto;
+.sidebar-header h3 {
+    margin-bottom: 0;
+}
+
+/* Inline presence indicator */
+.presence-inline {
+    display: flex;
+    gap: 4px;
+}
+
+.presence-inline .presence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--clr-success);
+    cursor: help;
+}
+
+.sidebar-section:last-child {
+    border-bottom: none;
 }
 
 .sidebar-section h3 {

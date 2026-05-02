@@ -39,7 +39,8 @@
                     hx-target="#validation-results"
                     hx-swap="innerHTML"
                     title="Validate all entities against schema">Verify</button>
-            <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view in new tab">Graph View</a>
+            <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view in new tab">Graph</a>
+            <a href="/hub/projects/{{ project.id }}/chat" class="btn" target="_blank" title="Open chat in new tab">Chat</a>
             <a href="/hub/projects/{{ project.id }}/export" class="btn" download>Export</a>
         </div>
     </div>
@@ -51,37 +52,18 @@
             <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
                 <span class="toggle-icon">&#9664;</span>
             </button>
-            <div class="sidebar-section">
-                <h3>Entities</h3>
+            <div class="sidebar-section sidebar-section-full">
+                <div class="sidebar-header">
+                    <h3>Entities</h3>
+                    <div id="presence-list" class="presence-inline">
+                        <span class="presence-dot" title="{{ user.name }}"></span>
+                    </div>
+                </div>
                 <div id="entity-tree"
                      hx-get="/hub/projects/{{ project.id }}/tree"
                      hx-trigger="load, entityChanged from:body"
                      hx-swap="innerHTML">
                     Loading...
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <h3>Collaborators</h3>
-                <div id="presence-list">
-                    <div class="presence-item you">
-                        <span class="presence-dot"></span>
-                        {{ user.name }} (you)
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-section">
-                <h3>Chat</h3>
-                <div id="chat-container">
-                    <div id="chat-messages" class="chat-messages"></div>
-                    <form id="chat-form" class="chat-form"
-                          hx-post="/hub/projects/{{ project.id }}/chat"
-                          hx-target="#chat-messages"
-                          hx-swap="beforeend">
-                        <input type="text" name="message" placeholder="Type a message..." autocomplete="off">
-                        <button type="submit" class="btn btn-sm">Send</button>
-                    </form>
                 </div>
             </div>
         </aside>
