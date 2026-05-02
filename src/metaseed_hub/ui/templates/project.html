@@ -39,8 +39,8 @@
                     hx-target="#validation-results"
                     hx-swap="innerHTML"
                     title="Validate all entities against schema">Verify</button>
-            <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view in new tab">Graph</a>
-            <a href="/hub/projects/{{ project.id }}/chat" class="btn" target="_blank" title="Open chat in new tab">Chat</a>
+            <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view">Graph</a>
+            <button class="btn" onclick="toggleChatPanel()" title="Toggle chat panel">Chat</button>
             <a href="/hub/projects/{{ project.id }}/export" class="btn" download>Export</a>
         </div>
     </div>
@@ -113,6 +113,24 @@
                 </div>
             </div>
         </main>
+
+        <!-- Chat Panel (slide-out) -->
+        <aside class="chat-panel" id="chat-panel">
+            <div class="chat-panel-header">
+                <h3>Team Chat</h3>
+                <button class="chat-panel-close" onclick="toggleChatPanel()">&times;</button>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+                <p class="chat-placeholder">Messages will appear here...</p>
+            </div>
+            <form class="chat-form"
+                  hx-post="/hub/projects/{{ project.id }}/chat"
+                  hx-target="#chat-messages"
+                  hx-swap="beforeend">
+                <input type="text" name="message" placeholder="Type a message..." autocomplete="off">
+                <button type="submit" class="btn btn-sm btn-primary">Send</button>
+            </form>
+        </aside>
     </div>
 </div>
 {% endblock %}
@@ -125,6 +143,12 @@ function toggleSidebar() {
     const layout = document.getElementById('project-layout');
     sidebar.classList.toggle('collapsed');
     layout.classList.toggle('sidebar-collapsed');
+}
+
+// Chat panel toggle
+function toggleChatPanel() {
+    const panel = document.getElementById('chat-panel');
+    panel.classList.toggle('open');
 }
 
 // WebSocket connection for real-time collaboration
