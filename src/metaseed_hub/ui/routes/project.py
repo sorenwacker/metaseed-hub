@@ -500,7 +500,6 @@ async def project_validate(
     facade = state.get_or_create_facade()
 
     errors: list[dict[str, Any]] = []
-    valid_count = 0
 
     for node_id, node in state.nodes_by_id.items():
         try:
@@ -508,7 +507,6 @@ async def project_validate(
             data = node.instance.model_dump(exclude_none=True) if node.instance else {}
             # Re-validate by recreating - Pydantic validation runs here
             helper.create(**data)
-            valid_count += 1
         except ValidationError as e:
             errors.append(
                 {
