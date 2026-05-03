@@ -390,17 +390,30 @@ def build_inline_tables(
                     row_data[col] = val
             rows.append(row_data)
 
-        # If no children found, check if instance has this field as primitive list
+        # If no children found, check if instance has this field as primitive data
         # This handles cases where schema expects entities but data has plain values
         if not rows and hasattr(node.instance, "model_dump"):
             parent_data = node.instance.model_dump(exclude_none=True)
-            field_data = parent_data.get(field_name, [])
-            if isinstance(field_data, list) and field_data:
-                first_item = field_data[0]
-                # If items are primitives (not dicts), display as primitive list
-                if not isinstance(first_item, dict):
-                    for idx, val in enumerate(field_data):
-                        rows.append({"_idx": idx, "value": str(val)})
+            field_data = parent_data.get(field_name)
+
+            if field_data is not None:
+                # Handle list of primitives
+                if isinstance(field_data, list) and field_data:
+                    first_item = field_data[0]
+                    if not isinstance(first_item, dict):
+                        for idx, val in enumerate(field_data):
+                            rows.append({"_idx": idx, "value": str(val)})
+                        inline_tables[field_name] = {
+                            "columns": ["value"],
+                            "rows": rows,
+                            "column_types": {"value": "string"},
+                            "nested_entity_type": item_type,
+                            "is_primitive_list": True,
+                        }
+                        continue
+                # Handle single primitive value (for type=entity fields)
+                elif not isinstance(field_data, dict | list):
+                    rows.append({"_idx": 0, "value": str(field_data)})
                     inline_tables[field_name] = {
                         "columns": ["value"],
                         "rows": rows,
