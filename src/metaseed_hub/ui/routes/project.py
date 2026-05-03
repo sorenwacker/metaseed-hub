@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
-from metaseed.ui.state import AppState, TreeNode
+from metaseed.ui.state import AppState
 from sqlalchemy import select
 
 from metaseed_hub.models import Project
@@ -619,12 +619,13 @@ async def project_graph_api(
 ) -> Response:
     """Return graph data for visualization (JSON API).
 
-    Builds nodes and edges from the hub's tree structure for vis.js.
+    Uses metaseed's build_graph to extract nodes and edges from instance data.
 
     Args:
         node_id: Optional. If provided, only include this node and its descendants.
     """
     from fastapi.responses import JSONResponse
+    from metaseed.ui.services.graph import build_graph
 
     result = await session.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -634,48 +635,10 @@ async def project_graph_api(
 
     state = get_project_state(project, project_states)
 
-    # Build graph from hub's tree structure (uses TreeNode.children)
-    nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
-    node_ids: set[str] = set()
+    # Use metaseed's graph builder which properly extracts nested entities
+    graph_data = build_graph(state)
 
-    def truncate(text: str, max_len: int = 25) -> str:
-        if len(text) <= max_len:
-            return text
-        return text[: max_len - 1] + "..."
-
-    def add_node(tree_node: TreeNode, parent_vis_id: str | None = None) -> None:
-        vis_id = tree_node.id
-        if vis_id in node_ids:
-            return
-        node_ids.add(vis_id)
-
-        nodes.append(
-            {
-                "id": vis_id,
-                "label": truncate(tree_node.label, 25),
-                "title": f"{tree_node.entity_type}: {tree_node.label}",
-                "group": tree_node.entity_type,
-            }
-        )
-
-        if parent_vis_id:
-            edges.append({"from": parent_vis_id, "to": vis_id})
-
-        # Process children stored in TreeNode.children
-        for child in tree_node.children:
-            add_node(child, vis_id)
-
-    # If node_id specified, find that node and graph from there
-    if node_id and node_id in state.nodes_by_id:
-        start_node = state.nodes_by_id[node_id]
-        add_node(start_node)
-    else:
-        # Graph all entities
-        for root_node in state.entity_tree:
-            add_node(root_node)
-
-    return JSONResponse(content={"nodes": nodes, "edges": edges})
+    return JSONResponse(content=graph_data)
 
 
 @router.get("/{project_id}/chat", response_class=HTMLResponse)
