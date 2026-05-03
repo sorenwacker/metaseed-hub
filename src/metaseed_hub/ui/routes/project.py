@@ -12,23 +12,25 @@ from metaseed.ui.state import AppState
 from sqlalchemy import select
 
 from metaseed_hub.models import Project
-from metaseed_hub.ui.dependencies import CurrentUser, DbSession
+from metaseed_hub.ui.dependencies import (
+    CurrentUser,
+    DbSession,
+    get_project_for_user,
+    verify_workspace_access,
+)
 from metaseed_hub.ui.helpers import (
-    CSRF_TOKEN_COOKIE,
     create_nested_nodes,
-    get_or_create_csrf_token,
     get_project_state,
     get_tree_data_from_nodes,
     serialize_tree,
-    validate_csrf_token,
 )
+from metaseed_hub.ui.render import init_templates as _init_render_templates
+from metaseed_hub.ui.render import render_template
+from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-# Templates reference, initialized by init_templates()
-_templates: Jinja2Templates | None = None
 
 # Module-level project states cache
 project_states: dict[str, AppState] = {}
@@ -36,46 +38,7 @@ project_states: dict[str, AppState] = {}
 
 def init_templates(templates: Jinja2Templates) -> None:
     """Initialize templates reference."""
-    global _templates
-    _templates = templates
-
-
-def _render_template(
-    request: Request,
-    name: str,
-    context: dict[str, Any],
-    status_code: int = 200,
-) -> Response:
-    """Render template with CSRF token included.
-
-    Automatically adds CSRF token to context and sets cookie.
-    """
-    if _templates is None:
-        raise RuntimeError("Templates not initialized. Call init_templates() first.")
-
-    csrf_token = get_or_create_csrf_token(request)
-    context["csrf_token"] = csrf_token
-    context["request"] = request
-
-    response = _templates.TemplateResponse(
-        request=request,
-        name=name,
-        context=context,
-        status_code=status_code,
-    )
-
-    # Set CSRF cookie if not already set
-    if not request.cookies.get(CSRF_TOKEN_COOKIE):
-        response.set_cookie(
-            key=CSRF_TOKEN_COOKIE,
-            value=csrf_token,
-            httponly=True,
-            secure=request.url.scheme == "https",
-            samesite="lax",
-            max_age=3600 * 24,  # 24 hours
-        )
-
-    return response
+    _init_render_templates(templates)
 
 
 @router.get("/new", response_class=HTMLResponse)
@@ -124,7 +87,7 @@ async def project_new(
             }
         )
 
-    return _render_template(
+    return render_template(
         request=request,
         name="partials/project_form.html",
         context={
@@ -153,9 +116,14 @@ async def project_create(
     from metaseed.models import get_model
     from metaseed.specs.loader import SpecLoader
 
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
     if not validate_csrf_token(request, csrf_token):
         url = f"/hub/workspaces/{workspace_id}?error=csrf_validation_failed"
         return RedirectResponse(url, status_code=302)
+
+    # Verify user has access to the workspace
+    await verify_workspace_access(workspace_id, session, user)
 
     project = Project(
         workspace_id=workspace_id,
@@ -222,14 +190,13 @@ async def project_delete(
     user: CurrentUser,
 ) -> HTMLResponse:
     """Delete a project."""
-    if not validate_csrf_token(request):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
 
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-
-    if not project:
-        return HTMLResponse("<div class='error'>Project not found</div>")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     workspace_id = project.workspace_id
     await session.delete(project)
@@ -283,13 +250,13 @@ async def project_load_example(
     from metaseed.models import get_model
     from metaseed.specs.loader import SpecLoader
 
-    if not validate_csrf_token(request):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
 
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse("<div class='error'>Project not found</div>")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     # Find example YAML file
     examples_dir = Path(metaseed.__file__).parent / "examples"
@@ -381,16 +348,13 @@ async def project_editor(
     user: CurrentUser,
 ) -> Response:
     """Project editor - wraps metaseed UI with hub chrome."""
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-
-    if not project:
-        return RedirectResponse("/hub/")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     # Get or create state for this project (loads from database)
     state = get_project_state(project, project_states)
 
-    return _render_template(
+    return render_template(
         request=request,
         name="project.html",
         context={
@@ -410,10 +374,8 @@ async def project_tree(
     user: CurrentUser,
 ) -> HTMLResponse:
     """Return entity tree for a project."""
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse("<div class='error'>Project not found</div>")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     state = get_project_state(project, project_states)
     tree_data = get_tree_data_from_nodes(state)
@@ -488,13 +450,13 @@ async def project_validate(
     """Validate all entities in the project against their schemas."""
     from pydantic import ValidationError
 
-    if not validate_csrf_token(request):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
 
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse("<div class='error'>Project not found</div>")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     state = get_project_state(project, project_states)
     facade = state.get_or_create_facade()
@@ -592,13 +554,10 @@ async def project_graph(
     Args:
         node_id: Optional. If provided, only show this entity and its descendants.
     """
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
-    if not project:
-        return RedirectResponse("/hub/")
-
-    return _render_template(
+    return render_template(
         request=request,
         name="graph.html",
         context={
@@ -613,6 +572,7 @@ async def project_graph(
 async def project_graph_api(
     project_id: str,
     session: DbSession,
+    user: CurrentUser,
     node_id: str | None = None,
 ) -> Response:
     """Return graph data for visualization (JSON API).
@@ -625,11 +585,8 @@ async def project_graph_api(
     from fastapi.responses import JSONResponse
     from metaseed.ui.services.graph import build_graph
 
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-
-    if not project:
-        return JSONResponse(content={"nodes": [], "edges": []})
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     state = get_project_state(project, project_states)
 
@@ -647,10 +604,8 @@ async def project_chat_page(
     user: CurrentUser,
 ) -> Response:
     """Full-page chat view for a project."""
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse("<div class='error'>Project not found</div>")
+    # Verify user has access to this project
+    project = await get_project_for_user(project_id, session, user)
 
     icon = "/hub/hub-static/images/metaseed-icon.svg"
     css = "/hub/hub-static/css/hub.css"
@@ -710,9 +665,15 @@ async def project_chat(
     message: Annotated[str, Form()],
 ) -> HTMLResponse:
     """Post a chat message."""
-    if not validate_csrf_token(request):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    import html as html_module
 
-    # For now, just echo the message back
-    html = f"<div class='chat-message'><strong>{user.name}:</strong> {message}</div>"
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    # Escape user content to prevent XSS
+    safe_name = html_module.escape(user.name or "")
+    safe_message = html_module.escape(message)
+    html = f"<div class='chat-message'><strong>{safe_name}:</strong> {safe_message}</div>"
     return HTMLResponse(html)

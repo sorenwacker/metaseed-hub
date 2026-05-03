@@ -1,6 +1,6 @@
 """Workspace routes for Hub UI."""
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -10,61 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import Project, Tenant, Workspace
-from metaseed_hub.ui.dependencies import CurrentUser, DbSession
-from metaseed_hub.ui.helpers import (
-    CSRF_TOKEN_COOKIE,
-    get_or_create_csrf_token,
-    validate_csrf_token,
-)
+from metaseed_hub.ui.dependencies import CurrentUser, DbSession, verify_workspace_access
+from metaseed_hub.ui.helpers import validate_csrf_token
+from metaseed_hub.ui.render import init_templates as _init_render_templates
+from metaseed_hub.ui.render import render_template
+from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
-
-# Templates reference, initialized by init_templates()
-_templates: Jinja2Templates | None = None
 
 
 def init_templates(templates: Jinja2Templates) -> None:
     """Initialize templates reference."""
-    global _templates
-    _templates = templates
-
-
-def _render_template(
-    request: Request,
-    name: str,
-    context: dict[str, Any],
-    status_code: int = 200,
-) -> Response:
-    """Render template with CSRF token included.
-
-    Automatically adds CSRF token to context and sets cookie.
-    """
-    if _templates is None:
-        raise RuntimeError("Templates not initialized. Call init_templates() first.")
-
-    csrf_token = get_or_create_csrf_token(request)
-    context["csrf_token"] = csrf_token
-    context["request"] = request
-
-    response = _templates.TemplateResponse(
-        request=request,
-        name=name,
-        context=context,
-        status_code=status_code,
-    )
-
-    # Set CSRF cookie if not already set
-    if not request.cookies.get(CSRF_TOKEN_COOKIE):
-        response.set_cookie(
-            key=CSRF_TOKEN_COOKIE,
-            value=csrf_token,
-            httponly=True,
-            secure=request.url.scheme == "https",
-            samesite="lax",
-            max_age=3600 * 24,  # 24 hours
-        )
-
-    return response
+    _init_render_templates(templates)
 
 
 async def _get_or_create_tenant(session: AsyncSession, user: TokenUser) -> Tenant:
@@ -86,7 +43,7 @@ async def workspace_new(
     user: CurrentUser,
 ) -> Response:
     """Return workspace creation form."""
-    return _render_template(
+    return render_template(
         request=request,
         name="partials/workspace_form.html",
         context={"user": user},
@@ -105,6 +62,7 @@ async def workspace_create(
     """Create a new workspace."""
     if not validate_csrf_token(request, csrf_token):
         return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
+    # Note: Using redirect for form-based CSRF errors to preserve UX
 
     tenant = await _get_or_create_tenant(session, user)
 
@@ -127,16 +85,13 @@ async def workspace_detail(
     user: CurrentUser,
 ) -> Response:
     """Show projects in a workspace."""
-    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-
-    if not workspace:
-        return RedirectResponse("/hub/")
+    # Verify user has access to this workspace
+    workspace = await verify_workspace_access(workspace_id, session, user)
 
     result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
     projects = list(result.scalars().all())
 
-    return _render_template(
+    return render_template(
         request=request,
         name="workspace.html",
         context={
@@ -155,12 +110,10 @@ async def workspace_edit_form(
     user: CurrentUser,
 ) -> Response:
     """Return workspace edit form."""
-    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-    if not workspace:
-        return HTMLResponse("<div class='error'>Workspace not found</div>")
+    # Verify user has access to this workspace
+    workspace = await verify_workspace_access(workspace_id, session, user)
 
-    return _render_template(
+    return render_template(
         request=request,
         name="partials/workspace_form.html",
         context={
@@ -181,13 +134,13 @@ async def workspace_update(
     csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
 ) -> Response:
     """Update a workspace."""
-    if not validate_csrf_token(request, csrf_token):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    try:
+        validate_csrf_or_error(request, csrf_token)
+    except Exception:
+        return csrf_error_response()
 
-    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-    if not workspace:
-        return HTMLResponse("<div class='error'>Workspace not found</div>")
+    # Verify user has access to this workspace
+    workspace = await verify_workspace_access(workspace_id, session, user)
 
     workspace.name = name
     workspace.description = description
@@ -207,13 +160,13 @@ async def workspace_delete(
     user: CurrentUser,
 ) -> HTMLResponse:
     """Delete a workspace and all its projects."""
-    if not validate_csrf_token(request):
-        return HTMLResponse("<div class='error'>CSRF validation failed</div>", status_code=403)
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
 
-    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
-    if not workspace:
-        return HTMLResponse("<div class='error'>Workspace not found</div>")
+    # Verify user has access to this workspace
+    workspace = await verify_workspace_access(workspace_id, session, user)
 
     # Delete all projects in workspace first
     projects = (

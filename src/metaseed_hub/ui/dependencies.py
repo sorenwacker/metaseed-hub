@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Project
+from metaseed_hub.models import Project, Tenant, Workspace
 
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
@@ -92,11 +92,99 @@ async def get_project_by_id(
     """Get project by ID or raise 404.
 
     Use as a FastAPI dependency to load and validate project access.
+    Note: This function does NOT verify ownership. Use get_project_for_user()
+    for endpoints that require ownership verification.
     """
     result = await session.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
+    """Get or create tenant for user based on keycloak_id.
+
+    Args:
+        session: Database session.
+        user: Authenticated user.
+
+    Returns:
+        Tenant for the user, or None if not found.
+    """
+    slug = user.keycloak_id[:8]
+    result = await session.execute(select(Tenant).where(Tenant.slug == slug))
+    return result.scalar_one_or_none()
+
+
+async def verify_workspace_access(
+    workspace_id: str,
+    session: AsyncSession,
+    user: TokenUser,
+) -> Workspace:
+    """Verify user has access to workspace and return it.
+
+    A user has access to a workspace if their tenant owns the workspace.
+
+    Args:
+        workspace_id: ID of the workspace to verify.
+        session: Database session.
+        user: Authenticated user.
+
+    Returns:
+        Workspace if user has access.
+
+    Raises:
+        HTTPException: 404 if workspace not found, 403 if access denied.
+    """
+    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # Get user's tenant
+    tenant = await get_tenant_for_user(session, user)
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Verify workspace belongs to user's tenant
+    if workspace.tenant_id != tenant.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return workspace
+
+
+async def get_project_for_user(
+    project_id: str,
+    session: AsyncSession,
+    user: TokenUser,
+) -> Project:
+    """Get project if user has access through workspace membership.
+
+    A user has access to a project if their tenant owns the workspace
+    that contains the project.
+
+    Args:
+        project_id: ID of the project to retrieve.
+        session: Database session.
+        user: Authenticated user.
+
+    Returns:
+        Project if user has access.
+
+    Raises:
+        HTTPException: 404 if project not found, 403 if access denied.
+    """
+    result = await session.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Verify user has access to the workspace
+    await verify_workspace_access(project.workspace_id, session, user)
+
     return project
 
 

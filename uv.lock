@@ -1441,8 +1441,8 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.1.dev197"
-source = { git = "https://github.com/sorenwacker/metaseed.git#b4a666a989f8a295c7425017d23d00f01c1bfded" }
+version = "0.1.dev200"
+source = { git = "https://github.com/sorenwacker/metaseed.git#6b0e1a33f9e5f92c72b1a50aa115740fc73ad475" }
 dependencies = [
     { name = "fastapi" },
     { name = "isatools" },
