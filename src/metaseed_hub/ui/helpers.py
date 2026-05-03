@@ -490,11 +490,7 @@ def get_project_state(project: Project, project_states: dict[str, AppState]) -> 
     state.profile = project.profile
     state.version = project.version
     if project.data:
-        logger.info("get_project_state: deserializing from project.data")
         deserialize_tree(state, project.data)
-        logger.info(f"get_project_state: deserialized {len(state.nodes_by_id)} nodes")
-    else:
-        logger.info("get_project_state: project.data is empty, creating fresh state")
     project_states[project_id] = state
     return state
 

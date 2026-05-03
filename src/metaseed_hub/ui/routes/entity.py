@@ -265,21 +265,7 @@ async def project_entity_edit(
 ) -> Response:
     """Return form for editing an existing entity."""
     project = await get_project_by_id(project_id, session)
-
-    # Debug: check what's in project.data
-    if project.data:
-        tree = project.data.get("tree", [])
-        logger.info(f"entity_edit: project.data has {len(tree)} root nodes")
-        if tree:
-            first = tree[0]
-            children_count = len(first.get("children", []))
-            logger.info(f"  First: {first.get('entity_type')} with {children_count} children")
-    else:
-        logger.warning("entity_edit: project.data is empty!")
-
     state = get_project_state(project, project_states)
-
-    logger.info(f"entity_edit: state has {len(state.nodes_by_id)} nodes, looking for {node_id}")
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
@@ -288,26 +274,12 @@ async def project_entity_edit(
     entity_type = node.entity_type
     facade = state.get_or_create_facade()
 
-    # Log what's in the node instance
-    if node.instance and hasattr(node.instance, "model_dump"):
-        instance_data = node.instance.model_dump(exclude_none=True)
-        logger.info(f"Edit {entity_type} '{node.label}': {len(instance_data)} fields")
-        logger.debug(f"  Data: {instance_data}")
-    else:
-        logger.warning(f"Edit {entity_type} '{node.label}': NO INSTANCE DATA")
-
     try:
         helper = getattr(facade, entity_type)
     except AttributeError:
         return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
 
     form_context = build_entity_form_context(state, helper, node_id, node.parent_id)
-
-    # Debug: show what values are being passed to template
-    values = form_context.get("values", {})
-    logger.info(f"entity_edit: values has {len(values)} keys: {list(values.keys())[:10]}")
-    if "phone" in values:
-        logger.info(f"  phone value: {values['phone']}")
 
     return _render_template(
         request=request,
