@@ -39,9 +39,8 @@ SHORT_LATEST=$(echo "$LATEST" | cut -c1-7)
 SHORT_CURRENT=$(echo "$CURRENT" | cut -c1-7)
 log "New commit: $SHORT_LATEST (current: ${SHORT_CURRENT:-none})"
 
-# Pull latest changes
-git checkout main --quiet
-git pull origin main --quiet
+# Reset to latest origin/main (handles divergent history)
+git reset --hard origin/main --quiet
 
 # Install dependencies
 log "Installing dependencies..."
