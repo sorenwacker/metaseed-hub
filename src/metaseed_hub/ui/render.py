@@ -1,5 +1,6 @@
 """Shared template rendering utilities for Hub UI routes."""
 
+from functools import lru_cache
 from typing import Any
 
 from fastapi import Request
@@ -7,6 +8,24 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+
+
+@lru_cache(maxsize=1)
+def get_version_info() -> dict[str, str]:
+    """Get version information from package.
+
+    Returns:
+        Dictionary with version string.
+    """
+    info = {"version": "dev"}
+    try:
+        from metaseed_hub._version import __version__
+
+        info["version"] = __version__
+    except ImportError:
+        pass
+    return info
+
 
 # Module-level templates reference, set by init_templates()
 _templates: Jinja2Templates | None = None
@@ -63,6 +82,7 @@ def render_template(
     csrf_token = get_or_create_csrf_token(request)
     context["csrf_token"] = csrf_token
     context["request"] = request
+    context["version_info"] = get_version_info()
 
     response = templates.TemplateResponse(
         request=request,
