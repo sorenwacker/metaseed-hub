@@ -210,14 +210,9 @@ body {
 
 .version-info {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: var(--clr-ink-light);
-    opacity: 0.6;
+    font-size: 0.75rem;
+    color: var(--clr-ink);
     cursor: help;
-}
-
-.version-info:hover {
-    opacity: 1;
 }
 
 /* Buttons */
@@ -2497,7 +2492,7 @@ a.spec-editor-close:hover {
    ============================================================================= */
 
 .graph-page {
-    height: 100%;
+    height: calc(100vh - 56px - 28px); /* header + footer */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2611,7 +2606,7 @@ a.spec-editor-close:hover {
 .spec-builder-layout {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: calc(100vh - 56px - 28px); /* header + footer */
     background: var(--clr-background);
     overflow: hidden;
 }
@@ -3725,7 +3720,7 @@ a.start-option-card:hover {
 .spec-view-layout {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: calc(100vh - 56px - 28px); /* header + footer */
     background: var(--clr-background);
     overflow: hidden;
 }
