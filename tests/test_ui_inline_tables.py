@@ -132,7 +132,7 @@ class TestTreeSerialization:
         state.profile = "isa"
         state.version = "1.0"
 
-        from metaseed_hub.ui.app import serialize_tree
+        from metaseed_hub.ui.helpers import serialize_tree
 
         result = serialize_tree(state)
 
@@ -166,7 +166,7 @@ class TestTreeSerialization:
         state.nodes_by_id["parent-1"] = parent
         state.nodes_by_id["child-1"] = child
 
-        from metaseed_hub.ui.app import serialize_tree
+        from metaseed_hub.ui.helpers import serialize_tree
 
         result = serialize_tree(state)
 
@@ -183,7 +183,7 @@ class TestTreeSerialization:
         state.profile = "isa"
         state.version = "1.0"
 
-        from metaseed_hub.ui.app import deserialize_tree
+        from metaseed_hub.ui.helpers import deserialize_tree
 
         deserialize_tree(state, {})
 
@@ -225,7 +225,7 @@ class TestTreeSerialization:
             ],
         }
 
-        from metaseed_hub.ui.app import deserialize_tree
+        from metaseed_hub.ui.helpers import deserialize_tree
 
         deserialize_tree(state, data)
 
