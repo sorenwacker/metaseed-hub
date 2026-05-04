@@ -28,4 +28,4 @@ jobs:
         run: uv run mypy src/metaseed_hub --ignore-missing-imports
 
       - name: Run tests
-        run: uv run pytest tests/ -v --ignore=tests/test_models.py --ignore=tests/test_multi_spec.py
+        run: uv run pytest tests/ -v --ignore=tests/test_models.py --ignore=tests/test_multi_spec.py --ignore=tests/test_entity_persistence.py

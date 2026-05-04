@@ -4,6 +4,8 @@
 
 Collaborative metadata management platform for scientific research data. Built on [metaseed](https://github.com/sorenwacker/metaseed), it enables teams to create, edit, and share standardized metadata following MIAPPE, ISA, DiSSCo, and Darwin Core specifications.
 
+**Live instance:** https://metaseed.ewi.tudelft.nl
+
 ## Features
 
 - Multi-tenant workspaces and projects
