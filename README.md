@@ -1,5 +1,9 @@
 # Metaseed Hub
 
+[![CI](https://github.com/sorenwacker/metaseed-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/sorenwacker/metaseed-hub/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+
 <img src="src/metaseed_hub/ui/static/images/metaseed-logo.svg" alt="Metaseed Logo" width="300">
 
 Collaborative metadata management platform for scientific research data. Built on [metaseed](https://github.com/sorenwacker/metaseed), it enables teams to create, edit, and share standardized metadata following MIAPPE, ISA, DiSSCo, and Darwin Core specifications.
