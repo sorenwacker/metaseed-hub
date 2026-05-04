@@ -26,7 +26,7 @@
         {% if drafts %}
         <div class="spec-grid">
             {% for draft in drafts %}
-            <a href="/hub/spec-builder/{{ draft.id }}" class="spec-card draft">
+            <div class="spec-card draft">
                 <div class="spec-card-header">
                     <span class="spec-badge draft">Draft</span>
                     <span class="spec-workspace">{{ draft.workspace.name }}</span>
@@ -38,7 +38,15 @@
                         Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
                     </span>
                 </div>
-            </a>
+                <div class="spec-actions">
+                    <a href="/hub/spec-builder/{{ draft.id }}" class="btn btn-sm btn-primary">Edit</a>
+                    <button class="btn btn-sm btn-danger"
+                            hx-delete="/hub/spec-builder/{{ draft.id }}"
+                            hx-confirm="Delete this draft?"
+                            hx-target="closest .spec-card"
+                            hx-swap="outerHTML">Delete</button>
+                </div>
+            </div>
             {% endfor %}
         </div>
         {% else %}
