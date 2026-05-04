@@ -15,13 +15,15 @@ def get_version_info() -> dict[str, str]:
     """Get version information from package.
 
     Returns:
-        Dictionary with version string.
+        Dictionary with version and commit info.
     """
-    info = {"version": "dev"}
+    info = {"version": "dev", "short_commit": "unknown", "branch": "unknown"}
     try:
-        from metaseed_hub._version import __version__
+        from metaseed_hub._version import __commit_id__, __version__
 
         info["version"] = __version__
+        if __commit_id__:
+            info["short_commit"] = __commit_id__.lstrip("g")[:7]
     except ImportError:
         pass
     return info
