@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -568,7 +568,14 @@ def create_spec_builder_router(
     Returns:
         Configured APIRouter.
     """
+    from metaseed_hub.ui.app import get_version_info
+
     router = APIRouter(prefix="/spec-builder", tags=["spec-builder"])
+
+    def render(request: Request, template: str, context: dict[str, Any]) -> Response:
+        """Render template with version info included."""
+        context["version_info"] = get_version_info()
+        return templates.TemplateResponse(request, template, context)
 
     # -------------------------------------------------------------------------
     # List page and workspace selection
@@ -622,7 +629,7 @@ def create_spec_builder_router(
         )
         specs = list(result.scalars().all())
 
-        return templates.TemplateResponse(
+        return render(
             request,
             "spec_builder/list.html",
             {
@@ -658,7 +665,7 @@ def create_spec_builder_router(
 
         available_templates = list_available_templates()
 
-        return templates.TemplateResponse(
+        return render(
             request,
             "spec_builder/new.html",
             {
@@ -791,7 +798,7 @@ def create_spec_builder_router(
             builder.spec = create_empty_spec()
             await save_state_to_draft(session, builder, draft)
 
-        return templates.TemplateResponse(
+        return render(
             request,
             "spec_builder/base.html",
             {
@@ -966,7 +973,7 @@ def create_spec_builder_router(
             SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
         )
 
-        return templates.TemplateResponse(
+        return render(
             request,
             "spec_builder/view.html",
             {
