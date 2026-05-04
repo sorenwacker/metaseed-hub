@@ -425,7 +425,8 @@ body {
 
 /* Project Editor */
 .project-container {
-    height: calc(100vh - 56px - 3rem);
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -2490,7 +2491,8 @@ a.spec-editor-close:hover {
    ============================================================================= */
 
 .graph-page {
-    height: calc(100vh - 56px);
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -2603,7 +2605,8 @@ a.spec-editor-close:hover {
 .spec-builder-layout {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 56px);
+    flex: 1;
+    min-height: 0;
     background: var(--clr-background);
     overflow: hidden;
 }
@@ -3717,7 +3720,8 @@ a.start-option-card:hover {
 .spec-view-layout {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 56px);
+    flex: 1;
+    min-height: 0;
     background: var(--clr-background);
     overflow: hidden;
 }
