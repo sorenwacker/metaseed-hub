@@ -84,6 +84,11 @@ def create_app() -> FastAPI:
         """Redirect to hub UI."""
         return RedirectResponse(url="/hub/")
 
+    @app.get("/version")
+    async def version() -> dict[str, str]:
+        """Return version information."""
+        return {"version": __version__}
+
     # WebSocket endpoint
     @app.websocket("/ws/{project_id}")
     async def websocket_endpoint(
