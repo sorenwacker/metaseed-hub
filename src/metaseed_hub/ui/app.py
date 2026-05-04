@@ -59,12 +59,20 @@ STATIC_DIR = UI_DIR / "static"
 
 @lru_cache(maxsize=1)
 def get_version_info() -> dict[str, str]:
-    """Get version information from git.
+    """Get version information from git and package.
 
     Returns:
-        Dictionary with commit hash and branch name.
+        Dictionary with version, commit hash and branch name.
     """
-    info = {"commit": "unknown", "branch": "unknown", "short_commit": "unknown"}
+    info = {"version": "dev", "commit": "unknown", "branch": "unknown", "short_commit": "unknown"}
+
+    # Get package version
+    try:
+        from metaseed_hub._version import __version__
+
+        info["version"] = __version__
+    except ImportError:
+        pass
 
     try:
         # Get short commit hash
