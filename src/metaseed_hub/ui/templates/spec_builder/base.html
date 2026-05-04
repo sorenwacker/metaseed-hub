@@ -234,7 +234,7 @@
     window.draftId = {{ draft_id | tojson }};
 
     // ERD Data - convert spec to serializable format
-    const entities = {
+    window.entities = {
         {% for name, entity in spec.entities.items() %}
         {{ name | tojson }}: {
             "ontology_term": {{ entity.ontology_term | tojson }},
@@ -253,8 +253,8 @@
         }{% if not loop.last %},{% endif %}
         {% endfor %}
     };
-    const rootEntity = {{ spec.root_entity | tojson }};
-    const fieldTypes = {{ field_types | tojson | safe }};
+    window.rootEntity = {{ spec.root_entity | tojson }};
+    window.fieldTypes = {{ field_types | tojson | safe }};
 </script>
 <script src="/hub/hub-static/js/graph-config.js"></script>
 <script src="/hub/hub-static/js/spec-builder.js"></script>
