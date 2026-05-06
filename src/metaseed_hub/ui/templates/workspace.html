@@ -37,6 +37,7 @@
     <p class="workspace-description">{{ workspace.description }}</p>
     {% endif %}
 
+    <h2 class="section-title">Projects</h2>
     <div class="project-grid" id="project-grid">
         {% for project in projects %}
         <div class="project-card">
@@ -58,10 +59,65 @@
         {% else %}
         <div class="empty-state">
             <p>No projects yet.</p>
-            <p>Create a project to start working with metadata.</p>
         </div>
         {% endfor %}
     </div>
+
+    <h2 class="section-title">Specifications</h2>
+    <div class="project-grid" id="spec-grid">
+        {% for draft in spec_drafts %}
+        <div class="project-card">
+            <a href="/hub/spec-builder/{{ draft.id }}" class="project-card-link">
+                <h3>{{ draft.name or 'Untitled' }}</h3>
+                <div class="project-meta">
+                    <span class="profile-badge">v{{ draft.version }}</span>
+                    <span class="date">{{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                </div>
+            </a>
+            <button class="project-delete" title="Delete spec"
+                    hx-delete="/hub/spec-builder/{{ draft.id }}"
+                    hx-target="#spec-grid"
+                    hx-swap="outerHTML"
+                    hx-confirm="Delete '{{ draft.name }}'? This cannot be undone.">
+                &times;
+            </button>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No specifications yet.</p>
+            <p><a href="/hub/spec-builder?workspace_id={{ workspace.id }}">Create a spec</a> to define metadata schemas.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2 class="section-title">Members</h2>
+    <div class="member-list" id="member-list">
+        {% for membership, member in members %}
+        <div class="member-card">
+            <div class="member-info">
+                <span>{{ member.display_name or member.email }}</span>
+                <span class="member-role">{{ membership.role.value }}</span>
+            </div>
+            <button class="btn btn-sm"
+                    hx-delete="/hub/workspaces/{{ workspace.id }}/members/{{ member.id }}"
+                    hx-confirm="Remove {{ member.email }}?">
+                &times;
+            </button>
+        </div>
+        {% else %}
+        <p style="color: var(--clr-ink-light); font-size: 0.875rem;">No members yet.</p>
+        {% endfor %}
+    </div>
+
+    <form class="inline-form" hx-post="/hub/workspaces/{{ workspace.id }}/members" hx-swap="none">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <input type="email" name="email" placeholder="Email" required class="form-input">
+        <select name="role" class="form-select">
+            <option value="editor">Editor</option>
+            <option value="owner">Owner</option>
+        </select>
+        <button type="submit" class="btn btn-primary">Add</button>
+    </form>
 </div>
 
 <div id="project-modal"></div>

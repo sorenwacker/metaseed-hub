@@ -52,6 +52,17 @@
             "access.token.claim": "true",
             "userinfo.token.claim": "true"
           }
+        },
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "metaseed-hub",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
         }
       ]
     }

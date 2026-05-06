@@ -9,7 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.models import Project, Tenant, Workspace
+from metaseed_hub.models import (
+    Project,
+    SpecDraft,
+    Tenant,
+    User,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceRole,
+)
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, verify_workspace_access
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -46,7 +54,7 @@ async def workspace_new(
     return render_template(
         request=request,
         name="partials/workspace_form.html",
-        context={"user": user},
+        context={"user": user, "nav_active": "home"},
     )
 
 
@@ -91,6 +99,20 @@ async def workspace_detail(
     result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
     projects = list(result.scalars().all())
 
+    # Get spec drafts for this workspace
+    drafts_result = await session.execute(
+        select(SpecDraft).where(SpecDraft.workspace_id == workspace_id)
+    )
+    spec_drafts = list(drafts_result.scalars().all())
+
+    # Get workspace members
+    members_result = await session.execute(
+        select(WorkspaceMember, User)
+        .join(User, WorkspaceMember.user_id == User.id)
+        .where(WorkspaceMember.workspace_id == workspace_id)
+    )
+    members = [(m, u) for m, u in members_result.all()]
+
     return render_template(
         request=request,
         name="workspace.html",
@@ -98,6 +120,9 @@ async def workspace_detail(
             "user": user,
             "workspace": workspace,
             "projects": projects,
+            "spec_drafts": spec_drafts,
+            "members": members,
+            "nav_active": "home",
         },
     )
 
@@ -119,6 +144,7 @@ async def workspace_edit_form(
         context={
             "user": user,
             "workspace": workspace,
+            "nav_active": "home",
         },
     )
 
@@ -182,4 +208,97 @@ async def workspace_delete(
 
     response = HTMLResponse(status_code=200)
     response.headers["HX-Redirect"] = "/hub/"
+    return response
+
+
+@router.post("/{workspace_id}/members", response_class=HTMLResponse)
+async def add_member(
+    request: Request,
+    workspace_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    email: Annotated[str, Form()],
+    role: Annotated[str, Form()] = "editor",
+    csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+) -> Response:
+    """Add a member to the workspace by email."""
+    try:
+        validate_csrf_or_error(request, csrf_token)
+    except Exception:
+        return csrf_error_response()
+
+    await verify_workspace_access(workspace_id, session, user)
+    tenant = await _get_or_create_tenant(session, user)
+
+    # Find or create user by email
+    result = await session.execute(select(User).where(User.email == email))
+    member_user = result.scalar_one_or_none()
+
+    if not member_user:
+        # Create user record - they'll be linked when they log in via Keycloak
+        member_user = User(
+            keycloak_id=f"pending:{email}",
+            email=email,
+            display_name=email.split("@")[0],
+            tenant_id=tenant.id,
+        )
+        session.add(member_user)
+        await session.flush()
+
+    # Check if already a member
+    existing = await session.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == member_user.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        response = HTMLResponse(status_code=200)
+        response.headers["HX-Redirect"] = f"/hub/workspaces/{workspace_id}"
+        return response
+
+    # Add membership
+    ws_role = WorkspaceRole.OWNER if role == "owner" else WorkspaceRole.EDITOR
+    membership = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=member_user.id,
+        role=ws_role,
+    )
+    session.add(membership)
+    await session.commit()
+
+    response = HTMLResponse(status_code=200)
+    response.headers["HX-Redirect"] = f"/hub/workspaces/{workspace_id}"
+    return response
+
+
+@router.delete("/{workspace_id}/members/{member_id}", response_class=HTMLResponse)
+async def remove_member(
+    request: Request,
+    workspace_id: str,
+    member_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Remove a member from the workspace."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    await verify_workspace_access(workspace_id, session, user)
+
+    result = await session.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == member_id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership:
+        await session.delete(membership)
+        await session.commit()
+
+    response = HTMLResponse(status_code=200)
+    response.headers["HX-Redirect"] = f"/hub/workspaces/{workspace_id}"
     return response

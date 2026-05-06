@@ -573,8 +573,9 @@ def create_spec_builder_router(
     router = APIRouter(prefix="/spec-builder", tags=["spec-builder"])
 
     def render(request: Request, template: str, context: dict[str, Any]) -> Response:
-        """Render template with version info included."""
+        """Render template with version info and nav_active included."""
         context["version_info"] = get_version_info()
+        context["nav_active"] = "spec-builder"
         return templates.TemplateResponse(request, template, context)
 
     # -------------------------------------------------------------------------
@@ -1053,7 +1054,7 @@ def create_spec_builder_router(
         ctx: DraftContextDep,
         session: Annotated[AsyncSession, Depends(get_session)],
         name: str = Form(""),
-        version: str = Form("1.0"),
+        version: str = Form("0.1"),
         display_name: str = Form(""),
         description: str = Form(""),
         ontology: str = Form(""),
@@ -1061,7 +1062,7 @@ def create_spec_builder_router(
     ) -> HTMLResponse:
         """Update profile metadata."""
         ctx.spec.name = name.strip()
-        ctx.spec.version = version.strip() or "1.0"
+        ctx.spec.version = version.strip() or "0.1"
         ctx.spec.display_name = display_name.strip() or None
         ctx.spec.description = description.strip()
         ctx.spec.ontology = ontology.strip() or None
@@ -1259,10 +1260,10 @@ def create_spec_builder_router(
                         field.items = new_name
                     # Update reference (e.g., "OldName.field" -> "NewName.field")
                     if field.reference and field.reference.startswith(f"{name}."):
-                        field.reference = f"{new_name}.{field.reference[len(name)+1:]}"
+                        field.reference = f"{new_name}.{field.reference[len(name) + 1 :]}"
                     # Update parent_ref
                     if field.parent_ref and field.parent_ref.startswith(f"{name}."):
-                        field.parent_ref = f"{new_name}.{field.parent_ref[len(name)+1:]}"
+                        field.parent_ref = f"{new_name}.{field.parent_ref[len(name) + 1 :]}"
 
             # Update validation rules that reference this entity
             for rule in ctx.spec.validation_rules:

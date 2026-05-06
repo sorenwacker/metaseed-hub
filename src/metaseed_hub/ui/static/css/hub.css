@@ -364,6 +364,19 @@ body {
     gap: var(--space-md);
 }
 
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--clr-ink-light);
+    margin: var(--space-xl) 0 var(--space-md) 0;
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.section-title:first-of-type {
+    margin-top: var(--space-md);
+}
+
 .workspace-card, .project-card {
     background: white;
     border: 1px solid rgba(26, 58, 47, 0.08);
@@ -446,6 +459,60 @@ body {
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 500;
+}
+
+.member-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+}
+
+.member-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--clr-surface);
+    border-radius: var(--radius-md);
+}
+
+.member-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.member-role {
+    font-size: 0.7rem;
+    color: var(--clr-ink-light);
+    background: white;
+    padding: 0.15rem var(--space-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--clr-border);
+}
+
+.inline-form {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-top: var(--space-sm);
+}
+
+.inline-form .form-input,
+.inline-form .form-select {
+    padding: var(--space-sm);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+}
+
+.inline-form .form-input {
+    width: 220px;
+}
+
+.inline-form .form-select {
+    width: 100px;
 }
 
 .empty-state {

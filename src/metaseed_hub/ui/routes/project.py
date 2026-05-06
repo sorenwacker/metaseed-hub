@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
 from sqlalchemy import select
 
-from metaseed_hub.models import Project
+from metaseed_hub.models import Project, SpecDraft
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -44,6 +44,7 @@ def init_templates(templates: Jinja2Templates) -> None:
 @router.get("/new", response_class=HTMLResponse)
 async def project_new(
     request: Request,
+    session: DbSession,
     user: CurrentUser,
     workspace_id: str,
 ) -> Response:
@@ -84,8 +85,30 @@ async def project_new(
                 "root_entity": root_entity,
                 "versions": versions,
                 "latest_version": versions[0] if versions else "",
+                "source": "builtin",
             }
         )
+
+    # Get spec drafts from this workspace
+    drafts_result = await session.execute(
+        select(SpecDraft).where(SpecDraft.workspace_id == workspace_id)
+    )
+    drafts = drafts_result.scalars().all()
+
+    for draft in drafts:
+        if draft.name:
+            spec_data = draft.spec_data or {}
+            profiles_data.append(
+                {
+                    "name": f"draft:{draft.id}",
+                    "display_name": f"{draft.name} (Draft)",
+                    "description": spec_data.get("description", ""),
+                    "root_entity": spec_data.get("root_entity", "Investigation"),
+                    "versions": [draft.version],
+                    "latest_version": draft.version,
+                    "source": "draft",
+                }
+            )
 
     return render_template(
         request=request,
@@ -94,6 +117,7 @@ async def project_new(
             "user": user,
             "workspace_id": workspace_id,
             "profiles": profiles_data,
+            "nav_active": "home",
         },
     )
 
@@ -125,11 +149,23 @@ async def project_create(
     # Verify user has access to the workspace
     await verify_workspace_access(workspace_id, session, user)
 
+    # Check if using a draft spec
+    spec_draft_id = None
+    if profile.startswith("draft:"):
+        spec_draft_id = profile.replace("draft:", "")
+        # Get the draft to use its name as the profile
+        draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == spec_draft_id))
+        draft = draft_result.scalar_one_or_none()
+        if draft:
+            profile = draft.name
+            version = draft.version
+
     project = Project(
         workspace_id=workspace_id,
         name=name,
         profile=profile,
         version=version,
+        spec_draft_id=spec_draft_id,
         data={},
     )
     session.add(project)
@@ -214,7 +250,7 @@ async def project_delete(
                 <h3>{p.name}</h3>
                 <div class="project-meta">
                     <span class="profile-badge">{p.profile} {p.version}</span>
-                    <span class="date">{p.updated_at.strftime('%Y-%m-%d %H:%M')}</span>
+                    <span class="date">{p.updated_at.strftime("%Y-%m-%d %H:%M")}</span>
                 </div>
             </a>
             <button class="project-delete" title="Delete project"
@@ -362,6 +398,7 @@ async def project_editor(
             "project": project,
             "state": state,
             "root_types": state.get_root_entity_types(),
+            "nav_active": "home",
         },
     )
 
@@ -524,11 +561,11 @@ async def project_validate(
             html += f"""
             <div class="validation-error-item">
                 <div class="validation-entity">
-                    <span class="entity-type-badge">{err['entity_type']}</span>
+                    <span class="entity-type-badge">{err["entity_type"]}</span>
                     <a href="#" class="entity-link"
-                       hx-get="/hub/projects/{project_id}/entity/{err['node_id']}"
+                       hx-get="/hub/projects/{project_id}/entity/{err["node_id"]}"
                        hx-target="#editor"
-                       hx-swap="innerHTML">{err['label']}</a>
+                       hx-swap="innerHTML">{err["label"]}</a>
                 </div>
                 <ul class="validation-error-list">
             """
@@ -564,6 +601,7 @@ async def project_graph(
             "user": user,
             "project": project,
             "node_id": node_id,
+            "nav_active": "home",
         },
     )
 

@@ -1,4 +1,4 @@
-.PHONY: dev test lint docs clean up down db-migrate db-wait setup-keycloak
+.PHONY: dev test lint docs clean up down db-migrate db-wait setup-keycloak reset
 
 up:
 	docker compose up -d
@@ -7,6 +7,10 @@ up:
 
 down:
 	docker compose down
+
+reset:
+	docker compose down -v
+	@echo "Volumes cleared. Run 'make dev' to restart with fresh data."
 
 db-wait:
 	@echo "Waiting for PostgreSQL..."

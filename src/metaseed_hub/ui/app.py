@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import ChoiceLoader, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,7 +127,19 @@ def create_hub_app() -> FastAPI:
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
 
+    # Get metaseed's template directory for reusing Explorer templates
+    import metaseed.ui
+
+    metaseed_templates_dir = Path(metaseed.ui.__file__).parent / "templates"
+
+    # Create Jinja2 with multiple template directories (hub first, then metaseed)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    templates.env.loader = ChoiceLoader(
+        [
+            FileSystemLoader(str(TEMPLATES_DIR)),
+            FileSystemLoader(str(metaseed_templates_dir)),
+        ]
+    )
 
     # Register template filters
     templates.env.filters["escape_pattern"] = escape_pattern_hyphen
@@ -139,6 +152,10 @@ def create_hub_app() -> FastAPI:
 
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
+
+    # Mount metaseed's static files for Explorer template
+    metaseed_static_dir = Path(metaseed.ui.__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(metaseed_static_dir)), name="metaseed-static")
 
     # Include route modules
     app.include_router(auth_router)

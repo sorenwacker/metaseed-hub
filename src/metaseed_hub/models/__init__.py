@@ -122,6 +122,9 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     memberships: Mapped[list["TeamMembership"]] = relationship(
         "TeamMembership", back_populates="user"
     )
+    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember", back_populates="user"
+    )
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
     chat_messages: Mapped[list["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
 
@@ -192,6 +195,49 @@ class WorkspaceTeam(Base):
     team: Mapped["Team"] = relationship("Team", back_populates="workspaces")
 
 
+class WorkspaceRole(StrEnum):
+    """Role within a workspace."""
+
+    OWNER = "owner"
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
+
+class WorkspaceMember(Base):
+    """Direct user membership in a workspace."""
+
+    __tablename__ = "workspace_members"
+    __table_args__ = (
+        Index("ix_workspace_members_workspace_id", "workspace_id"),
+        Index("ix_workspace_members_user_id", "user_id"),
+    )
+
+    workspace_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[WorkspaceRole] = mapped_column(
+        Enum(WorkspaceRole),
+        nullable=False,
+        default=WorkspaceRole.EDITOR,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="members")
+    user: Mapped["User"] = relationship("User", back_populates="workspace_memberships")
+
+
 class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     """Workspace for organizing projects."""
 
@@ -218,6 +264,9 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="workspaces")
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="workspace")
     teams: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="workspace")
+    members: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember", back_populates="workspace"
+    )
     specs: Mapped[list["Spec"]] = relationship("Spec", back_populates="workspace")
     spec_drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="workspace")
 
@@ -241,6 +290,11 @@ class Project(TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
+    spec_draft_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("spec_drafts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     profile: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -248,6 +302,7 @@ class Project(TimestampMixin, SoftDeleteMixin, Base):
 
     # Relationships
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="projects")
+    spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="project")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
         "ChatMessage", back_populates="project"
@@ -424,5 +479,7 @@ __all__ = [
     "TimestampMixin",
     "User",
     "Workspace",
+    "WorkspaceMember",
+    "WorkspaceRole",
     "WorkspaceTeam",
 ]
