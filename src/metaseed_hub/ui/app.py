@@ -26,6 +26,7 @@ from metaseed_hub.ui.dependencies import (
     get_or_create_csrf_token,
     handle_auth_required_error,
 )
+from metaseed_hub.ui.explore_routes import create_explore_router
 from metaseed_hub.ui.helpers import (
     CSRF_TOKEN_COOKIE,
     escape_pattern_hyphen,
@@ -150,6 +151,10 @@ def create_hub_app() -> FastAPI:
     spec_builder_router = create_spec_builder_router(templates)
     app.include_router(spec_builder_router)
 
+    # Add explore routes
+    explore_router = create_explore_router(templates)
+    app.include_router(explore_router)
+
     def render_template(
         request: Request,
         name: str,
@@ -224,6 +229,7 @@ def create_hub_app() -> FastAPI:
             context={
                 "user": user,
                 "workspaces": workspaces,
+                "nav_active": "home",
             },
         )
 

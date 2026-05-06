@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Specifications - Metaseed Hub{% endblock %}
+
+{% block head %}
+<script src="/hub/hub-static/js/vis-network.min.js"></script>
+{% endblock %}
+
+{% block nav %}
+<span class="nav-sep">/</span>
+<span class="nav-item active">Compare</span>
+{% endblock %}
+
+{% block content %}
+<div class="compare-page">
+    <div class="page-header">
+        <div class="header-content">
+            <h1>Compare Specifications</h1>
+            <p>Select two specifications to compare their entities, fields, and relationships.</p>
+        </div>
+        <a href="/hub/explore" class="btn">Back to Explore</a>
+    </div>
+
+    {% if specs %}
+    <!-- Spec Selection -->
+    <div class="compare-selectors">
+        <form method="GET" action="/hub/explore/compare" class="compare-form">
+            <div class="selector-group">
+                <label for="spec_a">First Specification</label>
+                <select name="spec_a" id="spec_a" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Select a specification --</option>
+                    {% for spec in specs %}
+                    <option value="{{ spec.id }}" {% if spec_a_id == spec.id %}selected{% endif %}>
+                        {{ spec.name }} v{{ spec.version }} ({{ spec.profile }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="selector-divider">vs</div>
+            <div class="selector-group">
+                <label for="spec_b">Second Specification</label>
+                <select name="spec_b" id="spec_b" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Select a specification --</option>
+                    {% for spec in specs %}
+                    <option value="{{ spec.id }}" {% if spec_b_id == spec.id %}selected{% endif %}>
+                        {{ spec.name }} v{{ spec.version }} ({{ spec.profile }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if selected_spec_a and selected_spec_b %}
+    <!-- Comparison Results -->
+    <div class="compare-results">
+        <!-- Statistics Summary -->
+        {% if comparison_result and not comparison_result.error %}
+        <div class="compare-stats">
+            <h3>Comparison Summary</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Entities</div>
+                    <div class="stat-details">
+                        <span class="stat-added" title="Added">+{{ comparison_result.added_entities }}</span>
+                        <span class="stat-removed" title="Removed">-{{ comparison_result.removed_entities }}</span>
+                        <span class="stat-modified" title="Modified">~{{ comparison_result.modified_entities }}</span>
+                        <span class="stat-unchanged" title="Unchanged">={{ comparison_result.unchanged_entities }}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Fields</div>
+                    <div class="stat-details">
+                        <span class="stat-added" title="Added">+{{ comparison_result.added_fields }}</span>
+                        <span class="stat-removed" title="Removed">-{{ comparison_result.removed_fields }}</span>
+                        <span class="stat-modified" title="Modified">~{{ comparison_result.modified_fields }}</span>
+                        <span class="stat-unchanged" title="Unchanged">={{ comparison_result.unchanged_fields }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif comparison_result and comparison_result.error %}
+        <div class="compare-error">
+            <p>Comparison failed: {{ comparison_result.error }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Diff Graph Visualization -->
+        <div class="compare-body">
+            <main class="compare-canvas">
+                <div class="canvas-toolbar">
+                    <button class="btn btn-sm" onclick="zoomIn()">+</button>
+                    <button class="btn btn-sm" onclick="zoomOut()">-</button>
+                    <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
+                </div>
+                <div class="canvas-wrapper">
+                    <div id="diff-canvas"></div>
+                </div>
+                <div class="canvas-legend compare-legend">
+                    <span class="legend-item"><span class="legend-dot added"></span> Added</span>
+                    <span class="legend-item"><span class="legend-dot removed"></span> Removed</span>
+                    <span class="legend-item"><span class="legend-dot modified"></span> Modified</span>
+                    <span class="legend-item"><span class="legend-dot unchanged"></span> Unchanged</span>
+                </div>
+            </main>
+
+            <!-- Entity Details Panel -->
+            <aside class="compare-details" id="details-panel">
+                <div class="details-header">
+                    <h3 id="details-title">Entity Details</h3>
+                </div>
+                <div class="details-content" id="details-content">
+                    <div class="details-placeholder">
+                        <p>Click an entity in the graph to view comparison details</p>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+    {% else %}
+    <div class="compare-placeholder">
+        {% if not specs %}
+        <p>No published specifications available to compare.</p>
+        <p>Visit the <a href="/hub/spec-builder">Spec Builder</a> to create and publish specifications.</p>
+        {% else %}
+        <p>Select two specifications above to compare them.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/hub/hub-static/js/graph-config.js"></script>
+{% if diff_graph %}
+<script>
+    // Diff Graph Data from server
+    const diffGraph = {{ diff_graph | tojson }};
+    const specAName = {{ selected_spec_a.name | tojson }};
+    const specBName = {{ selected_spec_b.name | tojson }};
+
+    // Color scheme for diff types
+    const diffColors = {
+        'added': { background: '#d4edda', border: '#28a745', font: '#155724' },
+        'removed': { background: '#f8d7da', border: '#dc3545', font: '#721c24' },
+        'modified': { background: '#fff3cd', border: '#ffc107', font: '#856404' },
+        'unchanged': { background: '#ffffff', border: '#6c757d', font: '#343a40' },
+        'conflict': { background: '#f5c6cb', border: '#dc3545', font: '#721c24' }
+    };
+
+    let network = null;
+    let entityData = {};
+
+    function initDiffGraph() {
+        const container = document.getElementById('diff-canvas');
+        if (!container || !diffGraph) return;
+
+        const nodes = [];
+        const edges = [];
+
+        // Store entity data for details panel
+        entityData = {};
+
+        // Process nodes from diff graph
+        if (diffGraph.nodes) {
+            for (const node of diffGraph.nodes) {
+                const diffType = node.diff_type || 'unchanged';
+                const colors = diffColors[diffType] || diffColors.unchanged;
+
+                nodes.push({
+                    id: node.id,
+                    label: node.label || node.id,
+                    shape: 'box',
+                    color: {
+                        background: colors.background,
+                        border: colors.border,
+                        highlight: { background: colors.background, border: colors.border }
+                    },
+                    font: { color: colors.font, face: 'system-ui', size: 14 },
+                    borderWidth: 2,
+                    margin: 10
+                });
+
+                // Store entity data for details
+                entityData[node.id] = {
+                    name: node.label || node.id,
+                    diff_type: diffType,
+                    fields: node.fields || [],
+                    present_in: node.present_in || []
+                };
+            }
+        }
+
+        // Process edges from diff graph
+        if (diffGraph.edges) {
+            for (const edge of diffGraph.edges) {
+                const diffType = edge.diff_type || 'unchanged';
+                const colors = diffColors[diffType] || diffColors.unchanged;
+
+                edges.push({
+                    from: edge.from,
+                    to: edge.to,
+                    label: edge.label || '',
+                    arrows: 'to',
+                    color: { color: colors.border, highlight: colors.border },
+                    font: { size: 10, color: '#666' },
+                    smooth: { type: 'curvedCW', roundness: 0.2 },
+                    dashes: diffType === 'removed'
+                });
+            }
+        }
+
+        const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+        const options = {
+            layout: { hierarchical: false },
+            physics: GraphConfig.getPhysicsConfig(),
+            interaction: { hover: true, zoomView: true, dragView: true }
+        };
+
+        network = new vis.Network(container, data, options);
+
+        // Click handler to show entity details
+        network.on('click', function(params) {
+            if (params.nodes.length > 0) {
+                showEntityDiffDetails(params.nodes[0]);
+            }
+        });
+
+        // Fit after stabilization
+        network.once('stabilizationIterationsDone', function() {
+            network.fit();
+        });
+    }
+
+    function zoomIn() { if (network) network.moveTo({ scale: network.getScale() * 1.2 }); }
+    function zoomOut() { if (network) network.moveTo({ scale: network.getScale() / 1.2 }); }
+    function fitGraph() { if (network) network.fit(); }
+
+    function showEntityDiffDetails(entityId) {
+        const entity = entityData[entityId];
+        if (!entity) return;
+
+        document.getElementById('details-title').textContent = entity.name;
+
+        const diffTypeBadge = {
+            'added': '<span class="diff-badge added">Added</span>',
+            'removed': '<span class="diff-badge removed">Removed</span>',
+            'modified': '<span class="diff-badge modified">Modified</span>',
+            'unchanged': '<span class="diff-badge unchanged">Unchanged</span>'
+        };
+
+        const content = document.getElementById('details-content');
+
+        // Build field comparison table
+        let fieldsHtml = '';
+        if (entity.fields && entity.fields.length > 0) {
+            fieldsHtml = `
+                <div class="detail-section">
+                    <h4>Fields</h4>
+                    <div class="fields-table diff-table">
+                        <div class="field-row header">
+                            <span>Field</span>
+                            <span>Status</span>
+                            <span>Type</span>
+                        </div>
+                        ${entity.fields.map(f => {
+                            const fDiffType = f.diff_type || 'unchanged';
+                            return `
+                                <div class="field-row ${fDiffType}">
+                                    <span class="field-name">${f.name}</span>
+                                    <span class="field-diff">${diffTypeBadge[fDiffType]}</span>
+                                    <span class="field-type">${f.type || '-'}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        content.innerHTML = `
+            <div class="entity-details">
+                <div class="detail-section">
+                    <label>Status</label>
+                    <p class="detail-value">${diffTypeBadge[entity.diff_type]}</p>
+                </div>
+                <div class="detail-section">
+                    <label>Present In</label>
+                    <p class="detail-value">${entity.present_in.join(', ') || '-'}</p>
+                </div>
+                ${fieldsHtml}
+            </div>
+        `;
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initDiffGraph);
+</script>
+{% endif %}
+{% endblock %}

@@ -16,18 +16,22 @@
     <div class="hub-layout">
         <header class="hub-header">
             <a href="/hub/" class="hub-logo">
-                <img src="/hub/hub-static/images/metaseed-icon.svg" alt="" class="hub-logo-icon">
-                <span>Metaseed Hub</span>
+                <img src="/hub/hub-static/images/metaseed-logo-light.svg" alt="Metaseed Hub" class="hub-logo-img">
             </a>
-            <nav class="hub-nav">
-                {% block nav %}{% endblock %}
+            <nav class="hub-nav-global">
+                <a href="/hub/" class="nav-btn {% if nav_active == 'home' %}active{% endif %}">Editor</a>
+                <a href="/hub/spec-builder" class="nav-btn {% if nav_active == 'spec-builder' %}active{% endif %}">Spec Builder</a>
+                <a href="/hub/explore" class="nav-btn {% if nav_active == 'explore' %}active{% endif %}">Explorer</a>
             </nav>
+            <div class="header-breadcrumb">
+                {% block nav %}{% endblock %}
+            </div>
             <div class="hub-user">
                 {% if user %}
                 <span class="hub-user-name">{{ user.name }}</span>
-                <a href="/hub/auth/logout" class="btn btn-sm">Logout</a>
+                <a href="/hub/auth/logout" class="btn btn-sm btn-header">Logout</a>
                 {% else %}
-                <a href="/hub/auth/login" class="btn btn-primary btn-sm">Login</a>
+                <a href="/hub/auth/login" class="btn btn-sm btn-header">Login</a>
                 {% endif %}
             </div>
         </header>

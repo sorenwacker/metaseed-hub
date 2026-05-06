@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Explorer - Metaseed Hub{% endblock %}
+
+{% block nav %}
+{% endblock %}
+
+{% block content %}
+<div class="explore-page">
+    <div class="page-header">
+        <div class="header-content">
+            <h1>Explorer</h1>
+            <p>Browse and compare metadata specifications.</p>
+        </div>
+        <a href="/hub/explore/compare" class="btn btn-primary">
+            Compare Specs
+        </a>
+    </div>
+
+    <!-- Built-in Specs Section -->
+    {% if builtin_specs %}
+    <section class="explore-section">
+        <h2>Built-in Specifications</h2>
+        <div class="spec-grid">
+            {% for spec in builtin_specs %}
+            <a href="/hub/explore/spec/{{ spec.profile }}/{{ spec.version }}" class="spec-card builtin explore-card">
+                <div class="spec-card-header">
+                    <span class="spec-badge builtin">Built-in</span>
+                    <span class="spec-profile">{{ spec.profile }}</span>
+                </div>
+                <h3 class="spec-name">{{ spec.display_name }}</h3>
+                <p class="spec-version">v{{ spec.version }}</p>
+                {% if spec.description %}
+                <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
+                {% endif %}
+                <div class="spec-meta">
+                    <span class="spec-entities">{{ spec.entity_count }} entities</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- User Specs Section -->
+    {% if specs %}
+    <section class="explore-section">
+        <h2>User Specifications</h2>
+        <div class="spec-grid">
+            {% for spec in specs %}
+            <a href="/hub/explore/spec/{{ spec.profile }}/{{ spec.version }}" class="spec-card published explore-card">
+                <div class="spec-card-header">
+                    <span class="spec-badge published">User</span>
+                    <span class="spec-profile">{{ spec.profile }}</span>
+                </div>
+                <h3 class="spec-name">{{ spec.display_name }}</h3>
+                <p class="spec-version">v{{ spec.version }}</p>
+                {% if spec.description %}
+                <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
+                {% endif %}
+                <div class="spec-meta">
+                    <span class="spec-entities">{{ spec.entity_count }} entities</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if not builtin_specs and not specs %}
+    <div class="empty-state-sm">
+        <p>No specifications available.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
