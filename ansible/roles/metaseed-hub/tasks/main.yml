@@ -112,6 +112,7 @@
     dest: "{{ app_dir }}"
     version: "{{ repo_branch }}"
     update: true
+    force: true
   register: git_result
   when: git_dir.stat.exists
   tags: setup
