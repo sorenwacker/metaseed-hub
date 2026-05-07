@@ -8,5 +8,9 @@ User={{ app_user }}
 Group={{ app_group }}
 WorkingDirectory={{ app_dir }}
 ExecStart={{ app_dir }}/deploy.sh
+TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
+
+# Allow sudo for service restart
+Environment="PATH={{ app_dir }}/.local/bin:/usr/local/bin:/usr/bin:/bin"

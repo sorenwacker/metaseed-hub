@@ -188,9 +188,11 @@
 - name: Configure sudoers for deploy
   ansible.builtin.copy:
     content: |
-      # Allow app user to reload the service
+      # Allow app user to manage the service for deployments
       {{ app_user }} ALL=(ALL) NOPASSWD: /bin/systemctl reload metaseed-hub
       {{ app_user }} ALL=(ALL) NOPASSWD: /bin/systemctl restart metaseed-hub
+      {{ app_user }} ALL=(ALL) NOPASSWD: /bin/systemctl status metaseed-hub
+      {{ app_user }} ALL=(ALL) NOPASSWD: /bin/journalctl -u metaseed-hub *
     dest: /etc/sudoers.d/metaseed-deploy
     mode: "0440"
     validate: "visudo -cf %s"

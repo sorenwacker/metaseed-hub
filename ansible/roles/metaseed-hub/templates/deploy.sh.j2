@@ -8,10 +8,35 @@ APP_DIR="{{ app_dir }}"
 LOG_FILE="{{ app_dir }}/logs/deploy.log"
 LOCK_FILE="/tmp/metaseed-deploy.lock"
 COMMIT_FILE="{{ app_dir }}/.deployed_commit"
+HEALTH_URL="http://127.0.0.1:7001/version"
+MAX_LOG_SIZE=10485760  # 10MB
+
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Rotate log if too large
+if [ -f "$LOG_FILE" ] && [ "$(stat -c%s "$LOG_FILE" 2>/dev/null || stat -f%z "$LOG_FILE")" -gt "$MAX_LOG_SIZE" ]; then
+    mv "$LOG_FILE" "$LOG_FILE.old"
+fi
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" | tee -a "$LOG_FILE" >&2
+}
+
+# Error handler
+cleanup() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_error "Deploy failed with exit code $exit_code"
+        log_error "Check log for details: $LOG_FILE"
+    fi
+    exit $exit_code
+}
+trap cleanup EXIT
 
 # Prevent concurrent runs
 exec 200>"$LOCK_FILE"
@@ -20,7 +45,11 @@ flock -n 200 || { log "Deploy already running, exiting"; exit 0; }
 cd "$APP_DIR"
 
 # Fetch latest from origin
-git fetch origin --quiet
+log "Fetching from origin..."
+if ! git fetch origin 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "git fetch failed"
+    exit 1
+fi
 
 # Get latest commit on main
 LATEST=$(git rev-parse origin/main)
@@ -37,23 +66,73 @@ fi
 
 SHORT_LATEST=$(echo "$LATEST" | cut -c1-7)
 SHORT_CURRENT=$(echo "$CURRENT" | cut -c1-7)
-log "New commit: $SHORT_LATEST (current: ${SHORT_CURRENT:-none})"
+log "========================================="
+log "Deploying: $SHORT_LATEST (current: ${SHORT_CURRENT:-none})"
+log "========================================="
 
-# Reset to latest origin/main (handles divergent history)
-git reset --hard origin/main --quiet
+# Show what changed
+log "Changes:"
+git log --oneline "${CURRENT:-HEAD~5}..origin/main" 2>/dev/null | head -10 | tee -a "$LOG_FILE" || true
+
+# Reset to latest origin/main
+log "Resetting to origin/main..."
+if ! git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "git reset failed"
+    exit 1
+fi
 
 # Install dependencies
 log "Installing dependencies..."
-{{ app_dir }}/.local/bin/uv sync --frozen --quiet
+if ! {{ app_dir }}/.local/bin/uv sync --frozen 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "uv sync failed"
+    exit 1
+fi
 
 # Run migrations
 log "Running migrations..."
-{{ app_dir }}/.venv/bin/alembic upgrade head
-
-# Save deployed commit
-echo "$LATEST" > "$COMMIT_FILE"
+if ! {{ app_dir }}/.venv/bin/alembic upgrade head 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "alembic migrations failed"
+    exit 1
+fi
 
 # Restart app
-sudo /bin/systemctl restart metaseed-hub
+log "Restarting service..."
+if ! sudo /bin/systemctl restart metaseed-hub 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "systemctl restart failed"
+    exit 1
+fi
 
-log "Deployed: $SHORT_LATEST"
+# Health check - wait for app to be ready
+log "Waiting for app to start..."
+HEALTH_RETRIES=30
+HEALTH_OK=false
+for i in $(seq 1 $HEALTH_RETRIES); do
+    sleep 1
+    if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
+        HEALTH_OK=true
+        break
+    fi
+    if [ $((i % 5)) -eq 0 ]; then
+        log "Still waiting... ($i/$HEALTH_RETRIES)"
+    fi
+done
+
+if [ "$HEALTH_OK" = false ]; then
+    log_error "Health check failed after ${HEALTH_RETRIES}s"
+    log_error "Service status:"
+    sudo /bin/systemctl status metaseed-hub --no-pager 2>&1 | tee -a "$LOG_FILE" || true
+    log_error "Recent logs:"
+    sudo /bin/journalctl -u metaseed-hub -n 50 --no-pager 2>&1 | tee -a "$LOG_FILE" || true
+    exit 1
+fi
+
+# Verify version endpoint returns expected commit
+DEPLOYED_VERSION=$(curl -sf "$HEALTH_URL" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+log "Running version: $DEPLOYED_VERSION"
+
+# Save deployed commit only after successful health check
+echo "$LATEST" > "$COMMIT_FILE"
+
+log "========================================="
+log "Deploy successful: $SHORT_LATEST"
+log "========================================="
