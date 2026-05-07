@@ -1,0 +1,28 @@
+site_name: Metaseed Hub
+site_description: Collaborative metadata management platform
+repo_url: https://github.com/sorenwacker/metaseed-hub
+
+theme:
+  name: material
+  palette:
+    primary: teal
+    accent: orange
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Getting Started: guide/getting-started.md
+    - Projects: guide/projects.md
+    - Import and Export: guide/import-export.md
+  - Architecture: architecture.md
+  - API Reference: api.md
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences

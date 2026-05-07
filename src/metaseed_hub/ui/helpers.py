@@ -173,13 +173,20 @@ def create_nested_nodes(
         if not field_data:
             continue
 
-        items = field_data if isinstance(field_data, list) else [field_data]
         field_info = helper.field_info(field_name)
+        field_type = field_info.get("type")
         nested_type = field_info.get("items")
 
         # Only process entity types (uppercase names), skip primitives
         if not nested_type or not nested_type[0].isupper():
             continue
+
+        # Skip single entity fields (type: entity) - their data stays in parent instance
+        # Only create child nodes for list fields (type: list)
+        if field_type == "entity":
+            continue
+
+        items = field_data if isinstance(field_data, list) else [field_data]
 
         nested_helper = getattr(facade, nested_type, None)
         if not nested_helper:
@@ -187,8 +194,11 @@ def create_nested_nodes(
             continue
 
         for item_data in items:
+            # Handle Pydantic models by converting to dict
+            if hasattr(item_data, "model_dump"):
+                item_data = item_data.model_dump(exclude_none=True)
             # Skip non-dict items (primitives like strings)
-            if not isinstance(item_data, dict):
+            elif not isinstance(item_data, dict):
                 continue
 
             try:
@@ -235,16 +245,18 @@ def build_entity_form_context(
     fields = []
     for field_name in helper.all_fields:
         info = helper.field_info(field_name)
+        field_type = info.get("type", "string")
+        is_nested = field_type in ("list", "entity") and info.get("items") is not None
         fields.append(
             {
                 "name": field_name,
-                "type": info.get("type", "string"),
+                "type": field_type,
                 "required": info.get("required", False),
                 "description": info.get("description", ""),
                 "constraints": info.get("constraints"),
                 "item_type": info.get("items"),
-                "is_nested": info.get("type") in ("list", "entity")
-                and info.get("items") is not None,
+                "is_nested": is_nested,
+                "is_single_entity": field_type == "entity" and info.get("items") is not None,
             }
         )
 
@@ -357,7 +369,58 @@ def build_inline_tables(
             }
             continue
 
-        # Find children of this type under this node
+        # Handle single entity fields (type: entity, not type: list)
+        # Also detect if a "list" field actually contains single entity data (dict not list)
+        is_single_entity = field.get("is_single_entity", False)
+        if not is_single_entity and hasattr(node.instance, "model_dump"):
+            # Check if the actual data is a dict (single entity) not a list
+            parent_data = node.instance.model_dump(exclude_none=True)
+            field_data = parent_data.get(field_name)
+            if isinstance(field_data, dict) and field_data:
+                is_single_entity = True
+                logger.debug(f"Detected single entity from data for field {field_name}")
+
+        if is_single_entity:
+            # Single entity data is stored directly in parent instance
+            entity_data: dict[str, Any] = {}
+            if hasattr(node.instance, "model_dump"):
+                parent_data = node.instance.model_dump(exclude_none=True)
+                entity_data = parent_data.get(field_name, {}) or {}
+
+            # Build columns from helper's simple fields
+            columns = []
+            column_types = {}
+            required_columns = set()
+            for fname in helper.all_fields:
+                info = helper.field_info(fname)
+                is_nested = info.get("type") in ("list", "entity") and info.get("items")
+                if not is_nested:
+                    columns.append(fname)
+                    column_types[fname] = info.get("type", "string")
+                    if info.get("required"):
+                        required_columns.add(fname)
+
+            # Always create one row for single entities (editable even if empty)
+            row_data: dict[str, Any] = {"_idx": 0}
+            if entity_data and isinstance(entity_data, dict):
+                for col in columns:
+                    row_data[col] = entity_data.get(col, "")
+            else:
+                for col in columns:
+                    row_data[col] = ""
+            rows = [row_data]
+
+            inline_tables[field_name] = {
+                "columns": columns,
+                "rows": rows,
+                "column_types": column_types,
+                "nested_entity_type": item_type,
+                "required_columns": list(required_columns),
+                "is_single_entity": True,
+            }
+            continue
+
+        # Find children of this type under this node (for list fields)
         children = [child for child in node.children if child.entity_type == item_type]
 
         # Build columns from helper's simple fields (exclude nested)

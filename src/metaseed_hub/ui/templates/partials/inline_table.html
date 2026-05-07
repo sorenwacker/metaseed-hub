@@ -5,6 +5,7 @@
 {% set column_types = table_data.column_types or {} %}
 {% set nested_entity_type = table_data.nested_entity_type or field.item_type %}
 {% set is_primitive_list = table_data.is_primitive_list or false %}
+{% set is_single_entity = table_data.is_single_entity or false %}
 {% set inherited_columns = table_data.inherited_columns or [] %}
 {% set required_columns = table_data.required_columns or [] %}
 
@@ -13,9 +14,11 @@
         <div class="inline-table-title">
             <span class="inline-table-icon">&#9660;</span>
             <h4>{{ field_name|humanize }}</h4>
+            {% if not is_single_entity %}
             <span class="inline-table-count">({{ rows|length }} items)</span>
+            {% endif %}
         </div>
-        {% if node_id %}
+        {% if node_id and not is_single_entity %}
         <button type="button" class="btn btn-sm btn-primary"
                 hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/{{ field_name }}/row"
                 hx-target="#inline-table-body-{{ field_name }}"
@@ -59,6 +62,15 @@
                                hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
                                hx-trigger="change, blur"
                                hx-swap="none">
+                        {% elif is_single_entity %}
+                        <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
+                               class="cell-input"
+                               name="{{ col }}"
+                               value="{{ row.get(col, '') }}"
+                               {% if col_type == 'float' %}step="any"{% endif %}
+                               hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/single/{{ field_name }}"
+                               hx-trigger="change, blur"
+                               hx-swap="none">
                         {% else %}
                         <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
                                class="cell-input"
@@ -80,6 +92,15 @@
                                 hx-swap="delete"
                                 hx-confirm="Delete this item?"
                                 title="Delete">
+                            &#128465;
+                        </button>
+                        {% elif is_single_entity %}
+                        <button type="button" class="btn-icon danger"
+                                hx-delete="/hub/projects/{{ project_id }}/table/{{ node_id }}/single/{{ field_name }}"
+                                hx-target="#inline-table-{{ field_name }}"
+                                hx-swap="outerHTML"
+                                hx-confirm="Clear this {{ nested_entity_type }}?"
+                                title="Clear">
                             &#128465;
                         </button>
                         {% else %}

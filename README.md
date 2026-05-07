@@ -42,6 +42,14 @@ Default login: `demo@example.com` / `demo123`
 4. Add entities using the generated forms
 5. Export data or visualize as graph
 
+### Import and Export
+
+**Export to Excel:**
+Click the Export button in the project toolbar to download all entities as an Excel workbook. Each entity type gets its own worksheet.
+
+**Import ISA-JSON:**
+Click the Import button to upload ISA-JSON files. The importer parses Investigation, Study, and Assay structures and creates corresponding entities in the project.
+
 ## Development
 
 ```bash

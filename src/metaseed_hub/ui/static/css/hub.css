@@ -3279,6 +3279,72 @@ a.spec-editor-close:hover {
     text-align: center;
 }
 
+/* Import Form */
+.import-form {
+    max-width: 500px;
+    margin: var(--space-xl) auto;
+    padding: var(--space-xl);
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-border-light);
+    border-radius: var(--radius-lg);
+}
+
+.import-form h3 {
+    margin: 0 0 var(--space-sm) 0;
+    font-family: var(--font-display);
+    color: var(--clr-forest);
+}
+
+.import-form .form-group {
+    margin-bottom: var(--space-lg);
+}
+
+.import-form label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: var(--space-sm);
+    color: var(--clr-ink);
+}
+
+.import-form input[type="file"] {
+    width: 100%;
+    padding: var(--space-md);
+    border: 2px dashed var(--clr-border);
+    border-radius: var(--radius-md);
+    background: var(--clr-background);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.import-form input[type="file"]:hover {
+    border-color: var(--clr-moss);
+    background: var(--clr-paper);
+}
+
+.import-form .form-actions {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: flex-end;
+}
+
+.import-form .alert {
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-lg);
+}
+
+.import-form .alert-error {
+    background: var(--clr-error-bg);
+    color: var(--clr-error);
+    border: 1px solid var(--clr-error);
+}
+
+.import-form .alert-success {
+    background: var(--clr-success-bg);
+    color: var(--clr-success);
+    border: 1px solid var(--clr-success);
+}
+
 .btn-full {
     width: 100%;
 }

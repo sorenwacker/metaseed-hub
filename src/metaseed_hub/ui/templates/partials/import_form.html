@@ -1,0 +1,45 @@
+<div class="import-form" id="import-container">
+    <h3>Import ISA-JSON</h3>
+    <p class="text-muted">Upload an ISA-JSON file to import entities into this project.</p>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert alert-success">
+        {{ success }}
+        <div style="margin-top: 1rem;">
+            <button type="button" class="btn btn-primary"
+                    hx-get="/hub/projects/{{ project_id }}/overview"
+                    hx-target="#editor"
+                    hx-swap="innerHTML">View Entities</button>
+        </div>
+    </div>
+    {% else %}
+    <form hx-post="/hub/projects/{{ project_id }}/import"
+          hx-target="#import-container"
+          hx-swap="outerHTML"
+          hx-encoding="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+
+        <div class="form-group">
+            <label for="import-file">Select ISA-JSON File</label>
+            <input type="file"
+                   id="import-file"
+                   name="file"
+                   accept=".json,application/json"
+                   required>
+            <small class="text-muted">Supported format: ISA-JSON (.json)</small>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Import</button>
+            <button type="button" class="btn btn-ghost"
+                    hx-get="/hub/projects/{{ project_id }}/overview"
+                    hx-target="#editor"
+                    hx-swap="innerHTML">Cancel</button>
+        </div>
+    </form>
+    {% endif %}
+</div>

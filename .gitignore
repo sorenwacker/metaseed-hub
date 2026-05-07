@@ -71,3 +71,4 @@ logs/
 .zshrc
 deploy.sh
 logs/
+site/

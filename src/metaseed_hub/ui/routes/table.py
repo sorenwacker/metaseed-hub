@@ -586,3 +586,177 @@ async def delete_primitive_list_item(
     response = HTMLResponse(status_code=200)
     response.headers["HX-Trigger"] = "entityChanged"
     return response
+
+
+@router.post(
+    "/projects/{project_id}/table/{node_id}/single/{field_name}",
+    response_class=HTMLResponse,
+)
+async def update_single_entity_field(
+    request: Request,
+    project_id: str,
+    node_id: str,
+    field_name: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HTMLResponse:
+    """Update a single entity field (e.g., measurement_type, technology_type).
+
+    Single entity fields are nested objects that are not lists - they contain
+    a single instance of another entity type embedded in the parent.
+    """
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return unauthorized_response()
+
+    if not validate_csrf_token(request):
+        return HTMLResponse(status_code=403)
+
+    result = await session.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        return HTMLResponse(status_code=404)
+
+    state = _get_project_state(project)
+
+    if node_id not in state.nodes_by_id:
+        return HTMLResponse(status_code=404)
+
+    node = state.nodes_by_id[node_id]
+    facade = state.get_or_create_facade()
+
+    try:
+        helper = getattr(facade, node.entity_type)
+    except AttributeError:
+        return HTMLResponse(status_code=400)
+
+    # Get field info to understand nested type
+    field_info = helper.field_info(field_name)
+    nested_type = field_info.get("items")
+    if not nested_type:
+        return HTMLResponse(status_code=400)
+
+    # Get form data
+    form_data = await request.form()
+
+    # Build the nested entity data from form fields
+    nested_data: dict[str, Any] = {}
+    try:
+        nested_helper = getattr(facade, nested_type)
+        for fname in nested_helper.all_fields:
+            if fname in form_data:
+                raw_value = str(form_data.get(fname, ""))
+                if raw_value:
+                    info = nested_helper.field_info(fname)
+                    ftype = info.get("type", "string")
+                    if ftype == "integer":
+                        nested_data[fname] = int(raw_value)
+                    elif ftype == "float":
+                        nested_data[fname] = float(raw_value)
+                    elif ftype == "boolean":
+                        nested_data[fname] = raw_value.lower() == "true"
+                    else:
+                        nested_data[fname] = raw_value
+    except AttributeError:
+        # Nested type not found, just store raw form data
+        for key, value in form_data.items():
+            if not key.startswith("_") and value:
+                nested_data[key] = str(value)
+
+    # Get current parent values and update the single entity field
+    current_values: dict[str, Any] = {}
+    if hasattr(node.instance, "model_dump"):
+        current_values = node.instance.model_dump(exclude_none=True)
+
+    # Update the nested field
+    current_values[field_name] = nested_data
+
+    # Create updated parent instance
+    instance = helper.create(**current_values)
+    state.update_node(node_id, instance)
+
+    # Save to database
+    await save_project_state(session, project, state)
+
+    return HTMLResponse(
+        status_code=200,
+        headers={"HX-Trigger": "entityChanged"},
+    )
+
+
+@router.delete(
+    "/projects/{project_id}/table/{node_id}/single/{field_name}",
+    response_class=HTMLResponse,
+)
+async def delete_single_entity_field(
+    request: Request,
+    project_id: str,
+    node_id: str,
+    field_name: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> HTMLResponse:
+    """Clear/delete a single entity field.
+
+    Sets the field to None/empty, removing the nested entity data.
+    """
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return unauthorized_response()
+
+    if not validate_csrf_token(request):
+        return HTMLResponse(status_code=403)
+
+    result = await session.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        return HTMLResponse(status_code=404)
+
+    state = _get_project_state(project)
+
+    if node_id not in state.nodes_by_id:
+        return HTMLResponse(status_code=404)
+
+    node = state.nodes_by_id[node_id]
+    facade = state.get_or_create_facade()
+
+    try:
+        helper = getattr(facade, node.entity_type)
+    except AttributeError:
+        return HTMLResponse(status_code=400)
+
+    # Get current parent values and clear the single entity field
+    current_values: dict[str, Any] = {}
+    if hasattr(node.instance, "model_dump"):
+        current_values = node.instance.model_dump(exclude_none=True)
+
+    # Remove the nested field
+    if field_name in current_values:
+        del current_values[field_name]
+
+    # Create updated parent instance
+    instance = helper.create(**current_values)
+    state.update_node(node_id, instance)
+
+    # Save to database
+    await save_project_state(session, project, state)
+
+    # Return empty inline table HTML for the cleared field
+    field_info = helper.field_info(field_name)
+    nested_type = field_info.get("items", "Entity")
+
+    html = f"""<div class="inline-table-section" id="inline-table-{field_name}">
+    <div class="inline-table-header">
+        <div class="inline-table-title">
+            <span class="inline-table-icon">&#9660;</span>
+            <h4>{field_name.replace('_', ' ').title()}</h4>
+        </div>
+    </div>
+    <div class="inline-table-content">
+        <p class="text-muted text-center" style="padding: 1rem;">
+            No {nested_type} set. This field is optional.
+        </p>
+    </div>
+</div>"""
+
+    response = HTMLResponse(html)
+    response.headers["HX-Trigger"] = "entityChanged"
+    return response

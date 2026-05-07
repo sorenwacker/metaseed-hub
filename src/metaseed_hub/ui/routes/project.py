@@ -775,3 +775,187 @@ async def project_chat(
     safe_message = html_module.escape(message)
     html = f"<div class='chat-message'><strong>{safe_name}:</strong> {safe_message}</div>"
     return HTMLResponse(html)
+
+
+@router.get("/{project_id}/export")
+async def project_export(
+    project_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Export project data to Excel file.
+
+    Uses metaseed's export service to generate an Excel workbook
+    containing all entities in the project.
+    """
+    from fastapi.responses import StreamingResponse
+    from metaseed.ui.services.export import export_to_bytes, generate_filename
+
+    project = await get_project_for_user(project_id, session, user)
+    state = get_project_state(project, project_states)
+
+    # Generate Excel file using metaseed's export service
+    excel_bytes = export_to_bytes(state)
+    filename = generate_filename(state)
+
+    # If no data, use project name for filename
+    if not filename or filename == "export.xlsx":
+        filename = f"{project.name.replace(' ', '_')}.xlsx"
+
+    return StreamingResponse(
+        excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{project_id}/import", response_class=HTMLResponse)
+async def project_import_form(
+    request: Request,
+    project_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Show import form for uploading ISA-JSON files."""
+    project = await get_project_for_user(project_id, session, user)
+
+    return render_template(
+        request=request,
+        name="partials/import_form.html",
+        context={
+            "project_id": project_id,
+            "project": project,
+        },
+    )
+
+
+@router.post("/{project_id}/import", response_class=HTMLResponse)
+async def project_import(
+    request: Request,
+    project_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Import ISA-JSON file into project.
+
+    Uses metaseed's ISAImporter to parse ISA-JSON files and create
+    entities in the project.
+    """
+    import tempfile
+
+    from fastapi import UploadFile
+    from metaseed.importers.isa import ISAImporter
+    from metaseed.models import get_model
+
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    project = await get_project_for_user(project_id, session, user)
+    state = get_project_state(project, project_states)
+    facade = state.get_or_create_facade()
+
+    # Get uploaded file from form
+    form = await request.form()
+    file = form.get("file")
+    if not file or not isinstance(file, UploadFile):
+        return render_template(
+            request=request,
+            name="partials/import_form.html",
+            context={
+                "project_id": project_id,
+                "project": project,
+                "error": "Please select a file to import.",
+            },
+        )
+
+    filename = file.filename or ""
+    content = await file.read()
+
+    if not filename.endswith(".json"):
+        return render_template(
+            request=request,
+            name="partials/import_form.html",
+            context={
+                "project_id": project_id,
+                "project": project,
+                "error": "Unsupported file type. Please upload an ISA-JSON file (.json).",
+            },
+        )
+
+    try:
+        importer = ISAImporter()
+
+        # Write to temp file for importer
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".json", delete=False) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        result = importer.import_json(tmp_path)
+        Path(tmp_path).unlink()
+
+        # Process imported data
+        if result.investigation and "Investigation" in facade.entities:
+            helper = facade.Investigation
+            inv_data = result.investigation.copy()
+
+            # Add studies if present
+            if result.studies and "studies" in helper.nested_fields:
+                inv_data["studies"] = result.studies
+
+            # Add persons/contacts
+            if result.persons:
+                for field_name in ["persons", "contacts", "people"]:
+                    if field_name in helper.nested_fields:
+                        inv_data[field_name] = result.persons
+                        break
+
+            # Create instance and add to state
+            Model = get_model("Investigation", state.version, profile=state.profile)
+            instance = Model(**inv_data)
+            node = state.add_node("Investigation", instance)
+
+            # Create nested child nodes
+            example_data_copy = copy.deepcopy(inv_data)
+            create_nested_nodes(state, facade, node, "Investigation", example_data_copy)
+
+            # Save to database
+            from sqlalchemy.orm.attributes import flag_modified
+
+            project.data = serialize_tree(state)
+            flag_modified(project, "data")
+            session.add(project)
+            await session.commit()
+
+            return render_template(
+                request=request,
+                name="partials/import_form.html",
+                context={
+                    "project_id": project_id,
+                    "project": project,
+                    "success": f"Successfully imported {filename}",
+                },
+            )
+
+        return render_template(
+            request=request,
+            name="partials/import_form.html",
+            context={
+                "project_id": project_id,
+                "project": project,
+                "error": "No valid Investigation found in the ISA-JSON file.",
+            },
+        )
+
+    except Exception as e:
+        logger.exception("Import failed")
+        return render_template(
+            request=request,
+            name="partials/import_form.html",
+            context={
+                "project_id": project_id,
+                "project": project,
+                "error": f"Import failed: {e!s}",
+            },
+        )

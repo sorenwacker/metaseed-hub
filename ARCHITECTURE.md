@@ -232,7 +232,9 @@ errors = validate(data, "Investigation", version="1.1")
 │       ├── /            DELETE  Delete project
 │       ├── /entities    GET     List entities (from metaseed)
 │       ├── /validate    POST    Validate project data
-│       ├── /export      GET     Export to various formats
+│       ├── /export      GET     Export to Excel
+│       ├── /import      GET     Import form
+│       ├── /import      POST    Import ISA-JSON file
 │       ├── /notes       GET     List notes
 │       ├── /notes       POST    Create note
 │       └── /chat        GET     Chat history
@@ -338,6 +340,29 @@ Returns JSON for vis-network:
 - Physics-based or hierarchical layout
 - Adjustable spacing and repulsion
 - Double-click node to open entity editor
+
+### Import and Export
+
+The Hub reuses metaseed's import/export services for data interchange.
+
+**Export to Excel:**
+- **Endpoint:** `GET /projects/{id}/export`
+- Uses `metaseed.ui.services.export.export_to_bytes()` and `generate_filename()`
+- Returns Excel workbook (.xlsx) with one worksheet per entity type
+- Columns match entity field names
+
+**Import ISA-JSON:**
+- **Endpoint:** `GET /projects/{id}/import` (form), `POST /projects/{id}/import` (upload)
+- Uses `metaseed.importers.isa.ISAImporter`
+- Accepts ISA-JSON format (.json files)
+- Creates Investigation, Study, Assay, and nested entities
+- Preserves entity relationships and metadata
+
+**Supported Formats:**
+| Direction | Format | Service |
+|-----------|--------|---------|
+| Export | Excel (.xlsx) | `metaseed.ui.services.export` |
+| Import | ISA-JSON (.json) | `metaseed.importers.isa` |
 
 ### Validation
 

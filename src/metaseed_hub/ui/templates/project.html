@@ -41,7 +41,12 @@
                     title="Validate all entities against schema">Verify</button>
             <a href="/hub/projects/{{ project.id }}/graph" class="btn" target="_blank" title="Open graph view">Graph</a>
             <button class="btn" onclick="toggleChatPanel()" title="Toggle chat panel">Chat</button>
-            <a href="/hub/projects/{{ project.id }}/export" class="btn" download>Export</a>
+            <button class="btn"
+                    hx-get="/hub/projects/{{ project.id }}/import"
+                    hx-target="#editor"
+                    hx-swap="innerHTML"
+                    title="Import ISA-JSON file">Import</button>
+            <a href="/hub/projects/{{ project.id }}/export" class="btn" download title="Export to Excel">Export</a>
         </div>
     </div>
 

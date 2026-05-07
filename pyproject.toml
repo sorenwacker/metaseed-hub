@@ -17,7 +17,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
-    "metaseed @ git+https://github.com/sorenwacker/metaseed.git@v0.2.0",
+    "metaseed @ git+https://github.com/sorenwacker/metaseed.git@v0.2.1",
     "types-pyyaml>=6.0.12.20260408",
 ]
 
@@ -72,4 +72,6 @@ dev = [
     "types-python-jose>=3.5.0.20260408",
     "types-pyyaml>=6.0.12.20260408",
     "vulture>=2.16",
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
 ]
