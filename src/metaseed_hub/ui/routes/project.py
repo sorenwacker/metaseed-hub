@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
 from sqlalchemy import select
 
-from metaseed_hub.models import Project, SpecDraft
+from metaseed_hub.models import Project, SpecDraft, Workspace
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -321,12 +321,8 @@ async def project_load_example(
     spec = loader.load_profile(project.version, project.profile)
     root_entity = spec.root_entity or "Investigation"
 
-    # Load example into project state
+    # Load example into project state (append, don't replace)
     state = get_project_state(project, project_states)
-    state.reset()
-    state.profile = project.profile
-    state.version = project.version
-    state.facade = None
     facade = state.get_or_create_facade()
 
     try:
@@ -376,6 +372,22 @@ async def project_load_example(
     return response
 
 
+def _get_entity_info(state: AppState) -> list[dict[str, str]]:
+    """Get entity type information including descriptions."""
+    facade = state.get_or_create_facade()
+    entity_info = []
+    for entity_name in facade.entities:
+        helper = getattr(facade, entity_name, None)
+        if helper:
+            entity_info.append(
+                {
+                    "name": entity_name,
+                    "description": helper.description or "",
+                }
+            )
+    return entity_info
+
+
 @router.get("/{project_id}", response_class=HTMLResponse)
 async def project_editor(
     request: Request,
@@ -387,8 +399,21 @@ async def project_editor(
     # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
 
+    # Load workspace for breadcrumb
+    workspace = await session.get(Workspace, project.workspace_id)
+
     # Get or create state for this project (loads from database)
     state = get_project_state(project, project_states)
+
+    tree_data = get_tree_data_from_nodes(state)
+
+    # Get descriptions for entity types
+    facade = state.get_or_create_facade()
+    entity_descriptions = {}
+    for entity_name in facade.entities:
+        helper = getattr(facade, entity_name, None)
+        if helper:
+            entity_descriptions[entity_name] = helper.description or ""
 
     return render_template(
         request=request,
@@ -396,9 +421,44 @@ async def project_editor(
         context={
             "user": user,
             "project": project,
+            "workspace": workspace,
             "state": state,
             "root_types": state.get_root_entity_types(),
+            "tree_data": tree_data,
+            "entity_descriptions": entity_descriptions,
             "nav_active": "home",
+        },
+    )
+
+
+@router.get("/{project_id}/overview", response_class=HTMLResponse)
+async def project_overview(
+    request: Request,
+    project_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Return the project overview panel (for HTMX navigation back)."""
+    project = await get_project_for_user(project_id, session, user)
+    state = get_project_state(project, project_states)
+    tree_data = get_tree_data_from_nodes(state)
+
+    # Get descriptions for entity types
+    facade = state.get_or_create_facade()
+    entity_descriptions = {}
+    for entity_name in facade.entities:
+        helper = getattr(facade, entity_name, None)
+        if helper:
+            entity_descriptions[entity_name] = helper.description or ""
+
+    return render_template(
+        request=request,
+        name="partials/project_overview.html",
+        context={
+            "project": project,
+            "root_types": state.get_root_entity_types(),
+            "tree_data": tree_data,
+            "entity_descriptions": entity_descriptions,
         },
     )
 

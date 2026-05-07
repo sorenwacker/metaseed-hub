@@ -9,7 +9,7 @@
 {% block nav %}
 <a href="/hub/" class="nav-item">Workspaces</a>
 <span class="nav-sep">/</span>
-<a href="/hub/workspaces/{{ project.workspace_id }}" class="nav-item">Workspace</a>
+<a href="/hub/workspaces/{{ project.workspace_id }}" class="nav-item">{{ workspace.name if workspace else 'Workspace' }}</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ project.name }}</span>
 {% endblock %}
@@ -32,7 +32,7 @@
             {% endfor %}
             <button class="btn"
                     hx-post="/hub/projects/{{ project.id }}/load-example"
-                    hx-confirm="Load example data? This will replace current data."
+                    hx-confirm="Add example data to this project?"
                     title="Load example data for this profile">Load Example</button>
             <button class="btn"
                     hx-post="/hub/projects/{{ project.id }}/validate"
@@ -70,9 +70,21 @@
 
         <main class="project-editor" id="editor">
             <div class="editor-welcome">
-                <h2>Get Started</h2>
+                <h2>Project Overview</h2>
 
                 <div class="welcome-panels">
+                    <div class="welcome-panel">
+                        <h3>Examples</h3>
+                        <p class="panel-desc">Add example data to explore the structure</p>
+                        <div class="panel-actions">
+                            <button class="btn btn-outline"
+                                    hx-post="/hub/projects/{{ project.id }}/load-example"
+                                    hx-confirm="Add example data to this project?">
+                                Add {{ project.profile }} Example
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="welcome-panel">
                         <h3>Create Entity</h3>
                         <p class="panel-desc">Add a new root entity to this project</p>
@@ -89,18 +101,6 @@
                     </div>
 
                     <div class="welcome-panel">
-                        <h3>Examples</h3>
-                        <p class="panel-desc">Load example data to explore the structure</p>
-                        <div class="panel-actions">
-                            <button class="btn btn-outline"
-                                    hx-post="/hub/projects/{{ project.id }}/load-example"
-                                    hx-confirm="Load example data? This will replace current data.">
-                                Load {{ project.profile }} Example
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="welcome-panel">
                         <h3>Import</h3>
                         <p class="panel-desc">Import existing data from a file</p>
                         <div class="panel-actions">
@@ -111,6 +111,31 @@
                         </div>
                     </div>
                 </div>
+
+                {% if tree_data %}
+                <div class="project-entities-section">
+                    <h3>Root Entities</h3>
+                    <div class="entity-overview-list">
+                        {% for item in tree_data %}
+                        <div class="entity-overview-item">
+                            <a href="#" class="entity-overview-link"
+                               hx-get="/hub/projects/{{ project.id }}/entity/{{ item.id }}"
+                               hx-target="#editor"
+                               hx-swap="innerHTML">
+                                <span class="entity-type-badge">{{ item.entity_type }}</span>
+                                <span class="entity-overview-name">{{ item.label }}</span>
+                                {% if item.children %}
+                                <span class="entity-children-count">{{ item.children|length }} nested</span>
+                                {% endif %}
+                            </a>
+                            {% if entity_descriptions and entity_descriptions.get(item.entity_type) %}
+                            <p class="entity-overview-desc">{{ entity_descriptions[item.entity_type] }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </main>
 

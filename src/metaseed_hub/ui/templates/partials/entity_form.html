@@ -1,12 +1,20 @@
 <div class="entity-form">
-    {% if parent_id %}
-    <button type="button" class="btn btn-sm back-btn"
-            hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
-            hx-target="#editor"
-            hx-swap="innerHTML">
-        &larr; Back to parent
-    </button>
-    {% endif %}
+    <div class="entity-form-nav">
+        <button type="button" class="btn btn-sm btn-ghost back-btn"
+                hx-get="/hub/projects/{{ project_id }}/overview"
+                hx-target="#editor"
+                hx-swap="innerHTML">
+            &larr; Overview
+        </button>
+        {% if parent_id %}
+        <button type="button" class="btn btn-sm btn-ghost back-btn"
+                hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
+                hx-target="#editor"
+                hx-swap="innerHTML">
+            &larr; Back to parent
+        </button>
+        {% endif %}
+    </div>
 
     {% if success %}
     <div class="success-message">{{ success }}</div>

@@ -246,11 +246,18 @@ async def project_entity_delete(
     # Save to database
     await save_project_state(session, project, state)
 
-    # Return updated tree
+    # Return updated tree + out-of-band editor update
     tree_data = state.get_tree_data()
 
+    # Build editor placeholder (out-of-band swap)
+    editor_html = """<div id="editor" hx-swap-oob="innerHTML">
+        <div class="editor-placeholder">
+            <p>Select an entity or create a new one.</p>
+        </div>
+    </div>"""
+
     if not tree_data:
-        return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>")
+        return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>" + editor_html)
 
     html = "<ul class='entity-tree'>"
     for item in tree_data:
@@ -268,4 +275,5 @@ async def project_entity_delete(
                     hx-confirm='Delete this {item_type}?'>x</button>
         </li>"""
     html += "</ul>"
+    html += editor_html
     return HTMLResponse(html)
