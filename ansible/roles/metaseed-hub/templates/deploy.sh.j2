@@ -44,9 +44,9 @@ flock -n 200 || { log "Deploy already running, exiting"; exit 0; }
 
 cd "$APP_DIR"
 
-# Fetch latest from origin
+# Fetch latest from origin (including tags for versioning)
 log "Fetching from origin..."
-if ! git fetch origin 2>&1 | tee -a "$LOG_FILE"; then
+if ! git fetch origin --tags --force 2>&1 | tee -a "$LOG_FILE"; then
     log_error "git fetch failed"
     exit 1
 fi
