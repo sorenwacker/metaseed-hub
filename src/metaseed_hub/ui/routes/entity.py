@@ -5,13 +5,13 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
-from metaseed.ui.state import AppState
 
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_project_for_user
 from metaseed_hub.ui.forms import extract_entity_values
 from metaseed_hub.ui.helpers import (
     build_entity_form_context,
     get_project_state,
+    project_states,
     save_project_state,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -21,9 +21,6 @@ from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["entities"])
-
-# Project state cache - maps project_id to AppState
-project_states: dict[str, AppState] = {}
 
 
 def init_templates(templates: Jinja2Templates) -> None:
@@ -100,12 +97,12 @@ async def project_entity_create(
     except AttributeError:
         return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
 
-    logger.info(f"Entity create/update: entity_type={entity_type}, node_id={node_id}")
-    logger.info(f"Form data keys: {list(form_data.keys())}")
+    logger.debug(f"Entity create/update: entity_type={entity_type}, node_id={node_id}")
+    logger.debug(f"Form data keys: {list(form_data.keys())}")
 
     # Get existing values if updating
     existing_node = state.nodes_by_id.get(node_id) if node_id else None
-    logger.info(f"Existing node: {existing_node is not None}")
+    logger.debug(f"Existing node: {existing_node is not None}")
 
     existing_values = None
     if existing_node and hasattr(existing_node.instance, "model_dump"):
@@ -113,13 +110,13 @@ async def project_entity_create(
 
     # Extract and type-convert form values
     values = extract_entity_values(form_data, helper, existing_values)
-    logger.info(f"Final values for create: {values}")
+    logger.debug(f"Final values for create: {values}")
 
     # Create or update instance
     try:
         instance = helper.create(**values)
         if hasattr(instance, "model_dump"):
-            logger.info(f"Created instance: {instance.model_dump(exclude_none=True)}")
+            logger.debug(f"Created instance: {instance.model_dump(exclude_none=True)}")
 
         if node_id and node_id in state.nodes_by_id:
             # Update existing node
@@ -226,7 +223,7 @@ async def project_entity_delete(
     node_id: str,
     session: DbSession,
     user: CurrentUser,
-) -> HTMLResponse:
+) -> Response:
     """Delete an entity."""
     try:
         validate_csrf_or_error(request)
@@ -249,31 +246,11 @@ async def project_entity_delete(
     # Return updated tree + out-of-band editor update
     tree_data = state.get_tree_data()
 
-    # Build editor placeholder (out-of-band swap)
-    editor_html = """<div id="editor" hx-swap-oob="innerHTML">
-        <div class="editor-placeholder">
-            <p>Select an entity or create a new one.</p>
-        </div>
-    </div>"""
-
-    if not tree_data:
-        return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>" + editor_html)
-
-    html = "<ul class='entity-tree'>"
-    for item in tree_data:
-        item_id = item.get("id", "")
-        item_name = item.get("label") or item.get("name") or "Unnamed"
-        item_type = item.get("type", "Entity")
-        html += f"""<li class='entity-item'>
-            <span class='entity-type-badge'>{item_type}</span>
-            <a href='#' class='entity-name'
-               hx-get='/hub/projects/{project_id}/entity/{item_id}'
-               hx-target='#editor'>{item_name}</a>
-            <button class='entity-delete' title='Delete'
-                    hx-delete='/hub/projects/{project_id}/entity/{item_id}'
-                    hx-target='#entity-tree'
-                    hx-confirm='Delete this {item_type}?'>x</button>
-        </li>"""
-    html += "</ul>"
-    html += editor_html
-    return HTMLResponse(html)
+    return render_template(
+        request=request,
+        name="partials/entity_tree_simple.html",
+        context={
+            "project_id": project_id,
+            "tree_data": tree_data,
+        },
+    )

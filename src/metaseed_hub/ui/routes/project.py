@@ -22,6 +22,7 @@ from metaseed_hub.ui.helpers import (
     create_nested_nodes,
     get_project_state,
     get_tree_data_from_nodes,
+    project_states,
     serialize_tree,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -31,9 +32,6 @@ from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-# Module-level project states cache
-project_states: dict[str, AppState] = {}
 
 
 def init_templates(templates: Jinja2Templates) -> None:
@@ -224,7 +222,7 @@ async def project_delete(
     project_id: str,
     session: DbSession,
     user: CurrentUser,
-) -> HTMLResponse:
+) -> Response:
     """Delete a project."""
     try:
         validate_csrf_or_error(request)
@@ -242,35 +240,11 @@ async def project_delete(
     result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
     projects = list(result.scalars().all())
 
-    html = '<div class="project-grid" id="project-grid">'
-    for p in projects:
-        html += f"""
-        <div class="project-card">
-            <a href="/hub/projects/{p.id}" class="project-card-link">
-                <h3>{p.name}</h3>
-                <div class="project-meta">
-                    <span class="profile-badge">{p.profile} {p.version}</span>
-                    <span class="date">{p.updated_at.strftime("%Y-%m-%d %H:%M")}</span>
-                </div>
-            </a>
-            <button class="project-delete" title="Delete project"
-                    hx-delete="/hub/projects/{p.id}"
-                    hx-target="#project-grid"
-                    hx-swap="outerHTML"
-                    hx-confirm="Delete '{p.name}'? This cannot be undone.">
-                &times;
-            </button>
-        </div>
-        """
-    if not projects:
-        html += """
-        <div class="empty-state">
-            <p>No projects yet.</p>
-            <p>Create a project to start working with metadata.</p>
-        </div>
-        """
-    html += "</div>"
-    return HTMLResponse(html)
+    return render_template(
+        request=request,
+        name="partials/project_grid.html",
+        context={"projects": projects},
+    )
 
 
 @router.post("/{project_id}/load-example", response_class=HTMLResponse)
@@ -388,6 +362,33 @@ def _get_entity_info(state: AppState) -> list[dict[str, str]]:
     return entity_info
 
 
+def _build_project_context(project: Project) -> dict[str, Any]:
+    """Build common context for project views.
+
+    Args:
+        project: Project model.
+
+    Returns:
+        Dictionary with state, tree_data, and entity_descriptions.
+    """
+    state = get_project_state(project, project_states)
+    tree_data = get_tree_data_from_nodes(state)
+
+    # Get descriptions for entity types
+    facade = state.get_or_create_facade()
+    entity_descriptions = {}
+    for entity_name in facade.entities:
+        helper = getattr(facade, entity_name, None)
+        if helper:
+            entity_descriptions[entity_name] = helper.description or ""
+
+    return {
+        "state": state,
+        "tree_data": tree_data,
+        "entity_descriptions": entity_descriptions,
+    }
+
+
 @router.get("/{project_id}", response_class=HTMLResponse)
 async def project_editor(
     request: Request,
@@ -402,18 +403,8 @@ async def project_editor(
     # Load workspace for breadcrumb
     workspace = await session.get(Workspace, project.workspace_id)
 
-    # Get or create state for this project (loads from database)
-    state = get_project_state(project, project_states)
-
-    tree_data = get_tree_data_from_nodes(state)
-
-    # Get descriptions for entity types
-    facade = state.get_or_create_facade()
-    entity_descriptions = {}
-    for entity_name in facade.entities:
-        helper = getattr(facade, entity_name, None)
-        if helper:
-            entity_descriptions[entity_name] = helper.description or ""
+    # Build common project context
+    ctx = _build_project_context(project)
 
     return render_template(
         request=request,
@@ -422,10 +413,10 @@ async def project_editor(
             "user": user,
             "project": project,
             "workspace": workspace,
-            "state": state,
-            "root_types": state.get_root_entity_types(),
-            "tree_data": tree_data,
-            "entity_descriptions": entity_descriptions,
+            "state": ctx["state"],
+            "root_types": ctx["state"].get_root_entity_types(),
+            "tree_data": ctx["tree_data"],
+            "entity_descriptions": ctx["entity_descriptions"],
             "nav_active": "home",
         },
     )
@@ -440,25 +431,18 @@ async def project_overview(
 ) -> Response:
     """Return the project overview panel (for HTMX navigation back)."""
     project = await get_project_for_user(project_id, session, user)
-    state = get_project_state(project, project_states)
-    tree_data = get_tree_data_from_nodes(state)
 
-    # Get descriptions for entity types
-    facade = state.get_or_create_facade()
-    entity_descriptions = {}
-    for entity_name in facade.entities:
-        helper = getattr(facade, entity_name, None)
-        if helper:
-            entity_descriptions[entity_name] = helper.description or ""
+    # Build common project context
+    ctx = _build_project_context(project)
 
     return render_template(
         request=request,
         name="partials/project_overview.html",
         context={
             "project": project,
-            "root_types": state.get_root_entity_types(),
-            "tree_data": tree_data,
-            "entity_descriptions": entity_descriptions,
+            "root_types": ctx["state"].get_root_entity_types(),
+            "tree_data": ctx["tree_data"],
+            "entity_descriptions": ctx["entity_descriptions"],
         },
     )
 
@@ -469,7 +453,7 @@ async def project_tree(
     project_id: str,
     session: DbSession,
     user: CurrentUser,
-) -> HTMLResponse:
+) -> Response:
     """Return entity tree for a project."""
     # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
@@ -477,64 +461,14 @@ async def project_tree(
     state = get_project_state(project, project_states)
     tree_data = get_tree_data_from_nodes(state)
 
-    if not tree_data:
-        return HTMLResponse("<div class='empty-state'><p>No entities yet.</p></div>")
-
-    def render_tree_item(item: dict[str, Any], depth: int = 0) -> str:
-        """Recursively render tree item and its children."""
-        item_id = item.get("id", "")
-        item_name = item.get("label") or item.get("name") or "Unnamed"
-        item_type = item.get("entity_type") or item.get("type", "Entity")
-        children = item.get("children", [])
-        has_children = bool(children)
-        is_nested = item.get("is_nested", False)
-        child_count = len(children)
-
-        # For nested items, link to form with parent context
-        if is_nested:
-            field_name = item.get("field_name", "")
-            idx = item.get("idx", 0)
-            base = f"/hub/projects/{project_id}"
-            click_url = f"{base}/form/{item_type}?parent_field={field_name}&idx={idx}"
-            delete_url = f"{base}/nested/{field_name}/{idx}"
-        else:
-            click_url = f"/hub/projects/{project_id}/entity/{item_id}"
-            delete_url = f"/hub/projects/{project_id}/entity/{item_id}"
-
-        # Expand button for items with children
-        expand_btn = ""
-        if has_children:
-            expand_btn = f"""<button class='tree-expand' onclick='toggleTreeNode(this)'
-                title='{child_count} nested items'>▶</button>"""
-
-        html = f"""<li class='tree-node{"" if depth == 0 else " collapsed"}'>
-            <div class='entity-item'>
-                {expand_btn}
-                <span class='entity-type-badge'>{item_type}</span>
-                <a href='#' class='entity-name'
-                   hx-get='{click_url}'
-                   hx-target='#editor'>{item_name}</a>
-                <button class='entity-delete' title='Delete'
-                        hx-delete='{delete_url}'
-                        hx-target='#entity-tree'
-                        hx-confirm='Delete this {item_type}?'>×</button>
-            </div>"""
-
-        if children:
-            html += "<ul class='entity-children'>"
-            for child in children:
-                html += render_tree_item(child, depth + 1)
-            html += "</ul>"
-
-        html += "</li>"
-        return html
-
-    # Render tree with entity types and actions
-    html = "<ul class='entity-tree'>"
-    for item in tree_data:
-        html += render_tree_item(item)
-    html += "</ul>"
-    return HTMLResponse(html)
+    return render_template(
+        request=request,
+        name="partials/entity_tree.html",
+        context={
+            "tree_data": tree_data,
+            "project_id": project_id,
+        },
+    )
 
 
 @router.post("/{project_id}/validate", response_class=HTMLResponse)

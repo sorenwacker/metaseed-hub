@@ -9,42 +9,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
 from metaseed.ui.state import AppState, TreeNode
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Project
-from metaseed_hub.ui.dependencies import (
-    get_current_user_from_cookie,
-    unauthorized_response,
-)
-from metaseed_hub.ui.helpers import (
-    deserialize_tree,
-    save_project_state,
-    validate_csrf_token,
-)
+from metaseed_hub.ui.dependencies import get_project_state_for_mutation
+from metaseed_hub.ui.helpers import save_project_state
 
 router = APIRouter(tags=["table"])
 
 # Primitive types that are not entity types
 PRIMITIVE_TYPES = {"string", "integer", "float", "boolean", "date", "datetime", "uri"}
-
-
-def _get_project_state(project: Project) -> AppState:
-    """Get or create AppState for a project, loading from database.
-
-    Args:
-        project: Project model with profile, version, and data fields.
-
-    Returns:
-        AppState populated with project's entity tree.
-    """
-    state = AppState()
-    state.profile = project.profile
-    state.version = project.version
-    if project.data:
-        deserialize_tree(state, project.data)
-    return state
 
 
 def _handle_primitive_list_row(
@@ -265,6 +240,7 @@ async def add_table_row(
     project_id: str,
     parent_node_id: str,
     field_name: str,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Add a new row to an inline table.
@@ -273,19 +249,7 @@ async def add_table_row(
     For primitive lists, adds a new empty value to the list.
     For entity lists, creates a new child entity with default values.
     """
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse("<tr><td>CSRF validation failed</td></tr>", status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse("<tr><td>Project not found</td></tr>")
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if parent_node_id not in state.nodes_by_id:
         return HTMLResponse("<tr><td>Parent entity not found</td></tr>")
@@ -401,22 +365,11 @@ async def update_table_cell(
     request: Request,
     project_id: str,
     node_id: str,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
     """Update a single cell value in an inline table."""
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse(status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse(status_code=404)
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -476,22 +429,11 @@ async def update_primitive_list_item(
     node_id: str,
     field_name: str,
     idx: int,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a primitive list item value."""
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse(status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse(status_code=404)
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -538,22 +480,11 @@ async def delete_primitive_list_item(
     node_id: str,
     field_name: str,
     idx: int,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Delete a primitive list item."""
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse(status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse(status_code=404)
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -597,6 +528,7 @@ async def update_single_entity_field(
     project_id: str,
     node_id: str,
     field_name: str,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a single entity field (e.g., measurement_type, technology_type).
@@ -604,19 +536,7 @@ async def update_single_entity_field(
     Single entity fields are nested objects that are not lists - they contain
     a single instance of another entity type embedded in the parent.
     """
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse(status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse(status_code=404)
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -692,25 +612,14 @@ async def delete_single_entity_field(
     project_id: str,
     node_id: str,
     field_name: str,
+    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Clear/delete a single entity field.
 
     Sets the field to None/empty, removing the nested entity data.
     """
-    user = await get_current_user_from_cookie(request)
-    if not user:
-        return unauthorized_response()
-
-    if not validate_csrf_token(request):
-        return HTMLResponse(status_code=403)
-
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return HTMLResponse(status_code=404)
-
-    state = _get_project_state(project)
+    project, state = project_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)

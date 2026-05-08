@@ -1,0 +1,53 @@
+{% macro render_tree_item(item, project_id, depth=0) %}
+{% set item_id = item.id or '' %}
+{% set item_name = item.label or item.name or 'Unnamed' %}
+{% set item_type = item.entity_type or item.type or 'Entity' %}
+{% set children = item.children or [] %}
+{% set has_children = children|length > 0 %}
+{% set is_nested = item.is_nested or false %}
+{% set child_count = children|length %}
+
+{% if is_nested %}
+    {% set field_name = item.field_name or '' %}
+    {% set idx = item.idx or 0 %}
+    {% set click_url = '/hub/projects/' ~ project_id ~ '/form/' ~ item_type ~ '?parent_field=' ~ field_name ~ '&idx=' ~ idx %}
+    {% set delete_url = '/hub/projects/' ~ project_id ~ '/nested/' ~ field_name ~ '/' ~ idx %}
+{% else %}
+    {% set click_url = '/hub/projects/' ~ project_id ~ '/entity/' ~ item_id %}
+    {% set delete_url = '/hub/projects/' ~ project_id ~ '/entity/' ~ item_id %}
+{% endif %}
+
+<li class="tree-node{{ '' if depth == 0 else ' collapsed' }}">
+    <div class="entity-item">
+        {% if has_children %}
+        <button class="tree-expand" onclick="toggleTreeNode(this)"
+                title="{{ child_count }} nested items">&#9654;</button>
+        {% endif %}
+        <span class="entity-type-badge">{{ item_type }}</span>
+        <a href="#" class="entity-name"
+           hx-get="{{ click_url }}"
+           hx-target="#editor">{{ item_name }}</a>
+        <button class="entity-delete" title="Delete"
+                hx-delete="{{ delete_url }}"
+                hx-target="#entity-tree"
+                hx-confirm="Delete this {{ item_type }}?">&times;</button>
+    </div>
+    {% if children %}
+    <ul class="entity-children">
+        {% for child in children %}
+            {{ render_tree_item(child, project_id, depth + 1) }}
+        {% endfor %}
+    </ul>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% if tree_data %}
+<ul class="entity-tree">
+    {% for item in tree_data %}
+        {{ render_tree_item(item, project_id) }}
+    {% endfor %}
+</ul>
+{% else %}
+<div class="empty-state"><p>No entities yet.</p></div>
+{% endif %}

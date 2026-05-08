@@ -1,0 +1,30 @@
+<div class="project-grid" id="project-grid">
+    {% for project in projects %}
+    <div class="project-card">
+        <a href="/hub/projects/{{ project.id }}" class="project-card-link">
+            <h3>{{ project.name }}</h3>
+            <div class="project-meta">
+                <span class="profile-badge">{{ project.profile }} {{ project.version }}</span>
+                <span class="date">{{ project.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            </div>
+        </a>
+        <button class="project-delete" title="Delete project"
+                hx-delete="/hub/projects/{{ project.id }}"
+                hx-target="#project-grid"
+                hx-swap="outerHTML"
+                hx-confirm="Delete '{{ project.name }}'? This cannot be undone.">
+            &times;
+        </button>
+    </div>
+    {% else %}
+    <div class="empty-state-card">
+        <div class="empty-state-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+        </div>
+        <p class="empty-state-title">No projects yet</p>
+        <p class="empty-state-desc">Create a project to start working with metadata.</p>
+    </div>
+    {% endfor %}
+</div>

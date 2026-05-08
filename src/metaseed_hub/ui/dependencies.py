@@ -1,7 +1,7 @@
 """Shared FastAPI dependencies for Hub UI routes."""
 
 import secrets
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -11,6 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Project, Tenant, Workspace
+from metaseed_hub.ui.helpers import get_project_state, project_states, validate_csrf_token
+
+if TYPE_CHECKING:
+    from metaseed.ui.state import AppState
 
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
@@ -192,3 +196,65 @@ async def get_project_for_user(
 CurrentUser = Annotated[TokenUser, Depends(require_user)]
 OptionalUser = Annotated[TokenUser | None, Depends(get_current_user_from_cookie)]
 DbSession = Annotated[AsyncSession, Depends(get_session)]
+
+
+class CSRFValidationError(Exception):
+    """Raised when CSRF token validation fails."""
+
+    pass
+
+
+class ProjectNotFoundError(Exception):
+    """Raised when project is not found."""
+
+    pass
+
+
+async def get_project_state_for_mutation(
+    request: Request,
+    project_id: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> tuple[Project, "AppState"]:
+    """Dependency that validates auth, CSRF, and returns project with state.
+
+    Use for mutation endpoints (POST, DELETE) that need CSRF validation.
+
+    Args:
+        request: The FastAPI request object.
+        project_id: ID of the project to load.
+        session: Database session.
+
+    Returns:
+        Tuple of (Project, AppState) for the validated request.
+
+    Raises:
+        HTTPException: 401 if auth fails, 403 if CSRF fails, 404 if project not found.
+    """
+    # Validate authentication
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+        )
+
+    # Validate CSRF token
+    if not validate_csrf_token(request):
+        raise HTTPException(
+            status_code=403,
+            detail="CSRF validation failed",
+        )
+
+    # Load project from database
+    result = await session.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found",
+        )
+
+    # Get or create AppState for the project
+    state = get_project_state(project, project_states)
+
+    return project, state
