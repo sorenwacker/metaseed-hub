@@ -636,57 +636,17 @@ async def project_chat_page(
     user: CurrentUser,
 ) -> Response:
     """Full-page chat view for a project."""
-    # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
 
-    icon = "/hub/hub-static/images/metaseed-icon.svg"
-    css = "/hub/hub-static/css/hub.css"
-    js = "/hub/hub-static/js/hub.js"
-    htmx = "https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"
-    post_url = f"/hub/projects/{project_id}/chat"
-    back_url = f"/hub/projects/{project_id}"
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Chat - {project.name}</title>
-    <link rel="stylesheet" href="{css}">
-    <script src="{htmx}"></script>
-</head>
-<body>
-    <div class="hub-layout">
-        <header class="hub-header">
-            <a href="/hub/" class="hub-logo">
-                <img src="{icon}" alt="" class="hub-logo-icon">
-                <span>Metaseed Hub</span>
-            </a>
-            <nav class="hub-nav">
-                <a href="{back_url}" class="nav-item">Back to Project</a>
-                <span class="nav-sep">/</span>
-                <span class="nav-item active">Chat</span>
-            </nav>
-        </header>
-        <main class="hub-main chat-page">
-            <div class="chat-header">
-                <h2>{project.name} - Team Chat</h2>
-            </div>
-            <div id="chat-messages" class="chat-messages">
-                <p class="chat-placeholder">Chat messages will appear here...</p>
-            </div>
-            <form class="chat-form"
-                  hx-post="{post_url}"
-                  hx-target="#chat-messages"
-                  hx-swap="beforeend">
-                <input type="text" name="message" placeholder="Type a message..."
-                       autocomplete="off">
-                <button type="submit" class="btn btn-primary">Send</button>
-            </form>
-        </main>
-    </div>
-    <script src="{js}"></script>
-</body>
-</html>"""
-    return HTMLResponse(html)
+    return render_template(
+        request=request,
+        name="chat.html",
+        context={
+            "user": user,
+            "project": project,
+            "nav_active": "home",
+        },
+    )
 
 
 @router.post("/{project_id}/chat", response_class=HTMLResponse)
