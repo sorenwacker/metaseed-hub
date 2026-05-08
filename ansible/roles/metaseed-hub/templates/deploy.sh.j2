@@ -88,6 +88,13 @@ if ! {{ app_dir }}/.local/bin/uv sync --frozen 2>&1 | tee -a "$LOG_FILE"; then
     exit 1
 fi
 
+# Reinstall package to pick up version from git tag
+log "Reinstalling package for version..."
+if ! {{ app_dir }}/.local/bin/uv pip install -e . --force-reinstall --no-deps 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "package reinstall failed"
+    exit 1
+fi
+
 # Run migrations
 log "Running migrations..."
 if ! {{ app_dir }}/.venv/bin/alembic upgrade head 2>&1 | tee -a "$LOG_FILE"; then
