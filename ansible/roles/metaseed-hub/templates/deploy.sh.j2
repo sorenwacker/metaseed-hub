@@ -8,7 +8,7 @@ APP_DIR="{{ app_dir }}"
 LOG_FILE="{{ app_dir }}/logs/deploy.log"
 LOCK_FILE="/tmp/metaseed-deploy.lock"
 COMMIT_FILE="{{ app_dir }}/.deployed_commit"
-HEALTH_URL="http://127.0.0.1:7001/version"
+HEALTH_URL="http://127.0.0.1:8080/api/health"
 MAX_LOG_SIZE=10485760  # 10MB
 
 # Ensure log directory exists

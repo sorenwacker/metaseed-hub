@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from metaseed_hub._version import __version__
 from metaseed_hub.config import get_settings
 
 router = APIRouter()
@@ -21,6 +22,7 @@ async def health_check() -> dict[str, Any]:
     settings = get_settings()
     status: dict[str, Any] = {
         "status": "healthy",
+        "version": __version__,
         "services": {},
     }
 
