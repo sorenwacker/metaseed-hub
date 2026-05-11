@@ -104,6 +104,13 @@ body {
     flex-direction: column;
 }
 
+/* Fixed height layout for full-page content (ERD, spec builder) */
+.hub-layout:has(.erd-layout) {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .hub-header {
     background: var(--clr-forest);
     padding: 0 var(--space-xl);
