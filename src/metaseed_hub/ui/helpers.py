@@ -653,8 +653,9 @@ async def ensure_project_facade(
     """Get project state and ensure facade is properly set for user-defined specs.
 
     For projects using database-stored specs (spec_draft_id), this loads the spec
-    and creates a ProfileFacade with dependency injection. For built-in profiles,
-    it creates a standard facade.
+    and creates a ProfileFacade with dependency injection BEFORE deserializing
+    the tree (which requires a facade). For built-in profiles, it creates a
+    standard facade.
 
     Args:
         project: Project model with profile, version, and optional spec_draft_id.
@@ -668,9 +669,14 @@ async def ensure_project_facade(
 
     from metaseed_hub.models import SpecDraft
 
-    state = get_project_state(project, project_states)
+    project_id = project.id
 
-    # Check if project uses a database spec
+    # Create state without deserializing tree yet
+    state = AppState()
+    state.profile = project.profile
+    state.version = project.version
+
+    # Load spec from database FIRST if project uses a user-defined spec
     if project.spec_draft_id:
         try:
             spec_draft = await session.get(SpecDraft, project.spec_draft_id)
@@ -690,6 +696,11 @@ async def ensure_project_facade(
         except Exception as e:
             logger.warning(f"Failed to load spec for project {project.id}: {e}")
 
+    # NOW deserialize tree (which requires facade)
+    if project.data:
+        deserialize_tree(state, project.data)
+
+    project_states[project_id] = state
     return state
 
 
