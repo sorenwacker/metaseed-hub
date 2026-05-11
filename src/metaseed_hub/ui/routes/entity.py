@@ -10,6 +10,7 @@ from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_project_for
 from metaseed_hub.ui.forms import extract_entity_values
 from metaseed_hub.ui.helpers import (
     build_entity_form_context,
+    ensure_project_facade,
     get_project_state,
     project_states,
     save_project_state,
@@ -42,7 +43,7 @@ async def project_entity_form(
     """Return form for creating or editing an entity."""
     project = await get_project_for_user(project_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     facade = state.get_or_create_facade()
 
     try:
@@ -89,7 +90,7 @@ async def project_entity_create(
 
     project = await get_project_for_user(project_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     facade = state.get_or_create_facade()
 
     try:
@@ -187,7 +188,7 @@ async def project_entity_edit(
 ) -> Response:
     """Return form for editing an existing entity."""
     project = await get_project_for_user(project_id, session, user)
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")

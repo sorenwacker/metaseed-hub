@@ -375,30 +375,15 @@ async def _build_project_context(
     Returns:
         Dictionary with state, tree_data, and entity_descriptions.
     """
-    from metaseed.facade import ProfileFacade
-    from metaseed.specs.schema import ProfileSpec
+    from metaseed_hub.ui.helpers import ensure_project_facade
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     tree_data = get_tree_data_from_nodes(state)
 
     # Get descriptions for entity types
     entity_descriptions: dict[str, str] = {}
 
     try:
-        # Check if project uses a database spec
-        if project.spec_draft_id:
-            # Load spec from database
-            spec_draft = await session.get(SpecDraft, project.spec_draft_id)
-            if spec_draft and spec_draft.spec_data:
-                profile_spec = ProfileSpec.model_validate(spec_draft.spec_data)
-                # Create facade with injected spec (bypasses file loader)
-                state.facade = ProfileFacade(
-                    profile=project.profile,
-                    spec=profile_spec,
-                )
-                # Update state.profile to match facade's lowercased version
-                state.profile = state.facade.profile
-
         facade = state.get_or_create_facade()
         for entity_name in facade.entities:
             helper = getattr(facade, entity_name, None)

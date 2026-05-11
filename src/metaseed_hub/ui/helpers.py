@@ -646,6 +646,53 @@ def get_project_state(project: Project, project_states: dict[str, AppState]) -> 
     return state
 
 
+async def ensure_project_facade(
+    project: Project,
+    session: Any,
+) -> AppState:
+    """Get project state and ensure facade is properly set for user-defined specs.
+
+    For projects using database-stored specs (spec_draft_id), this loads the spec
+    and creates a ProfileFacade with dependency injection. For built-in profiles,
+    it creates a standard facade.
+
+    Args:
+        project: Project model with profile, version, and optional spec_draft_id.
+        session: Database session for loading spec drafts.
+
+    Returns:
+        AppState with facade ready to use.
+    """
+    from metaseed.facade import ProfileFacade
+    from metaseed.specs.schema import ProfileSpec
+
+    from metaseed_hub.models import SpecDraft
+
+    state = get_project_state(project, project_states)
+
+    # Check if project uses a database spec
+    if project.spec_draft_id:
+        try:
+            spec_draft = await session.get(SpecDraft, project.spec_draft_id)
+            if spec_draft and spec_draft.spec_data:
+                # spec_data may be SpecBuilderState format with spec nested under "spec" key
+                raw_data = spec_draft.spec_data
+                if isinstance(raw_data, dict) and "spec" in raw_data:
+                    raw_data = raw_data["spec"]
+                profile_spec = ProfileSpec.model_validate(raw_data)
+                # Create facade with injected spec (bypasses file loader)
+                state.facade = ProfileFacade(
+                    profile=project.profile,
+                    spec=profile_spec,
+                )
+                # Update state.profile to match facade's lowercased version
+                state.profile = state.facade.profile
+        except Exception as e:
+            logger.warning(f"Failed to load spec for project {project.id}: {e}")
+
+    return state
+
+
 async def save_project_state(
     session: Any,
     project: Project,
