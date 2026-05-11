@@ -272,6 +272,12 @@ body {
     min-height: 0;
 }
 
+/* ERD layout needs flex: 1 to fill hub-main */
+.hub-main .erd-layout {
+    flex: 1;
+    min-height: 0;
+}
+
 /* Footer */
 .hub-footer {
     background: var(--clr-paper);
