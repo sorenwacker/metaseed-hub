@@ -95,81 +95,89 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         if not user:
             return RedirectResponse(url="/hub/auth/login", status_code=302)
 
-        # Get profiles from SpecLoader (built-in specs)
-        loader = SpecLoader()
-        profiles = loader.list_profiles()
+        try:
+            # Get profiles from SpecLoader (built-in specs)
+            loader = SpecLoader()
+            profiles = loader.list_profiles()
 
-        # Build profile versions and display names
-        profile_versions: dict[str, list[str]] = {}
-        profile_display_names: dict[str, str] = {}
-        for profile in profiles:
-            versions = loader.list_versions(profile)
-            profile_versions[profile] = versions
-            try:
-                spec = loader.load_profile(versions[0], profile)
-                profile_display_names[profile] = spec.display_name or profile
-            except Exception:
-                profile_display_names[profile] = profile
+            # Build profile versions and display names
+            profile_versions: dict[str, list[str]] = {}
+            profile_display_names: dict[str, str] = {}
+            for profile in profiles:
+                versions = loader.list_versions(profile)
+                profile_versions[profile] = versions
+                try:
+                    spec = loader.load_profile(versions[0], profile)
+                    profile_display_names[profile] = spec.display_name or profile
+                except Exception:
+                    profile_display_names[profile] = profile
 
-        # Get user's tenant to find their workspaces
-        tenant_slug = user.keycloak_id[:8]
-        result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
-        tenant = result.scalar_one_or_none()
+            # Get user's tenant to find their workspaces
+            tenant_slug = user.keycloak_id[:8]
+            result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
+            tenant = result.scalar_one_or_none()
 
-        user_drafts: list[SpecDraft] = []
-        published_specs: list[Spec] = []
+            user_drafts: list[SpecDraft] = []
+            published_specs: list[Spec] = []
 
-        if tenant:
-            # Get workspaces for this tenant
-            ws_result = await session.execute(
-                select(Workspace).where(Workspace.tenant_id == tenant.id)
-            )
-            workspaces = list(ws_result.scalars().all())
-            workspace_ids = [ws.id for ws in workspaces]
-
-            if workspace_ids:
-                # Get user's drafts from their workspaces
-                drafts_result = await session.execute(
-                    select(SpecDraft).where(SpecDraft.workspace_id.in_(workspace_ids))
+            if tenant:
+                # Get workspaces for this tenant
+                ws_result = await session.execute(
+                    select(Workspace).where(Workspace.tenant_id == tenant.id)
                 )
-                user_drafts = list(drafts_result.scalars().all())
+                workspaces = list(ws_result.scalars().all())
+                workspace_ids = [ws.id for ws in workspaces]
 
-                # Get published specs from user's workspaces
-                specs_result = await session.execute(
-                    select(Spec).where(
-                        Spec.workspace_id.in_(workspace_ids),
-                        Spec.status == SpecStatus.PUBLISHED,
+                if workspace_ids:
+                    # Get user's drafts from their workspaces
+                    drafts_result = await session.execute(
+                        select(SpecDraft).where(SpecDraft.workspace_id.in_(workspace_ids))
                     )
-                )
-                published_specs = list(specs_result.scalars().all())
+                    user_drafts = list(drafts_result.scalars().all())
 
-        # Add user drafts to profiles (prefix with "draft:")
-        for draft in user_drafts:
-            draft_key = f"draft:{draft.id}"
-            profiles.append(draft_key)
-            profile_versions[draft_key] = [draft.version]
-            profile_display_names[draft_key] = f"{draft.name} (Draft)"
+                    # Get published specs from user's workspaces
+                    specs_result = await session.execute(
+                        select(Spec).where(
+                            Spec.workspace_id.in_(workspace_ids),
+                            Spec.status == SpecStatus.PUBLISHED,
+                        )
+                    )
+                    published_specs = list(specs_result.scalars().all())
 
-        # Add published specs to profiles (prefix with "spec:")
-        for spec in published_specs:
-            spec_key = f"spec:{spec.id}"
-            if spec_key not in profiles:
-                profiles.append(spec_key)
-                profile_versions[spec_key] = [spec.version]
-                profile_display_names[spec_key] = f"{spec.name} (Published)"
+            # Add user drafts to profiles (prefix with "draft:")
+            for draft in user_drafts:
+                draft_key = f"draft:{draft.id}"
+                profiles.append(draft_key)
+                profile_versions[draft_key] = [draft.version]
+                profile_display_names[draft_key] = f"{draft.name} (Draft)"
 
-        # Use metaseed's explore template with hub base_url
-        return render(
-            request,
-            "explore/index.html",
-            {
-                "base_url": "/hub",
-                "profiles": profiles,
-                "profile_versions": profile_versions,
-                "profile_display_names": profile_display_names,
-                "user": user,
-            },
-        )
+            # Add published specs to profiles (prefix with "spec:")
+            for spec in published_specs:
+                spec_key = f"spec:{spec.id}"
+                if spec_key not in profiles:
+                    profiles.append(spec_key)
+                    profile_versions[spec_key] = [spec.version]
+                    profile_display_names[spec_key] = f"{spec.name} (Published)"
+
+            # Use metaseed's explore template with hub base_url
+            return render(
+                request,
+                "explore/index.html",
+                {
+                    "base_url": "/hub",
+                    "profiles": profiles,
+                    "profile_versions": profile_versions,
+                    "profile_display_names": profile_display_names,
+                    "user": user,
+                },
+            )
+
+        except Exception as e:
+            logger.exception("Explorer page failed: %s", e)
+            return JSONResponse(
+                {"error": f"Explorer error: {e!s}"},
+                status_code=500,
+            )
 
     async def load_profile_spec(
         session: AsyncSession, profile_key: str, version: str
