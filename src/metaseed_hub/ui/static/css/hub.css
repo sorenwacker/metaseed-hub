@@ -264,7 +264,8 @@ body {
 .hub-main:has(.spec-builder-layout),
 .hub-main:has(.spec-view-layout),
 .hub-main:has(.graph-page),
-.hub-main:has(.project-container) {
+.hub-main:has(.project-container),
+.hub-main:has(.erd-layout) {
     padding: 0;
     display: flex;
     flex-direction: column;
