@@ -7,19 +7,53 @@ and DatabaseSpecProvider for unified spec access.
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
-from metaseed.specs.merge import DiffVisualizer, compare
+from metaseed.specs.merge import DiffVisualizer, SpecComparator
+from metaseed.specs.schema import ProfileSpec
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from metaseed_hub.database import get_session
 
+if TYPE_CHECKING:
+    from metaseed_hub.models import Spec, SpecDraft
+
 logger = logging.getLogger(__name__)
+
+
+class HubSpecLoader(SpecLoader):  # type: ignore[misc]
+    """Extended SpecLoader that includes database specs."""
+
+    def __init__(
+        self,
+        db_specs: dict[str, ProfileSpec] | None = None,
+    ) -> None:
+        """Initialize with optional database specs.
+
+        Args:
+            db_specs: Dict mapping "profile_key/version" to ProfileSpec.
+        """
+        super().__init__()
+        self._db_specs = db_specs or {}
+
+    def load_profile(
+        self,
+        version: str = "1.1",
+        profile: str | None = None,
+        *,
+        ctx: Any = None,
+    ) -> ProfileSpec:
+        """Load profile from database or built-in specs."""
+        if profile:
+            key = f"{profile}/{version}"
+            if key in self._db_specs:
+                return self._db_specs[key]
+        return super().load_profile(version, profile, ctx=ctx)
 
 
 def create_explore_router(templates: Jinja2Templates) -> APIRouter:
@@ -52,6 +86,9 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Explorer page - reuses metaseed's merge interface."""
+        from sqlalchemy import select
+
+        from metaseed_hub.models import Spec, SpecDraft, SpecStatus, Tenant, Workspace
         from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 
         user = await get_current_user_from_cookie(request)
@@ -63,8 +100,8 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         profiles = loader.list_profiles()
 
         # Build profile versions and display names
-        profile_versions = {}
-        profile_display_names = {}
+        profile_versions: dict[str, list[str]] = {}
+        profile_display_names: dict[str, str] = {}
         for profile in profiles:
             versions = loader.list_versions(profile)
             profile_versions[profile] = versions
@@ -73,6 +110,53 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 profile_display_names[profile] = spec.display_name or profile
             except Exception:
                 profile_display_names[profile] = profile
+
+        # Get user's tenant to find their workspaces
+        tenant_slug = user.keycloak_id[:8]
+        result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
+        tenant = result.scalar_one_or_none()
+
+        user_drafts: list[SpecDraft] = []
+        published_specs: list[Spec] = []
+
+        if tenant:
+            # Get workspaces for this tenant
+            ws_result = await session.execute(
+                select(Workspace).where(Workspace.tenant_id == tenant.id)
+            )
+            workspaces = list(ws_result.scalars().all())
+            workspace_ids = [ws.id for ws in workspaces]
+
+            if workspace_ids:
+                # Get user's drafts from their workspaces
+                drafts_result = await session.execute(
+                    select(SpecDraft).where(SpecDraft.workspace_id.in_(workspace_ids))
+                )
+                user_drafts = list(drafts_result.scalars().all())
+
+                # Get published specs from user's workspaces
+                specs_result = await session.execute(
+                    select(Spec).where(
+                        Spec.workspace_id.in_(workspace_ids),
+                        Spec.status == SpecStatus.PUBLISHED,
+                    )
+                )
+                published_specs = list(specs_result.scalars().all())
+
+        # Add user drafts to profiles (prefix with "draft:")
+        for draft in user_drafts:
+            draft_key = f"draft:{draft.id}"
+            profiles.append(draft_key)
+            profile_versions[draft_key] = [draft.version]
+            profile_display_names[draft_key] = f"{draft.name} (Draft)"
+
+        # Add published specs to profiles (prefix with "spec:")
+        for spec in published_specs:
+            spec_key = f"spec:{spec.id}"
+            if spec_key not in profiles:
+                profiles.append(spec_key)
+                profile_versions[spec_key] = [spec.version]
+                profile_display_names[spec_key] = f"{spec.name} (Published)"
 
         # Use metaseed's explore template with hub base_url
         return render(
@@ -86,6 +170,51 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 "user": user,
             },
         )
+
+    async def load_profile_spec(
+        session: AsyncSession, profile_key: str, version: str
+    ) -> tuple[str, Any] | None:
+        """Load a profile spec from built-in or database.
+
+        Args:
+            session: Database session.
+            profile_key: Profile identifier (name, draft:id, or spec:id).
+            version: Version string.
+
+        Returns:
+            Tuple of (display_name, ProfileSpec) or None if not found.
+        """
+        from metaseed.specs.schema import ProfileSpec
+        from sqlalchemy import select
+
+        from metaseed_hub.models import Spec, SpecDraft
+
+        if profile_key.startswith("draft:"):
+            draft_id = profile_key[6:]
+            result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
+            draft = result.scalar_one_or_none()
+            if draft and draft.spec_data:
+                spec = ProfileSpec.model_validate(draft.spec_data)
+                return (f"{draft.name} (Draft)", spec)
+            return None
+
+        elif profile_key.startswith("spec:"):
+            spec_id = profile_key[5:]
+            result = await session.execute(select(Spec).where(Spec.id == spec_id))
+            db_spec = result.scalar_one_or_none()
+            if db_spec and db_spec.spec_data:
+                spec = ProfileSpec.model_validate(db_spec.spec_data)
+                return (f"{db_spec.name} (Published)", spec)
+            return None
+
+        else:
+            # Built-in profile
+            loader = SpecLoader()
+            try:
+                spec = loader.load_profile(version, profile_key)
+                return (profile_key, spec)
+            except Exception:
+                return None
 
     @router.post("/compare", response_model=None)
     async def explore_compare(
@@ -105,15 +234,31 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         if len(profile_specs) < 1:
             return JSONResponse({"error": "Select at least 1 profile"}, status_code=400)
 
-        # Parse profile specs (format: "profile/version")
-        profile_tuples = []
-        for spec in profile_specs:
-            if isinstance(spec, str) and "/" in spec:
-                parts = spec.split("/", 1)
-                profile_tuples.append((parts[0], parts[1]))
+        # Parse and load database specs into a dict for HubSpecLoader
+        db_specs: dict[str, ProfileSpec] = {}
+        profile_tuples: list[tuple[str, str]] = []
+
+        for spec_str in profile_specs:
+            if isinstance(spec_str, str) and "/" in spec_str:
+                parts = spec_str.split("/", 1)
+                profile_key, version = parts[0], parts[1]
+                profile_tuples.append((profile_key, version))
+
+                # Load database specs into dict
+                if profile_key.startswith("draft:") or profile_key.startswith("spec:"):
+                    loaded = await load_profile_spec(session, profile_key, version)
+                    if loaded:
+                        db_specs[f"{profile_key}/{version}"] = loaded[1]
+
+        if len(profile_tuples) < 1:
+            return JSONResponse({"error": "No valid profiles found"}, status_code=400)
 
         try:
-            result = compare(profile_tuples)
+            # Create loader with database specs
+            loader = HubSpecLoader(db_specs=db_specs)
+            comparator = SpecComparator(loader)
+            result = comparator.compare(profile_tuples)
+
             visualizer = DiffVisualizer()
             graph_data = visualizer.build_diff_graph(result, show_unchanged=True)
 
@@ -156,14 +301,26 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         if len(profile_specs) < 1:
             return JSONResponse({"error": "At least 1 profile required"}, status_code=400)
 
-        profile_tuples = []
-        for spec in profile_specs:
-            if "/" in spec:
-                parts = spec.split("/", 1)
-                profile_tuples.append((parts[0], parts[1]))
+        # Parse and load database specs into a dict for HubSpecLoader
+        db_specs: dict[str, ProfileSpec] = {}
+        profile_tuples: list[tuple[str, str]] = []
+
+        for spec_str in profile_specs:
+            if "/" in spec_str:
+                parts = spec_str.split("/", 1)
+                profile_key, version = parts[0], parts[1]
+                profile_tuples.append((profile_key, version))
+
+                # Load database specs into dict
+                if profile_key.startswith("draft:") or profile_key.startswith("spec:"):
+                    loaded = await load_profile_spec(session, profile_key, version)
+                    if loaded:
+                        db_specs[f"{profile_key}/{version}"] = loaded[1]
 
         try:
-            result = compare(profile_tuples)
+            loader = HubSpecLoader(db_specs=db_specs)
+            comparator = SpecComparator(loader)
+            result = comparator.compare(profile_tuples)
             visualizer = DiffVisualizer()
             graph_data = visualizer.build_diff_graph(result, show_unchanged=True)
             return JSONResponse(graph_data)
