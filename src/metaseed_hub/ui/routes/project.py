@@ -20,6 +20,7 @@ from metaseed_hub.ui.dependencies import (
 )
 from metaseed_hub.ui.helpers import (
     create_nested_nodes,
+    ensure_project_facade,
     get_project_state,
     get_tree_data_from_nodes,
     project_states,
@@ -375,8 +376,6 @@ async def _build_project_context(
     Returns:
         Dictionary with state, tree_data, and entity_descriptions.
     """
-    from metaseed_hub.ui.helpers import ensure_project_facade
-
     state = await ensure_project_facade(project, session)
     tree_data = get_tree_data_from_nodes(state)
 
@@ -470,7 +469,7 @@ async def project_tree(
     # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     tree_data = get_tree_data_from_nodes(state)
 
     return render_template(
@@ -501,7 +500,7 @@ async def project_validate(
     # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     facade = state.get_or_create_facade()
 
     errors: list[dict[str, Any]] = []
@@ -632,7 +631,7 @@ async def project_graph_api(
     # Verify user has access to this project
     project = await get_project_for_user(project_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
 
     # Use metaseed's graph builder which properly extracts nested entities
     graph_data = build_graph(state)
@@ -698,7 +697,7 @@ async def project_export(
     from metaseed.ui.services.export import export_to_bytes, generate_filename
 
     project = await get_project_for_user(project_id, session, user)
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
 
     # Generate Excel file using metaseed's export service
     excel_bytes = export_to_bytes(state)
@@ -759,7 +758,7 @@ async def project_import(
         return csrf_error_response()
 
     project = await get_project_for_user(project_id, session, user)
-    state = get_project_state(project, project_states)
+    state = await ensure_project_facade(project, session)
     facade = state.get_or_create_facade()
 
     # Get uploaded file from form
