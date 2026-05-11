@@ -362,25 +362,52 @@ def _get_entity_info(state: AppState) -> list[dict[str, str]]:
     return entity_info
 
 
-def _build_project_context(project: Project) -> dict[str, Any]:
+async def _build_project_context(
+    project: Project,
+    session: Any,
+) -> dict[str, Any]:
     """Build common context for project views.
 
     Args:
         project: Project model.
+        session: Database session for loading spec drafts.
 
     Returns:
         Dictionary with state, tree_data, and entity_descriptions.
     """
+    from metaseed.facade import ProfileFacade
+    from metaseed.specs.schema import ProfileSpec
+
     state = get_project_state(project, project_states)
     tree_data = get_tree_data_from_nodes(state)
 
     # Get descriptions for entity types
-    facade = state.get_or_create_facade()
-    entity_descriptions = {}
-    for entity_name in facade.entities:
-        helper = getattr(facade, entity_name, None)
-        if helper:
-            entity_descriptions[entity_name] = helper.description or ""
+    entity_descriptions: dict[str, str] = {}
+
+    try:
+        # Check if project uses a database spec
+        if project.spec_draft_id:
+            # Load spec from database
+            spec_draft = await session.get(SpecDraft, project.spec_draft_id)
+            if spec_draft and spec_draft.spec_data:
+                profile_spec = ProfileSpec.model_validate(spec_draft.spec_data)
+                # Create facade with injected spec (bypasses file loader)
+                state.facade = ProfileFacade(
+                    profile=project.profile,
+                    spec=profile_spec,
+                )
+                # Update state.profile to match facade's lowercased version
+                state.profile = state.facade.profile
+
+        facade = state.get_or_create_facade()
+        for entity_name in facade.entities:
+            helper = getattr(facade, entity_name, None)
+            if helper:
+                entity_descriptions[entity_name] = helper.description or ""
+
+    except Exception as e:
+        # Log but don't crash
+        logger.warning(f"Failed to load facade for project {project.id}: {e}")
 
     return {
         "state": state,
@@ -404,7 +431,7 @@ async def project_editor(
     workspace = await session.get(Workspace, project.workspace_id)
 
     # Build common project context
-    ctx = _build_project_context(project)
+    ctx = await _build_project_context(project, session)
 
     return render_template(
         request=request,
@@ -433,7 +460,7 @@ async def project_overview(
     project = await get_project_for_user(project_id, session, user)
 
     # Build common project context
-    ctx = _build_project_context(project)
+    ctx = await _build_project_context(project, session)
 
     return render_template(
         request=request,
