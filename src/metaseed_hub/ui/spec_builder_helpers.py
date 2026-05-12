@@ -179,3 +179,35 @@ def validate_field_name(name: str) -> str | None:
     if not name.replace("_", "").isalnum():
         return "Field name can only contain letters, numbers, and underscores"
     return None
+
+
+def parse_spec_from_yaml(yaml_content: str) -> ProfileSpec:
+    """Parse a YAML string into a ProfileSpec.
+
+    Args:
+        yaml_content: YAML string containing spec definition.
+
+    Returns:
+        ProfileSpec object parsed from the YAML.
+
+    Raises:
+        ValueError: If YAML is invalid or cannot be parsed as ProfileSpec.
+    """
+    from metaseed.specs.schema import ProfileSpec
+
+    try:
+        data = yaml.safe_load(yaml_content)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML syntax: {e}") from e
+
+    if not isinstance(data, dict):
+        raise ValueError("YAML must contain a mapping/dictionary at the root level")
+
+    # Handle case where spec is nested under 'spec' key (SpecBuilderState format)
+    if "spec" in data and isinstance(data["spec"], dict):
+        data = data["spec"]
+
+    try:
+        return ProfileSpec.model_validate(data)
+    except Exception as e:
+        raise ValueError(f"Invalid spec structure: {e}") from e

@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.schema import (
@@ -46,6 +46,7 @@ from .spec_builder_helpers import (
     clone_spec,
     create_empty_spec,
     list_available_templates,
+    parse_spec_from_yaml,
     spec_to_yaml,
     validate_entity_name,
     validate_field_name,
@@ -721,6 +722,114 @@ def create_spec_builder_router(
             name=draft_name,
             spec=spec,
             template_source=template_source,
+        )
+
+        return RedirectResponse(
+            url=f"/hub/spec-builder/{draft.id}",
+            status_code=302,
+        )
+
+    @router.get("/import", response_model=None)
+    async def import_spec_form(
+        request: Request,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        workspace_id: str | None = None,
+    ) -> Response:
+        """Show form to import a spec from YAML file."""
+        try:
+            user_id, tenant_id = await get_user_context(
+                request, session, redirect_on_unauthorized=True
+            )
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        workspaces = await get_user_workspaces(session, user_id, tenant_id)
+
+        if not workspaces:
+            workspace = await get_or_create_default_workspace(session, tenant_id)
+            workspaces = [workspace]
+
+        return render(
+            request,
+            "spec_builder/import.html",
+            {
+                "workspaces": workspaces,
+                "selected_workspace_id": workspace_id or (workspaces[0].id if workspaces else None),
+            },
+        )
+
+    @router.post("/import", response_model=None)
+    async def import_spec(
+        request: Request,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        workspace_id: str = Form(...),
+        spec_file: UploadFile = File(...),
+    ) -> Response:
+        """Import a spec from uploaded YAML file."""
+        try:
+            user_id, tenant_id = await get_user_context(
+                request, session, redirect_on_unauthorized=True
+            )
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        # Verify workspace access
+        if not await can_access_workspace(session, user_id, workspace_id):
+            raise HTTPException(status_code=403, detail="Access denied to workspace")
+
+        # Validate file type
+        if not spec_file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+
+        if not spec_file.filename.endswith((".yaml", ".yml")):
+            workspaces = await get_user_workspaces(session, user_id, tenant_id)
+            return render(
+                request,
+                "spec_builder/import.html",
+                {
+                    "workspaces": workspaces,
+                    "selected_workspace_id": workspace_id,
+                    "error": "File must be a YAML file (.yaml or .yml)",
+                },
+            )
+
+        # Read and parse the file
+        try:
+            content = await spec_file.read()
+            yaml_content = content.decode("utf-8")
+            spec = parse_spec_from_yaml(yaml_content)
+        except UnicodeDecodeError:
+            workspaces = await get_user_workspaces(session, user_id, tenant_id)
+            return render(
+                request,
+                "spec_builder/import.html",
+                {
+                    "workspaces": workspaces,
+                    "selected_workspace_id": workspace_id,
+                    "error": "File must be UTF-8 encoded",
+                },
+            )
+        except ValueError as e:
+            workspaces = await get_user_workspaces(session, user_id, tenant_id)
+            return render(
+                request,
+                "spec_builder/import.html",
+                {
+                    "workspaces": workspaces,
+                    "selected_workspace_id": workspace_id,
+                    "error": str(e),
+                },
+            )
+
+        # Create draft from imported spec
+        draft_name = spec.name if spec.name else "Imported Spec"
+
+        draft = await create_new_draft(
+            session,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            name=draft_name,
+            spec=spec,
         )
 
         return RedirectResponse(

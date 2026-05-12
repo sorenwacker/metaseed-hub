@@ -179,6 +179,20 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 status_code=500,
             )
 
+    def _extract_spec_data(raw_data: dict[str, Any]) -> dict[str, Any]:
+        """Extract spec data from SpecBuilderState or raw format.
+
+        Args:
+            raw_data: The stored spec_data (may be SpecBuilderState or ProfileSpec).
+
+        Returns:
+            Dictionary containing ProfileSpec data.
+        """
+        # SpecBuilderState format has spec nested under "spec" key
+        if "spec" in raw_data and isinstance(raw_data["spec"], dict):
+            return raw_data["spec"]
+        return raw_data
+
     async def load_profile_spec(
         session: AsyncSession, profile_key: str, version: str
     ) -> tuple[str, Any] | None:
@@ -202,7 +216,8 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
             draft = result.scalar_one_or_none()
             if draft and draft.spec_data:
-                spec = ProfileSpec.model_validate(draft.spec_data)
+                spec_data = _extract_spec_data(draft.spec_data)
+                spec = ProfileSpec.model_validate(spec_data)
                 return (f"{draft.name} (Draft)", spec)
             return None
 
@@ -211,7 +226,8 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             result = await session.execute(select(Spec).where(Spec.id == spec_id))
             db_spec = result.scalar_one_or_none()
             if db_spec and db_spec.spec_data:
-                spec = ProfileSpec.model_validate(db_spec.spec_data)
+                spec_data = _extract_spec_data(db_spec.spec_data)
+                spec = ProfileSpec.model_validate(spec_data)
                 return (f"{db_spec.name} (Published)", spec)
             return None
 

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Import Specification - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<span class="nav-sep">/</span>
+<span class="nav-item active">Import</span>
+{% endblock %}
+
+{% block content %}
+<div class="new-spec-page">
+    <div class="page-header">
+        <h1>Import Specification</h1>
+        <p>Upload a YAML file to create a new specification draft.</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form action="/hub/spec-builder/import" method="POST" enctype="multipart/form-data" class="new-spec-form">
+        <div class="form-section">
+            <h2>Import Settings</h2>
+
+            {% if workspaces|length > 1 %}
+            <div class="form-group">
+                <label for="workspace_id" class="form-label">Workspace <span class="required">*</span></label>
+                <select name="workspace_id" id="workspace_id" class="form-input" required>
+                    {% for workspace in workspaces %}
+                    <option value="{{ workspace.id }}" {% if workspace.id == selected_workspace_id %}selected{% endif %}>
+                        {{ workspace.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="form-help">Select the workspace where this specification will be stored.</small>
+            </div>
+            {% else %}
+            <input type="hidden" name="workspace_id" value="{{ workspaces[0].id }}">
+            {% endif %}
+
+            <div class="form-group">
+                <label for="spec_file" class="form-label">YAML File <span class="required">*</span></label>
+                <input type="file"
+                       name="spec_file"
+                       id="spec_file"
+                       class="form-input"
+                       accept=".yaml,.yml"
+                       required>
+                <small class="form-help">Upload a ProfileSpec YAML file (.yaml or .yml)</small>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Expected Format</h2>
+            <p>The YAML file should follow the ProfileSpec schema:</p>
+            <pre class="code-example">name: MyProfile
+version: "0.1"
+description: A sample profile
+root_entity: Investigation
+entities:
+  Investigation:
+    description: Root entity
+    fields:
+      - name: title
+        type: string
+        required: true</pre>
+        </div>
+
+        <div class="form-actions">
+            <a href="/hub/spec-builder" class="btn">Cancel</a>
+            <button type="submit" class="btn btn-primary">Import Specification</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.code-example {
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.alert-error {
+    background: var(--error-bg, #fef2f2);
+    border: 1px solid var(--error-border, #fca5a5);
+    color: var(--error-color, #dc2626);
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+}
+</style>
+{% endblock %}
