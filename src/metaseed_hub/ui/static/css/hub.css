@@ -2308,6 +2308,42 @@ td.row-actions {
     pointer-events: auto;
 }
 
+.notification {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-sm);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.875rem;
+    min-width: 200px;
+    max-width: 400px;
+    animation: toastSlideIn 0.3s ease-out;
+    transition: opacity 0.3s ease;
+}
+
+.notification-success {
+    background: var(--clr-success-bg, #ecfdf5);
+    border-left: 4px solid var(--clr-success, #10b981);
+    color: var(--clr-success-text, #065f46);
+}
+
+.notification-error {
+    background: var(--clr-error-bg, #fef2f2);
+    border-left: 4px solid var(--clr-error, #ef4444);
+    color: var(--clr-error-text, #991b1b);
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 /* Empty modal containers should not block clicks */
 #workspace-modal:empty,
 #project-modal:empty {
