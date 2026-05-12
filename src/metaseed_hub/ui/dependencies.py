@@ -39,9 +39,15 @@ def get_or_create_csrf_token(request: Request) -> str:
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
     """Extract and verify user from access token cookie.
 
+    Checks for a refreshed token in request.state first (set by middleware),
+    then falls back to the cookie value.
+
     Returns None if no token or invalid token.
     """
-    token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    # Check for refreshed token from middleware
+    token = getattr(request.state, "refreshed_access_token", None)
+    if not token:
+        token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     if not token:
         return None
     try:

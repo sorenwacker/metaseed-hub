@@ -1,6 +1,7 @@
 """Authentication routes for Hub UI."""
 
 import secrets
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -13,7 +14,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Cookie names
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
+REFRESH_TOKEN_COOKIE = "metaseed_refresh_token"
 STATE_COOKIE = "metaseed_oauth_state"
+
+# Refresh token lifetime (30 days)
+REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60
 
 # OIDC discovery cache
 _oidc_config: dict[str, str] | None = None
@@ -62,7 +67,7 @@ async def auth_login(request: Request) -> RedirectResponse:
     params = {
         "client_id": settings.effective_client_id,
         "response_type": "code",
-        "scope": "openid email profile",
+        "scope": "openid email profile offline_access",
         "redirect_uri": redirect_uri,
         "state": state,
     }
@@ -122,6 +127,7 @@ async def auth_callback(
 
     tokens = token_response.json()
     access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
 
     response = RedirectResponse(url="/hub/", status_code=302)
     response.delete_cookie(key=STATE_COOKIE)
@@ -134,7 +140,55 @@ async def auth_callback(
         max_age=tokens.get("expires_in", 3600),
         path="/",
     )
+    # Store refresh token for longer sessions
+    if refresh_token:
+        response.set_cookie(
+            key=REFRESH_TOKEN_COOKIE,
+            value=refresh_token,
+            httponly=True,
+            secure=not settings.debug,
+            samesite="lax",
+            max_age=REFRESH_TOKEN_MAX_AGE,
+            path="/",
+        )
     return response
+
+
+async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
+    """Use refresh token to get new access token.
+
+    Args:
+        refresh_token: The refresh token from cookie.
+
+    Returns:
+        Dict with new tokens if successful, None if refresh failed.
+    """
+    settings = get_settings()
+    try:
+        oidc_config = await get_oidc_config()
+    except HTTPException:
+        return None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                oidc_config["token_endpoint"],
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": settings.effective_client_id,
+                    "client_secret": settings.effective_client_secret,
+                    "refresh_token": refresh_token,
+                },
+                timeout=10.0,
+            )
+
+        if token_response.status_code == 200:
+            tokens: dict[str, Any] = token_response.json()
+            return tokens
+    except Exception:
+        pass
+
+    return None
 
 
 @router.get("/logout")
@@ -147,6 +201,7 @@ async def auth_logout(request: Request) -> RedirectResponse:
 
     response = RedirectResponse(url="/hub/", status_code=302)
     response.delete_cookie(key=ACCESS_TOKEN_COOKIE)
+    response.delete_cookie(key=REFRESH_TOKEN_COOKIE)
 
     if logout_url:
         params = {
@@ -155,5 +210,6 @@ async def auth_logout(request: Request) -> RedirectResponse:
         }
         response = RedirectResponse(url=f"{logout_url}?{urlencode(params)}", status_code=302)
         response.delete_cookie(key=ACCESS_TOKEN_COOKIE)
+        response.delete_cookie(key=REFRESH_TOKEN_COOKIE)
 
     return response

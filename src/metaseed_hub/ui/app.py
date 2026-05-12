@@ -43,6 +43,12 @@ from metaseed_hub.ui.routes import (
     table_router,
     workspace_router,
 )
+from metaseed_hub.ui.routes.auth import (
+    ACCESS_TOKEN_COOKIE,
+    REFRESH_TOKEN_COOKIE,
+    REFRESH_TOKEN_MAX_AGE,
+    refresh_access_token,
+)
 from metaseed_hub.ui.spec_builder_routes import create_spec_builder_router
 
 # Configure logging
@@ -122,7 +128,71 @@ def create_hub_app() -> FastAPI:
     Returns:
         FastAPI application with hub routes and mounted metaseed UI.
     """
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request as StarletteRequest
+    from starlette.responses import Response as StarletteResponse
+
+    from metaseed_hub.auth import verify_token
+    from metaseed_hub.config import get_settings
+
     app = FastAPI(title="Metaseed Hub")
+
+    # Token refresh middleware - auto-refresh expired tokens
+    class TokenRefreshMiddleware(BaseHTTPMiddleware):
+        """Middleware that refreshes expired access tokens using refresh tokens."""
+
+        async def dispatch(self, request: StarletteRequest, call_next: Any) -> StarletteResponse:
+            """Check and refresh tokens before processing request."""
+            access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+            refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+            new_tokens: dict[str, Any] | None = None
+
+            # If we have an access token, verify it
+            if access_token:
+                try:
+                    await verify_token(access_token)
+                except Exception:
+                    # Token invalid/expired, try to refresh
+                    if refresh_token:
+                        new_tokens = await refresh_access_token(refresh_token)
+                        if new_tokens:
+                            # Store refreshed token in request state for downstream
+                            request.state.refreshed_access_token = new_tokens["access_token"]
+            elif refresh_token:
+                # No access token but have refresh token - try to refresh
+                new_tokens = await refresh_access_token(refresh_token)
+                if new_tokens:
+                    request.state.refreshed_access_token = new_tokens["access_token"]
+
+            # Process request
+            response: StarletteResponse = await call_next(request)
+
+            # If we got new tokens, set them on the response
+            if new_tokens:
+                settings = get_settings()
+                response.set_cookie(
+                    key=ACCESS_TOKEN_COOKIE,
+                    value=new_tokens["access_token"],
+                    httponly=True,
+                    secure=not settings.debug,
+                    samesite="lax",
+                    max_age=int(new_tokens.get("expires_in", 3600)),
+                    path="/",
+                )
+                if new_tokens.get("refresh_token"):
+                    response.set_cookie(
+                        key=REFRESH_TOKEN_COOKIE,
+                        value=str(new_tokens["refresh_token"]),
+                        httponly=True,
+                        secure=not settings.debug,
+                        samesite="lax",
+                        max_age=REFRESH_TOKEN_MAX_AGE,
+                        path="/",
+                    )
+
+            return response
+
+    app.add_middleware(TokenRefreshMiddleware)
 
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
