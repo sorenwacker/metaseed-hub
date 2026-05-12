@@ -297,10 +297,10 @@ def create_hub_app() -> FastAPI:
     ) -> Response:
         """Home page - show workspaces and projects."""
         if not user:
-            return templates.TemplateResponse(
+            return render_template(
                 request=request,
                 name="login.html",
-                context={"request": request},
+                context={},
             )
 
         # Get or create tenant for user
