@@ -70,6 +70,7 @@ async def auth_login(request: Request) -> RedirectResponse:
         "scope": "openid email profile offline_access",
         "redirect_uri": redirect_uri,
         "state": state,
+        "prompt": "consent",
     }
 
     auth_url = f"{oidc_config['authorization_endpoint']}?{urlencode(params)}"
