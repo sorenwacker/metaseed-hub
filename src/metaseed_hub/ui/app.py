@@ -49,7 +49,7 @@ from metaseed_hub.ui.routes.auth import (
     REFRESH_TOKEN_MAX_AGE,
     refresh_access_token,
 )
-from metaseed_hub.ui.spec_builder_routes import create_spec_builder_router
+from metaseed_hub.ui.spec_builder import create_spec_builder_router
 
 # Configure logging
 logging.basicConfig(
