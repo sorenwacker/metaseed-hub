@@ -148,7 +148,7 @@ class DatabaseSpecPersistence(SpecPersistence):
 
         # For now, create a new spec record
         # In a full implementation, this would update existing or create new
-        from metaseed_hub.ui.spec_builder_state import SpecBuilderState
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 
         builder = SpecBuilderState(spec=spec)
 
@@ -394,7 +394,7 @@ class DatabaseSpecProvider(SpecProvider):
             raise FileNotFoundError(f"Spec not found: {profile}/{version}")
 
         # Convert from database format
-        from metaseed_hub.ui.spec_builder_state import SpecBuilderState
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 
         builder = SpecBuilderState.from_dict(db_spec.spec_data)
         if not builder.spec:
