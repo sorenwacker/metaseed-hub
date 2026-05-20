@@ -204,23 +204,53 @@ async def dataset_import(
         elif filename.endswith(".json"):
             data = json.loads(content.decode("utf-8"))
         elif filename.endswith((".xlsx", ".xls")):
-            # Excel import - read first sheet as entity data
+            # Excel import - read sheets as entity data
+            # Each sheet name = entity type, headers = field names
             from io import BytesIO
 
             import openpyxl
 
             wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
-            # Use first sheet
-            ws = wb.active
-            if ws:
+
+            # Parse all sheets into entities dict
+            entities_by_type: dict[str, list[dict[str, Any]]] = {}
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
                 rows = list(ws.iter_rows(values_only=True))
-                if len(rows) > 1:
-                    headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
-                    # Create data dict from first data row
-                    data = {}
-                    for i, val in enumerate(rows[1]):
+                if len(rows) < 2:
+                    continue
+
+                headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
+
+                # Parse data rows (skip header and placeholder row if it has <field> format)
+                for row in rows[1:]:
+                    # Skip placeholder rows
+                    first_val = str(row[0]) if row[0] else ""
+                    if first_val.startswith("<") and first_val.endswith(">"):
+                        continue
+
+                    entity_data = {}
+                    for i, val in enumerate(row):
                         if i < len(headers) and val is not None:
-                            data[headers[i]] = val
+                            # Skip placeholder values
+                            str_val = str(val)
+                            if str_val.startswith("<") and str_val.endswith(">"):
+                                continue
+                            entity_data[headers[i]] = val
+
+                    if entity_data:
+                        if sheet_name not in entities_by_type:
+                            entities_by_type[sheet_name] = []
+                        entities_by_type[sheet_name].append(entity_data)
+
+            # Store entities for later processing
+            data = {"_entities_by_type": entities_by_type}
+
+            # Use first entity of first sheet for root if available
+            if entities_by_type:
+                first_type = list(entities_by_type.keys())[0]
+                if entities_by_type[first_type]:
+                    data.update(entities_by_type[first_type][0])
         else:
             return RedirectResponse("/hub/datasets/new?error=unsupported_format", status_code=302)
 
@@ -270,21 +300,51 @@ async def dataset_import(
         facade = state.get_or_create_facade()
 
         # Handle different data structures
-        entities_data = data.get("entities", []) if isinstance(data, dict) else []
-        if not entities_data and isinstance(data, dict):
-            # Try to use the data directly as root entity
-            Model = get_model(root_entity, version, profile=profile)
-            # Filter out metadata fields
-            entity_data = {
-                k: v
-                for k, v in data.items()
-                if not k.startswith("_") and k not in ("profile", "version")
-            }
-            if entity_data:
-                instance = Model(**entity_data)
-                node = state.add_node(root_entity, instance)
-                state.editing_node_id = node.id
-                create_nested_nodes(state, facade, node, root_entity, copy.deepcopy(entity_data))
+        entities_by_type = data.get("_entities_by_type", {}) if isinstance(data, dict) else {}
+
+        if entities_by_type:
+            # Excel import - create entities by type
+            # Process root entity first, then children in hierarchy order
+            entity_order = [root_entity] + [e for e in facade.entities if e != root_entity]
+
+            for entity_type in entity_order:
+                if entity_type not in entities_by_type:
+                    continue
+
+                for entity_data in entities_by_type[entity_type]:
+                    try:
+                        Model = get_model(entity_type, version, profile=profile)
+                        # Filter out empty values
+                        clean_data = {
+                            k: v for k, v in entity_data.items() if v is not None and str(v).strip()
+                        }
+                        if clean_data:
+                            instance = Model(**clean_data)
+                            node = state.add_node(entity_type, instance)
+                            if not state.editing_node_id:
+                                state.editing_node_id = node.id
+                    except Exception as e:
+                        logger.warning(f"Failed to create {entity_type}: {e}")
+
+        else:
+            # JSON/YAML import - use existing logic
+            entities_data = data.get("entities", []) if isinstance(data, dict) else []
+            if not entities_data and isinstance(data, dict):
+                # Try to use the data directly as root entity
+                Model = get_model(root_entity, version, profile=profile)
+                # Filter out metadata fields
+                entity_data = {
+                    k: v
+                    for k, v in data.items()
+                    if not k.startswith("_") and k not in ("profile", "version")
+                }
+                if entity_data:
+                    instance = Model(**entity_data)
+                    node = state.add_node(root_entity, instance)
+                    state.editing_node_id = node.id
+                    create_nested_nodes(
+                        state, facade, node, root_entity, copy.deepcopy(entity_data)
+                    )
 
         # Save to database
         from sqlalchemy.orm.attributes import flag_modified
@@ -923,6 +983,75 @@ async def dataset_export(
 
     return StreamingResponse(
         excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{dataset_id}/export-template")
+async def dataset_export_template(
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Export an empty Excel template with entity sheets and field headers.
+
+    Users can fill this out in Excel and re-import it.
+    """
+    from io import BytesIO
+
+    import openpyxl
+    from fastapi.responses import StreamingResponse
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
+
+    # Create workbook with sheets for each entity type
+    wb = openpyxl.Workbook()
+    # Remove default sheet
+    wb.remove(wb.active)
+
+    for entity_name in facade.entities:
+        helper = getattr(facade, entity_name, None)
+        if not helper:
+            continue
+
+        # Create sheet for this entity
+        ws = wb.create_sheet(title=entity_name[:31])  # Excel limit
+
+        # Get field names from the entity spec
+        fields = []
+        if hasattr(helper, "spec") and helper.spec:
+            for field in helper.spec.fields:
+                fields.append(field.name)
+        elif hasattr(helper, "model"):
+            # Fallback to model fields
+            for field_name in helper.model.model_fields:
+                fields.append(field_name)
+
+        # Write headers
+        for col, field_name in enumerate(fields, 1):
+            cell = ws.cell(row=1, column=col, value=field_name)
+            cell.font = openpyxl.styles.Font(bold=True)
+
+        # Add example row with placeholder hints
+        for col, field_name in enumerate(fields, 1):
+            ws.cell(row=2, column=col, value=f"<{field_name}>")
+
+        # Auto-size columns
+        for col in range(1, len(fields) + 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 20
+
+    # Save to bytes
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"{dataset.name.replace(' ', '_')}_template.xlsx"
+
+    return StreamingResponse(
+        output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -46,7 +46,10 @@
                         hx-swap="innerHTML"
                         title="Validate all entities">Validate</button>
                 <a href="/hub/datasets/{{ dataset.id }}/graph" class="btn btn-sm" title="Graph view">Graph</a>
-                <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export">Export</a>
+            </div>
+            <div class="sidebar-actions-row">
+                <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
+                <a href="/hub/datasets/{{ dataset.id }}/export-template" class="btn btn-sm" download title="Export empty template for Excel editing">Template</a>
             </div>
         </div>
 
