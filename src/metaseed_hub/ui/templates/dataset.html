@@ -49,7 +49,6 @@
             </div>
             <div class="sidebar-actions-row">
                 <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
-                <a href="/hub/datasets/{{ dataset.id }}/export-template" class="btn btn-sm" download title="Export empty template for Excel editing">Template</a>
                 <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
