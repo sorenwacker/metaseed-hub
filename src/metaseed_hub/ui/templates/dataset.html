@@ -50,7 +50,9 @@
             <div class="sidebar-actions-row">
                 <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
                 <a href="/hub/datasets/{{ dataset.id }}/export-template" class="btn btn-sm" download title="Export empty template for Excel editing">Template</a>
+                <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
+            <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
         </div>
 
         <!-- Entity Tree -->
@@ -199,5 +201,37 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('dataset-layout').classList.add('sidebar-collapsed');
     }
 });
+
+// Import data into existing dataset
+async function handleDatasetImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const response = await fetch('/hub/datasets/{{ dataset.id }}/import', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+
+        if (response.ok) {
+            // Reload page to show imported data
+            window.location.reload();
+        } else {
+            const text = await response.text();
+            alert('Import error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+
+    // Reset input so same file can be imported again
+    input.value = '';
+}
 </script>
 {% endblock %}

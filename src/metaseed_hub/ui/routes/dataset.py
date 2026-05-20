@@ -1057,6 +1057,167 @@ async def dataset_export_template(
     )
 
 
+@router.post("/{dataset_id}/import")
+async def dataset_import_into_existing(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+) -> Response:
+    """Import data from file into an existing dataset.
+
+    Supports JSON, YAML, and Excel files. Adds entities to the existing dataset.
+    """
+    import json
+    from io import BytesIO
+
+    import yaml
+    from metaseed.models import get_model
+    from sqlalchemy.orm.attributes import flag_modified
+
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    # Read file content
+    content = await file.read()
+    filename = file.filename or ""
+
+    # Parse based on file type
+    entities_by_type: dict[str, list[dict[str, Any]]] = {}
+
+    try:
+        if filename.endswith((".yaml", ".yml")):
+            data = yaml.safe_load(content.decode("utf-8"))
+            # For YAML, treat as single root entity or check for entities list
+            if isinstance(data, dict) and "entities" in data:
+                for entity in data["entities"]:
+                    etype = entity.get("_type", dataset.profile)
+                    if etype not in entities_by_type:
+                        entities_by_type[etype] = []
+                    entities_by_type[etype].append(entity)
+            elif isinstance(data, dict):
+                # Single entity - use root entity type
+                from metaseed.specs.loader import SpecLoader
+
+                loader = SpecLoader(profile=dataset.profile)
+                spec = loader.load_profile(dataset.version, dataset.profile)
+                root_entity = spec.root_entity or "Investigation"
+                entities_by_type[root_entity] = [data]
+
+        elif filename.endswith(".json"):
+            data = json.loads(content.decode("utf-8"))
+            if isinstance(data, dict) and "entities" in data:
+                for entity in data["entities"]:
+                    etype = entity.get("_type", dataset.profile)
+                    if etype not in entities_by_type:
+                        entities_by_type[etype] = []
+                    entities_by_type[etype].append(entity)
+            elif isinstance(data, dict):
+                from metaseed.specs.loader import SpecLoader
+
+                loader = SpecLoader(profile=dataset.profile)
+                spec = loader.load_profile(dataset.version, dataset.profile)
+                root_entity = spec.root_entity or "Investigation"
+                entities_by_type[root_entity] = [data]
+
+        elif filename.endswith((".xlsx", ".xls")):
+            import openpyxl
+
+            wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                rows = list(ws.iter_rows(values_only=True))
+                if len(rows) < 2:
+                    continue
+
+                headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
+
+                for row in rows[1:]:
+                    first_val = str(row[0]) if row[0] else ""
+                    if first_val.startswith("<") and first_val.endswith(">"):
+                        continue
+
+                    entity_data: dict[str, Any] = {}
+                    for i, val in enumerate(row):
+                        if i < len(headers) and val is not None:
+                            str_val = str(val)
+                            if str_val.startswith("<") and str_val.endswith(">"):
+                                continue
+                            entity_data[headers[i]] = val
+
+                    if entity_data:
+                        if sheet_name not in entities_by_type:
+                            entities_by_type[sheet_name] = []
+                        entities_by_type[sheet_name].append(entity_data)
+        else:
+            return HTMLResponse(
+                "<div class='notification error'>Unsupported file format</div>",
+                status_code=400,
+            )
+
+    except Exception as e:
+        logger.exception(f"Failed to parse import file: {e}")
+        return HTMLResponse(
+            f"<div class='notification error'>Parse error: {e}</div>",
+            status_code=400,
+        )
+
+    # Get dataset state and add entities
+    state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
+
+    imported_count = 0
+    errors: list[str] = []
+
+    # Process entities in order (root first)
+    from metaseed.specs.loader import SpecLoader
+
+    loader = SpecLoader(profile=dataset.profile)
+    spec = loader.load_profile(dataset.version, dataset.profile)
+    root_entity = spec.root_entity or "Investigation"
+
+    entity_order = [root_entity] + [e for e in facade.entities if e != root_entity]
+
+    for entity_type in entity_order:
+        if entity_type not in entities_by_type:
+            continue
+
+        for entity_data in entities_by_type[entity_type]:
+            try:
+                Model = get_model(entity_type, dataset.version, profile=dataset.profile)
+                clean_data = {
+                    k: v
+                    for k, v in entity_data.items()
+                    if v is not None and str(v).strip() and not k.startswith("_")
+                }
+                if clean_data:
+                    instance = Model(**clean_data)
+                    state.add_node(entity_type, instance)
+                    imported_count += 1
+            except Exception as e:
+                errors.append(f"{entity_type}: {e}")
+
+    # Save to database
+    dataset.data = serialize_tree(state)
+    flag_modified(dataset, "data")
+    session.add(dataset)
+    await session.commit()
+
+    if errors:
+        msg = f"Imported {imported_count} entities with {len(errors)} errors"
+        logger.warning(f"Import errors: {errors[:5]}")
+    else:
+        msg = f"Successfully imported {imported_count} entities"
+
+    return HTMLResponse(f"<div class='notification success'>{msg}</div>")
+
+
 # =============================================================================
 # Member Management Routes
 # =============================================================================
