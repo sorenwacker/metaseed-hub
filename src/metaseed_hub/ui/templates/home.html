@@ -82,31 +82,6 @@
         </div>
     </section>
 
-    <!-- Workspaces (collapsed) -->
-    <details class="home-section-collapsible">
-        <summary class="section-header clickable">
-            <h2 class="section-title">Workspaces</h2>
-            <span class="toggle-hint">organize datasets &amp; specs</span>
-        </summary>
-        <div class="workspace-grid">
-            {% for workspace in workspaces %}
-            <a href="/hub/workspaces/{{ workspace.id }}" class="workspace-card">
-                <h3>{{ workspace.name }}</h3>
-                {% if workspace.description %}
-                <p>{{ workspace.description }}</p>
-                {% endif %}
-            </a>
-            {% else %}
-            <p class="empty-state-inline">No workspaces yet.</p>
-            {% endfor %}
-            <button class="btn btn-ghost"
-                    hx-get="/hub/workspaces/new"
-                    hx-target="#modal-container"
-                    hx-swap="innerHTML">
-                + New Workspace
-            </button>
-        </div>
-    </details>
 </div>
 
 <div id="modal-container"></div>
