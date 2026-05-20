@@ -47,41 +47,6 @@
             {% endfor %}
         </div>
     </section>
-
-    <!-- Specs Section -->
-    <section class="home-section">
-        <div class="section-header">
-            <h2 class="section-title">My Specs</h2>
-            <a href="/hub/spec-builder/new" class="btn btn-primary btn-sm">+ New Spec</a>
-        </div>
-        <div class="project-grid">
-            {% for spec in specs %}
-            <div class="project-card">
-                <a href="/hub/spec-builder/{{ spec.id }}" class="project-card-link">
-                    <h3>{{ spec.name or 'Untitled' }}</h3>
-                    {% if spec.description %}
-                    <p class="project-desc">{{ spec.description }}</p>
-                    {% endif %}
-                    <div class="project-meta">
-                        <span class="profile-badge">v{{ spec.version }}</span>
-                        <span class="date">{{ spec.updated_at.strftime('%Y-%m-%d') }}</span>
-                    </div>
-                </a>
-            </div>
-            {% else %}
-            <div class="empty-state-card">
-                <div class="empty-state-icon">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                </div>
-                <p class="empty-state-title">No specifications yet</p>
-                <p class="empty-state-desc">Create a spec to define metadata schemas.</p>
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-
 </div>
 
 <div id="modal-container"></div>
