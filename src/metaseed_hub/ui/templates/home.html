@@ -24,6 +24,9 @@
             <div class="project-card">
                 <a href="/hub/datasets/{{ dataset.id }}" class="project-card-link">
                     <h3>{{ dataset.name }}</h3>
+                    {% if dataset.description %}
+                    <p class="project-desc">{{ dataset.description }}</p>
+                    {% endif %}
                     <div class="project-meta">
                         <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
                         <span class="date">{{ dataset.updated_at.strftime('%Y-%m-%d') }}</span>
@@ -56,6 +59,9 @@
             <div class="project-card">
                 <a href="/hub/spec-builder/{{ spec.id }}" class="project-card-link">
                     <h3>{{ spec.name or 'Untitled' }}</h3>
+                    {% if spec.description %}
+                    <p class="project-desc">{{ spec.description }}</p>
+                    {% endif %}
                     <div class="project-meta">
                         <span class="profile-badge">v{{ spec.version }}</span>
                         <span class="date">{{ spec.updated_at.strftime('%Y-%m-%d') }}</span>
