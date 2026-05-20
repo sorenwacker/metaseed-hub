@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .factories import (
-    make_project,
+    make_dataset,
     make_team,
     make_tenant,
     make_user,
@@ -233,11 +233,11 @@ class TestWorkspaceModel:
         assert workspace.is_deleted is True
 
 
-class TestProjectModel:
-    """Tests for Project model constraints."""
+class TestDatasetModel:
+    """Tests for Dataset model constraints."""
 
-    async def test_project_name_unique_per_workspace(self, session: AsyncSession) -> None:
-        """Project name should be unique within a workspace."""
+    async def test_dataset_name_unique_per_workspace(self, session: AsyncSession) -> None:
+        """Dataset name should be unique within a workspace."""
         tenant = make_tenant()
         session.add(tenant)
         await session.flush()
@@ -248,20 +248,20 @@ class TestProjectModel:
         await session.flush()
 
         # Same name in different workspaces should work
-        proj1 = make_project(workspace=ws1, name="Analysis")
-        proj2 = make_project(workspace=ws2, name="Analysis")
-        session.add_all([proj1, proj2])
+        ds1 = make_dataset(workspace=ws1, name="Analysis")
+        ds2 = make_dataset(workspace=ws2, name="Analysis")
+        session.add_all([ds1, ds2])
         await session.flush()
 
         # Same name in same workspace should fail
-        proj3 = make_project(workspace=ws1, name="Analysis")
-        session.add(proj3)
+        ds3 = make_dataset(workspace=ws1, name="Analysis")
+        session.add(ds3)
 
         with pytest.raises(IntegrityError):
             await session.flush()
 
-    async def test_project_has_timestamps(self, session: AsyncSession) -> None:
-        """Project should have created_at and updated_at timestamps."""
+    async def test_dataset_has_timestamps(self, session: AsyncSession) -> None:
+        """Dataset should have created_at and updated_at timestamps."""
         tenant = make_tenant()
         session.add(tenant)
         await session.flush()
@@ -270,16 +270,16 @@ class TestProjectModel:
         session.add(workspace)
         await session.flush()
 
-        project = make_project(workspace=workspace)
-        session.add(project)
+        dataset = make_dataset(workspace=workspace)
+        session.add(dataset)
         await session.flush()
-        await session.refresh(project)
+        await session.refresh(dataset)
 
-        assert project.created_at is not None
-        assert project.updated_at is not None
+        assert dataset.created_at is not None
+        assert dataset.updated_at is not None
 
-    async def test_project_updated_at_changes_on_update(self, session: AsyncSession) -> None:
-        """Project updated_at should change when the project is modified."""
+    async def test_dataset_updated_at_changes_on_update(self, session: AsyncSession) -> None:
+        """Dataset updated_at should change when the dataset is modified."""
         tenant = make_tenant()
         session.add(tenant)
         await session.flush()
@@ -288,23 +288,23 @@ class TestProjectModel:
         session.add(workspace)
         await session.flush()
 
-        project = make_project(workspace=workspace)
-        session.add(project)
+        dataset = make_dataset(workspace=workspace)
+        session.add(dataset)
         await session.flush()
-        await session.refresh(project)
+        await session.refresh(dataset)
 
-        original_updated_at = project.updated_at
+        original_updated_at = dataset.updated_at
 
-        # Modify the project
-        project.name = "Updated Name"
+        # Modify the dataset
+        dataset.name = "Updated Name"
         await session.flush()
-        await session.refresh(project)
+        await session.refresh(dataset)
 
         # updated_at should be >= original (may be same if within resolution)
-        assert project.updated_at >= original_updated_at
+        assert dataset.updated_at >= original_updated_at
 
-    async def test_project_soft_delete(self, session: AsyncSession) -> None:
-        """Project should support soft delete."""
+    async def test_dataset_soft_delete(self, session: AsyncSession) -> None:
+        """Dataset should support soft delete."""
         tenant = make_tenant()
         session.add(tenant)
         await session.flush()
@@ -313,19 +313,19 @@ class TestProjectModel:
         session.add(workspace)
         await session.flush()
 
-        project = make_project(workspace=workspace)
-        session.add(project)
+        dataset = make_dataset(workspace=workspace)
+        session.add(dataset)
         await session.flush()
-        await session.refresh(project)
+        await session.refresh(dataset)
 
-        assert project.is_deleted is False
+        assert dataset.is_deleted is False
 
-        project.soft_delete()
+        dataset.soft_delete()
         await session.flush()
-        await session.refresh(project)
+        await session.refresh(dataset)
 
-        assert project.is_deleted is True
-        assert project.deleted_at is not None
+        assert dataset.is_deleted is True
+        assert dataset.deleted_at is not None
 
 
 class TestTimestampBehavior:
