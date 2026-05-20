@@ -169,9 +169,9 @@ class TestAuthorizationDependencies:
         assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_get_project_for_user_not_found(self) -> None:
-        """Raises 404 when project not found."""
-        from metaseed_hub.ui.dependencies import get_project_for_user
+    async def test_get_dataset_for_user_not_found(self) -> None:
+        """Raises 404 when dataset not found."""
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
 
         session = AsyncMock()
         result_mock = Mock()
@@ -182,7 +182,7 @@ class TestAuthorizationDependencies:
         user.keycloak_id = "user12345678"
 
         with pytest.raises(HTTPException) as exc_info:
-            await get_project_for_user("nonexistent", session, user)
+            await get_dataset_for_user("nonexistent", session, user)
 
         assert exc_info.value.status_code == 404
 
@@ -200,19 +200,19 @@ class TestXSSPrevention:
         assert "&lt;script&gt;" in escaped
         assert "<script>" not in escaped
 
-    def test_project_name_escaped_in_template_context(self) -> None:
-        """Project names are escaped by Jinja2 autoescaping."""
+    def test_dataset_name_escaped_in_template_context(self) -> None:
+        """Dataset names are escaped by Jinja2 autoescaping."""
         # Jinja2 auto-escapes by default
         # This test verifies our understanding
         from jinja2 import Environment, select_autoescape
 
         env = Environment(autoescape=select_autoescape())
-        template = env.from_string("<h1>{{ project.name }}</h1>")
+        template = env.from_string("<h1>{{ dataset.name }}</h1>")
 
-        class FakeProject:
+        class FakeDataset:
             name = "<script>alert('xss')</script>"
 
-        result = template.render(project=FakeProject())
+        result = template.render(dataset=FakeDataset())
 
         assert "&lt;script&gt;" in result
         assert "<script>" not in result
