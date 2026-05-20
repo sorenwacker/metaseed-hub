@@ -4303,6 +4303,205 @@ a.start-option-card:hover {
     border-top: 1px solid var(--clr-fog, var(--clr-border));
 }
 
+/* Dataset Form Sections */
+.dataset-import-section,
+.dataset-specs-section,
+.dataset-profiles-section {
+    margin-bottom: var(--space-lg);
+}
+
+.dataset-import-section h3,
+.dataset-specs-section h3,
+.dataset-profiles-section h3 {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--clr-ink-light);
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--clr-parchment);
+}
+
+.import-options {
+    display: flex;
+    gap: var(--space-md);
+}
+
+.btn-file {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: pointer;
+}
+
+.btn-file input[type="file"] {
+    display: none;
+}
+
+.profile-grid-compact {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-md);
+}
+
+.profile-grid-compact .profile-card {
+    padding: var(--space-md);
+}
+
+.profile-grid-compact .profile-card h3 {
+    font-size: 1rem;
+}
+
+/* Home Page Sections */
+.home-section {
+    margin-bottom: var(--space-2xl);
+}
+
+.home-section-collapsible {
+    margin-bottom: var(--space-xl);
+}
+
+.home-section-collapsible > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.home-section-collapsible > summary::-webkit-details-marker {
+    display: none;
+}
+
+.home-section-collapsible > summary .toggle-hint {
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+    margin-left: var(--space-sm);
+}
+
+.home-section-collapsible[open] > summary .toggle-hint::before {
+    content: "▼ ";
+}
+
+.home-section-collapsible:not([open]) > summary .toggle-hint::before {
+    content: "▶ ";
+}
+
+.section-header.clickable {
+    cursor: pointer;
+    padding: var(--space-sm) 0;
+    border-radius: var(--radius-md);
+    transition: background 0.15s;
+}
+
+.section-header.clickable:hover {
+    background: var(--clr-parchment);
+    padding-left: var(--space-sm);
+}
+
+/* Entity List (metaseed style) */
+.entity-list {
+    padding: var(--space-lg);
+}
+
+.entity-list h2 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-md);
+}
+
+.entity-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.entity-item.child {
+    margin-left: var(--space-lg);
+}
+
+.entity-children {
+    margin-left: var(--space-md);
+    padding-left: var(--space-md);
+    border-left: 2px solid var(--clr-parchment);
+}
+
+.btn-entity {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: white;
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+}
+
+.btn-entity:hover {
+    border-color: var(--clr-moss);
+    background: var(--clr-success-bg);
+}
+
+.btn-entity.btn-nested {
+    background: var(--clr-ivory);
+}
+
+.btn-entity .entity-type {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--clr-moss);
+    background: var(--clr-success-bg);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.btn-entity .entity-label {
+    flex: 1;
+    color: var(--clr-ink);
+}
+
+.btn-delete {
+    padding: var(--space-xs) var(--space-sm);
+    background: transparent;
+    border: none;
+    color: var(--clr-ink-light);
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+}
+
+.btn-delete:hover {
+    color: var(--clr-error);
+    background: var(--clr-error-bg);
+}
+
+/* Welcome State */
+.welcome {
+    padding: var(--space-2xl);
+    text-align: center;
+}
+
+.welcome h2 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-sm);
+}
+
+.welcome p {
+    color: var(--clr-ink-light);
+    margin-bottom: var(--space-lg);
+}
+
+.welcome-actions {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
 /* =============================================================================
    Spec Builder - View Page
    ============================================================================= */

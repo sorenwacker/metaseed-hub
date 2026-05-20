@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Tenant, Workspace
+from metaseed_hub.models import Dataset, SpecDraft, Tenant, Workspace
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     OptionalUser,
@@ -295,7 +295,7 @@ def create_hub_app() -> FastAPI:
         session: Annotated[AsyncSession, Depends(get_session)],
         user: OptionalUser,
     ) -> Response:
-        """Home page - show workspaces and projects."""
+        """Home page - show datasets and specs."""
         if not user:
             return render_template(
                 request=request,
@@ -309,6 +309,27 @@ def create_hub_app() -> FastAPI:
         # Get user's workspaces
         result = await session.execute(select(Workspace).where(Workspace.tenant_id == tenant.id))
         workspaces = list(result.scalars().all())
+        workspace_ids = [w.id for w in workspaces]
+
+        # Get all datasets across user's workspaces
+        datasets: list[Dataset] = []
+        if workspace_ids:
+            ds_result = await session.execute(
+                select(Dataset)
+                .where(Dataset.workspace_id.in_(workspace_ids), Dataset.deleted_at.is_(None))
+                .order_by(Dataset.updated_at.desc())
+            )
+            datasets = list(ds_result.scalars().all())
+
+        # Get all spec drafts across user's workspaces
+        specs: list[SpecDraft] = []
+        if workspace_ids:
+            spec_result = await session.execute(
+                select(SpecDraft)
+                .where(SpecDraft.workspace_id.in_(workspace_ids))
+                .order_by(SpecDraft.updated_at.desc())
+            )
+            specs = list(spec_result.scalars().all())
 
         return render_template(
             request=request,
@@ -316,6 +337,8 @@ def create_hub_app() -> FastAPI:
             context={
                 "user": user,
                 "workspaces": workspaces,
+                "datasets": datasets,
+                "specs": specs,
                 "nav_active": "home",
             },
         )

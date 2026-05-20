@@ -3,43 +3,105 @@
 {% block title %}Home - Metaseed Hub{% endblock %}
 
 {% block nav %}
-<span class="nav-item active">Workspaces</span>
+<span class="nav-item active">Home</span>
 {% endblock %}
 
 {% block content %}
 <div class="home-container">
-    <div class="page-header">
-        <h1>Your Workspaces</h1>
-        <div class="header-actions">
-            <a href="/hub/spec-builder" class="btn">Spec Builder</a>
-            <button class="btn btn-primary"
+    <!-- Datasets Section -->
+    <section class="home-section">
+        <div class="section-header">
+            <h2 class="section-title">My Datasets</h2>
+            <button class="btn btn-primary btn-sm"
+                    hx-get="/hub/datasets/new"
+                    hx-target="#modal-container"
+                    hx-swap="innerHTML">
+                + New Dataset
+            </button>
+        </div>
+        <div class="project-grid">
+            {% for dataset in datasets %}
+            <div class="project-card">
+                <a href="/hub/datasets/{{ dataset.id }}" class="project-card-link">
+                    <h3>{{ dataset.name }}</h3>
+                    <div class="project-meta">
+                        <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
+                        <span class="date">{{ dataset.updated_at.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                </a>
+            </div>
+            {% else %}
+            <div class="empty-state-card">
+                <div class="empty-state-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"/>
+                        <path d="M12 4v16M4 12h16"/>
+                    </svg>
+                </div>
+                <p class="empty-state-title">No datasets yet</p>
+                <p class="empty-state-desc">Create a dataset to start entering metadata.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Specs Section -->
+    <section class="home-section">
+        <div class="section-header">
+            <h2 class="section-title">My Specs</h2>
+            <a href="/hub/spec-builder/new" class="btn btn-primary btn-sm">+ New Spec</a>
+        </div>
+        <div class="project-grid">
+            {% for spec in specs %}
+            <div class="project-card">
+                <a href="/hub/spec-builder/{{ spec.id }}" class="project-card-link">
+                    <h3>{{ spec.name or 'Untitled' }}</h3>
+                    <div class="project-meta">
+                        <span class="profile-badge">v{{ spec.version }}</span>
+                        <span class="date">{{ spec.updated_at.strftime('%Y-%m-%d') }}</span>
+                    </div>
+                </a>
+            </div>
+            {% else %}
+            <div class="empty-state-card">
+                <div class="empty-state-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <p class="empty-state-title">No specifications yet</p>
+                <p class="empty-state-desc">Create a spec to define metadata schemas.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Workspaces (collapsed) -->
+    <details class="home-section-collapsible">
+        <summary class="section-header clickable">
+            <h2 class="section-title">Workspaces</h2>
+            <span class="toggle-hint">organize datasets &amp; specs</span>
+        </summary>
+        <div class="workspace-grid">
+            {% for workspace in workspaces %}
+            <a href="/hub/workspaces/{{ workspace.id }}" class="workspace-card">
+                <h3>{{ workspace.name }}</h3>
+                {% if workspace.description %}
+                <p>{{ workspace.description }}</p>
+                {% endif %}
+            </a>
+            {% else %}
+            <p class="empty-state-inline">No workspaces yet.</p>
+            {% endfor %}
+            <button class="btn btn-ghost"
                     hx-get="/hub/workspaces/new"
-                    hx-target="#workspace-modal"
+                    hx-target="#modal-container"
                     hx-swap="innerHTML">
                 + New Workspace
             </button>
         </div>
-    </div>
-
-    <div class="workspace-grid">
-        {% for workspace in workspaces %}
-        <a href="/hub/workspaces/{{ workspace.id }}" class="workspace-card">
-            <h3>{{ workspace.name }}</h3>
-            {% if workspace.description %}
-            <p>{{ workspace.description }}</p>
-            {% endif %}
-            <span class="workspace-meta">
-                Created {{ workspace.created_at.strftime('%Y-%m-%d') }}
-            </span>
-        </a>
-        {% else %}
-        <div class="empty-state">
-            <p>No workspaces yet.</p>
-            <p>Create a workspace to organize your projects.</p>
-        </div>
-        {% endfor %}
-    </div>
+    </details>
 </div>
 
-<div id="workspace-modal"></div>
+<div id="modal-container"></div>
 {% endblock %}
