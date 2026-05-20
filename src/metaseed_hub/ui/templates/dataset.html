@@ -91,15 +91,28 @@
             </div>
         </div>
         {% else %}
-        <!-- Overview Panel -->
+        <!-- Overview Panel with Tabs -->
         <div class="dataset-overview">
             <div class="overview-header">
                 <p class="overview-hint">Select an entity from the sidebar to edit{% if not tree_data %}, or create one using the buttons above{% endif %}.</p>
             </div>
 
-            <!-- Version History (main content) -->
-            <div class="overview-section">
-                <h3 class="overview-section-title">Version History</h3>
+            <!-- Tab Navigation -->
+            <div class="overview-tabs">
+                <button class="overview-tab active" data-tab="history" onclick="switchOverviewTab('history')">
+                    History
+                </button>
+                <button class="overview-tab" data-tab="comments" onclick="switchOverviewTab('comments')">
+                    Comments
+                </button>
+                <button class="overview-tab" data-tab="sharing" onclick="switchOverviewTab('sharing')">
+                    Sharing
+                    <span class="tab-count">{{ members|length }}</span>
+                </button>
+            </div>
+
+            <!-- History Tab -->
+            <div class="overview-tab-content active" id="tab-history">
                 <div id="versions-list"
                      hx-get="/hub/datasets/{{ dataset.id }}/versions"
                      hx-trigger="load"
@@ -108,9 +121,8 @@
                 </div>
             </div>
 
-            <!-- Secondary sections in collapsible panels -->
-            <details class="overview-details">
-                <summary class="overview-summary">Comments</summary>
+            <!-- Comments Tab -->
+            <div class="overview-tab-content" id="tab-comments">
                 <div id="comments-list"
                      hx-get="/hub/datasets/{{ dataset.id }}/comments"
                      hx-trigger="revealed"
@@ -125,10 +137,10 @@
                     <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
                     <button type="submit" class="btn btn-primary">Post</button>
                 </form>
-            </details>
+            </div>
 
-            <details class="overview-details">
-                <summary class="overview-summary">Sharing <span class="tab-count">{{ members|length }}</span></summary>
+            <!-- Sharing Tab -->
+            <div class="overview-tab-content" id="tab-sharing">
                 <div class="member-list" id="member-list">
                     {% for member in members %}
                     <div class="member-row">
@@ -161,7 +173,7 @@
                     <input type="email" name="email" placeholder="Add collaborator by email" required class="form-input">
                     <button type="submit" class="btn btn-primary">Add</button>
                 </form>
-            </details>
+            </div>
         </div>
         {% endif %}
     </main>
@@ -179,6 +191,16 @@ function toggleSidebar() {
 
     // Save preference
     localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+}
+
+// Overview tab switching
+function switchOverviewTab(tabName) {
+    document.querySelectorAll('.overview-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.overview-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === 'tab-' + tabName);
+    });
 }
 
 // Restore sidebar state on load
