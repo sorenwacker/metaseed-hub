@@ -12,9 +12,9 @@ from metaseed.ui.state import AppState, TreeNode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Project
-from metaseed_hub.ui.dependencies import get_project_state_for_mutation
-from metaseed_hub.ui.helpers import save_project_state
+from metaseed_hub.models import Dataset
+from metaseed_hub.ui.dependencies import get_dataset_state_for_mutation
+from metaseed_hub.ui.helpers import save_dataset_state
 
 router = APIRouter(tags=["table"])
 
@@ -23,7 +23,7 @@ PRIMITIVE_TYPES = {"string", "integer", "float", "boolean", "date", "datetime", 
 
 
 def _handle_primitive_list_row(
-    project_id: str,
+    dataset_id: str,
     parent_node: TreeNode,
     field_name: str,
     nested_type: str,
@@ -32,7 +32,7 @@ def _handle_primitive_list_row(
     """Handle adding a new row to a primitive list.
 
     Args:
-        project_id: ID of the project.
+        dataset_id: ID of the dataset.
         parent_node: Parent TreeNode containing the list.
         field_name: Name of the list field.
         nested_type: Type of items in the list.
@@ -55,7 +55,7 @@ def _handle_primitive_list_row(
 
 
 def _build_primitive_row_html(
-    project_id: str,
+    dataset_id: str,
     parent_node_id: str,
     field_name: str,
     row_idx: int,
@@ -64,7 +64,7 @@ def _build_primitive_row_html(
     """Build HTML for a new primitive list row.
 
     Args:
-        project_id: ID of the project.
+        dataset_id: ID of the dataset.
         parent_node_id: ID of the parent node.
         field_name: Name of the list field.
         row_idx: Index of the new row.
@@ -81,7 +81,7 @@ def _build_primitive_row_html(
     elif nested_type.lower() == "datetime":
         input_type = "datetime-local"
 
-    post_url = f"/hub/projects/{project_id}/table/{parent_node_id}"
+    post_url = f"/hub/datasets/{dataset_id}/table/{parent_node_id}"
     post_url += f"/primitive/{field_name}/{row_idx}"
 
     html = f'<tr id="row-{field_name}-{row_idx}" data-idx="{row_idx}">'
@@ -154,7 +154,7 @@ def _get_default_values(
 
 
 def _build_entity_row_html(
-    project_id: str,
+    dataset_id: str,
     field_name: str,
     row_idx: int,
     child_node: TreeNode,
@@ -167,7 +167,7 @@ def _build_entity_row_html(
     """Build HTML for a new entity table row.
 
     Args:
-        project_id: ID of the project.
+        dataset_id: ID of the dataset.
         field_name: Name of the nested field.
         row_idx: Index of the new row.
         child_node: TreeNode for the new child entity.
@@ -206,7 +206,7 @@ def _build_entity_row_html(
             step = 'step="any"' if col_type == "float" else ""
             display_value = cell_value or "Click to edit"
             placeholder_class = " placeholder" if not cell_value else ""
-            post_url = f"/hub/projects/{project_id}/table/{child_node.id}/cell"
+            post_url = f"/hub/datasets/{dataset_id}/table/{child_node.id}/cell"
             html += f"""<td class="editable-cell" data-col="{col}">
                 <span class="cell-display{placeholder_class}">{display_value}</span>
                 <input type="{input_type}" class="cell-input" name="{col}"
@@ -216,12 +216,12 @@ def _build_entity_row_html(
 
     html += f"""<td class="row-actions">
         <button type="button" class="btn-icon"
-                hx-get="/hub/projects/{project_id}/entity/{child_node.id}"
+                hx-get="/hub/datasets/{dataset_id}/entity/{child_node.id}"
                 hx-target="#editor"
                 hx-swap="innerHTML"
                 title="Edit">&#9998;</button>
         <button type="button" class="btn-icon danger"
-                hx-delete="/hub/projects/{project_id}/entity/{child_node.id}"
+                hx-delete="/hub/datasets/{dataset_id}/entity/{child_node.id}"
                 hx-target="#row-{field_name}-{row_idx}"
                 hx-swap="delete"
                 hx-confirm="Delete this {nested_type}?"
@@ -232,15 +232,15 @@ def _build_entity_row_html(
 
 
 @router.post(
-    "/projects/{project_id}/table/{parent_node_id}/{field_name}/row",
+    "/datasets/{dataset_id}/table/{parent_node_id}/{field_name}/row",
     response_class=HTMLResponse,
 )
 async def add_table_row(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     parent_node_id: str,
     field_name: str,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Add a new row to an inline table.
@@ -249,7 +249,7 @@ async def add_table_row(
     For primitive lists, adds a new empty value to the list.
     For entity lists, creates a new child entity with default values.
     """
-    project, state = project_state
+    dataset, state = dataset_state
 
     if parent_node_id not in state.nodes_by_id:
         return HTMLResponse("<tr><td>Parent entity not found</td></tr>")
@@ -268,7 +268,7 @@ async def add_table_row(
         # Handle primitive list types (list of strings, integers, etc.)
         if nested_type.lower() in PRIMITIVE_TYPES:
             row_idx, current_list = _handle_primitive_list_row(
-                project_id, parent_node, field_name, nested_type, state
+                dataset_id, parent_node, field_name, nested_type, state
             )
 
             # Update parent instance with new list
@@ -278,11 +278,11 @@ async def add_table_row(
             state.update_node(parent_node_id, updated_instance)
 
             # Save to database
-            await save_project_state(session, project, state)
+            await save_dataset_state(session, dataset, state)
 
             # Return row HTML for primitive value
             html = _build_primitive_row_html(
-                project_id, parent_node_id, field_name, row_idx, nested_type
+                dataset_id, parent_node_id, field_name, row_idx, nested_type
             )
 
             response = HTMLResponse(html)
@@ -313,7 +313,7 @@ async def add_table_row(
     child_node = state.add_node(nested_type, instance, parent_id=parent_node_id)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     # Get columns for display
     columns = []
@@ -344,7 +344,7 @@ async def add_table_row(
                 inherited_cols.add(col)
 
     html = _build_entity_row_html(
-        project_id,
+        dataset_id,
         field_name,
         row_idx,
         child_node,
@@ -360,16 +360,16 @@ async def add_table_row(
     return response
 
 
-@router.post("/projects/{project_id}/table/{node_id}/cell")
+@router.post("/datasets/{dataset_id}/table/{node_id}/cell")
 async def update_table_cell(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
     """Update a single cell value in an inline table."""
-    project, state = project_state
+    dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -411,7 +411,7 @@ async def update_table_cell(
 
     instance = helper.create(**current_values)
     state.update_node(node_id, instance)
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     return Response(
         status_code=200,
@@ -420,20 +420,20 @@ async def update_table_cell(
 
 
 @router.post(
-    "/projects/{project_id}/table/{node_id}/primitive/{field_name}/{idx}",
+    "/datasets/{dataset_id}/table/{node_id}/primitive/{field_name}/{idx}",
     response_class=HTMLResponse,
 )
 async def update_primitive_list_item(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     field_name: str,
     idx: int,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a primitive list item value."""
-    project, state = project_state
+    dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -465,26 +465,26 @@ async def update_primitive_list_item(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     return HTMLResponse(status_code=200)
 
 
 @router.delete(
-    "/projects/{project_id}/table/{node_id}/primitive/{field_name}/{idx}",
+    "/datasets/{dataset_id}/table/{node_id}/primitive/{field_name}/{idx}",
     response_class=HTMLResponse,
 )
 async def delete_primitive_list_item(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     field_name: str,
     idx: int,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Delete a primitive list item."""
-    project, state = project_state
+    dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -512,7 +512,7 @@ async def delete_primitive_list_item(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     response = HTMLResponse(status_code=200)
     response.headers["HX-Trigger"] = "entityChanged"
@@ -520,15 +520,15 @@ async def delete_primitive_list_item(
 
 
 @router.post(
-    "/projects/{project_id}/table/{node_id}/single/{field_name}",
+    "/datasets/{dataset_id}/table/{node_id}/single/{field_name}",
     response_class=HTMLResponse,
 )
 async def update_single_entity_field(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     field_name: str,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a single entity field (e.g., measurement_type, technology_type).
@@ -536,7 +536,7 @@ async def update_single_entity_field(
     Single entity fields are nested objects that are not lists - they contain
     a single instance of another entity type embedded in the parent.
     """
-    project, state = project_state
+    dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -595,7 +595,7 @@ async def update_single_entity_field(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     return HTMLResponse(
         status_code=200,
@@ -604,22 +604,22 @@ async def update_single_entity_field(
 
 
 @router.delete(
-    "/projects/{project_id}/table/{node_id}/single/{field_name}",
+    "/datasets/{dataset_id}/table/{node_id}/single/{field_name}",
     response_class=HTMLResponse,
 )
 async def delete_single_entity_field(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     field_name: str,
-    project_state: Annotated[tuple[Project, AppState], Depends(get_project_state_for_mutation)],
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Clear/delete a single entity field.
 
     Sets the field to None/empty, removing the nested entity data.
     """
-    project, state = project_state
+    dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse(status_code=404)
@@ -646,7 +646,7 @@ async def delete_single_entity_field(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     # Return empty inline table HTML for the cleared field
     field_info = helper.field_info(field_name)

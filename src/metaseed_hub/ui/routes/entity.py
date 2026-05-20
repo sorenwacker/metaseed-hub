@@ -6,14 +6,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_project_for_user
+from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_dataset_for_user
 from metaseed_hub.ui.forms import extract_entity_values
 from metaseed_hub.ui.helpers import (
     build_entity_form_context,
-    ensure_project_facade,
-    get_project_state,
-    project_states,
-    save_project_state,
+    dataset_states,
+    ensure_dataset_facade,
+    get_dataset_state,
+    save_dataset_state,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
@@ -21,7 +21,7 @@ from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 logger = logging.getLogger("metaseed_hub")
 
-router = APIRouter(prefix="/projects/{project_id}", tags=["entities"])
+router = APIRouter(prefix="/datasets/{dataset_id}", tags=["entities"])
 
 
 def init_templates(templates: Jinja2Templates) -> None:
@@ -30,9 +30,9 @@ def init_templates(templates: Jinja2Templates) -> None:
 
 
 @router.get("/form/{entity_type}", response_class=HTMLResponse)
-async def project_entity_form(
+async def dataset_entity_form(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     entity_type: str,
     session: DbSession,
     user: CurrentUser,
@@ -41,9 +41,9 @@ async def project_entity_form(
     parent_field: str | None = None,
 ) -> Response:
     """Return form for creating or editing an entity."""
-    project = await get_project_for_user(project_id, session, user)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
     try:
@@ -57,7 +57,7 @@ async def project_entity_form(
         request=request,
         name="partials/entity_form.html",
         context={
-            "project_id": project_id,
+            "dataset_id": dataset_id,
             "entity_type": entity_type,
             "node_id": node_id,
             "parent_id": parent_id,
@@ -68,9 +68,9 @@ async def project_entity_form(
 
 
 @router.post("/entities", response_class=HTMLResponse)
-async def project_entity_create(
+async def dataset_entity_create(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
@@ -88,9 +88,9 @@ async def project_entity_create(
     if not entity_type:
         return HTMLResponse("<div class='error'>Missing entity type</div>")
 
-    project = await get_project_for_user(project_id, session, user)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
     try:
@@ -135,7 +135,7 @@ async def project_entity_create(
             success_msg = f"{entity_type} created successfully."
 
         # Save to database
-        await save_project_state(session, project, state)
+        await save_dataset_state(session, dataset, state)
 
         # Build form context with updated values from saved instance
         form_context = build_entity_form_context(state, helper, node_id, parent_id)
@@ -146,7 +146,7 @@ async def project_entity_create(
             request=request,
             name="partials/entity_form.html",
             context={
-                "project_id": project_id,
+                "dataset_id": dataset_id,
                 "entity_type": entity_type,
                 "node_id": node_id,
                 "parent_id": parent_id,
@@ -168,7 +168,7 @@ async def project_entity_create(
             request=request,
             name="partials/entity_form.html",
             context={
-                "project_id": project_id,
+                "dataset_id": dataset_id,
                 "entity_type": entity_type,
                 "node_id": node_id,
                 "parent_id": parent_id,
@@ -179,16 +179,16 @@ async def project_entity_create(
 
 
 @router.get("/entity/{node_id}", response_class=HTMLResponse)
-async def project_entity_edit(
+async def dataset_entity_edit(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
     """Return form for editing an existing entity."""
-    project = await get_project_for_user(project_id, session, user)
-    state = await ensure_project_facade(project, session)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
@@ -208,7 +208,7 @@ async def project_entity_edit(
         request=request,
         name="partials/entity_form.html",
         context={
-            "project_id": project_id,
+            "dataset_id": dataset_id,
             "entity_type": entity_type,
             "node_id": node_id,
             "parent_id": node.parent_id,
@@ -218,9 +218,9 @@ async def project_entity_edit(
 
 
 @router.delete("/entity/{node_id}", response_class=HTMLResponse)
-async def project_entity_delete(
+async def dataset_entity_delete(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     node_id: str,
     session: DbSession,
     user: CurrentUser,
@@ -231,9 +231,9 @@ async def project_entity_delete(
     except Exception:
         return csrf_error_response()
 
-    project = await get_project_for_user(project_id, session, user)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = get_project_state(project, project_states)
+    state = get_dataset_state(dataset, dataset_states)
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
@@ -242,7 +242,7 @@ async def project_entity_delete(
     state.delete_node(node_id)
 
     # Save to database
-    await save_project_state(session, project, state)
+    await save_dataset_state(session, dataset, state)
 
     # Return updated tree + out-of-band editor update
     tree_data = state.get_tree_data()
@@ -251,7 +251,7 @@ async def project_entity_delete(
         request=request,
         name="partials/entity_tree_simple.html",
         context={
-            "project_id": project_id,
+            "dataset_id": dataset_id,
             "tree_data": tree_data,
         },
     )

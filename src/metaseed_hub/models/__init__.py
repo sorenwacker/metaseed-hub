@@ -125,6 +125,10 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember", back_populates="user"
     )
+    dataset_memberships: Mapped[list["DatasetMember"]] = relationship(
+        "DatasetMember", back_populates="user"
+    )
+    spec_memberships: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="user")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
     chat_messages: Mapped[list["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
 
@@ -262,7 +266,7 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="workspaces")
-    projects: Mapped[list["Project"]] = relationship("Project", back_populates="workspace")
+    datasets: Mapped[list["Dataset"]] = relationship("Dataset", back_populates="workspace")
     teams: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="workspace")
     members: Mapped[list["WorkspaceMember"]] = relationship(
         "WorkspaceMember", back_populates="workspace"
@@ -271,13 +275,13 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     spec_drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="workspace")
 
 
-class Project(TimestampMixin, SoftDeleteMixin, Base):
-    """Project containing metaseed data."""
+class Dataset(TimestampMixin, SoftDeleteMixin, Base):
+    """Dataset containing a single spec instance with entity data."""
 
-    __tablename__ = "projects"
+    __tablename__ = "datasets"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_projects_workspace_name"),
-        Index("ix_projects_workspace_id", "workspace_id"),
+        UniqueConstraint("workspace_id", "name", name="uq_datasets_workspace_name"),
+        Index("ix_datasets_workspace_id", "workspace_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -301,28 +305,72 @@ class Project(TimestampMixin, SoftDeleteMixin, Base):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="projects")
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="datasets")
     spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
-    notes: Mapped[list["Note"]] = relationship("Note", back_populates="project")
+    notes: Mapped[list["Note"]] = relationship("Note", back_populates="dataset")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="project"
+        "ChatMessage", back_populates="dataset"
     )
+    members: Mapped[list["DatasetMember"]] = relationship("DatasetMember", back_populates="dataset")
+
+
+class DatasetRole(StrEnum):
+    """Role within a dataset."""
+
+    OWNER = "owner"
+    CURATOR = "curator"
+    VIEWER = "viewer"
+
+
+class DatasetMember(Base):
+    """User membership in a dataset with role-based access."""
+
+    __tablename__ = "dataset_members"
+    __table_args__ = (
+        Index("ix_dataset_members_dataset_id", "dataset_id"),
+        Index("ix_dataset_members_user_id", "user_id"),
+    )
+
+    dataset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[DatasetRole] = mapped_column(
+        Enum(DatasetRole),
+        nullable=False,
+        default=DatasetRole.VIEWER,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="members")
+    user: Mapped["User"] = relationship("User", back_populates="dataset_memberships")
 
 
 class Note(TimestampMixin, Base):
-    """Notes attached to entities within a project."""
+    """Notes attached to entities within a dataset."""
 
     __tablename__ = "notes"
-    __table_args__ = (Index("ix_notes_project_entity", "project_id", "entity_type", "entity_id"),)
+    __table_args__ = (Index("ix_notes_dataset_entity", "dataset_id", "entity_type", "entity_id"),)
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    project_id: Mapped[str] = mapped_column(
+    dataset_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("projects.id", ondelete="CASCADE"),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(
@@ -335,16 +383,16 @@ class Note(TimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relationships
-    project: Mapped["Project"] = relationship("Project", back_populates="notes")
+    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="notes")
     user: Mapped["User"] = relationship("User", back_populates="notes")
 
 
 class ChatMessage(TimestampMixin, Base):
-    """Real-time chat messages within a project."""
+    """Real-time chat messages within a dataset."""
 
     __tablename__ = "chat_messages"
     __table_args__ = (
-        Index("ix_chat_messages_project_id", "project_id"),
+        Index("ix_chat_messages_dataset_id", "dataset_id"),
         Index("ix_chat_messages_created_at", "created_at"),
     )
 
@@ -353,9 +401,9 @@ class ChatMessage(TimestampMixin, Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    project_id: Mapped[str] = mapped_column(
+    dataset_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("projects.id", ondelete="CASCADE"),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(
@@ -366,7 +414,7 @@ class ChatMessage(TimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relationships
-    project: Mapped["Project"] = relationship("Project", back_populates="chat_messages")
+    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="chat_messages")
     user: Mapped["User"] = relationship("User", back_populates="chat_messages")
 
 
@@ -413,6 +461,50 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="specs")
     created_by: Mapped["User"] = relationship("User")
     drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="source_spec")
+    members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
+
+
+class SpecRole(StrEnum):
+    """Role within a spec."""
+
+    OWNER = "owner"
+    CURATOR = "curator"
+    VIEWER = "viewer"
+
+
+class SpecMember(Base):
+    """User membership in a spec with role-based access."""
+
+    __tablename__ = "spec_members"
+    __table_args__ = (
+        Index("ix_spec_members_spec_id", "spec_id"),
+        Index("ix_spec_members_user_id", "user_id"),
+    )
+
+    spec_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("specs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[SpecRole] = mapped_column(
+        Enum(SpecRole),
+        nullable=False,
+        default=SpecRole.VIEWER,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    spec: Mapped["Spec"] = relationship("Spec", back_populates="members")
+    user: Mapped["User"] = relationship("User", back_populates="spec_memberships")
 
 
 class SpecDraft(TimestampMixin, Base):
@@ -466,11 +558,15 @@ class SpecDraft(TimestampMixin, Base):
 __all__ = [
     "Base",
     "ChatMessage",
+    "Dataset",
+    "DatasetMember",
+    "DatasetRole",
     "Note",
-    "Project",
     "SoftDeleteMixin",
     "Spec",
     "SpecDraft",
+    "SpecMember",
+    "SpecRole",
     "SpecStatus",
     "Team",
     "TeamMembership",

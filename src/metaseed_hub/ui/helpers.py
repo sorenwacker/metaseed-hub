@@ -8,12 +8,12 @@ from typing import Any
 from fastapi import Request
 from metaseed.ui.state import AppState, TreeNode
 
-from metaseed_hub.models import Project
+from metaseed_hub.models import Dataset
 
 logger = logging.getLogger("metaseed_hub")
 
-# Shared project state cache - maps project_id to AppState
-project_states: dict[str, AppState] = {}
+# Shared dataset state cache - maps dataset_id to AppState
+dataset_states: dict[str, AppState] = {}
 
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
 
@@ -625,40 +625,40 @@ def get_tree_data_from_nodes(state: AppState) -> list[dict[str, Any]]:
     return [node_to_dict(n) for n in state.entity_tree]
 
 
-def get_project_state(project: Project, project_states: dict[str, AppState]) -> AppState:
-    """Get or create AppState for a project, loading from database if needed.
+def get_dataset_state(dataset: Dataset, dataset_states: dict[str, AppState]) -> AppState:
+    """Get or create AppState for a dataset, loading from database if needed.
 
     Args:
-        project: Project model with profile, version, and data fields.
-        project_states: Cache dict to store project states.
+        dataset: Dataset model with profile, version, and data fields.
+        dataset_states: Cache dict to store dataset states.
 
     Returns:
-        AppState populated with project's entity tree.
+        AppState populated with dataset's entity tree.
     """
-    project_id = project.id
+    dataset_id = dataset.id
     # Always reload from database to ensure fresh data
     state = AppState()
-    state.profile = project.profile
-    state.version = project.version
-    if project.data:
-        deserialize_tree(state, project.data)
-    project_states[project_id] = state
+    state.profile = dataset.profile
+    state.version = dataset.version
+    if dataset.data:
+        deserialize_tree(state, dataset.data)
+    dataset_states[dataset_id] = state
     return state
 
 
-async def ensure_project_facade(
-    project: Project,
+async def ensure_dataset_facade(
+    dataset: Dataset,
     session: Any,
 ) -> AppState:
-    """Get project state and ensure facade is properly set for user-defined specs.
+    """Get dataset state and ensure facade is properly set for user-defined specs.
 
-    For projects using database-stored specs (spec_draft_id), this loads the spec
+    For datasets using database-stored specs (spec_draft_id), this loads the spec
     and creates a ProfileFacade with dependency injection BEFORE deserializing
     the tree (which requires a facade). For built-in profiles, it creates a
     standard facade.
 
     Args:
-        project: Project model with profile, version, and optional spec_draft_id.
+        dataset: Dataset model with profile, version, and optional spec_draft_id.
         session: Database session for loading spec drafts.
 
     Returns:
@@ -669,17 +669,17 @@ async def ensure_project_facade(
 
     from metaseed_hub.models import SpecDraft
 
-    project_id = project.id
+    dataset_id = dataset.id
 
     # Create state without deserializing tree yet
     state = AppState()
-    state.profile = project.profile
-    state.version = project.version
+    state.profile = dataset.profile
+    state.version = dataset.version
 
-    # Load spec from database FIRST if project uses a user-defined spec
-    if project.spec_draft_id:
+    # Load spec from database FIRST if dataset uses a user-defined spec
+    if dataset.spec_draft_id:
         try:
-            spec_draft = await session.get(SpecDraft, project.spec_draft_id)
+            spec_draft = await session.get(SpecDraft, dataset.spec_draft_id)
             if spec_draft and spec_draft.spec_data:
                 # spec_data may be SpecBuilderState format with spec nested under "spec" key
                 raw_data = spec_draft.spec_data
@@ -688,41 +688,41 @@ async def ensure_project_facade(
                 profile_spec = ProfileSpec.model_validate(raw_data)
                 # Create facade with injected spec (bypasses file loader)
                 state.facade = ProfileFacade(
-                    profile=project.profile,
+                    profile=dataset.profile,
                     spec=profile_spec,
                 )
                 # Update state.profile to match facade's lowercased version
                 state.profile = state.facade.profile
         except Exception as e:
-            logger.warning(f"Failed to load spec for project {project.id}: {e}")
+            logger.warning(f"Failed to load spec for dataset {dataset.id}: {e}")
 
     # NOW deserialize tree (which requires facade)
-    if project.data:
-        deserialize_tree(state, project.data)
+    if dataset.data:
+        deserialize_tree(state, dataset.data)
 
-    project_states[project_id] = state
+    dataset_states[dataset_id] = state
     return state
 
 
-async def save_project_state(
+async def save_dataset_state(
     session: Any,
-    project: Project,
+    dataset: Dataset,
     state: AppState,
 ) -> None:
     """Save AppState entity tree to database.
 
     Args:
         session: Database session.
-        project: Project model to update.
+        dataset: Dataset model to update.
         state: AppState with entity tree to save.
     """
     from sqlalchemy.orm.attributes import flag_modified
 
-    project.data = serialize_tree(state)
-    flag_modified(project, "data")
-    session.add(project)
+    dataset.data = serialize_tree(state)
+    flag_modified(dataset, "data")
+    session.add(dataset)
     await session.commit()
-    await session.refresh(project)
+    await session.refresh(dataset)
 
 
 def humanize_field_name(name: str) -> str:

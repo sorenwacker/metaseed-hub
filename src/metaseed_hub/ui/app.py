@@ -35,11 +35,11 @@ from metaseed_hub.ui.helpers import (
 )
 from metaseed_hub.ui.routes import (
     auth_router,
+    dataset_router,
     entity_router,
+    init_dataset_templates,
     init_entity_templates,
-    init_project_templates,
     init_workspace_templates,
-    project_router,
     table_router,
     workspace_router,
 )
@@ -217,7 +217,7 @@ def create_hub_app() -> FastAPI:
 
     # Initialize templates for route modules
     init_workspace_templates(templates)
-    init_project_templates(templates)
+    init_dataset_templates(templates)
     init_entity_templates(templates)
 
     # Mount hub static files
@@ -230,7 +230,7 @@ def create_hub_app() -> FastAPI:
     # Include route modules
     app.include_router(auth_router)
     app.include_router(workspace_router)
-    app.include_router(project_router)
+    app.include_router(dataset_router)
     app.include_router(entity_router)
     app.include_router(table_router)
 

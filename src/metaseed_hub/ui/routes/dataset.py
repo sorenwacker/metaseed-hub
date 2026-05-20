@@ -1,4 +1,4 @@
-"""Project routes for Hub UI."""
+"""Dataset routes for Hub UI."""
 
 import copy
 import logging
@@ -11,19 +11,19 @@ from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
 from sqlalchemy import select
 
-from metaseed_hub.models import Project, SpecDraft, Workspace
+from metaseed_hub.models import Dataset, SpecDraft, Workspace
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
-    get_project_for_user,
+    get_dataset_for_user,
     verify_workspace_access,
 )
 from metaseed_hub.ui.helpers import (
     create_nested_nodes,
-    ensure_project_facade,
-    get_project_state,
+    dataset_states,
+    ensure_dataset_facade,
+    get_dataset_state,
     get_tree_data_from_nodes,
-    project_states,
     serialize_tree,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -32,7 +32,7 @@ from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 logger = logging.getLogger("metaseed_hub")
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
 def init_templates(templates: Jinja2Templates) -> None:
@@ -41,13 +41,13 @@ def init_templates(templates: Jinja2Templates) -> None:
 
 
 @router.get("/new", response_class=HTMLResponse)
-async def project_new(
+async def dataset_new(
     request: Request,
     session: DbSession,
     user: CurrentUser,
     workspace_id: str,
 ) -> Response:
-    """Return project creation form."""
+    """Return dataset creation form."""
     from metaseed.specs.loader import SpecLoader
 
     # Get available profiles and versions from metaseed
@@ -111,7 +111,7 @@ async def project_new(
 
     return render_template(
         request=request,
-        name="partials/project_form.html",
+        name="partials/dataset_form.html",
         context={
             "user": user,
             "workspace_id": workspace_id,
@@ -122,7 +122,7 @@ async def project_new(
 
 
 @router.post("")
-async def project_create(
+async def dataset_create(
     request: Request,
     session: DbSession,
     user: CurrentUser,
@@ -133,7 +133,7 @@ async def project_create(
     csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
     load_example: Annotated[str | None, Form()] = None,
 ) -> RedirectResponse:
-    """Create a new project."""
+    """Create a new dataset."""
     import metaseed
     import yaml
     from metaseed.models import get_model
@@ -159,7 +159,7 @@ async def project_create(
             profile = draft.name
             version = draft.version
 
-    project = Project(
+    dataset = Dataset(
         workspace_id=workspace_id,
         name=name,
         profile=profile,
@@ -167,13 +167,13 @@ async def project_create(
         spec_draft_id=spec_draft_id,
         data={},
     )
-    session.add(project)
+    session.add(dataset)
     await session.commit()
-    await session.refresh(project)
+    await session.refresh(dataset)
 
     # Load example data if requested
     logger.info(
-        f"project_create: load_example={load_example!r}, profile={profile}, version={version}"
+        f"dataset_create: load_example={load_example!r}, profile={profile}, version={version}"
     )
     if load_example == "true":
         examples_dir = Path(metaseed.__file__).parent / "examples"
@@ -190,7 +190,7 @@ async def project_create(
                 spec = loader.load_profile(version, profile)
                 root_entity = spec.root_entity or "Investigation"
 
-                state = get_project_state(project, project_states)
+                state = get_dataset_state(dataset, dataset_states)
                 state.reset()
                 state.profile = profile
                 state.version = version
@@ -207,55 +207,55 @@ async def project_create(
 
                 from sqlalchemy.orm.attributes import flag_modified
 
-                project.data = serialize_tree(state)
-                flag_modified(project, "data")
-                session.add(project)
+                dataset.data = serialize_tree(state)
+                flag_modified(dataset, "data")
+                session.add(dataset)
                 await session.commit()
             except Exception as e:
                 logger.exception(f"Failed to load example data: {e}")
 
-    return RedirectResponse(f"/hub/projects/{project.id}", status_code=303)
+    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
 
 
-@router.delete("/{project_id}", response_class=HTMLResponse)
-async def project_delete(
+@router.delete("/{dataset_id}", response_class=HTMLResponse)
+async def dataset_delete(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Delete a project."""
+    """Delete a dataset."""
     try:
         validate_csrf_or_error(request)
     except Exception:
         return csrf_error_response()
 
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    workspace_id = project.workspace_id
-    await session.delete(project)
+    workspace_id = dataset.workspace_id
+    await session.delete(dataset)
     await session.commit()
 
-    # Return updated project grid
-    result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
-    projects = list(result.scalars().all())
+    # Return updated dataset grid
+    result = await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id))
+    datasets = list(result.scalars().all())
 
     return render_template(
         request=request,
-        name="partials/project_grid.html",
-        context={"projects": projects},
+        name="partials/dataset_grid.html",
+        context={"datasets": datasets},
     )
 
 
-@router.post("/{project_id}/load-example", response_class=HTMLResponse)
-async def project_load_example(
+@router.post("/{dataset_id}/load-example", response_class=HTMLResponse)
+async def dataset_load_example(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Load example data into a project from YAML files."""
+    """Load example data into a dataset from YAML files."""
     import metaseed
     import yaml
     from metaseed.models import get_model
@@ -266,20 +266,20 @@ async def project_load_example(
     except Exception:
         return csrf_error_response()
 
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     # Find example YAML file
     examples_dir = Path(metaseed.__file__).parent / "examples"
-    version_dir = examples_dir / project.profile / project.version
+    version_dir = examples_dir / dataset.profile / dataset.version
 
     if not version_dir.exists():
-        msg = f"No example available for {project.profile} v{project.version}"
+        msg = f"No example available for {dataset.profile} v{dataset.version}"
         return HTMLResponse(f"<div class='error'>{msg}</div>")
 
     yaml_files = list(version_dir.glob("*.yaml"))
     if not yaml_files:
-        msg = f"No example file found for {project.profile} v{project.version}"
+        msg = f"No example file found for {dataset.profile} v{dataset.version}"
         return HTMLResponse(f"<div class='error'>{msg}</div>")
 
     example_file = yaml_files[0]
@@ -292,16 +292,16 @@ async def project_load_example(
     example_data_copy = copy.deepcopy(example_data)
 
     # Load spec to get root entity
-    loader = SpecLoader(profile=project.profile)
-    spec = loader.load_profile(project.version, project.profile)
+    loader = SpecLoader(profile=dataset.profile)
+    spec = loader.load_profile(dataset.version, dataset.profile)
     root_entity = spec.root_entity or "Investigation"
 
-    # Load example into project state (append, don't replace)
-    state = get_project_state(project, project_states)
+    # Load example into dataset state (append, don't replace)
+    state = get_dataset_state(dataset, dataset_states)
     facade = state.get_or_create_facade()
 
     try:
-        Model = get_model(root_entity, project.version, profile=project.profile)
+        Model = get_model(root_entity, dataset.version, profile=dataset.profile)
         instance = Model(**example_data)
         node = state.add_node(root_entity, instance)
         state.editing_node_id = node.id
@@ -312,7 +312,7 @@ async def project_load_example(
         # Save to database
         from sqlalchemy.orm.attributes import flag_modified
 
-        project.data = serialize_tree(state)
+        dataset.data = serialize_tree(state)
         logger.info(f"Saving tree with {len(state.entity_tree)} root nodes")
         for n in state.entity_tree:
             if n.instance:
@@ -323,8 +323,8 @@ async def project_load_example(
                     cdata = c.instance.model_dump(exclude_none=True)
                     logger.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
 
-        flag_modified(project, "data")
-        session.add(project)
+        flag_modified(dataset, "data")
+        session.add(dataset)
         await session.commit()
 
     except Exception as e:
@@ -343,7 +343,7 @@ async def project_load_example(
 
     # Use HX-Redirect for HTMX to do a full page redirect
     response = HTMLResponse(status_code=200)
-    response.headers["HX-Redirect"] = f"/hub/projects/{project_id}"
+    response.headers["HX-Redirect"] = f"/hub/datasets/{dataset_id}"
     return response
 
 
@@ -363,20 +363,20 @@ def _get_entity_info(state: AppState) -> list[dict[str, str]]:
     return entity_info
 
 
-async def _build_project_context(
-    project: Project,
+async def _build_dataset_context(
+    dataset: Dataset,
     session: Any,
 ) -> dict[str, Any]:
-    """Build common context for project views.
+    """Build common context for dataset views.
 
     Args:
-        project: Project model.
+        dataset: Dataset model.
         session: Database session for loading spec drafts.
 
     Returns:
         Dictionary with state, tree_data, and entity_descriptions.
     """
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
     tree_data = get_tree_data_from_nodes(state)
 
     # Get descriptions for entity types
@@ -391,7 +391,7 @@ async def _build_project_context(
 
     except Exception as e:
         # Log but don't crash
-        logger.warning(f"Failed to load facade for project {project.id}: {e}")
+        logger.warning(f"Failed to load facade for dataset {dataset.id}: {e}")
 
     return {
         "state": state,
@@ -400,29 +400,29 @@ async def _build_project_context(
     }
 
 
-@router.get("/{project_id}", response_class=HTMLResponse)
-async def project_editor(
+@router.get("/{dataset_id}", response_class=HTMLResponse)
+async def dataset_editor(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Project editor - wraps metaseed UI with hub chrome."""
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    """Dataset editor - wraps metaseed UI with hub chrome."""
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     # Load workspace for breadcrumb
-    workspace = await session.get(Workspace, project.workspace_id)
+    workspace = await session.get(Workspace, dataset.workspace_id)
 
-    # Build common project context
-    ctx = await _build_project_context(project, session)
+    # Build common dataset context
+    ctx = await _build_dataset_context(dataset, session)
 
     return render_template(
         request=request,
-        name="project.html",
+        name="dataset.html",
         context={
             "user": user,
-            "project": project,
+            "dataset": dataset,
             "workspace": workspace,
             "state": ctx["state"],
             "root_types": ctx["state"].get_root_entity_types(),
@@ -433,43 +433,18 @@ async def project_editor(
     )
 
 
-@router.get("/{project_id}/overview", response_class=HTMLResponse)
-async def project_overview(
+@router.get("/{dataset_id}/tree", response_class=HTMLResponse)
+async def dataset_tree(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Return the project overview panel (for HTMX navigation back)."""
-    project = await get_project_for_user(project_id, session, user)
+    """Return entity tree for a dataset."""
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    # Build common project context
-    ctx = await _build_project_context(project, session)
-
-    return render_template(
-        request=request,
-        name="partials/project_overview.html",
-        context={
-            "project": project,
-            "root_types": ctx["state"].get_root_entity_types(),
-            "tree_data": ctx["tree_data"],
-            "entity_descriptions": ctx["entity_descriptions"],
-        },
-    )
-
-
-@router.get("/{project_id}/tree", response_class=HTMLResponse)
-async def project_tree(
-    request: Request,
-    project_id: str,
-    session: DbSession,
-    user: CurrentUser,
-) -> Response:
-    """Return entity tree for a project."""
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
-
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
     tree_data = get_tree_data_from_nodes(state)
 
     return render_template(
@@ -477,19 +452,19 @@ async def project_tree(
         name="partials/entity_tree.html",
         context={
             "tree_data": tree_data,
-            "project_id": project_id,
+            "dataset_id": dataset_id,
         },
     )
 
 
-@router.post("/{project_id}/validate", response_class=HTMLResponse)
-async def project_validate(
+@router.post("/{dataset_id}/validate", response_class=HTMLResponse)
+async def dataset_validate(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> HTMLResponse:
-    """Validate all entities in the project against their schemas."""
+    """Validate all entities in the dataset against their schemas."""
     from pydantic import ValidationError
 
     try:
@@ -497,10 +472,10 @@ async def project_validate(
     except Exception:
         return csrf_error_response()
 
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
     errors: list[dict[str, Any]] = []
@@ -568,7 +543,7 @@ async def project_validate(
                 <div class="validation-entity">
                     <span class="entity-type-badge">{err["entity_type"]}</span>
                     <a href="#" class="entity-link"
-                       hx-get="/hub/projects/{project_id}/entity/{err["node_id"]}"
+                       hx-get="/hub/datasets/{dataset_id}/entity/{err["node_id"]}"
                        hx-target="#editor"
                        hx-swap="innerHTML">{err["label"]}</a>
                 </div>
@@ -583,37 +558,37 @@ async def project_validate(
     return HTMLResponse(html)
 
 
-@router.get("/{project_id}/graph", response_class=HTMLResponse)
-async def project_graph(
+@router.get("/{dataset_id}/graph", response_class=HTMLResponse)
+async def dataset_graph(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
     node_id: str | None = None,
 ) -> Response:
-    """Graph visualization of project entities.
+    """Graph visualization of dataset entities.
 
     Args:
         node_id: Optional. If provided, only show this entity and its descendants.
     """
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     return render_template(
         request=request,
         name="graph.html",
         context={
             "user": user,
-            "project": project,
+            "dataset": dataset,
             "node_id": node_id,
             "nav_active": "home",
         },
     )
 
 
-@router.get("/{project_id}/api/graph")
-async def project_graph_api(
-    project_id: str,
+@router.get("/{dataset_id}/api/graph")
+async def dataset_graph_api(
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
     node_id: str | None = None,
@@ -628,10 +603,10 @@ async def project_graph_api(
     from fastapi.responses import JSONResponse
     from metaseed.ui.services.graph import build_graph
 
-    # Verify user has access to this project
-    project = await get_project_for_user(project_id, session, user)
+    # Verify user has access to this dataset
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_project_facade(project, session)
+    state = await ensure_dataset_facade(dataset, session)
 
     # Use metaseed's graph builder which properly extracts nested entities
     graph_data = build_graph(state)
@@ -639,31 +614,31 @@ async def project_graph_api(
     return JSONResponse(content=graph_data)
 
 
-@router.get("/{project_id}/chat", response_class=HTMLResponse)
-async def project_chat_page(
+@router.get("/{dataset_id}/chat", response_class=HTMLResponse)
+async def dataset_chat_page(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Full-page chat view for a project."""
-    project = await get_project_for_user(project_id, session, user)
+    """Full-page chat view for a dataset."""
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     return render_template(
         request=request,
         name="chat.html",
         context={
             "user": user,
-            "project": project,
+            "dataset": dataset,
             "nav_active": "home",
         },
     )
 
 
-@router.post("/{project_id}/chat", response_class=HTMLResponse)
-async def project_chat(
+@router.post("/{dataset_id}/chat", response_class=HTMLResponse)
+async def dataset_chat(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     user: CurrentUser,
     message: Annotated[str, Form()],
 ) -> HTMLResponse:
@@ -682,185 +657,33 @@ async def project_chat(
     return HTMLResponse(html)
 
 
-@router.get("/{project_id}/export")
-async def project_export(
-    project_id: str,
+@router.get("/{dataset_id}/export")
+async def dataset_export(
+    dataset_id: str,
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Export project data to Excel file.
+    """Export dataset data to Excel file.
 
     Uses metaseed's export service to generate an Excel workbook
-    containing all entities in the project.
+    containing all entities in the dataset.
     """
     from fastapi.responses import StreamingResponse
     from metaseed.ui.services.export import export_to_bytes, generate_filename
 
-    project = await get_project_for_user(project_id, session, user)
-    state = await ensure_project_facade(project, session)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
 
     # Generate Excel file using metaseed's export service
     excel_bytes = export_to_bytes(state)
     filename = generate_filename(state)
 
-    # If no data, use project name for filename
+    # If no data, use dataset name for filename
     if not filename or filename == "export.xlsx":
-        filename = f"{project.name.replace(' ', '_')}.xlsx"
+        filename = f"{dataset.name.replace(' ', '_')}.xlsx"
 
     return StreamingResponse(
         excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
-
-
-@router.get("/{project_id}/import", response_class=HTMLResponse)
-async def project_import_form(
-    request: Request,
-    project_id: str,
-    session: DbSession,
-    user: CurrentUser,
-) -> Response:
-    """Show import form for uploading ISA-JSON files."""
-    project = await get_project_for_user(project_id, session, user)
-
-    return render_template(
-        request=request,
-        name="partials/import_form.html",
-        context={
-            "project_id": project_id,
-            "project": project,
-        },
-    )
-
-
-@router.post("/{project_id}/import", response_class=HTMLResponse)
-async def project_import(
-    request: Request,
-    project_id: str,
-    session: DbSession,
-    user: CurrentUser,
-) -> Response:
-    """Import ISA-JSON file into project.
-
-    Uses metaseed's ISAImporter to parse ISA-JSON files and create
-    entities in the project.
-    """
-    import tempfile
-
-    from fastapi import UploadFile
-    from metaseed.importers.isa import ISAImporter
-    from metaseed.models import get_model
-
-    try:
-        validate_csrf_or_error(request)
-    except Exception:
-        return csrf_error_response()
-
-    project = await get_project_for_user(project_id, session, user)
-    state = await ensure_project_facade(project, session)
-    facade = state.get_or_create_facade()
-
-    # Get uploaded file from form
-    form = await request.form()
-    file = form.get("file")
-    if not file or not isinstance(file, UploadFile):
-        return render_template(
-            request=request,
-            name="partials/import_form.html",
-            context={
-                "project_id": project_id,
-                "project": project,
-                "error": "Please select a file to import.",
-            },
-        )
-
-    filename = file.filename or ""
-    content = await file.read()
-
-    if not filename.endswith(".json"):
-        return render_template(
-            request=request,
-            name="partials/import_form.html",
-            context={
-                "project_id": project_id,
-                "project": project,
-                "error": "Unsupported file type. Please upload an ISA-JSON file (.json).",
-            },
-        )
-
-    try:
-        importer = ISAImporter()
-
-        # Write to temp file for importer
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".json", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        result = importer.import_json(tmp_path)
-        Path(tmp_path).unlink()
-
-        # Process imported data
-        if result.investigation and "Investigation" in facade.entities:
-            helper = facade.Investigation
-            inv_data = result.investigation.copy()
-
-            # Add studies if present
-            if result.studies and "studies" in helper.nested_fields:
-                inv_data["studies"] = result.studies
-
-            # Add persons/contacts
-            if result.persons:
-                for field_name in ["persons", "contacts", "people"]:
-                    if field_name in helper.nested_fields:
-                        inv_data[field_name] = result.persons
-                        break
-
-            # Create instance and add to state
-            Model = get_model("Investigation", state.version, profile=state.profile)
-            instance = Model(**inv_data)
-            node = state.add_node("Investigation", instance)
-
-            # Create nested child nodes
-            example_data_copy = copy.deepcopy(inv_data)
-            create_nested_nodes(state, facade, node, "Investigation", example_data_copy)
-
-            # Save to database
-            from sqlalchemy.orm.attributes import flag_modified
-
-            project.data = serialize_tree(state)
-            flag_modified(project, "data")
-            session.add(project)
-            await session.commit()
-
-            return render_template(
-                request=request,
-                name="partials/import_form.html",
-                context={
-                    "project_id": project_id,
-                    "project": project,
-                    "success": f"Successfully imported {filename}",
-                },
-            )
-
-        return render_template(
-            request=request,
-            name="partials/import_form.html",
-            context={
-                "project_id": project_id,
-                "project": project,
-                "error": "No valid Investigation found in the ISA-JSON file.",
-            },
-        )
-
-    except Exception as e:
-        logger.exception("Import failed")
-        return render_template(
-            request=request,
-            name="partials/import_form.html",
-            context={
-                "project_id": project_id,
-                "project": project,
-                "error": f"Import failed: {e!s}",
-            },
-        )
