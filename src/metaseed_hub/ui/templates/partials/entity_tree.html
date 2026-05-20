@@ -1,4 +1,4 @@
-{% macro render_tree_item(item, project_id, depth=0) %}
+{% macro render_tree_item(item, dataset_id, depth=0) %}
 {% set item_id = item.id or '' %}
 {% set item_name = item.label or item.name or 'Unnamed' %}
 {% set item_type = item.entity_type or item.type or 'Entity' %}
@@ -10,11 +10,11 @@
 {% if is_nested %}
     {% set field_name = item.field_name or '' %}
     {% set idx = item.idx or 0 %}
-    {% set click_url = '/hub/projects/' ~ project_id ~ '/form/' ~ item_type ~ '?parent_field=' ~ field_name ~ '&idx=' ~ idx %}
-    {% set delete_url = '/hub/projects/' ~ project_id ~ '/nested/' ~ field_name ~ '/' ~ idx %}
+    {% set click_url = '/hub/datasets/' ~ dataset_id ~ '/form/' ~ item_type ~ '?parent_field=' ~ field_name ~ '&idx=' ~ idx %}
+    {% set delete_url = '/hub/datasets/' ~ dataset_id ~ '/nested/' ~ field_name ~ '/' ~ idx %}
 {% else %}
-    {% set click_url = '/hub/projects/' ~ project_id ~ '/entity/' ~ item_id %}
-    {% set delete_url = '/hub/projects/' ~ project_id ~ '/entity/' ~ item_id %}
+    {% set click_url = '/hub/datasets/' ~ dataset_id ~ '/entity/' ~ item_id %}
+    {% set delete_url = '/hub/datasets/' ~ dataset_id ~ '/entity/' ~ item_id %}
 {% endif %}
 
 <li class="tree-node{{ '' if depth == 0 else ' collapsed' }}">
@@ -35,7 +35,7 @@
     {% if children %}
     <ul class="entity-children">
         {% for child in children %}
-            {{ render_tree_item(child, project_id, depth + 1) }}
+            {{ render_tree_item(child, dataset_id, depth + 1) }}
         {% endfor %}
     </ul>
     {% endif %}
@@ -45,7 +45,7 @@
 {% if tree_data %}
 <ul class="entity-tree">
     {% for item in tree_data %}
-        {{ render_tree_item(item, project_id) }}
+        {{ render_tree_item(item, dataset_id) }}
     {% endfor %}
 </ul>
 {% else %}

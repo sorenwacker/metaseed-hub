@@ -20,7 +20,7 @@
         </div>
         {% if node_id and not is_single_entity %}
         <button type="button" class="btn btn-sm btn-primary"
-                hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/{{ field_name }}/row"
+                hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/{{ field_name }}/row"
                 hx-target="#inline-table-body-{{ field_name }}"
                 hx-swap="beforeend">
             + Add Row
@@ -59,7 +59,7 @@
                                name="value"
                                value="{{ row.get(col, '') }}"
                                {% if col_type == 'float' %}step="any"{% endif %}
-                               hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
+                               hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
                                hx-trigger="change, blur"
                                hx-swap="none">
                         {% elif is_single_entity %}
@@ -68,7 +68,7 @@
                                name="{{ col }}"
                                value="{{ row.get(col, '') }}"
                                {% if col_type == 'float' %}step="any"{% endif %}
-                               hx-post="/hub/projects/{{ project_id }}/table/{{ node_id }}/single/{{ field_name }}"
+                               hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/single/{{ field_name }}"
                                hx-trigger="change, blur"
                                hx-swap="none">
                         {% else %}
@@ -77,7 +77,7 @@
                                name="{{ col }}"
                                value="{{ row.get(col, '') }}"
                                {% if col_type == 'float' %}step="any"{% endif %}
-                               hx-post="/hub/projects/{{ project_id }}/table/{{ row._node_id }}/cell"
+                               hx-post="/hub/datasets/{{ dataset_id }}/table/{{ row._node_id }}/cell"
                                hx-trigger="change, blur"
                                hx-swap="none">
                         {% endif %}
@@ -87,7 +87,7 @@
                     <td class="row-actions">
                         {% if is_primitive_list %}
                         <button type="button" class="btn-icon danger"
-                                hx-delete="/hub/projects/{{ project_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
+                                hx-delete="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/primitive/{{ field_name }}/{{ row._idx }}"
                                 hx-target="#row-{{ field_name }}-{{ row._idx }}"
                                 hx-swap="delete"
                                 hx-confirm="Delete this item?"
@@ -96,7 +96,7 @@
                         </button>
                         {% elif is_single_entity %}
                         <button type="button" class="btn-icon danger"
-                                hx-delete="/hub/projects/{{ project_id }}/table/{{ node_id }}/single/{{ field_name }}"
+                                hx-delete="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/single/{{ field_name }}"
                                 hx-target="#inline-table-{{ field_name }}"
                                 hx-swap="outerHTML"
                                 hx-confirm="Clear this {{ nested_entity_type }}?"
@@ -105,14 +105,14 @@
                         </button>
                         {% else %}
                         <button type="button" class="btn-icon"
-                                hx-get="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
+                                hx-get="/hub/datasets/{{ dataset_id }}/entity/{{ row._node_id }}"
                                 hx-target="#editor"
                                 hx-swap="innerHTML"
                                 title="Edit">
                             &#9998;
                         </button>
                         <button type="button" class="btn-icon danger"
-                                hx-delete="/hub/projects/{{ project_id }}/entity/{{ row._node_id }}"
+                                hx-delete="/hub/datasets/{{ dataset_id }}/entity/{{ row._node_id }}"
                                 hx-target="#row-{{ field_name }}-{{ row._idx }}"
                                 hx-swap="delete"
                                 hx-confirm="Delete this {{ nested_entity_type }}?"

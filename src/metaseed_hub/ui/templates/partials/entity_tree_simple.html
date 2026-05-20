@@ -4,10 +4,10 @@
     <li class="entity-item">
         <span class="entity-type-badge">{{ item.type }}</span>
         <a href="#" class="entity-name"
-           hx-get="/hub/projects/{{ project_id }}/entity/{{ item.id }}"
+           hx-get="/hub/datasets/{{ dataset_id }}/entity/{{ item.id }}"
            hx-target="#editor">{{ item.label or item.name or "Unnamed" }}</a>
         <button class="entity-delete" title="Delete"
-                hx-delete="/hub/projects/{{ project_id }}/entity/{{ item.id }}"
+                hx-delete="/hub/datasets/{{ dataset_id }}/entity/{{ item.id }}"
                 hx-target="#entity-tree"
                 hx-confirm="Delete this {{ item.type }}?">x</button>
     </li>

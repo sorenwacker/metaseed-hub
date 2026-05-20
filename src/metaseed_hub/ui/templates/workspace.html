@@ -26,7 +26,7 @@
             </button>
             <button class="btn btn-ghost btn-sm btn-danger-text"
                     hx-delete="/hub/workspaces/{{ workspace.id }}"
-                    hx-confirm="Delete '{{ workspace.name }}' and all its projects? This cannot be undone.">
+                    hx-confirm="Delete '{{ workspace.name }}' and all its datasets? This cannot be undone.">
                 Delete
             </button>
         </div>
@@ -34,15 +34,15 @@
 
     <section class="workspace-section">
         <div class="section-header">
-            <h2 class="section-title">Projects</h2>
+            <h2 class="section-title">Datasets</h2>
             <button class="btn btn-primary btn-sm"
-                    hx-get="/hub/projects/new?workspace_id={{ workspace.id }}"
-                    hx-target="#project-modal"
+                    hx-get="/hub/datasets/new?workspace_id={{ workspace.id }}"
+                    hx-target="#dataset-modal"
                     hx-swap="innerHTML">
-                + New Project
+                + New Dataset
             </button>
         </div>
-        {% include "partials/project_grid.html" %}
+        {% include "partials/dataset_grid.html" %}
     </section>
 
     <section class="workspace-section">
@@ -118,6 +118,6 @@
     </section>
 </div>
 
-<div id="project-modal"></div>
+<div id="dataset-modal"></div>
 <div id="workspace-modal"></div>
 {% endblock %}

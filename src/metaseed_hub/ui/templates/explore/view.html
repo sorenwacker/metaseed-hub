@@ -77,6 +77,9 @@
             </div>
             <div class="canvas-wrapper">
                 <div id="erd-canvas"></div>
+                <div id="zoom-hint" class="zoom-hint hidden">
+                    Zoom in to see field details
+                </div>
             </div>
             <div class="canvas-legend">
                 <span class="legend-item"><span class="legend-dot root"></span> Root Entity</span>
@@ -188,6 +191,10 @@
             }
         });
 
+        network.on('zoom', function(params) {
+            updateZoomHint(params.scale);
+        });
+
         // Fit after stabilization
         network.once('stabilizationIterationsDone', function() {
             network.fit();
@@ -197,6 +204,16 @@
     function zoomIn() { if (network) network.moveTo({ scale: network.getScale() * 1.2 }); }
     function zoomOut() { if (network) network.moveTo({ scale: network.getScale() / 1.2 }); }
     function fitGraph() { if (network) network.fit(); }
+
+    function updateZoomHint(scale) {
+        var hint = document.getElementById('zoom-hint');
+        if (!hint) return;
+        if (scale < 0.5) {
+            hint.classList.remove('hidden');
+        } else {
+            hint.classList.add('hidden');
+        }
+    }
 
     function showEntityDetails(entityName) {
         const entity = entities[entityName];

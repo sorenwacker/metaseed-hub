@@ -1,16 +1,16 @@
 <div class="modal-overlay" onclick="this.parentElement.innerHTML=''">
     <div class="modal-content modal-large" onclick="event.stopPropagation()">
-        <h2 class="modal-title">New Project</h2>
-        <p class="modal-subtitle">Choose a metadata standard and version for your project.</p>
+        <h2 class="modal-title">New Dataset</h2>
+        <p class="modal-subtitle">Choose a metadata standard and version for your dataset.</p>
 
-        <div class="project-name-field">
+        <div class="dataset-name-field">
             {% if csrf_token %}
             <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
             {% endif %}
             <input type="hidden" id="workspace-id" value="{{ workspace_id | e }}">
-            <label for="project-name">Project Name</label>
-            <input type="text" id="project-name" name="name" required
-                   placeholder="My Project" autofocus>
+            <label for="dataset-name">Dataset Name</label>
+            <input type="text" id="dataset-name" name="name" required
+                   placeholder="My Dataset" autofocus>
         </div>
 
         <div class="profile-grid">
@@ -26,12 +26,12 @@
                     <div class="version-row">
                         <button type="button"
                                 class="btn {% if version == profile.latest_version %}btn-primary{% else %}btn-secondary{% endif %}"
-                                onclick="createProject('{{ profile.name }}', '{{ version }}')">
+                                onclick="createDataset('{{ profile.name }}', '{{ version }}')">
                             v{{ version }}{% if version == profile.latest_version %} (latest){% endif %}
                         </button>
                         <button type="button"
                                 class="btn btn-outline-accent"
-                                onclick="createProjectWithExample('{{ profile.name }}', '{{ version }}')"
+                                onclick="createDatasetWithExample('{{ profile.name }}', '{{ version }}')"
                                 title="Create with example data">
                             Load Example
                         </button>
@@ -52,11 +52,11 @@
 </div>
 
 <script>
-async function createProject(profile, version) {
-    const name = document.getElementById('project-name').value;
+async function createDataset(profile, version) {
+    const name = document.getElementById('dataset-name').value;
     if (!name) {
-        alert('Please enter a project name');
-        document.getElementById('project-name').focus();
+        alert('Please enter a dataset name');
+        document.getElementById('dataset-name').focus();
         return;
     }
 
@@ -84,7 +84,7 @@ async function createProject(profile, version) {
     formData.append('_csrf_token', csrfToken);
 
     try {
-        const response = await fetch('/hub/projects', {
+        const response = await fetch('/hub/datasets', {
             method: 'POST',
             body: formData
         });
@@ -92,14 +92,14 @@ async function createProject(profile, version) {
         if (response.redirected) {
             window.location.href = response.url;
         } else if (response.ok) {
-            if (response.url.includes('/projects/')) {
+            if (response.url.includes('/datasets/')) {
                 window.location.href = response.url;
             } else {
                 window.location.reload();
             }
         } else {
             const text = await response.text();
-            alert('Error creating project: ' + text.substring(0, 200));
+            alert('Error creating dataset: ' + text.substring(0, 200));
             btn.disabled = false;
             btn.textContent = originalText;
         }
@@ -110,15 +110,15 @@ async function createProject(profile, version) {
     }
 }
 
-async function createProjectWithExample(profile, version) {
+async function createDatasetWithExample(profile, version) {
     // Find and disable the clicked button, show loading state
     const btn = event.target;
     const originalText = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Loading...';
 
-    const name = document.getElementById('project-name').value || `${profile} Example`;
-    document.getElementById('project-name').value = name;
+    const name = document.getElementById('dataset-name').value || `${profile} Example`;
+    document.getElementById('dataset-name').value = name;
 
     const csrfToken = document.getElementById('csrf-token')?.value || '';
     const workspaceId = document.getElementById('workspace-id')?.value || '';
@@ -139,7 +139,7 @@ async function createProjectWithExample(profile, version) {
     formData.append('load_example', 'true');
 
     try {
-        const response = await fetch('/hub/projects', {
+        const response = await fetch('/hub/datasets', {
             method: 'POST',
             body: formData
         });
@@ -148,15 +148,15 @@ async function createProjectWithExample(profile, version) {
             window.location.href = response.url;
         } else if (response.ok) {
             // For 303 redirects, fetch follows automatically
-            // Check if we got the project URL in response
-            if (response.url.includes('/projects/')) {
+            // Check if we got the dataset URL in response
+            if (response.url.includes('/datasets/')) {
                 window.location.href = response.url;
             } else {
                 window.location.reload();
             }
         } else {
             const text = await response.text();
-            alert('Error creating project: ' + text.substring(0, 200));
+            alert('Error creating dataset: ' + text.substring(0, 200));
             btn.disabled = false;
             btn.textContent = originalText;
         }
@@ -167,4 +167,3 @@ async function createProjectWithExample(profile, version) {
     }
 }
 </script>
-

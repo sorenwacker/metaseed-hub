@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Graph View - {{ project.name }} - Metaseed Hub{% endblock %}
+{% block title %}Graph View - {{ dataset.name }} - Metaseed Hub{% endblock %}
 
 {% block head %}
 <script src="/hub/hub-static/js/vis-network.min.js"></script>
@@ -9,9 +9,9 @@
 {% block nav %}
 <a href="/hub/" class="nav-item">Workspaces</a>
 <span class="nav-sep">/</span>
-<a href="/hub/workspaces/{{ project.workspace_id }}" class="nav-item">Workspace</a>
+<a href="/hub/workspaces/{{ dataset.workspace_id }}" class="nav-item">Workspace</a>
 <span class="nav-sep">/</span>
-<a href="/hub/projects/{{ project.id }}" class="nav-item">{{ project.name }}</a>
+<a href="/hub/datasets/{{ dataset.id }}" class="nav-item">{{ dataset.name }}</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">Graph</span>
 {% endblock %}
@@ -20,8 +20,8 @@
 <div class="graph-page">
     <div class="graph-header">
         <div class="graph-info">
-            <h1>{{ project.name }} - Entity Graph</h1>
-            <span class="profile-badge">{{ project.profile }} {{ project.version }}</span>
+            <h1>{{ dataset.name }} - Entity Graph</h1>
+            <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
         </div>
         <div class="graph-controls">
             <label class="graph-control-label">
@@ -34,7 +34,7 @@
             </label>
             <button id="graph-layout-btn" class="btn btn-sm" onclick="toggleGraphLayout()">Hierarchical</button>
             <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
-            <a href="/hub/projects/{{ project.id }}" class="btn">Back to Editor</a>
+            <a href="/hub/datasets/{{ dataset.id }}" class="btn">Back to Editor</a>
         </div>
     </div>
     <div class="graph-body">
@@ -164,7 +164,7 @@ function loadGraph() {
     console.log('Graph container size:', graphView.offsetWidth, 'x', graphView.offsetHeight);
     graphView.innerHTML = '<div class="graph-loading">Loading graph...</div>';
 
-    var apiUrl = '/hub/projects/{{ project.id }}/api/graph';
+    var apiUrl = '/hub/datasets/{{ dataset.id }}/api/graph';
     {% if node_id %}
     apiUrl += '?node_id={{ node_id }}';
     {% endif %}
@@ -235,7 +235,7 @@ function renderGraph(data) {
         // Double-click to open entity
         graphNetwork.on('doubleClick', function(params) {
             if (params.nodes.length > 0) {
-                window.open('/hub/projects/{{ project.id }}/entity/' + params.nodes[0], '_blank');
+                window.open('/hub/datasets/{{ dataset.id }}/entity/' + params.nodes[0], '_blank');
             }
         });
     } catch (e) {
@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', loadGraph);
 // Listen for entity changes from other tabs via BroadcastChannel
 var entityChannel = new BroadcastChannel('metaseed-entity-updates');
 entityChannel.onmessage = function(event) {
-    if (event.data.projectId === '{{ project.id }}' && event.data.type === 'entityChanged') {
+    if (event.data.datasetId === '{{ dataset.id }}' && event.data.type === 'entityChanged') {
         console.log('Entity changed in another tab, reloading graph...');
         loadGraph();
     }

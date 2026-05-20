@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Chat - {{ project.name }} - Metaseed Hub{% endblock %}
+{% block title %}Chat - {{ dataset.name }} - Metaseed Hub{% endblock %}
 
 {% block nav %}
 <a href="/hub/" class="nav-item">Workspaces</a>
 <span class="nav-sep">/</span>
-<a href="/hub/workspaces/{{ project.workspace_id }}" class="nav-item">Workspace</a>
+<a href="/hub/workspaces/{{ dataset.workspace_id }}" class="nav-item">Workspace</a>
 <span class="nav-sep">/</span>
-<a href="/hub/projects/{{ project.id }}" class="nav-item">{{ project.name }}</a>
+<a href="/hub/datasets/{{ dataset.id }}" class="nav-item">{{ dataset.name }}</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">Chat</span>
 {% endblock %}
@@ -15,13 +15,13 @@
 {% block content %}
 <div class="chat-page">
     <div class="chat-header">
-        <h2>{{ project.name }} - Team Chat</h2>
+        <h2>{{ dataset.name }} - Team Chat</h2>
     </div>
     <div id="chat-messages" class="chat-messages">
         <p class="chat-placeholder">Chat messages will appear here...</p>
     </div>
     <form class="chat-form"
-          hx-post="/hub/projects/{{ project.id }}/chat"
+          hx-post="/hub/datasets/{{ dataset.id }}/chat"
           hx-target="#chat-messages"
           hx-swap="beforeend">
         <input type="text" name="message" placeholder="Type a message..."
