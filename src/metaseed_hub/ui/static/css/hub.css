@@ -5305,6 +5305,43 @@ a.start-option-card:hover {
     cursor: pointer;
 }
 
+/* Version History */
+.version-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--clr-paper);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+}
+
+.version-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.version-number {
+    font-weight: 600;
+    color: var(--clr-forest);
+}
+
+.version-time {
+    color: var(--clr-ink-light);
+}
+
+.version-author {
+    color: var(--clr-ink-light);
+    font-size: 0.75rem;
+}
+
 .btn-icon {
     width: 20px;
     height: 20px;

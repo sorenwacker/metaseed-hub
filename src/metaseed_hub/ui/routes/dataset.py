@@ -18,6 +18,7 @@ from metaseed_hub.models import (
     Dataset,
     DatasetMember,
     DatasetRole,
+    DatasetVersion,
     ReactionType,
     SpecDraft,
     User,
@@ -1460,3 +1461,108 @@ async def react_to_comment(
     await session.commit()
 
     return await _get_comments_html(request, dataset_id, session, user.sub)
+
+
+# =============================================================================
+# Version History Routes
+# =============================================================================
+
+
+@router.get("/{dataset_id}/versions", response_class=HTMLResponse)
+async def get_dataset_versions(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Get version history for a dataset."""
+    await get_dataset_for_user(dataset_id, session, user)
+
+    result = await session.execute(
+        select(DatasetVersion)
+        .where(DatasetVersion.dataset_id == dataset_id)
+        .options(selectinload(DatasetVersion.created_by))
+        .order_by(DatasetVersion.version_number.desc())
+    )
+    versions = list(result.scalars().all())
+
+    return render_template(
+        request=request,
+        name="partials/dataset_versions.html",
+        context={
+            "versions": versions,
+            "dataset_id": dataset_id,
+        },
+    )
+
+
+@router.post("/{dataset_id}/versions/{version_id}/restore", response_class=HTMLResponse)
+async def restore_dataset_version(
+    request: Request,
+    dataset_id: str,
+    version_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Restore a dataset to a previous version."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    # Get the version to restore
+    result = await session.execute(
+        select(DatasetVersion).where(
+            DatasetVersion.id == version_id, DatasetVersion.dataset_id == dataset_id
+        )
+    )
+    version = result.scalar_one_or_none()
+
+    if not version:
+        return HTMLResponse(
+            "<div class='notification error'>Version not found</div>",
+            status_code=404,
+        )
+
+    # Get user from database
+    user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user = user_result.scalar_one_or_none()
+    user_id = db_user.id if db_user else None
+
+    # Restore the data (this will create a new version)
+    from sqlalchemy import func
+    from sqlalchemy.orm.attributes import flag_modified
+
+    # Get next version number
+    max_result = await session.execute(
+        select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
+            DatasetVersion.dataset_id == dataset_id
+        )
+    )
+    max_version = max_result.scalar() or 0
+
+    # Create new version with restored data
+    new_version = DatasetVersion(
+        dataset_id=dataset_id,
+        version_number=max_version + 1,
+        data=version.data,
+        created_by_id=user_id,
+    )
+    session.add(new_version)
+
+    # Update dataset
+    dataset.data = version.data
+    flag_modified(dataset, "data")
+    session.add(dataset)
+    await session.commit()
+
+    # Clear cached state
+    if dataset_id in dataset_states:
+        del dataset_states[dataset_id]
+
+    # Return redirect to reload page
+    response = HTMLResponse(status_code=200)
+    response.headers["HX-Redirect"] = f"/hub/datasets/{dataset_id}"
+    return response

@@ -323,6 +323,41 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="dataset", order_by="Comment.created_at"
     )
+    versions: Mapped[list["DatasetVersion"]] = relationship(
+        "DatasetVersion", back_populates="dataset", order_by="DatasetVersion.version_number.desc()"
+    )
+
+
+class DatasetVersion(TimestampMixin, Base):
+    """Snapshot of dataset data at a point in time."""
+
+    __tablename__ = "dataset_versions"
+    __table_args__ = (
+        UniqueConstraint("dataset_id", "version_number", name="uq_dataset_versions_number"),
+        Index("ix_dataset_versions_dataset_id", "dataset_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version_number: Mapped[int] = mapped_column(nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_by_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Relationships
+    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="versions")
+    created_by: Mapped["User | None"] = relationship("User")
 
 
 class DatasetRole(StrEnum):

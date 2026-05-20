@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Request
 from metaseed.ui.state import AppState, TreeNode
 
-from metaseed_hub.models import Dataset
+from metaseed_hub.models import Dataset, DatasetVersion
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -708,17 +708,41 @@ async def save_dataset_state(
     session: Any,
     dataset: Dataset,
     state: AppState,
+    user_id: str | None = None,
 ) -> None:
-    """Save AppState entity tree to database.
+    """Save AppState entity tree to database and create a version.
 
     Args:
         session: Database session.
         dataset: Dataset model to update.
         state: AppState with entity tree to save.
+        user_id: Optional user ID for version tracking.
     """
+    from sqlalchemy import func, select
     from sqlalchemy.orm.attributes import flag_modified
 
-    dataset.data = serialize_tree(state)
+    new_data = serialize_tree(state)
+
+    # Only create version if data changed
+    if new_data != dataset.data:
+        # Get next version number
+        result = await session.execute(
+            select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
+                DatasetVersion.dataset_id == dataset.id
+            )
+        )
+        max_version = result.scalar() or 0
+
+        # Create version with new data
+        version = DatasetVersion(
+            dataset_id=dataset.id,
+            version_number=max_version + 1,
+            data=new_data,
+            created_by_id=user_id,
+        )
+        session.add(version)
+
+    dataset.data = new_data
     flag_modified(dataset, "data")
     session.add(dataset)
     await session.commit()

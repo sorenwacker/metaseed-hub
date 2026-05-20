@@ -102,6 +102,9 @@
                 <button class="overview-tab active" data-tab="comments" onclick="switchOverviewTab('comments')">
                     Comments
                 </button>
+                <button class="overview-tab" data-tab="history" onclick="switchOverviewTab('history')">
+                    History
+                </button>
                 <button class="overview-tab" data-tab="sharing" onclick="switchOverviewTab('sharing')">
                     Sharing
                     <span class="tab-count">{{ members|length }}</span>
@@ -124,6 +127,16 @@
                     <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
                     <button type="submit" class="btn btn-primary">Post</button>
                 </form>
+            </div>
+
+            <!-- History Tab -->
+            <div class="overview-tab-content" id="tab-history">
+                <div id="versions-list"
+                     hx-get="/hub/datasets/{{ dataset.id }}/versions"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading version history...
+                </div>
             </div>
 
             <!-- Sharing Tab -->

@@ -1,0 +1,23 @@
+{% if versions %}
+<div class="version-list">
+    {% for version in versions %}
+    <div class="version-row">
+        <div class="version-info">
+            <span class="version-number">v{{ version.version_number }}</span>
+            <span class="version-time">{{ version.created_at.strftime('%b %d, %H:%M') }}</span>
+            {% if version.created_by %}
+            <span class="version-author">by {{ version.created_by.display_name or version.created_by.email }}</span>
+            {% endif %}
+        </div>
+        <button class="btn btn-sm btn-ghost"
+                hx-post="/hub/datasets/{{ dataset_id }}/versions/{{ version.id }}/restore"
+                hx-confirm="Restore to version {{ version.version_number }}? This will create a new version with the restored data."
+                title="Restore this version">
+            Restore
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="empty-state-inline">No version history yet. Versions are created automatically when you save changes.</p>
+{% endif %}
