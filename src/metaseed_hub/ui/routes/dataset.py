@@ -1481,10 +1481,26 @@ async def react_to_comment(
 # =============================================================================
 
 
+def _flatten_tree(tree: list[dict[str, Any]], prefix: str = "") -> dict[str, dict[str, Any]]:
+    """Flatten tree into dict keyed by node ID with full data."""
+    result: dict[str, dict[str, Any]] = {}
+    for node in tree:
+        node_id = node.get("id", "")
+        if node_id:
+            result[node_id] = {
+                "entity_type": node.get("entity_type", "Unknown"),
+                "label": node.get("label", ""),
+                "data": node.get("data", {}),
+            }
+        if "children" in node:
+            result.update(_flatten_tree(node["children"], prefix))
+    return result
+
+
 def _calculate_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
     """Calculate diff between two dataset states.
 
-    Returns dict with added, removed, modified counts and details.
+    Returns dict with summary changes and detailed field changes.
     """
     old_tree = old_data.get("tree", [])
     new_tree = new_data.get("tree", [])
@@ -1524,6 +1540,85 @@ def _calculate_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[
         "total_new": total_new,
         "has_changes": changes or (old_data != new_data),
     }
+
+
+def _calculate_detailed_diff(
+    old_data: dict[str, Any], new_data: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Calculate detailed field-level diff between two dataset states.
+
+    Returns list of changes with entity info and field diffs.
+    """
+    old_nodes = _flatten_tree(old_data.get("tree", []))
+    new_nodes = _flatten_tree(new_data.get("tree", []))
+
+    all_ids = set(old_nodes.keys()) | set(new_nodes.keys())
+    changes: list[dict[str, Any]] = []
+
+    for node_id in all_ids:
+        old_node = old_nodes.get(node_id)
+        new_node = new_nodes.get(node_id)
+
+        if old_node and not new_node:
+            # Entity removed
+            changes.append(
+                {
+                    "type": "removed",
+                    "entity_type": old_node["entity_type"],
+                    "label": old_node["label"],
+                    "fields": [],
+                }
+            )
+        elif new_node and not old_node:
+            # Entity added
+            field_changes = []
+            for key, val in new_node["data"].items():
+                if val is not None and str(val).strip():
+                    field_changes.append(
+                        {
+                            "field": key,
+                            "old": None,
+                            "new": val,
+                        }
+                    )
+            changes.append(
+                {
+                    "type": "added",
+                    "entity_type": new_node["entity_type"],
+                    "label": new_node["label"],
+                    "fields": field_changes,
+                }
+            )
+        elif old_node and new_node:
+            # Check for field changes
+            old_fields = old_node["data"]
+            new_fields = new_node["data"]
+            all_keys = set(old_fields.keys()) | set(new_fields.keys())
+
+            field_changes = []
+            for key in all_keys:
+                old_val = old_fields.get(key)
+                new_val = new_fields.get(key)
+                if old_val != new_val:
+                    field_changes.append(
+                        {
+                            "field": key,
+                            "old": old_val,
+                            "new": new_val,
+                        }
+                    )
+
+            if field_changes:
+                changes.append(
+                    {
+                        "type": "modified",
+                        "entity_type": new_node["entity_type"],
+                        "label": new_node["label"],
+                        "fields": field_changes,
+                    }
+                )
+
+    return changes
 
 
 @router.get("/{dataset_id}/versions", response_class=HTMLResponse)
@@ -1566,6 +1661,55 @@ async def get_dataset_versions(
         name="partials/dataset_versions.html",
         context={
             "versions": versions_with_diffs,
+            "dataset_id": dataset_id,
+        },
+    )
+
+
+@router.get("/{dataset_id}/versions/{version_id}/diff", response_class=HTMLResponse)
+async def get_version_diff(
+    request: Request,
+    dataset_id: str,
+    version_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Get detailed diff for a specific version."""
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Get the version
+    result = await session.execute(
+        select(DatasetVersion).where(
+            DatasetVersion.id == version_id, DatasetVersion.dataset_id == dataset_id
+        )
+    )
+    version = result.scalar_one_or_none()
+
+    if not version:
+        return HTMLResponse("<div class='error'>Version not found</div>", status_code=404)
+
+    # Get previous version
+    prev_result = await session.execute(
+        select(DatasetVersion)
+        .where(
+            DatasetVersion.dataset_id == dataset_id,
+            DatasetVersion.version_number < version.version_number,
+        )
+        .order_by(DatasetVersion.version_number.desc())
+        .limit(1)
+    )
+    prev_version = prev_result.scalar_one_or_none()
+
+    # Calculate detailed diff
+    old_data = prev_version.data if prev_version else {}
+    detailed_changes = _calculate_detailed_diff(old_data, version.data)
+
+    return render_template(
+        request=request,
+        name="partials/version_diff.html",
+        context={
+            "version": version,
+            "changes": detailed_changes,
             "dataset_id": dataset_id,
         },
     )

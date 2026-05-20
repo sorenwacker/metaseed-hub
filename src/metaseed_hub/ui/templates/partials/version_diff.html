@@ -1,0 +1,47 @@
+<div class="version-diff-detail">
+    <div class="diff-header">
+        <span>Changes in v{{ version.version_number }}</span>
+        <button class="btn btn-sm btn-ghost" onclick="this.closest('.version-diff-detail').remove()">Close</button>
+    </div>
+
+    {% if changes %}
+    <div class="diff-changes">
+        {% for change in changes %}
+        <div class="diff-entity diff-{{ change.type }}">
+            <div class="diff-entity-header">
+                {% if change.type == 'added' %}
+                <span class="diff-badge diff-add">+ Added</span>
+                {% elif change.type == 'removed' %}
+                <span class="diff-badge diff-remove">- Removed</span>
+                {% else %}
+                <span class="diff-badge diff-modify">~ Modified</span>
+                {% endif %}
+                <span class="diff-entity-type">{{ change.entity_type }}</span>
+                <span class="diff-entity-label">{{ change.label }}</span>
+            </div>
+
+            {% if change.fields %}
+            <div class="diff-fields">
+                {% for field in change.fields %}
+                <div class="diff-field">
+                    <span class="diff-field-name">{{ field.field }}:</span>
+                    {% if field.old is not none and field.new is not none %}
+                    <span class="diff-old">{{ field.old }}</span>
+                    <span class="diff-arrow">&rarr;</span>
+                    <span class="diff-new">{{ field.new }}</span>
+                    {% elif field.old is none %}
+                    <span class="diff-new">{{ field.new }}</span>
+                    {% else %}
+                    <span class="diff-old diff-removed">{{ field.old }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state-inline">No changes detected.</p>
+    {% endif %}
+</div>

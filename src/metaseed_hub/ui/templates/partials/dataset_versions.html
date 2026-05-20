@@ -3,33 +3,45 @@
     {% for item in versions %}
     {% set version = item.version %}
     {% set diff = item.diff %}
-    <div class="version-row">
-        <div class="version-main">
-            <div class="version-header">
-                <span class="version-number">v{{ version.version_number }}</span>
-                <span class="version-time">{{ version.created_at.strftime('%b %d, %H:%M') }}</span>
-                {% if version.created_by %}
-                <span class="version-author">{{ version.created_by.display_name or version.created_by.email }}</span>
+    <div class="version-item">
+        <div class="version-row">
+            <div class="version-main">
+                <div class="version-header">
+                    <span class="version-number">v{{ version.version_number }}</span>
+                    <span class="version-time">{{ version.created_at.strftime('%b %d, %H:%M') }}</span>
+                    {% if version.created_by %}
+                    <span class="version-author">{{ version.created_by.display_name or version.created_by.email }}</span>
+                    {% endif %}
+                </div>
+                {% if diff and diff.changes %}
+                <div class="version-summary">
+                    {% for change in diff.changes %}
+                    <span class="diff-change {% if change.startswith('+') %}diff-add{% else %}diff-remove{% endif %}">{{ change }}</span>
+                    {% endfor %}
+                </div>
+                {% elif diff and not diff.changes and diff.has_changes %}
+                <div class="version-summary">
+                    <span class="diff-change diff-modify">Fields modified</span>
+                </div>
                 {% endif %}
             </div>
-            {% if diff and diff.changes %}
-            <div class="version-diff">
-                {% for change in diff.changes %}
-                <span class="diff-change {% if change.startswith('+') %}diff-add{% else %}diff-remove{% endif %}">{{ change }}</span>
-                {% endfor %}
+            <div class="version-actions">
+                <button class="btn btn-sm btn-ghost"
+                        hx-get="/hub/datasets/{{ dataset_id }}/versions/{{ version.id }}/diff"
+                        hx-target="#diff-{{ version.id }}"
+                        hx-swap="innerHTML"
+                        title="Show changes">
+                    Diff
+                </button>
+                <button class="btn btn-sm btn-ghost"
+                        hx-post="/hub/datasets/{{ dataset_id }}/versions/{{ version.id }}/restore"
+                        hx-confirm="Restore to version {{ version.version_number }}? This will create a new version."
+                        title="Restore this version">
+                    Restore
+                </button>
             </div>
-            {% elif diff and not diff.changes and diff.has_changes %}
-            <div class="version-diff">
-                <span class="diff-change diff-modify">Content modified</span>
-            </div>
-            {% endif %}
         </div>
-        <button class="btn btn-sm btn-ghost"
-                hx-post="/hub/datasets/{{ dataset_id }}/versions/{{ version.id }}/restore"
-                hx-confirm="Restore to version {{ version.version_number }}? This will create a new version."
-                title="Restore this version">
-            Restore
-        </button>
+        <div id="diff-{{ version.id }}" class="version-diff-container"></div>
     </div>
     {% endfor %}
 </div>
