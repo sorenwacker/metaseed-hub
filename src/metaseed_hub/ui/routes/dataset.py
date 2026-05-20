@@ -1468,6 +1468,51 @@ async def react_to_comment(
 # =============================================================================
 
 
+def _calculate_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[str, Any]:
+    """Calculate diff between two dataset states.
+
+    Returns dict with added, removed, modified counts and details.
+    """
+    old_tree = old_data.get("tree", [])
+    new_tree = new_data.get("tree", [])
+
+    def count_entities(tree: list[dict[str, Any]]) -> dict[str, int]:
+        """Count entities by type in tree."""
+        counts: dict[str, int] = {}
+        for node in tree:
+            entity_type = node.get("entity_type", "Unknown")
+            counts[entity_type] = counts.get(entity_type, 0) + 1
+            if "children" in node:
+                child_counts = count_entities(node["children"])
+                for k, v in child_counts.items():
+                    counts[k] = counts.get(k, 0) + v
+        return counts
+
+    old_counts = count_entities(old_tree)
+    new_counts = count_entities(new_tree)
+
+    all_types = set(old_counts.keys()) | set(new_counts.keys())
+    changes: list[str] = []
+
+    for entity_type in sorted(all_types):
+        old_count = old_counts.get(entity_type, 0)
+        new_count = new_counts.get(entity_type, 0)
+        if new_count > old_count:
+            changes.append(f"+{new_count - old_count} {entity_type}")
+        elif new_count < old_count:
+            changes.append(f"-{old_count - new_count} {entity_type}")
+
+    total_old = sum(old_counts.values())
+    total_new = sum(new_counts.values())
+
+    return {
+        "changes": changes,
+        "total_old": total_old,
+        "total_new": total_new,
+        "has_changes": changes or (old_data != new_data),
+    }
+
+
 @router.get("/{dataset_id}/versions", response_class=HTMLResponse)
 async def get_dataset_versions(
     request: Request,
@@ -1475,7 +1520,7 @@ async def get_dataset_versions(
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Get version history for a dataset."""
+    """Get version history for a dataset with diffs."""
     await get_dataset_for_user(dataset_id, session, user)
 
     result = await session.execute(
@@ -1486,11 +1531,28 @@ async def get_dataset_versions(
     )
     versions = list(result.scalars().all())
 
+    # Calculate diffs between consecutive versions
+    versions_with_diffs: list[dict[str, Any]] = []
+    for i, version in enumerate(versions):
+        version_data: dict[str, Any] = {
+            "version": version,
+            "diff": None,
+        }
+        # Compare with previous version (next in list since sorted desc)
+        if i < len(versions) - 1:
+            prev_version = versions[i + 1]
+            version_data["diff"] = _calculate_diff(prev_version.data, version.data)
+        elif i == len(versions) - 1:
+            # First version - compare with empty
+            version_data["diff"] = _calculate_diff({}, version.data)
+
+        versions_with_diffs.append(version_data)
+
     return render_template(
         request=request,
         name="partials/dataset_versions.html",
         context={
-            "versions": versions,
+            "versions": versions_with_diffs,
             "dataset_id": dataset_id,
         },
     )

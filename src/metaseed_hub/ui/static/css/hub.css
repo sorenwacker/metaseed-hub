@@ -5305,6 +5305,47 @@ a.start-option-card:hover {
     cursor: pointer;
 }
 
+/* Overview sections */
+.overview-section {
+    margin-bottom: var(--space-lg);
+}
+
+.overview-section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--clr-ink);
+    margin-bottom: var(--space-sm);
+}
+
+.overview-details {
+    margin-bottom: var(--space-sm);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md);
+}
+
+.overview-summary {
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--clr-ink);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.overview-summary:hover {
+    background: var(--clr-paper);
+}
+
+.overview-details[open] .overview-summary {
+    border-bottom: 1px solid var(--clr-parchment);
+}
+
+.overview-details > *:not(summary) {
+    padding: var(--space-sm) var(--space-md);
+}
+
 /* Version History */
 .version-list {
     display: flex;
@@ -5314,18 +5355,25 @@ a.start-option-card:hover {
 
 .version-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm);
     background: var(--clr-paper);
     border-radius: var(--radius-sm);
     font-size: 0.8125rem;
+    gap: var(--space-sm);
 }
 
-.version-info {
+.version-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.version-header {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+    flex-wrap: wrap;
 }
 
 .version-number {
@@ -5340,6 +5388,35 @@ a.start-option-card:hover {
 .version-author {
     color: var(--clr-ink-light);
     font-size: 0.75rem;
+}
+
+.version-diff {
+    margin-top: var(--space-xs);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+.diff-change {
+    font-size: 0.6875rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+}
+
+.diff-add {
+    background: var(--clr-success-bg);
+    color: var(--clr-success);
+}
+
+.diff-remove {
+    background: var(--clr-error-bg);
+    color: var(--clr-error);
+}
+
+.diff-modify {
+    background: var(--clr-warning-bg);
+    color: var(--clr-warning);
 }
 
 .btn-icon {
