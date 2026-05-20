@@ -744,15 +744,28 @@ async def dataset_overview(
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Return the editor placeholder for overview."""
-    # Verify user has access to this dataset
-    await get_dataset_for_user(dataset_id, session, user)
+    """Return the overview panel with version history, comments, and sharing."""
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    # Load members
+    members_result = await session.execute(
+        select(DatasetMember)
+        .where(DatasetMember.dataset_id == dataset_id)
+        .options(selectinload(DatasetMember.user))
+    )
+    members = list(members_result.scalars().all())
+
+    # Check if there's any tree data
+    state = await ensure_dataset_facade(dataset, session)
+    tree_data = get_tree_data_from_nodes(state)
 
     return render_template(
         request=request,
-        name="partials/editor_placeholder.html",
+        name="partials/dataset_overview.html",
         context={
-            "message": "Select an entity from the sidebar to edit.",
+            "dataset": dataset,
+            "members": members,
+            "tree_data": tree_data,
         },
     )
 
