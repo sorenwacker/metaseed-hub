@@ -7,9 +7,7 @@
 {% endblock %}
 
 {% block nav %}
-<a href="/hub/" class="nav-item">Workspaces</a>
-<span class="nav-sep">/</span>
-<a href="/hub/workspaces/{{ dataset.workspace_id }}" class="nav-item">{{ workspace.name if workspace else 'Workspace' }}</a>
+<a href="/hub/" class="nav-item">Home</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ dataset.name }}</span>
 {% endblock %}
@@ -31,16 +29,11 @@
             </button>
             {% endfor %}
             <button class="btn"
-                    hx-post="/hub/datasets/{{ dataset.id }}/load-example"
-                    hx-confirm="Add example data to this dataset?"
-                    title="Load example data for this profile">Load Example</button>
-            <button class="btn"
                     hx-post="/hub/datasets/{{ dataset.id }}/validate"
                     hx-target="#validation-results"
                     hx-swap="innerHTML"
-                    title="Validate all entities against schema">Verify</button>
-            <a href="/hub/datasets/{{ dataset.id }}/graph" class="btn" target="_blank" title="Open graph view">Graph</a>
-            <button class="btn" onclick="toggleChatPanel()" title="Toggle chat panel">Chat</button>
+                    title="Validate all entities against schema">Validate</button>
+            <a href="/hub/datasets/{{ dataset.id }}/graph" class="btn" title="Open graph view">Graph</a>
             <a href="/hub/datasets/{{ dataset.id }}/export" class="btn" download title="Export to Excel">Export</a>
         </div>
     </div>
@@ -69,41 +62,14 @@
         </aside>
 
         <main class="dataset-editor" id="editor">
-            {% if tree_data %}
-            <!-- Entity List (metaseed style) -->
-            <div class="entity-list">
-                <h2>Entities</h2>
-                {% for node in tree_data recursive %}
-                <div class="entity-item {% if loop.depth > 1 %}child{% endif %}">
-                    <button class="btn btn-entity {% if loop.depth > 1 %}btn-nested{% endif %}"
-                            hx-get="/hub/datasets/{{ dataset.id }}/entity/{{ node.id }}"
-                            hx-target="#editor"
-                            hx-swap="innerHTML">
-                        <span class="entity-type">{{ node.entity_type }}</span>
-                        <span class="entity-label">{{ node.label }}</span>
-                    </button>
-                    {% if loop.depth == 1 %}
-                    <button class="btn btn-delete"
-                            hx-delete="/hub/datasets/{{ dataset.id }}/entity/{{ node.id }}"
-                            hx-target="#editor"
-                            hx-swap="innerHTML"
-                            hx-confirm="Delete '{{ node.label }}'?">
-                        &times;
-                    </button>
-                    {% endif %}
-                </div>
-                {% if node.children %}
-                <div class="entity-children">
-                    {{ loop(node.children) }}
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-            {% else %}
-            <!-- Empty State -->
+            <!-- Welcome State - click entity in sidebar to edit -->
             <div class="welcome">
-                <h2>No Entities Yet</h2>
-                <p>Create a new entity or load example data to get started.</p>
+                <h2>{{ dataset.name }}</h2>
+                <p class="welcome-profile">{{ dataset.profile }} {{ dataset.version }}</p>
+                {% if tree_data %}
+                <p>Select an entity from the sidebar to edit.</p>
+                {% else %}
+                <p>No entities yet. Create one to get started.</p>
                 <div class="welcome-actions">
                     {% for entity_type in root_types %}
                     <button class="btn btn-primary"
@@ -113,33 +79,11 @@
                         + New {{ entity_type }}
                     </button>
                     {% endfor %}
-                    <button class="btn btn-secondary"
-                            hx-post="/hub/datasets/{{ dataset.id }}/load-example"
-                            hx-confirm="Add example data to this dataset?">
-                        Load Example
-                    </button>
                 </div>
+                {% endif %}
             </div>
-            {% endif %}
         </main>
 
-        <!-- Chat Panel (slide-out) -->
-        <aside class="chat-panel" id="chat-panel">
-            <div class="chat-panel-header">
-                <h3>Team Chat</h3>
-                <button class="chat-panel-close" onclick="toggleChatPanel()">&times;</button>
-            </div>
-            <div id="chat-messages" class="chat-messages">
-                <p class="chat-placeholder">Messages will appear here...</p>
-            </div>
-            <form class="chat-form"
-                  hx-post="/hub/datasets/{{ dataset.id }}/chat"
-                  hx-target="#chat-messages"
-                  hx-swap="beforeend">
-                <input type="text" name="message" placeholder="Type a message..." autocomplete="off">
-                <button type="submit" class="btn btn-sm btn-primary">Send</button>
-            </form>
-        </aside>
     </div>
 </div>
 {% endblock %}
@@ -152,74 +96,18 @@ function toggleSidebar() {
     const layout = document.getElementById('dataset-layout');
     sidebar.classList.toggle('collapsed');
     layout.classList.toggle('sidebar-collapsed');
+
+    // Save preference
+    localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
 }
 
-// Chat panel toggle
-function toggleChatPanel() {
-    const panel = document.getElementById('chat-panel');
-    panel.classList.toggle('open');
-}
-
-// WebSocket connection for real-time collaboration
-const datasetId = "{{ dataset.id }}";
-const wsUrl = `ws://${window.location.host}/ws/${datasetId}?token=${getAuthToken()}`;
-
-function getAuthToken() {
-    // Get token from cookie or localStorage
-    return localStorage.getItem('auth_token') || '';
-}
-
-let ws;
-
-function connectWebSocket() {
-    ws = new WebSocket(wsUrl);
-
-    ws.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-    };
-
-    ws.onclose = function() {
-        // Reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000);
-    };
-}
-
-function handleWebSocketMessage(data) {
-    switch(data.type) {
-        case 'presence':
-            updatePresence(data);
-            break;
-        case 'chat':
-            appendChatMessage(data);
-            break;
-        case 'update':
-            // Refresh the entity tree
-            htmx.trigger('#entity-tree', 'refresh');
-            break;
+// Restore sidebar state on load
+document.addEventListener('DOMContentLoaded', function() {
+    const collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+    if (collapsed) {
+        document.getElementById('dataset-sidebar').classList.add('collapsed');
+        document.getElementById('dataset-layout').classList.add('sidebar-collapsed');
     }
-}
-
-function updatePresence(data) {
-    const list = document.getElementById('presence-list');
-    // Update presence UI
-}
-
-function appendChatMessage(data) {
-    const messages = document.getElementById('chat-messages');
-    const msg = document.createElement('div');
-    msg.className = 'chat-message';
-    // Use textContent to prevent XSS
-    const strong = document.createElement('strong');
-    strong.textContent = data.user + ':';
-    const text = document.createTextNode(' ' + data.content);
-    msg.appendChild(strong);
-    msg.appendChild(text);
-    messages.appendChild(msg);
-    messages.scrollTop = messages.scrollHeight;
-}
-
-// Connect on page load
-// connectWebSocket();
+});
 </script>
 {% endblock %}
