@@ -29,13 +29,11 @@
 | GET | `/hub/projects/{id}/entity/{node_id}` | Edit entity |
 | DELETE | `/hub/projects/{id}/entity/{node_id}` | Delete entity |
 
-### Import/Export
+### Export
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/hub/projects/{id}/export` | Download Excel |
-| GET | `/hub/projects/{id}/import` | Import form |
-| POST | `/hub/projects/{id}/import` | Upload ISA-JSON |
 
 ### Visualization
 

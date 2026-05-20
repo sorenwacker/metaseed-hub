@@ -42,7 +42,6 @@ Metaseed Hub uses metaseed as a library:
 from metaseed.ui.state import AppState
 from metaseed.ui.services.export import export_to_bytes
 from metaseed.ui.services.graph import build_graph
-from metaseed.importers.isa import ISAImporter
 ```
 
 Key integrations:
@@ -53,4 +52,3 @@ Key integrations:
 | Validation | `metaseed.validators` | Schema validation |
 | Export | `metaseed.ui.services.export` | Excel export |
 | Graph | `metaseed.ui.services.graph` | Visualization data |
-| Import | `metaseed.importers.isa` | ISA-JSON parsing |

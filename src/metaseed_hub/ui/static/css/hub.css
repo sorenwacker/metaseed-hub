@@ -3529,6 +3529,25 @@ a.spec-editor-close:hover {
     overflow: hidden;
 }
 
+.zoom-hint {
+    position: absolute;
+    bottom: var(--space-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    font-size: var(--fs-sm);
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.zoom-hint.hidden {
+    opacity: 0;
+}
+
 .canvas-legend {
     display: flex;
     gap: var(--space-lg);
