@@ -671,6 +671,10 @@ async def ensure_dataset_facade(
 
     dataset_id = dataset.id
 
+    # Check cache first - return existing state if available
+    if dataset_id in dataset_states:
+        return dataset_states[dataset_id]
+
     # Create state without deserializing tree yet
     state = AppState()
     state.profile = dataset.profile
