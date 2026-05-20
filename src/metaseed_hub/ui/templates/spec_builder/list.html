@@ -31,7 +31,6 @@
             <div class="spec-card draft">
                 <div class="spec-card-header">
                     <span class="spec-badge draft">Draft</span>
-                    <span class="spec-workspace">{{ draft.workspace.name }}</span>
                 </div>
                 <h3 class="spec-name">{{ draft.name or "Untitled" }}</h3>
                 <p class="spec-version">v{{ draft.version }}</p>
@@ -67,7 +66,6 @@
             <div class="spec-card published">
                 <div class="spec-card-header">
                     <span class="spec-badge published">Published</span>
-                    <span class="spec-workspace">{{ spec.workspace.name }}</span>
                 </div>
                 <h3 class="spec-name">{{ spec.name }}</h3>
                 <p class="spec-version">v{{ spec.version }}</p>
@@ -81,9 +79,9 @@
                     </span>
                 </div>
                 <div class="spec-actions">
-                    <a href="/hub/spec-builder/spec/{{ spec.id }}" class="btn btn-sm">View</a>
+                    <a href="/hub/spec-builder/spec/{{ spec.id }}" class="btn btn-sm btn-primary">View</a>
                     <form action="/hub/spec-builder/spec/{{ spec.id }}/edit" method="POST" class="inline-form">
-                        <button type="submit" class="btn btn-sm">Edit</button>
+                        <button type="submit" class="btn btn-sm btn-ghost" title="Create a new draft from this spec">Fork</button>
                     </form>
                 </div>
             </div>

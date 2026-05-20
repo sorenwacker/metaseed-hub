@@ -5,13 +5,24 @@ import logging
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from metaseed_hub.models import Dataset, SpecDraft, Workspace
+from metaseed_hub.models import (
+    Comment,
+    CommentReaction,
+    Dataset,
+    DatasetMember,
+    DatasetRole,
+    ReactionType,
+    SpecDraft,
+    User,
+    Workspace,
+)
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -45,10 +56,28 @@ async def dataset_new(
     request: Request,
     session: DbSession,
     user: CurrentUser,
-    workspace_id: str,
+    workspace_id: str | None = None,
 ) -> Response:
     """Return dataset creation form."""
     from metaseed.specs.loader import SpecLoader
+
+    # If no workspace_id provided, get user's first workspace
+    if not workspace_id:
+        # Get user's tenant using sub (keycloak ID)
+        tenant_result = await session.execute(
+            select(Workspace)
+            .join(Workspace.tenant)
+            .where(Workspace.tenant.has(slug=user.sub[:8]))
+            .limit(1)
+        )
+        workspace = tenant_result.scalar_one_or_none()
+        if workspace:
+            workspace_id = workspace.id
+        else:
+            # No workspace found - this shouldn't happen normally
+            return Response(
+                content="<p>No workspace found. Please create one first.</p>", status_code=400
+            )
 
     # Get available profiles and versions from metaseed
     loader = SpecLoader()
@@ -111,14 +140,164 @@ async def dataset_new(
 
     return render_template(
         request=request,
-        name="partials/dataset_form.html",
+        name="dataset_new.html",
         context={
             "user": user,
             "workspace_id": workspace_id,
             "profiles": profiles_data,
+            "user_specs": [],  # TODO: load user's custom specs
             "nav_active": "home",
         },
     )
+
+
+@router.post("/import")
+async def dataset_import(
+    request: Request,
+    session: DbSession,
+    user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+    name: Annotated[str, Form()],
+    workspace_id: Annotated[str | None, Form()] = None,
+    csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+) -> RedirectResponse:
+    """Import a dataset from an uploaded file (JSON, YAML, or Excel)."""
+    import json
+
+    import yaml
+    from metaseed.models import get_model
+    from metaseed.specs.loader import SpecLoader
+
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
+    if not validate_csrf_token(request, csrf_token):
+        return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
+
+    # Get workspace if not provided
+    if not workspace_id:
+        tenant_result = await session.execute(
+            select(Workspace)
+            .join(Workspace.tenant)
+            .where(Workspace.tenant.has(slug=user.sub[:8]))
+            .limit(1)
+        )
+        workspace = tenant_result.scalar_one_or_none()
+        if workspace:
+            workspace_id = workspace.id
+        else:
+            return RedirectResponse("/hub/?error=no_workspace", status_code=302)
+
+    await verify_workspace_access(workspace_id, session, user)
+
+    # Read file content
+    content = await file.read()
+    filename = file.filename or ""
+
+    # Parse based on file type
+    data = None
+    profile = None
+    version = None
+
+    try:
+        if filename.endswith((".yaml", ".yml")):
+            data = yaml.safe_load(content.decode("utf-8"))
+        elif filename.endswith(".json"):
+            data = json.loads(content.decode("utf-8"))
+        elif filename.endswith((".xlsx", ".xls")):
+            # Excel import - read first sheet as entity data
+            from io import BytesIO
+
+            import openpyxl
+
+            wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+            # Use first sheet
+            ws = wb.active
+            if ws:
+                rows = list(ws.iter_rows(values_only=True))
+                if len(rows) > 1:
+                    headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
+                    # Create data dict from first data row
+                    data = {}
+                    for i, val in enumerate(rows[1]):
+                        if i < len(headers) and val is not None:
+                            data[headers[i]] = val
+        else:
+            return RedirectResponse("/hub/datasets/new?error=unsupported_format", status_code=302)
+
+        if not data:
+            return RedirectResponse("/hub/datasets/new?error=empty_file", status_code=302)
+
+        # Try to detect profile from data
+        if isinstance(data, dict):
+            profile = data.get("profile") or data.get("_profile")
+            version = data.get("version") or data.get("_version")
+
+        # Default to miappe if not detected
+        if not profile:
+            profile = "miappe"
+        if not version:
+            loader = SpecLoader()
+            versions = loader.list_versions(profile)
+            version = versions[0] if versions else "1.1"
+
+    except Exception as e:
+        logger.exception(f"Failed to parse import file: {e}")
+        return RedirectResponse("/hub/datasets/new?error=parse_error", status_code=302)
+
+    # Create dataset
+    dataset = Dataset(
+        workspace_id=workspace_id,
+        name=name,
+        profile=profile,
+        version=version,
+        data={},
+    )
+    session.add(dataset)
+    await session.commit()
+    await session.refresh(dataset)
+
+    # Try to import entities from data
+    try:
+        loader = SpecLoader(profile=profile)
+        spec = loader.load_profile(version, profile)
+        root_entity = spec.root_entity or "Investigation"
+
+        state = get_dataset_state(dataset, dataset_states)
+        state.reset()
+        state.profile = profile
+        state.version = version
+        state.facade = None
+        facade = state.get_or_create_facade()
+
+        # Handle different data structures
+        entities_data = data.get("entities", []) if isinstance(data, dict) else []
+        if not entities_data and isinstance(data, dict):
+            # Try to use the data directly as root entity
+            Model = get_model(root_entity, version, profile=profile)
+            # Filter out metadata fields
+            entity_data = {
+                k: v
+                for k, v in data.items()
+                if not k.startswith("_") and k not in ("profile", "version")
+            }
+            if entity_data:
+                instance = Model(**entity_data)
+                node = state.add_node(root_entity, instance)
+                state.editing_node_id = node.id
+                create_nested_nodes(state, facade, node, root_entity, copy.deepcopy(entity_data))
+
+        # Save to database
+        from sqlalchemy.orm.attributes import flag_modified
+
+        dataset.data = serialize_tree(state)
+        flag_modified(dataset, "data")
+        session.add(dataset)
+        await session.commit()
+
+    except Exception as e:
+        logger.warning(f"Could not import entities, dataset created empty: {e}")
+
+    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
 
 
 @router.post("")
@@ -236,6 +415,13 @@ async def dataset_delete(
     workspace_id = dataset.workspace_id
     await session.delete(dataset)
     await session.commit()
+
+    # If request target is body, redirect to home (called from dataset page)
+    hx_target = request.headers.get("HX-Target", "")
+    if hx_target == "body":
+        response = Response(status_code=200)
+        response.headers["HX-Redirect"] = "/hub/"
+        return response
 
     # Return updated dataset grid
     result = await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id))
@@ -414,8 +600,40 @@ async def dataset_editor(
     # Load workspace for breadcrumb
     workspace = await session.get(Workspace, dataset.workspace_id)
 
+    # Load members with user info
+    members_result = await session.execute(
+        select(DatasetMember)
+        .where(DatasetMember.dataset_id == dataset_id)
+        .options(selectinload(DatasetMember.user))
+    )
+    members = list(members_result.scalars().all())
+
     # Build common dataset context
-    ctx = await _build_dataset_context(dataset, session)
+    try:
+        ctx = await _build_dataset_context(dataset, session)
+        root_types = ctx["state"].get_root_entity_types()
+    except Exception as e:
+        # Profile doesn't exist or is invalid - show error page
+        logger.warning(f"Failed to load dataset {dataset_id}: {e}")
+        return render_template(
+            request=request,
+            name="dataset.html",
+            context={
+                "user": user,
+                "dataset": dataset,
+                "workspace": workspace,
+                "members": members,
+                "state": None,
+                "root_types": [],
+                "tree_data": [],
+                "entity_descriptions": {},
+                "nav_active": "home",
+                "error": (
+                    f"Could not load profile '{dataset.profile}' v{dataset.version}. "
+                    "The profile may not exist or may be invalid."
+                ),
+            },
+        )
 
     return render_template(
         request=request,
@@ -424,8 +642,9 @@ async def dataset_editor(
             "user": user,
             "dataset": dataset,
             "workspace": workspace,
+            "members": members,
             "state": ctx["state"],
-            "root_types": ctx["state"].get_root_entity_types(),
+            "root_types": root_types,
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
             "nav_active": "home",
@@ -453,6 +672,26 @@ async def dataset_tree(
         context={
             "tree_data": tree_data,
             "dataset_id": dataset_id,
+        },
+    )
+
+
+@router.get("/{dataset_id}/overview", response_class=HTMLResponse)
+async def dataset_overview(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Return the editor placeholder for overview."""
+    # Verify user has access to this dataset
+    await get_dataset_for_user(dataset_id, session, user)
+
+    return render_template(
+        request=request,
+        name="partials/editor_placeholder.html",
+        context={
+            "message": "Select an entity from the sidebar to edit.",
         },
     )
 
@@ -687,3 +926,316 @@ async def dataset_export(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# =============================================================================
+# Member Management Routes
+# =============================================================================
+
+
+async def _get_members_html(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+) -> Response:
+    """Render the member list partial."""
+    result = await session.execute(
+        select(DatasetMember)
+        .where(DatasetMember.dataset_id == dataset_id)
+        .options(selectinload(DatasetMember.user))
+    )
+    members = list(result.scalars().all())
+
+    return render_template(
+        request=request,
+        name="partials/dataset_members.html",
+        context={
+            "members": members,
+            "dataset_id": dataset_id,
+        },
+    )
+
+
+@router.post("/{dataset_id}/members", response_class=HTMLResponse)
+async def add_dataset_member(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    email: Annotated[str, Form()],
+) -> Response:
+    """Add a member to a dataset by email."""
+    # Verify user has access
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Find user by email
+    result = await session.execute(select(User).where(User.email == email))
+    target_user = result.scalar_one_or_none()
+
+    if not target_user:
+        return await _get_members_html(request, dataset_id, session)
+
+    # Check if already a member
+    existing = await session.execute(
+        select(DatasetMember).where(
+            DatasetMember.dataset_id == dataset_id,
+            DatasetMember.user_id == target_user.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return await _get_members_html(request, dataset_id, session)
+
+    # Add member with viewer role by default
+    member = DatasetMember(
+        dataset_id=dataset_id,
+        user_id=target_user.id,
+        role=DatasetRole.VIEWER,
+    )
+    session.add(member)
+    await session.commit()
+
+    # Refresh to ensure we can load relationships
+    await session.refresh(member)
+
+    return await _get_members_html(request, dataset_id, session)
+
+
+@router.patch("/{dataset_id}/members/{user_id}", response_class=HTMLResponse)
+async def update_dataset_member_role(
+    request: Request,
+    dataset_id: str,
+    user_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    role: Annotated[str, Form()],
+) -> Response:
+    """Update a member's role in a dataset."""
+    # Verify user has access
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Find membership
+    result = await session.execute(
+        select(DatasetMember).where(
+            DatasetMember.dataset_id == dataset_id,
+            DatasetMember.user_id == user_id,
+        )
+    )
+    member = result.scalar_one_or_none()
+
+    if member:
+        member.role = DatasetRole(role)
+        await session.commit()
+
+    return await _get_members_html(request, dataset_id, session)
+
+
+@router.delete("/{dataset_id}/members/{user_id}", response_class=HTMLResponse)
+async def remove_dataset_member(
+    request: Request,
+    dataset_id: str,
+    user_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Remove a member from a dataset."""
+    # Verify user has access
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Find and delete membership
+    result = await session.execute(
+        select(DatasetMember).where(
+            DatasetMember.dataset_id == dataset_id,
+            DatasetMember.user_id == user_id,
+        )
+    )
+    member = result.scalar_one_or_none()
+
+    if member:
+        await session.delete(member)
+        await session.commit()
+
+    return await _get_members_html(request, dataset_id, session)
+
+
+# =============================================================================
+# Comment Routes (Threaded, with reactions)
+# =============================================================================
+
+
+async def _get_comments_html(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    keycloak_sub: str,
+) -> Response:
+    """Render the comments list partial."""
+    # Get database user ID from keycloak sub
+    user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
+    db_user = user_result.scalar_one_or_none()
+    current_user_id = db_user.id if db_user else None
+
+    # Get top-level comments (no parent) with all nested relationships eagerly loaded
+    result = await session.execute(
+        select(Comment)
+        .where(Comment.dataset_id == dataset_id, Comment.parent_id.is_(None))
+        .options(
+            selectinload(Comment.user),
+            selectinload(Comment.reactions),
+            selectinload(Comment.replies).selectinload(Comment.user),
+            selectinload(Comment.replies).selectinload(Comment.reactions),
+            selectinload(Comment.replies).selectinload(Comment.replies).selectinload(Comment.user),
+            selectinload(Comment.replies)
+            .selectinload(Comment.replies)
+            .selectinload(Comment.reactions),
+        )
+        .order_by(Comment.created_at.desc())
+    )
+    comments = list(result.scalars().all())
+
+    return render_template(
+        request=request,
+        name="partials/comments_list.html",
+        context={
+            "comments": comments,
+            "dataset_id": dataset_id,
+            "current_user_id": current_user_id,
+        },
+    )
+
+
+@router.get("/{dataset_id}/comments", response_class=HTMLResponse)
+async def get_dataset_comments(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Get all comments for a dataset."""
+    await get_dataset_for_user(dataset_id, session, user)
+    return await _get_comments_html(request, dataset_id, session, user.sub)
+
+
+@router.post("/{dataset_id}/comments", response_class=HTMLResponse)
+async def add_dataset_comment(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    content: Annotated[str, Form()],
+    parent_id: Annotated[str | None, Form()] = None,
+) -> Response:
+    """Add a comment to a dataset."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Get user from database by keycloak sub
+    user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user = user_result.scalar_one_or_none()
+
+    if not db_user:
+        return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+    comment = Comment(
+        dataset_id=dataset_id,
+        user_id=db_user.id,
+        parent_id=parent_id if parent_id else None,
+        content=content.strip(),
+    )
+    session.add(comment)
+    await session.commit()
+
+    return await _get_comments_html(request, dataset_id, session, user.sub)
+
+
+@router.delete("/{dataset_id}/comments/{comment_id}", response_class=HTMLResponse)
+async def delete_dataset_comment(
+    request: Request,
+    dataset_id: str,
+    comment_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Delete a comment (only by owner)."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Get user from database
+    user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user = user_result.scalar_one_or_none()
+
+    if not db_user:
+        return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+    # Find comment and verify ownership
+    result = await session.execute(select(Comment).where(Comment.id == comment_id))
+    comment = result.scalar_one_or_none()
+
+    if comment and comment.user_id == db_user.id:
+        await session.delete(comment)
+        await session.commit()
+
+    return await _get_comments_html(request, dataset_id, session, user.sub)
+
+
+@router.post("/{dataset_id}/comments/{comment_id}/react", response_class=HTMLResponse)
+async def react_to_comment(
+    request: Request,
+    dataset_id: str,
+    comment_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    reaction: Annotated[str, Form()],
+) -> Response:
+    """Add or toggle a reaction on a comment."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    await get_dataset_for_user(dataset_id, session, user)
+
+    # Get user from database
+    user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user = user_result.scalar_one_or_none()
+
+    if not db_user:
+        return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+    # Check for existing reaction
+    existing_result = await session.execute(
+        select(CommentReaction).where(
+            CommentReaction.comment_id == comment_id,
+            CommentReaction.user_id == db_user.id,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+
+    reaction_type = ReactionType(reaction)
+
+    if existing:
+        if existing.reaction == reaction_type:
+            # Toggle off - remove reaction
+            await session.delete(existing)
+        else:
+            # Change reaction type
+            existing.reaction = reaction_type
+    else:
+        # Add new reaction
+        new_reaction = CommentReaction(
+            comment_id=comment_id,
+            user_id=db_user.id,
+            reaction=reaction_type,
+        )
+        session.add(new_reaction)
+
+    await session.commit()
+
+    return await _get_comments_html(request, dataset_id, session, user.sub)

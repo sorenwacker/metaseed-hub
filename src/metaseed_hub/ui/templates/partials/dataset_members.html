@@ -1,0 +1,23 @@
+{% for member in members %}
+<div class="member-row">
+    <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
+    <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
+    <select class="member-role-select"
+            hx-patch="/hub/datasets/{{ dataset_id }}/members/{{ member.user_id }}"
+            hx-target="#member-list"
+            hx-swap="innerHTML"
+            name="role">
+        <option value="owner" {% if member.role.value == 'owner' %}selected{% endif %}>Owner</option>
+        <option value="curator" {% if member.role.value == 'curator' %}selected{% endif %}>Curator</option>
+        <option value="viewer" {% if member.role.value == 'viewer' %}selected{% endif %}>Viewer</option>
+    </select>
+    <button class="btn-icon btn-danger-text"
+            hx-delete="/hub/datasets/{{ dataset_id }}/members/{{ member.user_id }}"
+            hx-target="#member-list"
+            hx-swap="innerHTML"
+            hx-confirm="Remove {{ member.user.email }}?"
+            title="Remove">&times;</button>
+</div>
+{% else %}
+<p class="empty-state-inline">Not shared yet.</p>
+{% endfor %}

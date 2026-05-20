@@ -17,9 +17,6 @@
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ draft.name or "Untitled" }}</span>
 {% endif %}
-{% if workspace %}
-<span class="nav-workspace">({{ workspace.name }})</span>
-{% endif %}
 {% if has_unsaved_changes %}
 <span class="unsaved-indicator" title="Unsaved changes">*</span>
 {% endif %}
@@ -71,14 +68,6 @@
                 <span class="toggle-icon">&lsaquo;</span>
             </button>
 
-            <!-- Toolbox - New Entity drag target -->
-            <div class="toolbox">
-                <div class="toolbox-item" draggable="true" ondragstart="dragNewEntity(event)" title="Drag to canvas or double-click canvas to add">
-                    <span class="toolbox-icon">+</span>
-                    <span>New Entity</span>
-                </div>
-            </div>
-
             <!-- Sidebar tabs -->
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
@@ -87,6 +76,13 @@
                 <button class="sidebar-tab" data-tab="rules" onclick="switchSidebarTab('rules')">
                     Rules
                     <span class="tab-badge">{{ spec.validation_rules|length }}</span>
+                </button>
+                <button class="sidebar-tab" data-tab="comments" onclick="switchSidebarTab('comments')">
+                    Comments
+                </button>
+                <button class="sidebar-tab" data-tab="sharing" onclick="switchSidebarTab('sharing')">
+                    Sharing
+                    <span class="tab-badge">{{ members|length if members else 0 }}</span>
                 </button>
             </div>
 
@@ -108,6 +104,65 @@
                      hx-trigger="load"
                      hx-swap="innerHTML">
                     Loading...
+                </div>
+
+                <!-- Comments -->
+                <div id="comments-panel" class="sidebar-tab-content" data-tab="comments">
+                    <div class="comments-section">
+                        <div id="spec-comments-list"
+                             hx-get="/hub/spec-builder/{{ draft_id }}/comments"
+                             hx-trigger="load"
+                             hx-swap="innerHTML">
+                            Loading comments...
+                        </div>
+                        <form class="comment-add-form"
+                              hx-post="/hub/spec-builder/{{ draft_id }}/comments"
+                              hx-target="#spec-comments-list"
+                              hx-swap="innerHTML"
+                              hx-on:htmx:after-request="this.reset()">
+                            <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
+                            <button type="submit" class="btn btn-sm btn-primary">Post</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Sharing -->
+                <div id="sharing-panel" class="sidebar-tab-content" data-tab="sharing">
+                    <div class="sharing-section">
+                        <p class="sharing-hint">Share this spec draft with collaborators.</p>
+                        <div class="member-list" id="member-list">
+                            {% for member in members %}
+                            <div class="member-row">
+                                <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
+                                <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
+                                <select class="member-role-select"
+                                        hx-patch="/hub/spec-builder/{{ draft_id }}/members/{{ member.user_id }}"
+                                        hx-target="#member-list"
+                                        hx-swap="innerHTML"
+                                        name="role">
+                                    <option value="owner" {% if member.role.value == 'owner' %}selected{% endif %}>Owner</option>
+                                    <option value="editor" {% if member.role.value == 'editor' %}selected{% endif %}>Editor</option>
+                                    <option value="viewer" {% if member.role.value == 'viewer' %}selected{% endif %}>Viewer</option>
+                                </select>
+                                <button class="btn-icon btn-danger-text"
+                                        hx-delete="/hub/spec-builder/{{ draft_id }}/members/{{ member.user_id }}"
+                                        hx-target="#member-list"
+                                        hx-swap="innerHTML"
+                                        hx-confirm="Remove {{ member.user.email }}?"
+                                        title="Remove">&times;</button>
+                            </div>
+                            {% else %}
+                            <p class="empty-state-inline">Not shared yet.</p>
+                            {% endfor %}
+                        </div>
+                        <form class="member-add-form"
+                              hx-post="/hub/spec-builder/{{ draft_id }}/members"
+                              hx-target="#member-list"
+                              hx-swap="innerHTML">
+                            <input type="email" name="email" placeholder="Email address" required class="form-input form-input-sm">
+                            <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </aside>

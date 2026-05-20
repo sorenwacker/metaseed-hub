@@ -131,6 +131,14 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     spec_memberships: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="user")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
     chat_messages: Mapped[list["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
+    comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="user")
+    comment_reactions: Mapped[list["CommentReaction"]] = relationship(
+        "CommentReaction", back_populates="user"
+    )
+    spec_comments: Mapped[list["SpecComment"]] = relationship("SpecComment", back_populates="user")
+    spec_comment_reactions: Mapped[list["SpecCommentReaction"]] = relationship(
+        "SpecCommentReaction", back_populates="user"
+    )
 
 
 class TeamMembership(Base):
@@ -312,6 +320,9 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
         "ChatMessage", back_populates="dataset"
     )
     members: Mapped[list["DatasetMember"]] = relationship("DatasetMember", back_populates="dataset")
+    comments: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="dataset", order_by="Comment.created_at"
+    )
 
 
 class DatasetRole(StrEnum):
@@ -416,6 +427,167 @@ class ChatMessage(TimestampMixin, Base):
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="chat_messages")
     user: Mapped["User"] = relationship("User", back_populates="chat_messages")
+
+
+class Comment(TimestampMixin, Base):
+    """Threaded comments on datasets (Slack-style)."""
+
+    __tablename__ = "comments"
+    __table_args__ = (
+        Index("ix_comments_dataset_id", "dataset_id"),
+        Index("ix_comments_parent_id", "parent_id"),
+        Index("ix_comments_created_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("datasets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    parent_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="comments")
+    user: Mapped["User"] = relationship("User", back_populates="comments")
+    parent: Mapped["Comment | None"] = relationship(
+        "Comment", remote_side="Comment.id", back_populates="replies"
+    )
+    replies: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="parent", order_by="Comment.created_at"
+    )
+    reactions: Mapped[list["CommentReaction"]] = relationship(
+        "CommentReaction", back_populates="comment", cascade="all, delete-orphan"
+    )
+
+
+class ReactionType(StrEnum):
+    """Types of reactions on comments."""
+
+    LIKE = "like"
+    DISLIKE = "dislike"
+
+
+class CommentReaction(Base):
+    """User reactions (like/dislike) on comments."""
+
+    __tablename__ = "comment_reactions"
+    __table_args__ = (Index("ix_comment_reactions_comment_id", "comment_id"),)
+
+    comment_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    reaction: Mapped[ReactionType] = mapped_column(
+        Enum(ReactionType),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    comment: Mapped["Comment"] = relationship("Comment", back_populates="reactions")
+    user: Mapped["User"] = relationship("User", back_populates="comment_reactions")
+
+
+class SpecComment(TimestampMixin, Base):
+    """Threaded comments on spec drafts."""
+
+    __tablename__ = "spec_comments"
+    __table_args__ = (
+        Index("ix_spec_comments_spec_draft_id", "spec_draft_id"),
+        Index("ix_spec_comments_parent_id", "parent_id"),
+        Index("ix_spec_comments_created_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    spec_draft_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("spec_drafts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    parent_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("spec_comments.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    spec_draft: Mapped["SpecDraft"] = relationship("SpecDraft", back_populates="comments")
+    user: Mapped["User"] = relationship("User", back_populates="spec_comments")
+    parent: Mapped["SpecComment | None"] = relationship(
+        "SpecComment", remote_side="SpecComment.id", back_populates="replies"
+    )
+    replies: Mapped[list["SpecComment"]] = relationship(
+        "SpecComment", back_populates="parent", order_by="SpecComment.created_at"
+    )
+    reactions: Mapped[list["SpecCommentReaction"]] = relationship(
+        "SpecCommentReaction", back_populates="comment", cascade="all, delete-orphan"
+    )
+
+
+class SpecCommentReaction(Base):
+    """User reactions (like/dislike) on spec comments."""
+
+    __tablename__ = "spec_comment_reactions"
+    __table_args__ = (Index("ix_spec_comment_reactions_comment_id", "comment_id"),)
+
+    comment_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("spec_comments.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    reaction: Mapped[ReactionType] = mapped_column(
+        Enum(ReactionType, name="reactiontype", create_type=False),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    comment: Mapped["SpecComment"] = relationship("SpecComment", back_populates="reactions")
+    user: Mapped["User"] = relationship("User", back_populates="spec_comment_reactions")
 
 
 class Spec(TimestampMixin, SoftDeleteMixin, Base):
@@ -553,18 +725,77 @@ class SpecDraft(TimestampMixin, Base):
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="spec_drafts")
     user: Mapped["User"] = relationship("User")
     source_spec: Mapped["Spec | None"] = relationship("Spec", back_populates="drafts")
+    members: Mapped[list["SpecDraftMember"]] = relationship(
+        "SpecDraftMember", back_populates="spec_draft", cascade="all, delete-orphan"
+    )
+    comments: Mapped[list["SpecComment"]] = relationship(
+        "SpecComment",
+        back_populates="spec_draft",
+        order_by="SpecComment.created_at",
+        cascade="all, delete-orphan",
+    )
+
+
+class SpecDraftRole(StrEnum):
+    """Role within a spec draft."""
+
+    OWNER = "owner"
+    EDITOR = "editor"
+    VIEWER = "viewer"
+
+
+class SpecDraftMember(Base):
+    """User membership in a spec draft with role-based access."""
+
+    __tablename__ = "spec_draft_members"
+    __table_args__ = (
+        Index("ix_spec_draft_members_spec_draft_id", "spec_draft_id"),
+        Index("ix_spec_draft_members_user_id", "user_id"),
+    )
+
+    spec_draft_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("spec_drafts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role: Mapped[SpecDraftRole] = mapped_column(
+        Enum(SpecDraftRole),
+        nullable=False,
+        default=SpecDraftRole.VIEWER,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    spec_draft: Mapped["SpecDraft"] = relationship("SpecDraft", back_populates="members")
+    user: Mapped["User"] = relationship("User")
 
 
 __all__ = [
     "Base",
     "ChatMessage",
+    "Comment",
+    "CommentReaction",
     "Dataset",
     "DatasetMember",
     "DatasetRole",
     "Note",
+    "ReactionType",
     "SoftDeleteMixin",
     "Spec",
+    "SpecComment",
+    "SpecCommentReaction",
     "SpecDraft",
+    "SpecDraftMember",
+    "SpecDraftRole",
     "SpecMember",
     "SpecRole",
     "SpecStatus",

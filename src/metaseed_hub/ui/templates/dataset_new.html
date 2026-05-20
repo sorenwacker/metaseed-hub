@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}New Dataset - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Home</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">New Dataset</span>
+{% endblock %}
+
+{% block content %}
+<div class="new-dataset-page">
+    <header class="page-header">
+        <h1>Create Dataset</h1>
+    </header>
+
+    <div class="new-dataset-form">
+        <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+        <input type="hidden" id="workspace-id" value="{{ workspace_id }}">
+
+        <div class="form-section">
+            <label for="dataset-name" class="form-label">Name</label>
+            <input type="text" id="dataset-name" name="name" required
+                   class="form-input form-input-lg"
+                   placeholder="Enter dataset name" autofocus>
+        </div>
+
+        <div class="form-section">
+            <label class="form-label">Source</label>
+            <div class="source-tabs">
+                <button type="button" class="source-tab active" data-tab="standards">Standards</button>
+                <button type="button" class="source-tab" data-tab="import">Import File</button>
+                {% if user_specs %}
+                <button type="button" class="source-tab" data-tab="specs">My Specs</button>
+                {% endif %}
+            </div>
+
+            <!-- Standards Tab -->
+            <div class="source-panel active" id="panel-standards">
+                <div class="standards-grid">
+                    {% for profile in profiles %}
+                    <div class="standard-card" data-profile="{{ profile.name }}">
+                        <div class="standard-header">
+                            <h3>{{ profile.display_name }}</h3>
+                            <select class="version-select" onchange="selectVersion(this, '{{ profile.name }}')">
+                                {% for version in profile.versions %}
+                                <option value="{{ version }}" {% if version == profile.latest_version %}selected{% endif %}>
+                                    v{{ version }}{% if version == profile.latest_version %} (latest){% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if profile.description %}
+                        <p class="standard-desc">{{ profile.description }}</p>
+                        {% endif %}
+                        <div class="standard-actions">
+                            <button type="button" class="btn btn-primary"
+                                    onclick="createDataset('{{ profile.name }}', this.closest('.standard-card').querySelector('.version-select').value)">
+                                Create
+                            </button>
+                            <button type="button" class="btn btn-ghost"
+                                    onclick="createDatasetWithExample('{{ profile.name }}', this.closest('.standard-card').querySelector('.version-select').value)">
+                                With Example
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Import Tab -->
+            <div class="source-panel" id="panel-import">
+                <div class="import-zone" id="import-zone">
+                    <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleImport(this)">
+                    <div class="import-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <p class="import-text">Drop a file here or <label for="import-file" class="import-link">browse</label></p>
+                    <p class="import-hint">Supports JSON, YAML, or Excel files</p>
+                </div>
+            </div>
+
+            <!-- My Specs Tab -->
+            {% if user_specs %}
+            <div class="source-panel" id="panel-specs">
+                <div class="standards-grid">
+                    {% for spec in user_specs %}
+                    <div class="standard-card">
+                        <div class="standard-header">
+                            <h3>{{ spec.name }}</h3>
+                            <span class="version-badge">v{{ spec.version }}</span>
+                        </div>
+                        <div class="standard-actions">
+                            <button type="button" class="btn btn-primary"
+                                    onclick="createDatasetFromSpec('{{ spec.id }}')">
+                                Use Spec
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Tab switching
+document.querySelectorAll('.source-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.source-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    });
+});
+
+// Drag and drop
+const importZone = document.getElementById('import-zone');
+if (importZone) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        importZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+    });
+    ['dragenter', 'dragover'].forEach(eventName => {
+        importZone.addEventListener(eventName, () => importZone.classList.add('drag-over'));
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        importZone.addEventListener(eventName, () => importZone.classList.remove('drag-over'));
+    });
+    importZone.addEventListener('drop', e => {
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            document.getElementById('import-file').files = e.dataTransfer.files;
+            handleImport(document.getElementById('import-file'));
+        }
+    });
+}
+
+async function handleImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const name = document.getElementById('dataset-name').value || file.name.replace(/\.(json|yaml|yml|xlsx|xls)$/i, '');
+    document.getElementById('dataset-name').value = name;
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets/import', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected || response.ok) {
+            window.location.href = response.url || '/hub/';
+        } else {
+            const text = await response.text();
+            alert('Import error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function createDataset(profile, version) {
+    const name = document.getElementById('dataset-name').value;
+    if (!name) {
+        document.getElementById('dataset-name').focus();
+        document.getElementById('dataset-name').classList.add('error');
+        return;
+    }
+
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('profile', profile);
+    formData.append('version', version);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            window.location.href = response.url || '/hub/';
+        } else {
+            const text = await response.text();
+            alert('Error: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = 'Create';
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Create';
+    }
+}
+
+async function createDatasetWithExample(profile, version) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    const name = document.getElementById('dataset-name').value || `${profile} Example`;
+    document.getElementById('dataset-name').value = name;
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('profile', profile);
+    formData.append('version', version);
+    formData.append('_csrf_token', csrfToken);
+    formData.append('load_example', 'true');
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            window.location.href = response.url || '/hub/';
+        } else {
+            const text = await response.text();
+            alert('Error: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = 'With Example';
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'With Example';
+    }
+}
+
+async function createDatasetFromSpec(specId) {
+    const name = document.getElementById('dataset-name').value;
+    if (!name) {
+        document.getElementById('dataset-name').focus();
+        return;
+    }
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('spec_id', specId);
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected || response.ok) {
+            window.location.href = response.url || '/hub/';
+        } else {
+            const text = await response.text();
+            alert('Error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+// Remove error state on input
+document.getElementById('dataset-name').addEventListener('input', function() {
+    this.classList.remove('error');
+});
+</script>
+{% endblock %}
