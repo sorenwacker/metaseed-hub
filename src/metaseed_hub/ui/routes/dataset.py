@@ -474,6 +474,11 @@ async def dataset_delete(
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
     workspace_id = dataset.workspace_id
+
+    # Clear state cache
+    if dataset_id in dataset_states:
+        del dataset_states[dataset_id]
+
     await session.delete(dataset)
     await session.commit()
 
