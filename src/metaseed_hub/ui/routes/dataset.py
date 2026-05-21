@@ -162,6 +162,8 @@ async def dataset_import(
     file: Annotated[UploadFile, File()],
     name: Annotated[str, Form()],
     workspace_id: Annotated[str | None, Form()] = None,
+    profile: Annotated[str | None, Form()] = None,
+    version: Annotated[str | None, Form()] = None,
     csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
 ) -> RedirectResponse:
     """Import a dataset from an uploaded file (JSON, YAML, or Excel)."""
@@ -260,9 +262,10 @@ async def dataset_import(
         if not data:
             return RedirectResponse("/hub/datasets/new?error=empty_file", status_code=302)
 
-        # Try to detect profile from data
-        if isinstance(data, dict):
+        # Use provided profile/version, or try to detect from data
+        if not profile and isinstance(data, dict):
             profile = data.get("profile") or data.get("_profile")
+        if not version and isinstance(data, dict):
             version = data.get("version") or data.get("_version")
 
         # Default to miappe if not detected

@@ -5769,6 +5769,36 @@ a.start-option-card:hover {
     text-align: center;
 }
 
+/* Import Options */
+.import-options {
+    margin-bottom: var(--space-lg);
+}
+
+.import-options .form-row {
+    display: flex;
+    gap: var(--space-md);
+}
+
+.import-options .form-group {
+    flex: 1;
+}
+
+.import-options .form-label {
+    display: block;
+    margin-bottom: var(--space-xs);
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+}
+
+.import-options .form-select {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.9375rem;
+    background: var(--clr-paper);
+}
+
 /* Import Zone */
 .import-zone {
     border: 2px dashed var(--clr-border);
