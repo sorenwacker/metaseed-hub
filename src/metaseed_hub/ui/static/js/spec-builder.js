@@ -275,6 +275,20 @@ window.SpecBuilder = (function() {
                 showContextMenu(params.event, nodeId);
             }
         });
+
+        network.on('zoom', function(params) {
+            updateZoomHint(params.scale);
+        });
+    }
+
+    function updateZoomHint(scale) {
+        var hint = document.getElementById('zoom-hint');
+        if (!hint) return;
+        if (scale < 0.5) {
+            hint.classList.remove('hidden');
+        } else {
+            hint.classList.add('hidden');
+        }
     }
 
     // =========================================================================

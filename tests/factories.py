@@ -5,8 +5,8 @@ from uuid import uuid4
 
 from metaseed_hub.models import (
     ChatMessage,
+    Dataset,
     Note,
-    Project,
     Spec,
     SpecDraft,
     SpecStatus,
@@ -133,29 +133,29 @@ def make_workspace(
     )
 
 
-def make_project(
+def make_dataset(
     *,
     workspace: Workspace,
     name: str | None = None,
     profile: str = "miappe",
     version: str = "1.1",
     data: dict | None = None,
-) -> Project:
-    """Create a Project instance for testing.
+) -> Dataset:
+    """Create a Dataset instance for testing.
 
     Args:
-        workspace: Parent workspace for the project.
-        name: Project name. Auto-generated if not provided.
+        workspace: Parent workspace for the dataset.
+        name: Dataset name. Auto-generated if not provided.
         profile: Metaseed profile type.
         version: Profile version.
         data: Optional JSONB data.
 
     Returns:
-        Project model instance (not yet persisted).
+        Dataset model instance (not yet persisted).
     """
-    return Project(
+    return Dataset(
         workspace_id=workspace.id,
-        name=name or f"Project {uuid4().hex[:8]}",
+        name=name or f"Dataset {uuid4().hex[:8]}",
         profile=profile,
         version=version,
         data=data or {},
@@ -164,7 +164,7 @@ def make_project(
 
 def make_note(
     *,
-    project: Project,
+    dataset: Dataset,
     user: User,
     entity_type: str = "Investigation",
     entity_id: str | None = None,
@@ -173,7 +173,7 @@ def make_note(
     """Create a Note instance for testing.
 
     Args:
-        project: Parent project for the note.
+        dataset: Parent dataset for the note.
         user: User who created the note.
         entity_type: Type of entity the note is attached to.
         entity_id: Identifier of the entity. Auto-generated if not provided.
@@ -183,7 +183,7 @@ def make_note(
         Note model instance (not yet persisted).
     """
     return Note(
-        project_id=project.id,
+        dataset_id=dataset.id,
         user_id=user.id,
         entity_type=entity_type,
         entity_id=entity_id or f"entity-{uuid4().hex[:8]}",
@@ -193,14 +193,14 @@ def make_note(
 
 def make_chat_message(
     *,
-    project: Project,
+    dataset: Dataset,
     user: User,
     content: str = "Test chat message",
 ) -> ChatMessage:
     """Create a ChatMessage instance for testing.
 
     Args:
-        project: Parent project for the message.
+        dataset: Parent dataset for the message.
         user: User who sent the message.
         content: Message content.
 
@@ -208,7 +208,7 @@ def make_chat_message(
         ChatMessage model instance (not yet persisted).
     """
     return ChatMessage(
-        project_id=project.id,
+        dataset_id=dataset.id,
         user_id=user.id,
         content=content,
     )

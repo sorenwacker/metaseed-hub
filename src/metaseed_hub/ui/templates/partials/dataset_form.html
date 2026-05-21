@@ -1,0 +1,283 @@
+<div class="modal-overlay" onclick="this.parentElement.innerHTML=''">
+    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+        <h2 class="modal-title">New Dataset</h2>
+        <p class="modal-subtitle">Choose a specification for your dataset, or import existing data.</p>
+
+        <div class="dataset-name-field">
+            {% if csrf_token %}
+            <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+            {% endif %}
+            <input type="hidden" id="workspace-id" value="{{ workspace_id | e }}">
+            <label for="dataset-name">Dataset Name</label>
+            <input type="text" id="dataset-name" name="name" required
+                   placeholder="My Dataset" autofocus>
+        </div>
+
+        <!-- Import Section -->
+        <div class="dataset-import-section">
+            <h3>Import from File</h3>
+            <div class="import-options">
+                <label class="btn btn-outline btn-file">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    Import JSON/YAML
+                    <input type="file" id="import-file" accept=".json,.yaml,.yml" hidden onchange="handleImport(this)">
+                </label>
+            </div>
+        </div>
+
+        <!-- Custom Specs Section -->
+        {% if user_specs %}
+        <div class="dataset-specs-section">
+            <h3>My Specs</h3>
+            <div class="profile-grid profile-grid-compact">
+                {% for spec in user_specs %}
+                <div class="profile-card">
+                    <div class="profile-card-accent"></div>
+                    <h3>{{ spec.name }}</h3>
+                    <div class="profile-actions">
+                        <button type="button" class="btn btn-primary"
+                                onclick="createDatasetFromSpec('{{ spec.id }}')">
+                            Use Spec
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Built-in Profiles Section -->
+        <div class="dataset-profiles-section">
+            <h3>Built-in Standards</h3>
+            <div class="profile-grid">
+                {% for profile in profiles %}
+                <div class="profile-card">
+                    <div class="profile-card-accent"></div>
+                    <h3>{{ profile.display_name }}</h3>
+                    {% if profile.description %}
+                    <p>{{ profile.description }}</p>
+                    {% endif %}
+                    <div class="profile-actions">
+                        {% for version in profile.versions %}
+                        <div class="version-row">
+                            <button type="button"
+                                    class="btn {% if version == profile.latest_version %}btn-primary{% else %}btn-secondary{% endif %}"
+                                    onclick="createDataset('{{ profile.name }}', '{{ version }}')">
+                                v{{ version }}{% if version == profile.latest_version %} (latest){% endif %}
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-accent"
+                                    onclick="createDatasetWithExample('{{ profile.name }}', '{{ version }}')"
+                                    title="Create with example data">
+                                Example
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary"
+                    onclick="this.closest('.modal-overlay').parentElement.innerHTML=''">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+async function handleImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const name = document.getElementById('dataset-name').value || file.name.replace(/\.(json|yaml|yml)$/i, '');
+    document.getElementById('dataset-name').value = name;
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets/import', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected || response.ok) {
+            if (response.url.includes('/datasets/')) {
+                window.location.href = response.url;
+            } else {
+                window.location.reload();
+            }
+        } else {
+            const text = await response.text();
+            alert('Import error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function createDatasetFromSpec(specId) {
+    const name = document.getElementById('dataset-name').value;
+    if (!name) {
+        alert('Please enter a dataset name');
+        document.getElementById('dataset-name').focus();
+        return;
+    }
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('spec_id', specId);
+    if (workspaceId) formData.append('workspace_id', workspaceId);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected || response.ok) {
+            if (response.url.includes('/datasets/')) {
+                window.location.href = response.url;
+            } else {
+                window.location.reload();
+            }
+        } else {
+            const text = await response.text();
+            alert('Error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function createDataset(profile, version) {
+    const name = document.getElementById('dataset-name').value;
+    if (!name) {
+        alert('Please enter a dataset name');
+        document.getElementById('dataset-name').focus();
+        return;
+    }
+
+    // Find and disable the clicked button, show loading state
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    if (!workspaceId) {
+        alert('Error: workspace ID not found');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('profile', profile);
+    formData.append('version', version);
+    formData.append('_csrf_token', csrfToken);
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            if (response.url.includes('/datasets/')) {
+                window.location.href = response.url;
+            } else {
+                window.location.reload();
+            }
+        } else {
+            const text = await response.text();
+            alert('Error creating dataset: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+async function createDatasetWithExample(profile, version) {
+    // Find and disable the clicked button, show loading state
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    const name = document.getElementById('dataset-name').value || `${profile} Example`;
+    document.getElementById('dataset-name').value = name;
+
+    const csrfToken = document.getElementById('csrf-token')?.value || '';
+    const workspaceId = document.getElementById('workspace-id')?.value || '';
+
+    if (!workspaceId) {
+        alert('Error: workspace ID not found');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('profile', profile);
+    formData.append('version', version);
+    formData.append('_csrf_token', csrfToken);
+    formData.append('load_example', 'true');
+
+    try {
+        const response = await fetch('/hub/datasets', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            // For 303 redirects, fetch follows automatically
+            // Check if we got the dataset URL in response
+            if (response.url.includes('/datasets/')) {
+                window.location.href = response.url;
+            } else {
+                window.location.reload();
+            }
+        } else {
+            const text = await response.text();
+            alert('Error creating dataset: ' + text.substring(0, 200));
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+</script>

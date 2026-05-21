@@ -10,8 +10,8 @@ from metaseed_hub.ui.helpers import (
     build_entity_form_context,
     build_inline_tables,
     escape_pattern_hyphen,
+    get_dataset_state,
     get_or_create_csrf_token,
-    get_project_state,
     get_tree_data_from_nodes,
     humanize_field_name,
     validate_csrf_token,
@@ -206,32 +206,32 @@ class TestGetTreeDataFromNodes:
         assert result[0]["children"][0]["id"] == "child-1"
 
 
-class TestGetProjectState:
-    """Tests for get_project_state function."""
+class TestGetDatasetState:
+    """Tests for get_dataset_state function."""
 
     def test_creates_new_state(self) -> None:
-        """Creates new state for project without cache."""
-        project = Mock()
-        project.id = "proj-1"
-        project.profile = "miappe"
-        project.version = "1.1"
-        project.data = None
+        """Creates new state for dataset without cache."""
+        dataset = Mock()
+        dataset.id = "ds-1"
+        dataset.profile = "miappe"
+        dataset.version = "1.1"
+        dataset.data = None
 
         cache: dict = {}
-        state = get_project_state(project, cache)
+        state = get_dataset_state(dataset, cache)
 
         assert state is not None
         assert state.profile == "miappe"
         assert state.version == "1.1"
-        assert "proj-1" in cache
+        assert "ds-1" in cache
 
     def test_loads_from_data(self) -> None:
-        """Loads entity tree from project data."""
-        project = Mock()
-        project.id = "proj-2"
-        project.profile = "miappe"
-        project.version = "1.1"
-        project.data = {
+        """Loads entity tree from dataset data."""
+        dataset = Mock()
+        dataset.id = "ds-2"
+        dataset.profile = "miappe"
+        dataset.version = "1.1"
+        dataset.data = {
             "profile": "miappe",
             "version": "1.1",
             "tree": [
@@ -246,7 +246,7 @@ class TestGetProjectState:
         }
 
         cache: dict = {}
-        state = get_project_state(project, cache)
+        state = get_dataset_state(dataset, cache)
 
         # Note: Deserialization requires facade, so tree may be empty
         # This tests that the function runs without error

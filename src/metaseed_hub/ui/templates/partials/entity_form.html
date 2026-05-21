@@ -1,14 +1,14 @@
 <div class="entity-form">
     <div class="entity-form-nav">
         <button type="button" class="btn btn-sm btn-ghost back-btn"
-                hx-get="/hub/projects/{{ project_id }}/overview"
+                hx-get="/hub/datasets/{{ dataset_id }}/overview"
                 hx-target="#editor"
                 hx-swap="innerHTML">
             &larr; Overview
         </button>
         {% if parent_id %}
         <button type="button" class="btn btn-sm btn-ghost back-btn"
-                hx-get="/hub/projects/{{ project_id }}/entity/{{ parent_id }}"
+                hx-get="/hub/datasets/{{ dataset_id }}/entity/{{ parent_id }}"
                 hx-target="#editor"
                 hx-swap="innerHTML">
             &larr; Back to parent
@@ -27,7 +27,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-sm);">
         <h2>{{ "Edit" if node_id else "New" }} {{ entity_type }}</h2>
         {% if node_id %}
-        <a href="/hub/projects/{{ project_id }}/graph?node_id={{ node_id }}"
+        <a href="/hub/datasets/{{ dataset_id }}/graph?node_id={{ node_id }}"
            class="btn btn-sm" target="_blank" title="View this entity and its children in graph">
             View in Graph
         </a>
@@ -38,8 +38,8 @@
     {% endif %}
 
     <form method="post"
-          action="/hub/projects/{{ project_id }}/entities"
-          hx-post="/hub/projects/{{ project_id }}/entities"
+          action="/hub/datasets/{{ dataset_id }}/entities"
+          hx-post="/hub/datasets/{{ dataset_id }}/entities"
           hx-target="#editor"
           hx-swap="innerHTML"
           autocomplete="off">

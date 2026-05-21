@@ -3,80 +3,249 @@
 {% block title %}New Specification - Metaseed Hub{% endblock %}
 
 {% block nav %}
+<a href="/hub/" class="nav-item">Home</a>
+<span class="nav-sep">/</span>
+<a href="/hub/spec-builder" class="nav-item">Specs</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">New</span>
 {% endblock %}
 
 {% block content %}
-<div class="new-spec-page">
-    <div class="page-header">
-        <h1>Create New Specification</h1>
-        <p>Start a new metadata specification from scratch or use a template.</p>
-    </div>
+<div class="new-dataset-page">
+    <header class="page-header">
+        <h1>Create Specification</h1>
+    </header>
 
-    <form action="/hub/spec-builder/new" method="POST" class="new-spec-form">
+    <div class="new-dataset-form">
+        <input type="hidden" id="workspace-id" value="{{ workspaces[0].id if workspaces else '' }}">
+
         <div class="form-section">
-            <h2>Basic Information</h2>
+            <label for="spec-name" class="form-label">Name</label>
+            <input type="text" id="spec-name" name="name"
+                   class="form-input form-input-lg"
+                   placeholder="Enter specification name" autofocus>
+        </div>
 
-            {% if workspaces|length > 1 %}
-            <div class="form-group">
-                <label for="workspace_id" class="form-label">Workspace <span class="required">*</span></label>
-                <select name="workspace_id" id="workspace_id" class="form-input" required>
-                    {% for workspace in workspaces %}
-                    <option value="{{ workspace.id }}" {% if workspace.id == selected_workspace_id %}selected{% endif %}>
-                        {{ workspace.name }}
-                    </option>
+        <div class="form-section">
+            <label class="form-label">Source</label>
+            <div class="source-tabs">
+                <button type="button" class="source-tab active" data-tab="scratch">From Scratch</button>
+                <button type="button" class="source-tab" data-tab="template">From Template</button>
+                <button type="button" class="source-tab" data-tab="import">Import YAML</button>
+            </div>
+
+            <!-- From Scratch Tab -->
+            <div class="source-panel active" id="panel-scratch">
+                <div class="scratch-option">
+                    <div class="scratch-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <line x1="12" y1="8" x2="12" y2="16"/>
+                            <line x1="8" y1="12" x2="16" y2="12"/>
+                        </svg>
+                    </div>
+                    <h3>Empty Specification</h3>
+                    <p>Start with a blank canvas and define your own entities and fields.</p>
+                    <button type="button" class="btn btn-primary" onclick="createEmptySpec()">
+                        Create Empty Spec
+                    </button>
+                </div>
+            </div>
+
+            <!-- From Template Tab -->
+            <div class="source-panel" id="panel-template">
+                <div class="standards-grid">
+                    {% for template in templates %}
+                    <div class="standard-card">
+                        <div class="standard-header">
+                            <h3>{{ template.display_name }}</h3>
+                            <select class="version-select" id="version-{{ template.name }}">
+                                {% for version in template.versions %}
+                                <option value="{{ version }}">v{{ version }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if template.description %}
+                        <p class="standard-desc">{{ template.description[:100] }}{% if template.description|length > 100 %}...{% endif %}</p>
+                        {% endif %}
+                        <div class="standard-actions">
+                            <button type="button" class="btn btn-primary"
+                                    onclick="createFromTemplate('{{ template.name }}')">
+                                Use Template
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="empty-state-inline">No templates available.</p>
                     {% endfor %}
-                </select>
-                <small class="form-help">Select the workspace where this specification will be stored.</small>
+                </div>
             </div>
-            {% else %}
-            <input type="hidden" name="workspace_id" value="{{ workspaces[0].id }}">
-            {% endif %}
 
-            <div class="form-group">
-                <label for="name" class="form-label">Specification Name</label>
-                <input type="text"
-                       name="name"
-                       id="name"
-                       class="form-input"
-                       placeholder="e.g., BiologicalMaterial">
-                <small class="form-help">PascalCase name for the specification (can be changed later).</small>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h2>Start From</h2>
-
-            <div class="template-options">
-                <label class="template-option">
-                    <input type="radio" name="template" value="" checked>
-                    <div class="template-card">
-                        <div class="template-icon">+</div>
-                        <h3>Start from Scratch</h3>
-                        <p>Create an empty specification with no predefined entities.</p>
+            <!-- Import YAML Tab -->
+            <div class="source-panel" id="panel-import">
+                <div class="import-zone" id="import-zone">
+                    <input type="file" id="import-file" accept=".yaml,.yml" hidden onchange="handleImport(this)">
+                    <div class="import-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
                     </div>
-                </label>
-
-                {% for template in templates %}
-                <label class="template-option">
-                    <input type="radio" name="template" value="{{ template.name }}:{{ template.versions[0] }}">
-                    <div class="template-card">
-                        <div class="template-icon">~</div>
-                        <h3>{{ template.display_name }}</h3>
-                        <p>{{ template.description[:80] }}{% if template.description|length > 80 %}...{% endif %}</p>
-                        <span class="template-version">v{{ template.versions[0] }}</span>
-                    </div>
-                </label>
-                {% endfor %}
+                    <p class="import-text">Drop a YAML file here or <label for="import-file" class="import-link">browse</label></p>
+                    <p class="import-hint">Import an existing specification in YAML format</p>
+                </div>
             </div>
         </div>
-
-        <div class="form-actions">
-            <a href="/hub/spec-builder" class="btn">Cancel</a>
-            <button type="submit" class="btn btn-primary">Create Specification</button>
-        </div>
-    </form>
+    </div>
 </div>
 
+<script>
+// Tab switching
+document.querySelectorAll('.source-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.source-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    });
+});
+
+// Drag and drop
+const importZone = document.getElementById('import-zone');
+if (importZone) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        importZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+    });
+    ['dragenter', 'dragover'].forEach(eventName => {
+        importZone.addEventListener(eventName, () => importZone.classList.add('drag-over'));
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        importZone.addEventListener(eventName, () => importZone.classList.remove('drag-over'));
+    });
+    importZone.addEventListener('drop', e => {
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            document.getElementById('import-file').files = e.dataTransfer.files;
+            handleImport(document.getElementById('import-file'));
+        }
+    });
+}
+
+async function createEmptySpec() {
+    const name = document.getElementById('spec-name').value || 'Untitled';
+    const workspaceId = document.getElementById('workspace-id').value;
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('template', '');
+
+    try {
+        const response = await fetch('/hub/spec-builder/new', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            window.location.href = response.url || '/hub/spec-builder';
+        } else {
+            alert('Error creating specification');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function createFromTemplate(templateName) {
+    const name = document.getElementById('spec-name').value || templateName;
+    const workspaceId = document.getElementById('workspace-id').value;
+    const version = document.getElementById('version-' + templateName).value;
+
+    const formData = new FormData();
+    formData.append('workspace_id', workspaceId);
+    formData.append('name', name);
+    formData.append('template', templateName + ':' + version);
+
+    try {
+        const response = await fetch('/hub/spec-builder/new', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            window.location.href = response.url || '/hub/spec-builder';
+        } else {
+            alert('Error creating specification');
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+async function handleImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const name = document.getElementById('spec-name').value || file.name.replace(/\.(yaml|yml)$/i, '');
+    const workspaceId = document.getElementById('workspace-id').value;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    formData.append('workspace_id', workspaceId);
+
+    try {
+        const response = await fetch('/hub/spec-builder/import', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else if (response.ok) {
+            window.location.href = response.url || '/hub/spec-builder';
+        } else {
+            const text = await response.text();
+            alert('Import error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+</script>
+
+<style>
+.scratch-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: var(--space-2xl);
+    background: var(--clr-background);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-lg);
+}
+
+.scratch-icon {
+    color: var(--clr-primary);
+    margin-bottom: var(--space-md);
+}
+
+.scratch-option h3 {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    margin: 0 0 var(--space-sm);
+}
+
+.scratch-option p {
+    color: var(--clr-ink-light);
+    margin: 0 0 var(--space-lg);
+    max-width: 300px;
+}
+</style>
 {% endblock %}

@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dataset.name }} - Metaseed Hub{% endblock %}
+
+{% block head %}
+<script src="/hub/hub-static/js/vis-network.min.js"></script>
+{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Home</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">{{ dataset.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="dataset-layout" id="dataset-layout">
+    <!-- Sidebar with dataset info, actions, and entity tree -->
+    <aside class="dataset-sidebar" id="dataset-sidebar">
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <span class="toggle-icon">&#9664;</span>
+        </button>
+
+        <!-- Dataset Info -->
+        <div class="sidebar-section">
+            <h2 class="sidebar-dataset-name">{{ dataset.name }}</h2>
+            <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
+        </div>
+
+        <!-- Actions -->
+        <div class="sidebar-section sidebar-actions">
+            {% set existing_root_types = tree_data | map(attribute='entity_type') | list %}
+            {% for entity_type in root_types %}
+            {% if entity_type not in existing_root_types %}
+            <button class="btn btn-primary btn-sm"
+                    hx-get="/hub/datasets/{{ dataset.id }}/form/{{ entity_type }}"
+                    hx-target="#editor"
+                    hx-swap="innerHTML">
+                + {{ entity_type }}
+            </button>
+            {% endif %}
+            {% endfor %}
+            <div class="sidebar-actions-row">
+                <button class="btn btn-sm"
+                        hx-post="/hub/datasets/{{ dataset.id }}/validate"
+                        hx-target="#editor"
+                        hx-swap="innerHTML"
+                        title="Validate all entities">Validate</button>
+                <a href="/hub/datasets/{{ dataset.id }}/graph" class="btn btn-sm" title="Graph view">Graph</a>
+            </div>
+            <div class="sidebar-actions-row">
+                <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
+                <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
+            </div>
+            <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
+        </div>
+
+        <!-- Entity Tree -->
+        <div class="sidebar-section sidebar-section-grow">
+            <div class="sidebar-header">
+                <h3>Entities</h3>
+            </div>
+            <div id="entity-tree"
+                 hx-get="/hub/datasets/{{ dataset.id }}/tree"
+                 hx-trigger="load, entityChanged from:body"
+                 hx-swap="innerHTML">
+                Loading...
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- Main Editor Area -->
+    <main class="dataset-editor" id="editor">
+        {% if error %}
+        <div class="editor-error">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--clr-error); margin-bottom: 1rem;">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <h3>Unable to Load Dataset</h3>
+            <p>{{ error }}</p>
+            <div class="error-actions">
+                <a href="/hub/" class="btn">Back to Home</a>
+                <button class="btn btn-danger"
+                        hx-delete="/hub/datasets/{{ dataset.id }}"
+                        hx-confirm="Delete this dataset? This cannot be undone."
+                        hx-target="body">
+                    Delete Dataset
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <!-- Overview Panel with Tabs -->
+        <div class="dataset-overview">
+            <div class="overview-header">
+                <p class="overview-hint">Select an entity from the sidebar to edit{% if not tree_data %}, or create one using the buttons above{% endif %}.</p>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="overview-tabs">
+                <button class="overview-tab active" data-tab="history" onclick="switchOverviewTab('history')">
+                    History
+                </button>
+                <button class="overview-tab" data-tab="comments" onclick="switchOverviewTab('comments')">
+                    Comments
+                </button>
+                <button class="overview-tab" data-tab="sharing" onclick="switchOverviewTab('sharing')">
+                    Sharing
+                    <span class="tab-count">{{ members|length }}</span>
+                </button>
+            </div>
+
+            <!-- History Tab -->
+            <div class="overview-tab-content active" id="tab-history">
+                <div id="versions-list"
+                     hx-get="/hub/datasets/{{ dataset.id }}/versions"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading version history...
+                </div>
+            </div>
+
+            <!-- Comments Tab -->
+            <div class="overview-tab-content" id="tab-comments">
+                <div id="comments-list"
+                     hx-get="/hub/datasets/{{ dataset.id }}/comments"
+                     hx-trigger="revealed"
+                     hx-swap="innerHTML">
+                    Loading comments...
+                </div>
+                <form class="comment-add-form"
+                      hx-post="/hub/datasets/{{ dataset.id }}/comments"
+                      hx-target="#comments-list"
+                      hx-swap="innerHTML"
+                      hx-on:htmx:after-request="this.reset()">
+                    <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
+                    <button type="submit" class="btn btn-primary">Post</button>
+                </form>
+            </div>
+
+            <!-- Sharing Tab -->
+            <div class="overview-tab-content" id="tab-sharing">
+                <div class="member-list" id="member-list">
+                    {% for member in members %}
+                    <div class="member-row">
+                        <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
+                        <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
+                        <select class="member-role-select"
+                                hx-patch="/hub/datasets/{{ dataset.id }}/members/{{ member.user_id }}"
+                                hx-target="#member-list"
+                                hx-swap="innerHTML"
+                                name="role">
+                            <option value="owner" {% if member.role.value == 'owner' %}selected{% endif %}>Owner</option>
+                            <option value="curator" {% if member.role.value == 'curator' %}selected{% endif %}>Curator</option>
+                            <option value="viewer" {% if member.role.value == 'viewer' %}selected{% endif %}>Viewer</option>
+                        </select>
+                        <button class="btn-icon btn-danger-text"
+                                hx-delete="/hub/datasets/{{ dataset.id }}/members/{{ member.user_id }}"
+                                hx-target="#member-list"
+                                hx-swap="innerHTML"
+                                hx-confirm="Remove {{ member.user.email }}?"
+                                title="Remove">&times;</button>
+                    </div>
+                    {% else %}
+                    <p class="empty-state-inline">Not shared with anyone yet.</p>
+                    {% endfor %}
+                </div>
+                <form class="member-add-form"
+                      hx-post="/hub/datasets/{{ dataset.id }}/members"
+                      hx-target="#member-list"
+                      hx-swap="innerHTML">
+                    <input type="email" name="email" placeholder="Add collaborator by email" required class="form-input">
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Sidebar toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('dataset-sidebar');
+    const layout = document.getElementById('dataset-layout');
+    sidebar.classList.toggle('collapsed');
+    layout.classList.toggle('sidebar-collapsed');
+
+    // Save preference
+    localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('collapsed'));
+}
+
+// Overview tab switching
+function switchOverviewTab(tabName) {
+    document.querySelectorAll('.overview-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.overview-tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === 'tab-' + tabName);
+    });
+}
+
+// Restore sidebar state on load
+document.addEventListener('DOMContentLoaded', function() {
+    const collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+    if (collapsed) {
+        document.getElementById('dataset-sidebar').classList.add('collapsed');
+        document.getElementById('dataset-layout').classList.add('sidebar-collapsed');
+    }
+});
+
+// Import data into existing dataset
+async function handleDatasetImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const response = await fetch('/hub/datasets/{{ dataset.id }}/import', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+
+        if (response.ok) {
+            // Reload page to show imported data
+            window.location.reload();
+        } else {
+            const text = await response.text();
+            alert('Import error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+
+    // Reset input so same file can be imported again
+    input.value = '';
+}
+</script>
+{% endblock %}

@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Project, Tenant, Workspace
-from metaseed_hub.ui.helpers import get_project_state, project_states, validate_csrf_token
+from metaseed_hub.models import Dataset, Tenant, Workspace
+from metaseed_hub.ui.helpers import dataset_states, get_dataset_state, validate_csrf_token
 
 if TYPE_CHECKING:
     from metaseed.ui.state import AppState
@@ -95,21 +95,21 @@ def unauthorized_response() -> HTMLResponse:
     )
 
 
-async def get_project_by_id(
-    project_id: str,
+async def get_dataset_by_id(
+    dataset_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> Project:
-    """Get project by ID or raise 404.
+) -> Dataset:
+    """Get dataset by ID or raise 404.
 
-    Use as a FastAPI dependency to load and validate project access.
-    Note: This function does NOT verify ownership. Use get_project_for_user()
+    Use as a FastAPI dependency to load and validate dataset access.
+    Note: This function does NOT verify ownership. Use get_dataset_for_user()
     for endpoints that require ownership verification.
     """
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
+    dataset = result.scalar_one_or_none()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return dataset
 
 
 async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
@@ -165,37 +165,37 @@ async def verify_workspace_access(
     return workspace
 
 
-async def get_project_for_user(
-    project_id: str,
+async def get_dataset_for_user(
+    dataset_id: str,
     session: AsyncSession,
     user: TokenUser,
-) -> Project:
-    """Get project if user has access through workspace membership.
+) -> Dataset:
+    """Get dataset if user has access through workspace membership.
 
-    A user has access to a project if their tenant owns the workspace
-    that contains the project.
+    A user has access to a dataset if their tenant owns the workspace
+    that contains the dataset.
 
     Args:
-        project_id: ID of the project to retrieve.
+        dataset_id: ID of the dataset to retrieve.
         session: Database session.
         user: Authenticated user.
 
     Returns:
-        Project if user has access.
+        Dataset if user has access.
 
     Raises:
-        HTTPException: 404 if project not found, 403 if access denied.
+        HTTPException: 404 if dataset not found, 403 if access denied.
     """
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
+    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
+    dataset = result.scalar_one_or_none()
 
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
     # Verify user has access to the workspace
-    await verify_workspace_access(project.workspace_id, session, user)
+    await verify_workspace_access(dataset.workspace_id, session, user)
 
-    return project
+    return dataset
 
 
 # Type aliases for cleaner route signatures
@@ -210,31 +210,31 @@ class CSRFValidationError(Exception):
     pass
 
 
-class ProjectNotFoundError(Exception):
-    """Raised when project is not found."""
+class DatasetNotFoundError(Exception):
+    """Raised when dataset is not found."""
 
     pass
 
 
-async def get_project_state_for_mutation(
+async def get_dataset_state_for_mutation(
     request: Request,
-    project_id: str,
+    dataset_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> tuple[Project, "AppState"]:
-    """Dependency that validates auth, CSRF, and returns project with state.
+) -> tuple[Dataset, "AppState"]:
+    """Dependency that validates auth, CSRF, and returns dataset with state.
 
     Use for mutation endpoints (POST, DELETE) that need CSRF validation.
 
     Args:
         request: The FastAPI request object.
-        project_id: ID of the project to load.
+        dataset_id: ID of the dataset to load.
         session: Database session.
 
     Returns:
-        Tuple of (Project, AppState) for the validated request.
+        Tuple of (Dataset, AppState) for the validated request.
 
     Raises:
-        HTTPException: 401 if auth fails, 403 if CSRF fails, 404 if project not found.
+        HTTPException: 401 if auth fails, 403 if CSRF fails, 404 if dataset not found.
     """
     # Validate authentication
     user = await get_current_user_from_cookie(request)
@@ -251,16 +251,16 @@ async def get_project_state_for_mutation(
             detail="CSRF validation failed",
         )
 
-    # Load project from database
-    result = await session.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
+    # Load dataset from database
+    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
+    dataset = result.scalar_one_or_none()
+    if not dataset:
         raise HTTPException(
             status_code=404,
-            detail="Project not found",
+            detail="Dataset not found",
         )
 
-    # Get or create AppState for the project
-    state = get_project_state(project, project_states)
+    # Get or create AppState for the dataset
+    state = get_dataset_state(dataset, dataset_states)
 
-    return project, state
+    return dataset, state

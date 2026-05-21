@@ -24,7 +24,18 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Spec, SpecDraft, SpecStatus
+from metaseed_hub.models import (
+    Dataset,
+    ReactionType,
+    Spec,
+    SpecComment,
+    SpecCommentReaction,
+    SpecDraft,
+    SpecDraftMember,
+    SpecDraftRole,
+    SpecStatus,
+    User,
+)
 
 from ..spec_builder_helpers import (
     clone_spec,
@@ -372,6 +383,14 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             builder.spec = create_empty_spec()
             await save_state_to_draft(session, builder, draft)
 
+        # Load members for sharing tab
+        members_result = await session.execute(
+            select(SpecDraftMember)
+            .where(SpecDraftMember.spec_draft_id == draft_id)
+            .options(selectinload(SpecDraftMember.user))
+        )
+        members = list(members_result.scalars().all())
+
         return render(
             request,
             "spec_builder/base.html",
@@ -384,6 +403,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
                 "has_unsaved_changes": builder.has_unsaved_changes,
                 "template_source": builder.template_source,
                 "field_types": [t.value for t in FieldType],
+                "members": members,
             },
         )
 
@@ -409,6 +429,25 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
 
         if draft.user_id != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
+
+        # Check if any datasets are using this spec
+        datasets_result = await session.execute(
+            select(Dataset).where(Dataset.spec_draft_id == draft_id)
+        )
+        dependent_datasets = list(datasets_result.scalars().all())
+
+        if dependent_datasets:
+            dataset_names = ", ".join(d.name for d in dependent_datasets[:3])
+            if len(dependent_datasets) > 3:
+                dataset_names += f" and {len(dependent_datasets) - 3} more"
+            msg = (
+                f"Cannot delete: {len(dependent_datasets)} dataset(s) are using "
+                f"this spec ({dataset_names}). Delete or migrate the datasets first."
+            )
+            return HTMLResponse(
+                content=f'<div class="notification notification-error">{msg}</div>',
+                headers={"HX-Reswap": "beforeend", "HX-Retarget": "#notification-container"},
+            )
 
         await session.delete(draft)
         await session.commit()
@@ -1335,5 +1374,277 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             media_type="application/x-yaml",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    # =========================================================================
+    # Member Management Routes
+    # =========================================================================
+
+    async def _get_spec_members_html(
+        request: Request,
+        draft_id: str,
+        session: AsyncSession,
+    ) -> HTMLResponse:
+        """Render the member list partial for a spec draft."""
+        result = await session.execute(
+            select(SpecDraftMember)
+            .where(SpecDraftMember.spec_draft_id == draft_id)
+            .options(selectinload(SpecDraftMember.user))
+        )
+        members = list(result.scalars().all())
+
+        return templates.TemplateResponse(
+            request,
+            "partials/spec_draft_members.html",
+            {"members": members, "draft_id": draft_id},
+        )
+
+    @router.post("/{draft_id}/members", response_class=HTMLResponse)
+    async def add_spec_member(
+        request: Request,
+        draft_id: str,
+        email: Annotated[str, Form()],
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Add a member to a spec draft by email."""
+        # Find user by email
+        result = await session.execute(select(User).where(User.email == email))
+        target_user = result.scalar_one_or_none()
+
+        if not target_user:
+            return await _get_spec_members_html(request, draft_id, session)
+
+        # Check if already a member
+        existing = await session.execute(
+            select(SpecDraftMember).where(
+                SpecDraftMember.spec_draft_id == draft_id,
+                SpecDraftMember.user_id == target_user.id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            return await _get_spec_members_html(request, draft_id, session)
+
+        # Add member with viewer role by default
+        member = SpecDraftMember(
+            spec_draft_id=draft_id,
+            user_id=target_user.id,
+            role=SpecDraftRole.VIEWER,
+        )
+        session.add(member)
+        await session.commit()
+
+        return await _get_spec_members_html(request, draft_id, session)
+
+    @router.patch("/{draft_id}/members/{user_id}", response_class=HTMLResponse)
+    async def update_spec_member_role(
+        request: Request,
+        draft_id: str,
+        user_id: str,
+        role: Annotated[str, Form()],
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Update a member's role in a spec draft."""
+        result = await session.execute(
+            select(SpecDraftMember).where(
+                SpecDraftMember.spec_draft_id == draft_id,
+                SpecDraftMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+
+        if member:
+            member.role = SpecDraftRole(role)
+            await session.commit()
+
+        return await _get_spec_members_html(request, draft_id, session)
+
+    @router.delete("/{draft_id}/members/{user_id}", response_class=HTMLResponse)
+    async def remove_spec_member(
+        request: Request,
+        draft_id: str,
+        user_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> HTMLResponse:
+        """Remove a member from a spec draft."""
+        result = await session.execute(
+            select(SpecDraftMember).where(
+                SpecDraftMember.spec_draft_id == draft_id,
+                SpecDraftMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+
+        if member:
+            await session.delete(member)
+            await session.commit()
+
+        return await _get_spec_members_html(request, draft_id, session)
+
+    # =========================================================================
+    # Comment Routes
+    # =========================================================================
+
+    async def _get_spec_comments_html(
+        request: Request,
+        draft_id: str,
+        session: AsyncSession,
+        keycloak_sub: str,
+    ) -> HTMLResponse:
+        """Render the spec comments list partial."""
+        # Get database user ID from keycloak sub
+        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
+        db_user = user_result.scalar_one_or_none()
+        current_user_id = db_user.id if db_user else None
+
+        # Get top-level comments (no parent) with nested relationships
+        result = await session.execute(
+            select(SpecComment)
+            .where(SpecComment.spec_draft_id == draft_id, SpecComment.parent_id.is_(None))
+            .options(
+                selectinload(SpecComment.user),
+                selectinload(SpecComment.reactions),
+                selectinload(SpecComment.replies).selectinload(SpecComment.user),
+                selectinload(SpecComment.replies).selectinload(SpecComment.reactions),
+            )
+            .order_by(SpecComment.created_at.desc())
+        )
+        comments = list(result.scalars().all())
+
+        return templates.TemplateResponse(
+            request,
+            "partials/spec_comments_list.html",
+            {
+                "comments": comments,
+                "draft_id": draft_id,
+                "current_user_id": current_user_id,
+            },
+        )
+
+    @router.get("/{draft_id}/comments", response_class=HTMLResponse)
+    async def get_spec_comments(
+        request: Request,
+        draft_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Response:
+        """Get all comments for a spec draft."""
+        try:
+            user_id, _ = await get_user_context(request, session)
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        return await _get_spec_comments_html(request, draft_id, session, user_id)
+
+    @router.post("/{draft_id}/comments", response_class=HTMLResponse)
+    async def add_spec_comment(
+        request: Request,
+        draft_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        content: str = Form(...),
+        parent_id: str | None = Form(None),
+    ) -> Response:
+        """Add a comment to a spec draft."""
+        try:
+            keycloak_sub, _ = await get_user_context(request, session)
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        # Get user from database by keycloak sub
+        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
+        db_user = user_result.scalar_one_or_none()
+
+        if not db_user:
+            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+        comment = SpecComment(
+            spec_draft_id=draft_id,
+            user_id=db_user.id,
+            parent_id=parent_id if parent_id else None,
+            content=content.strip(),
+        )
+        session.add(comment)
+        await session.commit()
+
+        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
+
+    @router.delete("/{draft_id}/comments/{comment_id}", response_class=HTMLResponse)
+    async def delete_spec_comment(
+        request: Request,
+        draft_id: str,
+        comment_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Response:
+        """Delete a spec comment (only by owner)."""
+        try:
+            keycloak_sub, _ = await get_user_context(request, session)
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        # Get user from database
+        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
+        db_user = user_result.scalar_one_or_none()
+
+        if not db_user:
+            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+        # Find comment and verify ownership
+        result = await session.execute(select(SpecComment).where(SpecComment.id == comment_id))
+        comment = result.scalar_one_or_none()
+
+        if comment and comment.user_id == db_user.id:
+            await session.delete(comment)
+            await session.commit()
+
+        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
+
+    @router.post("/{draft_id}/comments/{comment_id}/react", response_class=HTMLResponse)
+    async def react_to_spec_comment(
+        request: Request,
+        draft_id: str,
+        comment_id: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        reaction: str = Form(...),
+    ) -> Response:
+        """Add or toggle a reaction on a spec comment."""
+        try:
+            keycloak_sub, _ = await get_user_context(request, session)
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        # Get user from database
+        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
+        db_user = user_result.scalar_one_or_none()
+
+        if not db_user:
+            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+        # Check for existing reaction
+        existing_result = await session.execute(
+            select(SpecCommentReaction).where(
+                SpecCommentReaction.comment_id == comment_id,
+                SpecCommentReaction.user_id == db_user.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+
+        reaction_type = ReactionType(reaction)
+
+        if existing:
+            if existing.reaction == reaction_type:
+                # Toggle off - remove reaction
+                await session.delete(existing)
+            else:
+                # Change reaction type
+                existing.reaction = reaction_type
+        else:
+            # Add new reaction
+            new_reaction = SpecCommentReaction(
+                comment_id=comment_id,
+                user_id=db_user.id,
+                reaction=reaction_type,
+            )
+            session.add(new_reaction)
+
+        await session.commit()
+
+        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
 
     return router

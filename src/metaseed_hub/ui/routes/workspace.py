@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import (
-    Project,
+    Dataset,
     SpecDraft,
     Tenant,
     User,
@@ -92,12 +92,12 @@ async def workspace_detail(
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Show projects in a workspace."""
+    """Show datasets in a workspace."""
     # Verify user has access to this workspace
     workspace = await verify_workspace_access(workspace_id, session, user)
 
-    result = await session.execute(select(Project).where(Project.workspace_id == workspace_id))
-    projects = list(result.scalars().all())
+    result = await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id))
+    datasets = list(result.scalars().all())
 
     # Get spec drafts for this workspace
     drafts_result = await session.execute(
@@ -119,7 +119,7 @@ async def workspace_detail(
         context={
             "user": user,
             "workspace": workspace,
-            "projects": projects,
+            "datasets": datasets,
             "spec_drafts": spec_drafts,
             "members": members,
             "nav_active": "home",
@@ -185,7 +185,7 @@ async def workspace_delete(
     session: DbSession,
     user: CurrentUser,
 ) -> HTMLResponse:
-    """Delete a workspace and all its projects."""
+    """Delete a workspace and all its datasets."""
     try:
         validate_csrf_or_error(request)
     except Exception:
@@ -194,14 +194,14 @@ async def workspace_delete(
     # Verify user has access to this workspace
     workspace = await verify_workspace_access(workspace_id, session, user)
 
-    # Delete all projects in workspace first
-    projects = (
-        (await session.execute(select(Project).where(Project.workspace_id == workspace_id)))
+    # Delete all datasets in workspace first
+    datasets = (
+        (await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id)))
         .scalars()
         .all()
     )
-    for project in projects:
-        await session.delete(project)
+    for dataset in datasets:
+        await session.delete(dataset)
 
     await session.delete(workspace)
     await session.commit()

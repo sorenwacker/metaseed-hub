@@ -23,11 +23,11 @@ class TestRouteImports:
 
         assert entity.router is not None
 
-    def test_project_routes_import(self) -> None:
-        """Project routes module imports."""
-        from metaseed_hub.ui.routes import project
+    def test_dataset_routes_import(self) -> None:
+        """Dataset routes module imports."""
+        from metaseed_hub.ui.routes import dataset
 
-        assert project.router is not None
+        assert dataset.router is not None
 
     def test_workspace_routes_import(self) -> None:
         """Workspace routes module imports."""
@@ -46,19 +46,19 @@ class TestAuthorizationIntegration:
     """Tests for authorization enforcement in routes."""
 
     @pytest.mark.asyncio
-    async def test_get_project_for_user_verifies_access(self) -> None:
-        """get_project_for_user calls verify_workspace_access."""
-        from metaseed_hub.ui.dependencies import get_project_for_user
+    async def test_get_dataset_for_user_verifies_access(self) -> None:
+        """get_dataset_for_user calls verify_workspace_access."""
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
 
-        # Mock project
-        project = Mock()
-        project.id = "proj-1"
-        project.workspace_id = "ws-1"
+        # Mock dataset
+        dataset = Mock()
+        dataset.id = "ds-1"
+        dataset.workspace_id = "ws-1"
 
-        # Mock session that returns project
+        # Mock session that returns dataset
         session = AsyncMock()
         result_mock = Mock()
-        result_mock.scalar_one_or_none.return_value = project
+        result_mock.scalar_one_or_none.return_value = dataset
         session.execute.return_value = result_mock
 
         # Mock user
@@ -68,7 +68,7 @@ class TestAuthorizationIntegration:
         # This will fail because verify_workspace_access is called
         # and the workspace won't be found
         with pytest.raises(HTTPException):
-            await get_project_for_user("proj-1", session, user)
+            await get_dataset_for_user("ds-1", session, user)
 
         # It should try to verify workspace access
         assert session.execute.called
@@ -213,16 +213,16 @@ class TestDependenciesIntegration:
             CurrentUser,
             DbSession,
             OptionalUser,
-            get_project_by_id,
-            get_project_for_user,
+            get_dataset_by_id,
+            get_dataset_for_user,
             verify_workspace_access,
         )
 
         assert CurrentUser is not None
         assert DbSession is not None
         assert OptionalUser is not None
-        assert get_project_by_id is not None
-        assert get_project_for_user is not None
+        assert get_dataset_by_id is not None
+        assert get_dataset_for_user is not None
         assert verify_workspace_access is not None
 
 
@@ -240,9 +240,9 @@ class TestRouteStructure:
                 # Routes should have dependencies (auth, db, etc)
                 assert len(params) >= 0  # Just verify structure exists
 
-    def test_project_routes_use_auth(self) -> None:
-        """Project routes require authentication."""
-        from metaseed_hub.ui.routes.project import router
+    def test_dataset_routes_use_auth(self) -> None:
+        """Dataset routes require authentication."""
+        from metaseed_hub.ui.routes.dataset import router
 
         for route in router.routes:
             if hasattr(route, "dependant"):
