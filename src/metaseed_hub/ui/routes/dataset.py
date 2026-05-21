@@ -472,8 +472,16 @@ async def dataset_delete(
     except Exception:
         return csrf_error_response()
 
-    # Verify user has access to this dataset
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    try:
+        # Verify user has access to this dataset
+        dataset = await get_dataset_for_user(dataset_id, session, user)
+    except Exception as e:
+        logger.error(f"Failed to get dataset {dataset_id}: {e}")
+        response = Response(status_code=200)
+        response.headers["HX-Trigger"] = (
+            '{"showToast": {"message": "Dataset not found or access denied", "type": "error"}}'
+        )
+        return response
 
     workspace_id = dataset.workspace_id
 
@@ -499,12 +507,14 @@ async def dataset_delete(
         await session.delete(dataset)
         await session.commit()
     except Exception as e:
-        logger.error(f"Failed to delete dataset {dataset_id}: {e}")
+        logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)
         await session.rollback()
-        return Response(
-            content=f"<div class='error'>Failed to delete dataset: {e}</div>",
-            status_code=500,
+        error_msg = str(e).replace('"', '\\"')
+        response = Response(status_code=200)
+        response.headers["HX-Trigger"] = (
+            f'{{"showToast": {{"message": "Delete failed: {error_msg}", "type": "error"}}}}'
         )
+        return response
 
     # If request target is body, redirect to home (called from dataset page)
     hx_target = request.headers.get("HX-Target", "")

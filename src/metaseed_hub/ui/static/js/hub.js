@@ -109,6 +109,34 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
     }
 });
 
+// Handle showToast events from HTMX responses
+document.body.addEventListener('showToast', function(evt) {
+    const { message, type } = evt.detail;
+    showToast(message, type || 'error');
+});
+
+// Show toast notification
+function showToast(message, type) {
+    let container = document.getElementById('notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notification-container';
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `notification notification-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
 // WebSocket reconnection helper
 class HubWebSocket {
     constructor(projectId) {
