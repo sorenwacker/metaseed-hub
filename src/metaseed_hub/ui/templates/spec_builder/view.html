@@ -32,11 +32,6 @@
             </div>
         </div>
         <div class="header-right">
-            {% if can_edit %}
-            <form action="/hub/spec-builder/spec/{{ spec_record.id }}/edit" method="POST" class="inline-form">
-                <button type="submit" class="btn btn-primary">Edit Specification</button>
-            </form>
-            {% endif %}
             <a href="/hub/spec-builder" class="btn">Back to List</a>
         </div>
     </div>
