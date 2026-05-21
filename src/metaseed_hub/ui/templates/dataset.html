@@ -28,17 +28,22 @@
 
         <!-- Actions -->
         <div class="sidebar-section sidebar-actions">
-            {% set existing_root_types = tree_data | map(attribute='entity_type') | list %}
-            {% for entity_type in root_types %}
-            {% if entity_type not in existing_root_types %}
-            <button class="btn btn-primary btn-sm"
-                    hx-get="/hub/datasets/{{ dataset.id }}/form/{{ entity_type }}"
-                    hx-target="#editor"
-                    hx-swap="innerHTML">
-                + {{ entity_type }}
-            </button>
-            {% endif %}
-            {% endfor %}
+            <div id="root-buttons"
+                 hx-get="/hub/datasets/{{ dataset.id }}/root-buttons"
+                 hx-trigger="load, entityChanged from:body"
+                 hx-swap="innerHTML">
+                {% set existing_root_types = tree_data | map(attribute='entity_type') | list %}
+                {% for entity_type in root_types %}
+                {% if entity_type not in existing_root_types %}
+                <button class="btn btn-primary btn-sm"
+                        hx-get="/hub/datasets/{{ dataset.id }}/form/{{ entity_type }}"
+                        hx-target="#editor"
+                        hx-swap="innerHTML">
+                    + {{ entity_type }}
+                </button>
+                {% endif %}
+                {% endfor %}
+            </div>
             <div class="sidebar-actions-row">
                 <button class="btn btn-sm"
                         hx-post="/hub/datasets/{{ dataset.id }}/validate"

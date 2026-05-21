@@ -1,0 +1,10 @@
+{% for entity_type in root_types %}
+{% if entity_type not in existing_root_types %}
+<button class="btn btn-primary btn-sm"
+        hx-get="/hub/datasets/{{ dataset_id }}/form/{{ entity_type }}"
+        hx-target="#editor"
+        hx-swap="innerHTML">
+    + {{ entity_type }}
+</button>
+{% endif %}
+{% endfor %}

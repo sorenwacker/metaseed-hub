@@ -742,6 +742,32 @@ async def dataset_tree(
     )
 
 
+@router.get("/{dataset_id}/root-buttons", response_class=HTMLResponse)
+async def dataset_root_buttons(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Return root entity type buttons for the sidebar."""
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    state = await ensure_dataset_facade(dataset, session)
+    root_types = state.get_root_entity_types()
+    tree_data = get_tree_data_from_nodes(state)
+    existing_root_types = [item["entity_type"] for item in tree_data]
+
+    return render_template(
+        request=request,
+        name="partials/root_buttons.html",
+        context={
+            "dataset_id": dataset_id,
+            "root_types": root_types,
+            "existing_root_types": existing_root_types,
+        },
+    )
+
+
 @router.get("/{dataset_id}/overview", response_class=HTMLResponse)
 async def dataset_overview(
     request: Request,
