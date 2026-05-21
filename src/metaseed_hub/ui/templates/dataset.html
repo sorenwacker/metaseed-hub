@@ -52,6 +52,13 @@
                 <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
+            <div class="sidebar-actions-row">
+                <button class="btn btn-sm btn-danger"
+                        hx-delete="/hub/datasets/{{ dataset.id }}"
+                        hx-confirm="Delete '{{ dataset.name }}'? This cannot be undone."
+                        hx-target="body"
+                        title="Delete this dataset">Delete</button>
+            </div>
         </div>
 
         <!-- Entity Tree -->
