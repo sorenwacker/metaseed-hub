@@ -522,7 +522,12 @@ async def dataset_delete(
     # If request target is body, redirect to home (called from dataset page)
     hx_target = request.headers.get("HX-Target", "")
     if hx_target == "body":
-        response = Response(status_code=200)
+        # Return HTML with redirect script as fallback
+        response = Response(
+            content='<script>window.location.href="/hub/";</script>',
+            status_code=200,
+            media_type="text/html",
+        )
         response.headers["HX-Redirect"] = "/hub/"
         return response
 
