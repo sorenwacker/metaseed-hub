@@ -227,6 +227,7 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                         select(Spec).where(
                             Spec.workspace_id.in_(workspace_ids),
                             Spec.status == SpecStatus.PUBLISHED,
+                            Spec.deleted_at.is_(None),
                         )
                     )
                     published_specs = list(specs_result.scalars().all())
