@@ -9,16 +9,18 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
+    ChatMessage,
     Comment,
     CommentReaction,
     Dataset,
     DatasetMember,
     DatasetRole,
     DatasetVersion,
+    Note,
     ReactionType,
     SpecDraft,
     User,
@@ -479,8 +481,30 @@ async def dataset_delete(
     if dataset_id in dataset_states:
         del dataset_states[dataset_id]
 
-    await session.delete(dataset)
-    await session.commit()
+    try:
+        # Manually delete related records (in case CASCADE not set in DB)
+        await session.execute(
+            delete(CommentReaction).where(
+                CommentReaction.comment_id.in_(
+                    select(Comment.id).where(Comment.dataset_id == dataset_id)
+                )
+            )
+        )
+        await session.execute(delete(Comment).where(Comment.dataset_id == dataset_id))
+        await session.execute(delete(ChatMessage).where(ChatMessage.dataset_id == dataset_id))
+        await session.execute(delete(Note).where(Note.dataset_id == dataset_id))
+        await session.execute(delete(DatasetMember).where(DatasetMember.dataset_id == dataset_id))
+        await session.execute(delete(DatasetVersion).where(DatasetVersion.dataset_id == dataset_id))
+
+        await session.delete(dataset)
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to delete dataset {dataset_id}: {e}")
+        await session.rollback()
+        return Response(
+            content=f"<div class='error'>Failed to delete dataset: {e}</div>",
+            status_code=500,
+        )
 
     # If request target is body, redirect to home (called from dataset page)
     hx_target = request.headers.get("HX-Target", "")
