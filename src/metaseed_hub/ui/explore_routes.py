@@ -178,7 +178,15 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Explorer page - reuses metaseed's merge interface."""
-        from metaseed_hub.models import Spec, SpecDraft, SpecStatus, Tenant, Workspace
+        from metaseed_hub.models import (
+            Spec,
+            SpecDraft,
+            SpecDraftMember,
+            SpecStatus,
+            Tenant,
+            User,
+            Workspace,
+        )
         from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 
         user = await get_current_user_from_cookie(request)
@@ -210,6 +218,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             user_drafts: list[SpecDraft] = []
             published_specs: list[Spec] = []
 
+            # Get user's database record for membership check
+            db_user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+            db_user = db_user_result.scalar_one_or_none()
+
             if tenant:
                 ws_result = await session.execute(
                     select(Workspace).where(Workspace.tenant_id == tenant.id)
@@ -231,6 +243,20 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                         )
                     )
                     published_specs = list(specs_result.scalars().all())
+
+            # Also include drafts shared with user via SpecDraftMember
+            if db_user:
+                shared_result = await session.execute(
+                    select(SpecDraft)
+                    .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+                    .where(SpecDraftMember.user_id == db_user.id)
+                )
+                shared_drafts = list(shared_result.scalars().all())
+                # Add shared drafts that aren't already in user_drafts
+                existing_ids = {d.id for d in user_drafts}
+                for draft in shared_drafts:
+                    if draft.id not in existing_ids:
+                        user_drafts.append(draft)
 
             # Add user drafts to profiles
             for draft in user_drafts:
