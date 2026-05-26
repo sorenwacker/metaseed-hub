@@ -389,3 +389,211 @@ class TestSpecDraftSharing:
         assert found_user is not None
         assert found_user.display_name == "Test User"
         assert found_user.email == "user@test.com"
+
+    @pytest.mark.asyncio
+    async def test_alice_shares_with_demo_full_flow(self, session: AsyncMock) -> None:
+        """Full sharing flow: Alice creates draft, shares with Demo, Demo sees it."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create tenant
+        tenant = Tenant(name="Test Tenant", slug="test-tenant")
+        session.add(tenant)
+        await session.flush()
+
+        # Create workspace
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create Alice (owner)
+        alice = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="alice@example.com",
+            display_name="Alice",
+        )
+        session.add(alice)
+        await session.flush()
+
+        # Create Demo (recipient)
+        demo = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="demo@example.com",
+            display_name="Demo User",
+        )
+        session.add(demo)
+        await session.flush()
+
+        # Alice creates a draft
+        draft = SpecDraft(
+            name="Alice's Spec",
+            user_id=alice.id,
+            workspace_id=workspace.id,
+            version="1.0",
+            spec_data={
+                "spec": {
+                    "name": "Alice's Spec",
+                    "display_name": "Alice's Spec",
+                    "version": "1.0",
+                    "entities": {},
+                }
+            },
+        )
+        session.add(draft)
+        await session.flush()
+
+        # Alice shares with Demo by email lookup
+        result = await session.execute(select(User).where(User.email == "demo@example.com"))
+        target_user = result.scalar_one_or_none()
+        assert target_user is not None, "Demo user should be found by email"
+
+        # Create membership
+        membership = SpecDraftMember(
+            spec_draft_id=draft.id,
+            user_id=target_user.id,
+            role=SpecDraftRole.EDITOR,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Verify Demo can see the shared draft
+        # Query owned drafts (none for Demo)
+        result = await session.execute(select(SpecDraft).where(SpecDraft.user_id == demo.id))
+        owned_drafts = list(result.scalars().all())
+        assert len(owned_drafts) == 0, "Demo should not own any drafts"
+
+        # Query shared drafts
+        result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == demo.id)
+        )
+        shared_drafts = list(result.scalars().all())
+        assert len(shared_drafts) == 1, "Demo should see 1 shared draft"
+        assert shared_drafts[0].name == "Alice's Spec"
+
+        # Combined query (as the spec builder list does)
+        owned_ids = {d.id for d in owned_drafts}
+        all_drafts = owned_drafts + [d for d in shared_drafts if d.id not in owned_ids]
+        assert len(all_drafts) == 1, "Demo should see 1 draft total"
+
+    @pytest.mark.asyncio
+    async def test_share_by_email_requires_existing_user(self, session: AsyncMock) -> None:
+        """Sharing by email fails if user hasn't logged in yet."""
+        from sqlalchemy import select
+
+        from metaseed_hub.models import Tenant, User
+
+        # Create tenant
+        tenant = Tenant(name="Test Tenant", slug="test-tenant")
+        session.add(tenant)
+        await session.commit()
+
+        # Try to find non-existent user by email
+        result = await session.execute(select(User).where(User.email == "nonexistent@example.com"))
+        user = result.scalar_one_or_none()
+
+        assert user is None, "Non-existent user should not be found"
+
+    @pytest.mark.asyncio
+    async def test_member_roles(self, session: AsyncMock) -> None:
+        """Test different member roles (owner, editor, viewer)."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create tenant and workspace
+        tenant = Tenant(name="Test Tenant", slug="test-tenant")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create owner
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@example.com",
+            display_name="Owner",
+        )
+        session.add(owner)
+        await session.flush()
+
+        # Create draft
+        draft = SpecDraft(
+            name="Test Spec",
+            user_id=owner.id,
+            workspace_id=workspace.id,
+            version="1.0",
+        )
+        session.add(draft)
+        await session.flush()
+
+        # Create users with different roles
+        roles_to_test = [
+            ("editor@example.com", "Editor", SpecDraftRole.EDITOR),
+            ("viewer@example.com", "Viewer", SpecDraftRole.VIEWER),
+            ("coowner@example.com", "Co-Owner", SpecDraftRole.OWNER),
+        ]
+
+        for email, name, role in roles_to_test:
+            user = User(
+                keycloak_id=str(uuid4()),
+                tenant_id=tenant.id,
+                email=email,
+                display_name=name,
+            )
+            session.add(user)
+            await session.flush()
+
+            membership = SpecDraftMember(
+                spec_draft_id=draft.id,
+                user_id=user.id,
+                role=role,
+            )
+            session.add(membership)
+
+        await session.commit()
+
+        # Verify all memberships
+        result = await session.execute(
+            select(SpecDraftMember).where(SpecDraftMember.spec_draft_id == draft.id)
+        )
+        memberships = list(result.scalars().all())
+
+        assert len(memberships) == 3
+        roles = {m.role for m in memberships}
+        assert SpecDraftRole.EDITOR in roles
+        assert SpecDraftRole.VIEWER in roles
+        assert SpecDraftRole.OWNER in roles
