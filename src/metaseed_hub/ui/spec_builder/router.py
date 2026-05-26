@@ -117,7 +117,13 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
 
         workspace_ids = [w.id for w in workspaces]
 
-        result = await session.execute(
+        # Get user's database ID for membership check
+        user_result = await session.execute(select(User).where(User.keycloak_id == user_id))
+        db_user = user_result.scalar_one_or_none()
+        db_user_id = db_user.id if db_user else None
+
+        # Get drafts user owns
+        owned_result = await session.execute(
             select(SpecDraft)
             .options(selectinload(SpecDraft.workspace))
             .where(
@@ -126,7 +132,27 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             )
             .order_by(SpecDraft.updated_at.desc())
         )
-        drafts = list(result.scalars().all())
+        owned_drafts = list(owned_result.scalars().all())
+
+        # Get drafts shared with user
+        shared_drafts = []
+        if db_user_id:
+            shared_result = await session.execute(
+                select(SpecDraft)
+                .options(selectinload(SpecDraft.workspace))
+                .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+                .where(SpecDraftMember.user_id == db_user_id)
+                .order_by(SpecDraft.updated_at.desc())
+            )
+            shared_drafts = list(shared_result.scalars().all())
+
+        # Combine and deduplicate
+        seen_ids = set()
+        drafts = []
+        for draft in owned_drafts + shared_drafts:
+            if draft.id not in seen_ids:
+                seen_ids.add(draft.id)
+                drafts.append(draft)
 
         result = await session.execute(
             select(Spec)

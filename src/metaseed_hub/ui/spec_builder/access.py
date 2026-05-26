@@ -19,6 +19,7 @@ from metaseed_hub.database import get_session
 from metaseed_hub.models import (
     Spec,
     SpecDraft,
+    SpecDraftMember,
     Team,
     TeamMembership,
     TeamRole,
@@ -248,6 +249,27 @@ async def get_or_create_default_workspace(
     return workspace
 
 
+async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, keycloak_id: str) -> bool:
+    """Check if user can access a draft (owner or member)."""
+    # Owner can always access
+    if draft.user_id == keycloak_id:
+        return True
+
+    # Check if user is a member
+    user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_id))
+    db_user = user_result.scalar_one_or_none()
+    if not db_user:
+        return False
+
+    member_result = await session.execute(
+        select(SpecDraftMember).where(
+            SpecDraftMember.spec_draft_id == draft.id,
+            SpecDraftMember.user_id == db_user.id,
+        )
+    )
+    return member_result.scalar_one_or_none() is not None
+
+
 async def load_state_for_draft(
     session: AsyncSession,
     draft_id: str,
@@ -258,7 +280,7 @@ async def load_state_for_draft(
     Args:
         session: Database session
         draft_id: Draft ID to load
-        user_id: User ID (for access control)
+        user_id: User ID (keycloak_id for access control)
 
     Returns:
         Tuple of (SpecBuilderState, SpecDraft)
@@ -274,7 +296,7 @@ async def load_state_for_draft(
             .where(SpecDraft.id == draft_id)
         )
         draft = result.scalar_one_or_none()
-        if draft and draft.user_id == user_id:
+        if draft and await _user_can_access_draft(session, draft, user_id):
             return cached_state, draft
 
     result = await session.execute(
@@ -285,7 +307,7 @@ async def load_state_for_draft(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
-    if draft.user_id != user_id:
+    if not await _user_can_access_draft(session, draft, user_id):
         raise HTTPException(status_code=403, detail="Access denied to this draft")
 
     if draft.spec_data:
