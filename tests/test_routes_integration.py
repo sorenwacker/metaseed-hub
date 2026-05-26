@@ -255,3 +255,137 @@ class TestRouteStructure:
         for route in router.routes:
             if hasattr(route, "dependant"):
                 assert route.dependant is not None
+
+
+class TestSpecDraftSharing:
+    """Tests for spec draft sharing functionality."""
+
+    @pytest.mark.asyncio
+    async def test_shared_draft_visible_to_member(self, session: AsyncMock) -> None:
+        """User can see drafts shared with them."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create tenant
+        tenant = Tenant(name="Test Tenant", slug="test-tenant")
+        session.add(tenant)
+        await session.flush()
+
+        # Create workspace
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create owner user
+        owner_keycloak_id = str(uuid4())
+        owner = User(
+            keycloak_id=owner_keycloak_id,
+            tenant_id=tenant.id,
+            email="owner@test.com",
+            display_name="Owner",
+        )
+        session.add(owner)
+        await session.flush()
+
+        # Create member user
+        member_keycloak_id = str(uuid4())
+        member = User(
+            keycloak_id=member_keycloak_id,
+            tenant_id=tenant.id,
+            email="member@test.com",
+            display_name="Member",
+        )
+        session.add(member)
+        await session.flush()
+
+        # Create draft owned by owner (user_id is FK to users.id)
+        draft = SpecDraft(
+            name="Shared Draft",
+            user_id=owner.id,
+            workspace_id=workspace.id,
+            version="1.0",
+        )
+        session.add(draft)
+        await session.flush()
+
+        # Share draft with member
+        membership = SpecDraftMember(
+            spec_draft_id=draft.id,
+            user_id=member.id,
+            role=SpecDraftRole.EDITOR,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Query drafts shared with member
+        result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == member.id)
+        )
+        shared_drafts = list(result.scalars().all())
+
+        assert len(shared_drafts) == 1
+        assert shared_drafts[0].id == draft.id
+        assert shared_drafts[0].name == "Shared Draft"
+
+    @pytest.mark.asyncio
+    async def test_owner_visible_in_sharing_panel(self, session: AsyncMock) -> None:
+        """Draft owner is visible in the sharing panel."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import Tenant, User, Workspace
+
+        # Create tenant
+        tenant = Tenant(name="Test Tenant", slug="test-tenant")
+        session.add(tenant)
+        await session.flush()
+
+        # Create workspace
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create user
+        keycloak_id = str(uuid4())
+        user = User(
+            keycloak_id=keycloak_id,
+            tenant_id=tenant.id,
+            email="user@test.com",
+            display_name="Test User",
+        )
+        session.add(user)
+        await session.commit()
+
+        # Query user by keycloak_id and tenant_id (as the sharing panel does)
+        result = await session.execute(
+            select(User).where(
+                User.keycloak_id == keycloak_id,
+                User.tenant_id == tenant.id,
+            )
+        )
+        found_user = result.scalar_one_or_none()
+
+        assert found_user is not None
+        assert found_user.display_name == "Test User"
+        assert found_user.email == "user@test.com"
