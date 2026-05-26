@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Metaseed Hub{% endblock %}
+
+{% block nav %}
+<a href="/hub/" class="nav-item">Home</a>
+<span class="nav-sep">/</span>
+<span class="nav-item active">Profile</span>
+{% endblock %}
+
+{% block content %}
+<div class="profile-page">
+    <header class="page-header">
+        <h1>Your Profile</h1>
+        <p class="page-subtitle">Information from your identity provider (SRAM)</p>
+    </header>
+
+    <div class="profile-card">
+        <div class="profile-section">
+            <h2>Account Information</h2>
+            <dl class="profile-info">
+                <div class="info-row">
+                    <dt>Name</dt>
+                    <dd>{{ user.name or 'Not provided' }}</dd>
+                </div>
+                <div class="info-row">
+                    <dt>Email</dt>
+                    <dd>{{ user.email or 'Not provided' }}</dd>
+                </div>
+                <div class="info-row">
+                    <dt>Subject ID</dt>
+                    <dd><code>{{ user.sub }}</code></dd>
+                </div>
+                {% if user.roles %}
+                <div class="info-row">
+                    <dt>Roles</dt>
+                    <dd>
+                        {% for role in user.roles %}
+                        <span class="role-badge">{{ role }}</span>
+                        {% endfor %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <div class="profile-section">
+            <h2>Sharing</h2>
+            <p class="help-text">
+                To share datasets or specs with colleagues, they must first log in to Metaseed Hub.
+                Once they've logged in, you can add them using their email address.
+            </p>
+            <p class="help-text">
+                <strong>Your email for sharing:</strong> <code>{{ user.email }}</code>
+            </p>
+        </div>
+
+        <div class="profile-actions">
+            <a href="/hub/" class="btn">Back to Home</a>
+            <a href="/hub/auth/logout" class="btn btn-ghost">Logout</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.profile-page {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.page-header {
+    margin-bottom: var(--space-xl);
+}
+
+.page-header h1 {
+    margin: 0 0 var(--space-xs);
+}
+
+.page-subtitle {
+    color: var(--clr-ink-light);
+    margin: 0;
+}
+
+.profile-card {
+    background: var(--clr-paper);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+}
+
+.profile-section {
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.profile-section:last-of-type {
+    border-bottom: none;
+    margin-bottom: var(--space-lg);
+}
+
+.profile-section h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 var(--space-md);
+    color: var(--clr-ink);
+}
+
+.profile-info {
+    margin: 0;
+}
+
+.info-row {
+    display: flex;
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--clr-border-light);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row dt {
+    flex: 0 0 120px;
+    font-weight: 500;
+    color: var(--clr-ink-light);
+}
+
+.info-row dd {
+    flex: 1;
+    margin: 0;
+}
+
+.info-row code {
+    font-size: 0.875rem;
+    background: var(--clr-bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.role-badge {
+    display: inline-block;
+    background: var(--clr-primary-bg);
+    color: var(--clr-primary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-right: var(--space-xs);
+}
+
+.help-text {
+    color: var(--clr-ink-light);
+    font-size: 0.9375rem;
+    margin: 0 0 var(--space-sm);
+}
+
+.help-text code {
+    background: var(--clr-bg);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.profile-actions {
+    display: flex;
+    gap: var(--space-md);
+}
+</style>
+{% endblock %}

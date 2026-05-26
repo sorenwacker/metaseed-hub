@@ -28,7 +28,7 @@
             </div>
             <div class="hub-user">
                 {% if user %}
-                <span class="hub-user-name">{{ user.name }}</span>
+                <a href="/hub/auth/profile" class="hub-user-name">{{ user.name }}</a>
                 <a href="/hub/auth/logout" class="btn btn-sm btn-header">Logout</a>
                 {% else %}
                 <a href="/hub/auth/login" class="btn btn-sm btn-header">Login</a>

@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from metaseed_hub.config import get_settings
 
@@ -190,6 +190,27 @@ async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
         pass
 
     return None
+
+
+@router.get("/profile")
+async def auth_profile(request: Request) -> Response:
+    """Show user profile page with SRAM/OIDC info."""
+
+    from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+    from metaseed_hub.ui.render import render_template
+
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+    return render_template(
+        request=request,
+        name="profile.html",
+        context={
+            "user": user,
+            "nav_active": "profile",
+        },
+    )
 
 
 @router.get("/logout")
