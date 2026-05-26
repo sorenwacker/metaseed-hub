@@ -11,6 +11,8 @@ from metaseed_hub.ui.spec_builder.forms import ValidationRuleFormData
 
 from ._common import DraftContextDep, SessionDep
 
+__all__ = ["register_rule_routes"]
+
 
 def register_rule_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register validation rule CRUD routes."""

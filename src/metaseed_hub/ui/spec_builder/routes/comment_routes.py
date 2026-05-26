@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +11,10 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import ReactionType, SpecComment, SpecCommentReaction
-from metaseed_hub.ui.spec_builder.access import LoginRequiredRedirectError, get_user_context
 
-from ._common import SessionDep
+from ._common import SessionDep, UserContextDep
+
+__all__ = ["register_comment_routes"]
 
 
 def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> None:
@@ -62,12 +63,10 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Get all comments for a spec draft."""
-        try:
-            user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _ = user_ctx
 
         return await _get_spec_comments_html(request, draft_id, session, user_id)
 
@@ -76,14 +75,12 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
         content: str = Form(...),
         parent_id: str | None = Form(None),
     ) -> Response:
         """Add a comment to a spec draft."""
-        try:
-            user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _ = user_ctx
 
         comment = SpecComment(
             spec_draft_id=draft_id,
@@ -102,12 +99,10 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         draft_id: str,
         comment_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Delete a spec comment (only by owner)."""
-        try:
-            user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _ = user_ctx
 
         # Find comment and verify ownership
         result = await session.execute(select(SpecComment).where(SpecComment.id == comment_id))
@@ -125,13 +120,11 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         draft_id: str,
         comment_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
         reaction: str = Form(...),
     ) -> Response:
         """Add or toggle a reaction on a spec comment."""
-        try:
-            user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _ = user_ctx
 
         # Check for existing reaction
         existing_result = await session.execute(

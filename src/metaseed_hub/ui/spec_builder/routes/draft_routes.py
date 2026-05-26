@@ -12,11 +12,9 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.spec_builder.access import (
-    LoginRequiredRedirectError,
     can_access_workspace,
     can_edit_spec,
     create_new_draft,
-    get_user_context,
     load_state_for_draft,
     save_state_to_draft,
 )
@@ -24,28 +22,25 @@ from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder_helpers import create_empty_spec, spec_to_yaml
 
-from ._common import DraftContextDep, SessionDep, render_with_context
+from ._common import DraftContextDep, SessionDep, UserContextDep, create_render_helper
+
+__all__ = ["register_draft_routes"]
 
 
 def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register draft editing, publishing, and viewing routes."""
 
-    async def render(request: Request, template: str, context: dict[str, object]) -> Response:
-        return await render_with_context(templates, request, template, context)
+    render = create_render_helper(templates)
 
     @router.get("/{draft_id}", response_model=None)
     async def edit_draft(
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Edit a specific draft."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
@@ -92,14 +87,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Delete a draft."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _tenant_id = user_ctx
 
         result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
         draft = result.scalar_one_or_none()
@@ -143,9 +134,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         request: Request,
         draft_id: str,
         session: SessionDep,
-    ) -> RedirectResponse:
+        user_ctx: UserContextDep,
+    ) -> Response:
         """Reset a draft to empty state."""
-        user_id, _tenant_id = await get_user_context(request, session)
+        user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
         builder.spec = ProfileSpec(
@@ -167,9 +159,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> HTMLResponse:
         """Publish a draft as a spec."""
-        user_id, tenant_id = await get_user_context(request, session)
+        user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
         if builder.spec is None:
@@ -241,14 +234,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         request: Request,
         spec_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """View a published spec (read-only)."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _tenant_id = user_ctx
 
         result = await session.execute(
             select(Spec)
@@ -283,14 +272,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         request: Request,
         spec_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Create a draft from a published spec for editing."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _tenant_id = user_ctx
 
         result = await session.execute(
             select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))

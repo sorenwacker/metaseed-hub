@@ -11,6 +11,8 @@ from metaseed_hub.ui.spec_builder_helpers import validate_entity_name
 
 from ._common import DraftContextDep, SessionDep
 
+__all__ = ["register_entity_routes"]
+
 
 def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register entity CRUD routes."""

@@ -16,6 +16,8 @@ from .list_routes import register_list_routes
 from .member_routes import register_member_routes
 from .rule_routes import register_rule_routes
 
+__all__ = ["create_spec_builder_router"]
+
 
 def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     """Create the spec builder router with all routes.

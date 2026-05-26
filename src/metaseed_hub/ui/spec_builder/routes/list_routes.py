@@ -11,11 +11,9 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
 from metaseed_hub.ui.spec_builder.access import (
-    LoginRequiredRedirectError,
     can_access_workspace,
     create_new_draft,
     get_or_create_default_workspace,
-    get_user_context,
     get_user_workspaces,
 )
 from metaseed_hub.ui.spec_builder_helpers import (
@@ -25,27 +23,24 @@ from metaseed_hub.ui.spec_builder_helpers import (
     parse_spec_from_yaml,
 )
 
-from ._common import SessionDep, render_with_context
+from ._common import SessionDep, UserContextDep, create_render_helper
+
+__all__ = ["register_list_routes"]
 
 
 def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register list, new, import, and clone routes."""
 
-    async def render(request: Request, template: str, context: dict[str, object]) -> Response:
-        return await render_with_context(templates, request, template, context)
+    render = create_render_helper(templates)
 
     @router.get("", response_model=None)
     async def spec_builder_list(
         request: Request,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Render the specs list page showing drafts and published specs."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         workspaces = await get_user_workspaces(session, user_id, tenant_id)
         if not workspaces:
@@ -106,15 +101,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     async def new_spec_form(
         request: Request,
         session: SessionDep,
+        user_ctx: UserContextDep,
         workspace_id: str | None = None,
     ) -> Response:
         """Show form to create a new spec draft."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         workspaces = await get_user_workspaces(session, user_id, tenant_id)
         if not workspaces:
@@ -135,17 +126,13 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     async def create_new_spec(
         request: Request,
         session: SessionDep,
+        user_ctx: UserContextDep,
         workspace_id: str = Form(...),
         name: str = Form(""),
         template: str = Form(""),
     ) -> Response:
         """Create a new spec draft."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         if not await can_access_workspace(session, user_id, workspace_id):
             raise HTTPException(status_code=403, detail="Access denied to workspace")
@@ -181,15 +168,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     async def import_spec_form(
         request: Request,
         session: SessionDep,
+        user_ctx: UserContextDep,
         workspace_id: str | None = None,
     ) -> Response:
         """Show form to import a spec from YAML file."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         workspaces = await get_user_workspaces(session, user_id, tenant_id)
         if not workspaces:
@@ -209,16 +192,12 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     async def import_spec(
         request: Request,
         session: SessionDep,
+        user_ctx: UserContextDep,
         workspace_id: str = Form(...),
         spec_file: UploadFile = File(...),
     ) -> Response:
         """Import a spec from uploaded YAML file."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         if not await can_access_workspace(session, user_id, workspace_id):
             raise HTTPException(status_code=403, detail="Access denied to workspace")
@@ -283,15 +262,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         profile: str,
         version: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
         workspace_id: str | None = None,
     ) -> Response:
         """Clone an existing spec as a template."""
-        try:
-            user_id, tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, tenant_id = user_ctx
 
         try:
             spec = clone_spec(profile, version)

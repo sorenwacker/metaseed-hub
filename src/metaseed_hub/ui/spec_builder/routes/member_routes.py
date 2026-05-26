@@ -11,9 +11,10 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import SpecDraft, SpecDraftMember, SpecDraftRole, User
-from metaseed_hub.ui.spec_builder.access import LoginRequiredRedirectError, get_user_context
 
-from ._common import SessionDep
+from ._common import SessionDep, UserContextDep
+
+__all__ = ["register_member_routes"]
 
 
 def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> None:
@@ -70,13 +71,11 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
         email: str = Form(...),
     ) -> HTMLResponse:
         """Add a member to a spec draft by email."""
-        try:
-            current_user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
+        current_user_id, _ = user_ctx
 
         # Find user by email
         result = await session.execute(select(User).where(User.email == email))
@@ -118,13 +117,11 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         draft_id: str,
         member_user_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
         role: str = Form(...),
     ) -> HTMLResponse:
         """Update a member's role in a spec draft."""
-        try:
-            current_user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
+        current_user_id, _ = user_ctx
 
         result = await session.execute(
             select(SpecDraftMember).where(
@@ -146,12 +143,10 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         draft_id: str,
         member_user_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> HTMLResponse:
         """Remove a member from a spec draft."""
-        try:
-            current_user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
+        current_user_id, _ = user_ctx
 
         result = await session.execute(
             select(SpecDraftMember).where(
@@ -172,12 +167,10 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         request: Request,
         draft_id: str,
         session: SessionDep,
+        user_ctx: UserContextDep,
     ) -> Response:
         """Leave a spec draft as owner (transfer ownership)."""
-        try:
-            current_user_id, _ = await get_user_context(request, session)
-        except LoginRequiredRedirectError:
-            return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
+        current_user_id, _ = user_ctx
 
         # Get draft
         draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))

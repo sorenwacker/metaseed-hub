@@ -12,6 +12,8 @@ from metaseed_hub.ui.spec_builder_helpers import validate_field_name
 
 from ._common import DraftContextDep, SessionDep
 
+__all__ = ["register_field_routes"]
+
 
 def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register field CRUD routes."""
