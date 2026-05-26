@@ -1,7 +1,31 @@
+{% if draft_owner %}
+<div class="member-row member-owner">
+    <span class="member-avatar">{{ (draft_owner.display_name or draft_owner.email)[0]|upper }}</span>
+    <span class="member-name">
+        {{ draft_owner.display_name or draft_owner.email }}
+        {% if draft_owner.id == current_user_id %}<span class="member-you">(you)</span>{% endif %}
+    </span>
+    <span class="member-role-badge">Owner</span>
+    {% set has_other_owner = members|selectattr('role.value', 'equalto', 'owner')|list|length > 0 %}
+    {% if draft_owner.id == current_user_id and has_other_owner %}
+    <button class="btn-icon btn-danger-text"
+            hx-delete="/hub/spec-builder/{{ draft_id }}/leave"
+            hx-target="#member-list"
+            hx-swap="innerHTML"
+            hx-confirm="Leave this spec? You will lose owner access."
+            title="Leave">&times;</button>
+    {% else %}
+    <span class="member-action-placeholder"></span>
+    {% endif %}
+</div>
+{% endif %}
 {% for member in members %}
 <div class="member-row">
     <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
-    <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
+    <span class="member-name">
+        {{ member.user.display_name or member.user.email }}
+        {% if member.user_id == current_user_id %}<span class="member-you">(you)</span>{% endif %}
+    </span>
     <select class="member-role-select"
             hx-patch="/hub/spec-builder/{{ draft_id }}/members/{{ member.user_id }}"
             hx-target="#member-list"
@@ -18,6 +42,7 @@
             hx-confirm="Remove {{ member.user.email }}?"
             title="Remove">&times;</button>
 </div>
-{% else %}
-<p class="empty-state-inline">Not shared yet.</p>
 {% endfor %}
+{% if not draft_owner and not members %}
+<p class="empty-state-inline">Not shared yet.</p>
+{% endif %}

@@ -1659,11 +1659,11 @@ body {
 
 .sidebar-tab {
     flex: 1;
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-sm) var(--space-xs);
     border: none;
     background: transparent;
     font-family: var(--font-body);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--clr-ink-light);
     cursor: pointer;
@@ -1671,7 +1671,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-xs);
+    gap: 2px;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
 }
@@ -3528,6 +3528,11 @@ a.spec-editor-close:hover {
     border-bottom: 1px solid var(--clr-border);
 }
 
+.zoom-controls {
+    display: flex;
+    gap: var(--space-xs);
+}
+
 .canvas-wrapper {
     flex: 1;
     position: relative;
@@ -5323,6 +5328,32 @@ a.start-option-card:hover {
     background: white;
     color: var(--clr-ink);
     cursor: pointer;
+}
+
+.member-you {
+    font-size: 0.6875rem;
+    color: var(--clr-ink-light);
+    font-style: italic;
+}
+
+.member-role-badge {
+    font-size: 0.6875rem;
+    padding: 2px 6px;
+    background: var(--clr-primary-bg);
+    color: var(--clr-primary);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+
+.member-owner {
+    background: var(--clr-paper);
+    margin: 0 calc(-1 * var(--space-xs));
+    padding: var(--space-xs);
+    border-radius: var(--radius-sm);
+}
+
+.member-action-placeholder {
+    width: 20px;
 }
 
 /* Overview sections */

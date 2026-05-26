@@ -131,29 +131,7 @@
                     <div class="sharing-section">
                         <p class="sharing-hint">Share this spec draft with collaborators.</p>
                         <div class="member-list" id="member-list">
-                            {% for member in members %}
-                            <div class="member-row">
-                                <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
-                                <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
-                                <select class="member-role-select"
-                                        hx-patch="/hub/spec-builder/{{ draft_id }}/members/{{ member.user_id }}"
-                                        hx-target="#member-list"
-                                        hx-swap="innerHTML"
-                                        name="role">
-                                    <option value="owner" {% if member.role.value == 'owner' %}selected{% endif %}>Owner</option>
-                                    <option value="editor" {% if member.role.value == 'editor' %}selected{% endif %}>Editor</option>
-                                    <option value="viewer" {% if member.role.value == 'viewer' %}selected{% endif %}>Viewer</option>
-                                </select>
-                                <button class="btn-icon btn-danger-text"
-                                        hx-delete="/hub/spec-builder/{{ draft_id }}/members/{{ member.user_id }}"
-                                        hx-target="#member-list"
-                                        hx-swap="innerHTML"
-                                        hx-confirm="Remove {{ member.user.email }}?"
-                                        title="Remove">&times;</button>
-                            </div>
-                            {% else %}
-                            <p class="empty-state-inline">Not shared yet.</p>
-                            {% endfor %}
+                            {% include "partials/spec_draft_members.html" %}
                         </div>
                         <form class="member-add-form"
                               hx-post="/hub/spec-builder/{{ draft_id }}/members"
@@ -173,10 +151,11 @@
                 <button class="btn btn-sm btn-primary" onclick="showAddEntityModal()">
                     + Entity
                 </button>
-                <span class="toolbar-divider"></span>
-                <button class="btn btn-sm" onclick="zoomIn()">+</button>
-                <button class="btn btn-sm" onclick="zoomOut()">-</button>
-                <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
+                <div class="zoom-controls">
+                    <button class="btn btn-sm" onclick="zoomIn()">+</button>
+                    <button class="btn btn-sm" onclick="zoomOut()">-</button>
+                    <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
+                </div>
             </div>
             <div class="canvas-wrapper">
                 <div id="erd-canvas"
