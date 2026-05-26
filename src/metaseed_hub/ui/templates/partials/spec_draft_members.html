@@ -1,13 +1,21 @@
-{% if draft_owner %}
+{% if draft_owner or is_current_user_owner %}
 <div class="member-row member-owner">
+    {% if draft_owner %}
     <span class="member-avatar">{{ (draft_owner.display_name or draft_owner.email)[0]|upper }}</span>
     <span class="member-name">
         {{ draft_owner.display_name or draft_owner.email }}
-        {% if draft_owner.id == current_user_id %}<span class="member-you">(you)</span>{% endif %}
+        {% if is_current_user_owner %}<span class="member-you">(you)</span>{% endif %}
     </span>
+    {% else %}
+    <span class="member-avatar">?</span>
+    <span class="member-name">
+        Owner
+        {% if is_current_user_owner %}<span class="member-you">(you)</span>{% endif %}
+    </span>
+    {% endif %}
     <span class="member-role-badge">Owner</span>
     {% set has_other_owner = members|selectattr('role.value', 'equalto', 'owner')|list|length > 0 %}
-    {% if draft_owner.id == current_user_id and has_other_owner %}
+    {% if is_current_user_owner and has_other_owner %}
     <button class="btn-icon btn-danger-text"
             hx-delete="/hub/spec-builder/{{ draft_id }}/leave"
             hx-target="#member-list"

@@ -414,9 +414,12 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             builder.spec = create_empty_spec()
             await save_state_to_draft(session, builder, draft)
 
-        # Load draft owner
+        # Load draft owner - try to find User record
         owner_result = await session.execute(select(User).where(User.keycloak_id == draft.user_id))
         draft_owner = owner_result.scalar_one_or_none()
+
+        # Check if current user is the owner
+        is_current_user_owner = draft.user_id == user_id
 
         # Load members for sharing tab
         members_result = await session.execute(
@@ -445,6 +448,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
                 "members": members,
                 "draft_owner": draft_owner,
                 "current_user_id": current_db_user.id if current_db_user else None,
+                "is_current_user_owner": is_current_user_owner,
             },
         )
 
@@ -1432,11 +1436,13 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         draft = draft_result.scalar_one_or_none()
 
         draft_owner = None
+        is_current_user_owner = False
         if draft:
             owner_result = await session.execute(
                 select(User).where(User.keycloak_id == draft.user_id)
             )
             draft_owner = owner_result.scalar_one_or_none()
+            is_current_user_owner = draft.user_id == keycloak_sub
 
         # Get members
         result = await session.execute(
@@ -1460,6 +1466,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
                 "draft_id": draft_id,
                 "draft_owner": draft_owner,
                 "current_user_id": current_db_user.id if current_db_user else None,
+                "is_current_user_owner": is_current_user_owner,
             },
         )
 
