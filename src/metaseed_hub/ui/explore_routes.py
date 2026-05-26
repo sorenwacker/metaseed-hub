@@ -237,7 +237,14 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 draft_key = f"draft:{draft.id}"
                 profiles.append(draft_key)
                 profile_versions[draft_key] = [draft.version]
-                profile_display_names[draft_key] = f"{draft.name} (Draft)"
+                # Use display_name from spec_data if available
+                display_name = draft.name
+                if draft.spec_data:
+                    spec_data = _extract_spec_data(draft.spec_data)
+                    display_name = (
+                        spec_data.get("display_name") or spec_data.get("name") or draft.name
+                    )
+                profile_display_names[draft_key] = f"{display_name} (Draft)"
 
             # Add published specs to profiles
             for spec in published_specs:
@@ -245,7 +252,14 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 if spec_key not in profiles:
                     profiles.append(spec_key)
                     profile_versions[spec_key] = [spec.version]
-                    profile_display_names[spec_key] = f"{spec.name} (Published)"
+                    # Use display_name from spec_data if available
+                    display_name = spec.name
+                    if spec.spec_data:
+                        spec_data = _extract_spec_data(spec.spec_data)
+                        display_name = (
+                            spec_data.get("display_name") or spec_data.get("name") or spec.name
+                        )
+                    profile_display_names[spec_key] = f"{display_name} (Published)"
 
             return render(
                 request,
