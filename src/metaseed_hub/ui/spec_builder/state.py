@@ -178,9 +178,9 @@ def dict_to_spec(data: dict[str, Any]) -> ProfileSpec:
         name=data.get("name", "unnamed"),
         version=data.get("version", "0.1"),
         display_name=data.get("display_name"),
-        description=data.get("description"),
+        description=data.get("description") or "",
         ontology=data.get("ontology"),
-        root_entity=data.get("root_entity"),
+        root_entity=data.get("root_entity") or "",
         entities=entities,
         validation_rules=[_dict_to_rule(r) for r in data.get("validation_rules", [])],
     )
