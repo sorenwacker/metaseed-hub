@@ -1,4 +1,5 @@
 {% if draft_owner or is_current_user_owner %}
+{% set has_other_owner = members|selectattr('role.value', 'equalto', 'owner')|list|length > 0 %}
 <div class="member-row member-owner">
     {% if draft_owner %}
     <span class="member-avatar">{{ (draft_owner.display_name or draft_owner.email)[0]|upper }}</span>
@@ -13,8 +14,9 @@
         {% if is_current_user_owner %}<span class="member-you">(you)</span>{% endif %}
     </span>
     {% endif %}
-    <span class="member-role-badge">Owner</span>
-    {% set has_other_owner = members|selectattr('role.value', 'equalto', 'owner')|list|length > 0 %}
+    <select class="member-role-select" disabled title="Primary owner cannot change role">
+        <option value="owner" selected>Owner</option>
+    </select>
     {% if is_current_user_owner and has_other_owner %}
     <button class="btn-icon btn-danger-text"
             hx-delete="/hub/spec-builder/{{ draft_id }}/leave"
