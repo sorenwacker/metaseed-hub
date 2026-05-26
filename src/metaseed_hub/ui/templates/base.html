@@ -28,7 +28,14 @@
             </div>
             <div class="hub-user">
                 {% if user %}
-                <a href="/hub/auth/profile" class="hub-user-name">{{ user.name }}</a>
+                <a href="/hub/auth/profile" class="user-avatar" title="{{ user.name }}">
+                    {%- set parts = user.name.split() -%}
+                    {%- if parts|length >= 2 -%}
+                        {{ parts[0][0] }}{{ parts[-1][0] }}
+                    {%- else -%}
+                        {{ user.name[:2] }}
+                    {%- endif -%}
+                </a>
                 <a href="/hub/auth/logout" class="btn btn-sm btn-header">Logout</a>
                 {% else %}
                 <a href="/hub/auth/login" class="btn btn-sm btn-header">Login</a>
