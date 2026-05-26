@@ -249,22 +249,26 @@ async def get_or_create_default_workspace(
     return workspace
 
 
-async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, keycloak_id: str) -> bool:
-    """Check if user can access a draft (owner or member)."""
-    # Owner can always access
-    if draft.user_id == keycloak_id:
+async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:
+    """Check if user can access a draft (owner or member).
+
+    Args:
+        session: Database session
+        draft: The draft to check access for
+        user_id: Database User.id (not keycloak_id)
+
+    Returns:
+        True if user is the owner or a member of the draft
+    """
+    # Owner can always access (draft.user_id is User.id FK)
+    if draft.user_id == user_id:
         return True
 
-    # Check if user is a member
-    user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_id))
-    db_user = user_result.scalar_one_or_none()
-    if not db_user:
-        return False
-
+    # Check if user is a member (SpecDraftMember.user_id is also User.id FK)
     member_result = await session.execute(
         select(SpecDraftMember).where(
             SpecDraftMember.spec_draft_id == draft.id,
-            SpecDraftMember.user_id == db_user.id,
+            SpecDraftMember.user_id == user_id,
         )
     )
     return member_result.scalar_one_or_none() is not None
@@ -280,7 +284,7 @@ async def load_state_for_draft(
     Args:
         session: Database session
         draft_id: Draft ID to load
-        user_id: User ID (keycloak_id for access control)
+        user_id: Database User.id (not keycloak_id) for access control
 
     Returns:
         Tuple of (SpecBuilderState, SpecDraft)

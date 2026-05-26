@@ -422,16 +422,11 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             builder.spec = create_empty_spec()
             await save_state_to_draft(session, builder, draft)
 
-        # Load draft owner - try to find User record (filter by workspace's tenant)
-        owner_result = await session.execute(
-            select(User).where(
-                User.keycloak_id == draft.user_id,
-                User.tenant_id == draft.workspace.tenant_id,
-            )
-        )
+        # Load draft owner - draft.user_id is a FK to users.id
+        owner_result = await session.execute(select(User).where(User.id == draft.user_id))
         draft_owner = owner_result.scalar_one_or_none()
 
-        # Check if current user is the owner
+        # Check if current user is the owner (both are User.id)
         is_current_user_owner = draft.user_id == user_id
 
         # Load members for sharing tab
@@ -1441,9 +1436,16 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         request: Request,
         draft_id: str,
         session: AsyncSession,
-        keycloak_sub: str,
+        user_id: str,
     ) -> HTMLResponse:
-        """Render the member list partial for a spec draft."""
+        """Render the member list partial for a spec draft.
+
+        Args:
+            request: FastAPI request
+            draft_id: Draft ID
+            session: Database session
+            user_id: Database User.id (not keycloak_id)
+        """
         # Get draft to find owner
         draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
         draft = draft_result.scalar_one_or_none()
@@ -1451,16 +1453,10 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         draft_owner = None
         is_current_user_owner = False
         if draft:
-            # Load workspace to get tenant_id
-            await session.refresh(draft, ["workspace"])
-            owner_result = await session.execute(
-                select(User).where(
-                    User.keycloak_id == draft.user_id,
-                    User.tenant_id == draft.workspace.tenant_id,
-                )
-            )
+            # Load owner - draft.user_id is FK to users.id
+            owner_result = await session.execute(select(User).where(User.id == draft.user_id))
             draft_owner = owner_result.scalar_one_or_none()
-            is_current_user_owner = draft.user_id == keycloak_sub
+            is_current_user_owner = draft.user_id == user_id
 
         # Get members
         result = await session.execute(
@@ -1470,12 +1466,6 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         )
         members = list(result.scalars().all())
 
-        # Get current user's database ID
-        current_user_result = await session.execute(
-            select(User).where(User.keycloak_id == keycloak_sub)
-        )
-        current_db_user = current_user_result.scalar_one_or_none()
-
         return templates.TemplateResponse(
             request,
             "partials/spec_draft_members.html",
@@ -1483,7 +1473,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
                 "members": members,
                 "draft_id": draft_id,
                 "draft_owner": draft_owner,
-                "current_user_id": current_db_user.id if current_db_user else None,
+                "current_user_id": user_id,
                 "is_current_user_owner": is_current_user_owner,
             },
         )
@@ -1497,7 +1487,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     ) -> HTMLResponse:
         """Add a member to a spec draft by email."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            current_user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
 
@@ -1507,7 +1497,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
 
         if not target_user:
             # Return error message - user must log in first
-            response = await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+            response = await _get_spec_members_html(request, draft_id, session, current_user_id)
             msg = "User not found. They must log in first before you can share."
             response.headers["HX-Trigger"] = (
                 f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
@@ -1522,7 +1512,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             )
         )
         if existing.scalar_one_or_none():
-            return await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+            return await _get_spec_members_html(request, draft_id, session, current_user_id)
 
         # Add member with viewer role by default
         member = SpecDraftMember(
@@ -1533,26 +1523,26 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         session.add(member)
         await session.commit()
 
-        return await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_members_html(request, draft_id, session, current_user_id)
 
-    @router.patch("/{draft_id}/members/{user_id}", response_class=HTMLResponse)
+    @router.patch("/{draft_id}/members/{member_user_id}", response_class=HTMLResponse)
     async def update_spec_member_role(
         request: Request,
         draft_id: str,
-        user_id: str,
+        member_user_id: str,
         role: Annotated[str, Form()],
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> HTMLResponse:
         """Update a member's role in a spec draft."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            current_user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
 
         result = await session.execute(
             select(SpecDraftMember).where(
                 SpecDraftMember.spec_draft_id == draft_id,
-                SpecDraftMember.user_id == user_id,
+                SpecDraftMember.user_id == member_user_id,
             )
         )
         member = result.scalar_one_or_none()
@@ -1561,25 +1551,25 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             member.role = SpecDraftRole(role)
             await session.commit()
 
-        return await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_members_html(request, draft_id, session, current_user_id)
 
-    @router.delete("/{draft_id}/members/{user_id}", response_class=HTMLResponse)
+    @router.delete("/{draft_id}/members/{member_user_id}", response_class=HTMLResponse)
     async def remove_spec_member(
         request: Request,
         draft_id: str,
-        user_id: str,
+        member_user_id: str,
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> HTMLResponse:
         """Remove a member from a spec draft."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            current_user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
 
         result = await session.execute(
             select(SpecDraftMember).where(
                 SpecDraftMember.spec_draft_id == draft_id,
-                SpecDraftMember.user_id == user_id,
+                SpecDraftMember.user_id == member_user_id,
             )
         )
         member = result.scalar_one_or_none()
@@ -1588,7 +1578,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             await session.delete(member)
             await session.commit()
 
-        return await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_members_html(request, draft_id, session, current_user_id)
 
     @router.delete("/{draft_id}/leave", response_class=HTMLResponse)
     async def leave_spec(
@@ -1598,14 +1588,14 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     ) -> Response:
         """Leave a spec draft as owner (transfer ownership)."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            current_user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return HTMLResponse("<div class='error'>Login required</div>", status_code=401)
 
         # Get draft
         draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
         draft = draft_result.scalar_one_or_none()
-        if not draft or draft.user_id != keycloak_sub:
+        if not draft or draft.user_id != current_user_id:
             return HTMLResponse("<div class='error'>Access denied</div>", status_code=403)
 
         # Check if there's another owner in members
@@ -1620,16 +1610,16 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         owner_members = list(members_result.scalars().all())
 
         if not owner_members:
-            response = await _get_spec_members_html(request, draft_id, session, keycloak_sub)
+            response = await _get_spec_members_html(request, draft_id, session, current_user_id)
             msg = "Cannot leave: assign another owner first."
             response.headers["HX-Trigger"] = (
                 f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
             )
             return response
 
-        # Transfer ownership to the first owner member
+        # Transfer ownership to the first owner member (use User.id, not keycloak_id)
         new_owner = owner_members[0]
-        draft.user_id = new_owner.user.keycloak_id
+        draft.user_id = new_owner.user.id
 
         # Remove the new owner from members (they're now the primary owner)
         await session.delete(new_owner)
@@ -1649,14 +1639,16 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         request: Request,
         draft_id: str,
         session: AsyncSession,
-        keycloak_sub: str,
+        user_id: str,
     ) -> HTMLResponse:
-        """Render the spec comments list partial."""
-        # Get database user ID from keycloak sub
-        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
-        db_user = user_result.scalar_one_or_none()
-        current_user_id = db_user.id if db_user else None
+        """Render the spec comments list partial.
 
+        Args:
+            request: FastAPI request
+            draft_id: Draft ID
+            session: Database session
+            user_id: Database User.id (not keycloak_id)
+        """
         # Get top-level comments (no parent) with nested relationships
         result = await session.execute(
             select(SpecComment)
@@ -1677,7 +1669,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             {
                 "comments": comments,
                 "draft_id": draft_id,
-                "current_user_id": current_user_id,
+                "current_user_id": user_id,
             },
         )
 
@@ -1705,27 +1697,20 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     ) -> Response:
         """Add a comment to a spec draft."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return RedirectResponse(url="/hub/auth/login", status_code=302)
 
-        # Get user from database by keycloak sub
-        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
-        db_user = user_result.scalar_one_or_none()
-
-        if not db_user:
-            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
-
         comment = SpecComment(
             spec_draft_id=draft_id,
-            user_id=db_user.id,
+            user_id=user_id,
             parent_id=parent_id if parent_id else None,
             content=content.strip(),
         )
         session.add(comment)
         await session.commit()
 
-        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_comments_html(request, draft_id, session, user_id)
 
     @router.delete("/{draft_id}/comments/{comment_id}", response_class=HTMLResponse)
     async def delete_spec_comment(
@@ -1736,26 +1721,19 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     ) -> Response:
         """Delete a spec comment (only by owner)."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return RedirectResponse(url="/hub/auth/login", status_code=302)
-
-        # Get user from database
-        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
-        db_user = user_result.scalar_one_or_none()
-
-        if not db_user:
-            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
 
         # Find comment and verify ownership
         result = await session.execute(select(SpecComment).where(SpecComment.id == comment_id))
         comment = result.scalar_one_or_none()
 
-        if comment and comment.user_id == db_user.id:
+        if comment and comment.user_id == user_id:
             await session.delete(comment)
             await session.commit()
 
-        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_comments_html(request, draft_id, session, user_id)
 
     @router.post("/{draft_id}/comments/{comment_id}/react", response_class=HTMLResponse)
     async def react_to_spec_comment(
@@ -1767,22 +1745,15 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     ) -> Response:
         """Add or toggle a reaction on a spec comment."""
         try:
-            keycloak_sub, _ = await get_user_context(request, session)
+            user_id, _ = await get_user_context(request, session)
         except LoginRequiredRedirectError:
             return RedirectResponse(url="/hub/auth/login", status_code=302)
-
-        # Get user from database
-        user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
-        db_user = user_result.scalar_one_or_none()
-
-        if not db_user:
-            return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
 
         # Check for existing reaction
         existing_result = await session.execute(
             select(SpecCommentReaction).where(
                 SpecCommentReaction.comment_id == comment_id,
-                SpecCommentReaction.user_id == db_user.id,
+                SpecCommentReaction.user_id == user_id,
             )
         )
         existing = existing_result.scalar_one_or_none()
@@ -1800,13 +1771,13 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             # Add new reaction
             new_reaction = SpecCommentReaction(
                 comment_id=comment_id,
-                user_id=db_user.id,
+                user_id=user_id,
                 reaction=reaction_type,
             )
             session.add(new_reaction)
 
         await session.commit()
 
-        return await _get_spec_comments_html(request, draft_id, session, keycloak_sub)
+        return await _get_spec_comments_html(request, draft_id, session, user_id)
 
     return router
