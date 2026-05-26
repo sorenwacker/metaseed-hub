@@ -118,7 +118,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         workspace_ids = [w.id for w in workspaces]
         tenant_ids = list({w.tenant_id for w in workspaces})
 
-        # Get user's database ID for membership check (check all tenants user has access to)
+        # Get user's database IDs (may exist in multiple tenants)
         user_result = await session.execute(
             select(User).where(
                 User.keycloak_id == user_id,
@@ -128,17 +128,19 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         db_users = list(user_result.scalars().all())
         db_user_ids = [u.id for u in db_users]
 
-        # Get drafts user owns
-        owned_result = await session.execute(
-            select(SpecDraft)
-            .options(selectinload(SpecDraft.workspace))
-            .where(
-                SpecDraft.user_id == user_id,
-                SpecDraft.workspace_id.in_(workspace_ids),
+        # Get drafts user owns (SpecDraft.user_id is FK to users.id, not keycloak_id)
+        owned_drafts = []
+        if db_user_ids:
+            owned_result = await session.execute(
+                select(SpecDraft)
+                .options(selectinload(SpecDraft.workspace))
+                .where(
+                    SpecDraft.user_id.in_(db_user_ids),
+                    SpecDraft.workspace_id.in_(workspace_ids),
+                )
+                .order_by(SpecDraft.updated_at.desc())
             )
-            .order_by(SpecDraft.updated_at.desc())
-        )
-        owned_drafts = list(owned_result.scalars().all())
+            owned_drafts = list(owned_result.scalars().all())
 
         # Get drafts shared with user
         shared_drafts = []
