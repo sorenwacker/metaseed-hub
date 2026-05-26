@@ -1411,7 +1411,13 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         target_user = result.scalar_one_or_none()
 
         if not target_user:
-            return await _get_spec_members_html(request, draft_id, session)
+            # Return error message - user must log in first
+            response = await _get_spec_members_html(request, draft_id, session)
+            msg = "User not found. They must log in first before you can share."
+            response.headers["HX-Trigger"] = (
+                f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
+            )
+            return response
 
         # Check if already a member
         existing = await session.execute(

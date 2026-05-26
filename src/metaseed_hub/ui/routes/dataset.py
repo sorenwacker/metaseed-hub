@@ -1281,7 +1281,11 @@ async def add_dataset_member(
     target_user = result.scalar_one_or_none()
 
     if not target_user:
-        return await _get_members_html(request, dataset_id, session)
+        # Return error message - user must log in first
+        response = await _get_members_html(request, dataset_id, session)
+        msg = "User not found. They must log in first before you can share."
+        response.headers["HX-Trigger"] = f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
+        return response
 
     # Check if already a member
     existing = await session.execute(
