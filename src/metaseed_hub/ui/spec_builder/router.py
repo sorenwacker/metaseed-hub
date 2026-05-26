@@ -82,10 +82,15 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
 
     router = APIRouter(prefix="/spec-builder", tags=["spec-builder"])
 
-    def render(request: Request, template: str, context: dict[str, Any]) -> Response:
-        """Render template with version info and nav_active included."""
+    async def render(request: Request, template: str, context: dict[str, Any]) -> Response:
+        """Render template with version info, nav_active, and user included."""
+        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+
         context["version_info"] = get_version_info()
         context["nav_active"] = "spec-builder"
+        # Add user to context for navbar
+        if "user" not in context:
+            context["user"] = await get_current_user_from_cookie(request)
         return templates.TemplateResponse(request, template, context)
 
     # =========================================================================
@@ -135,7 +140,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         )
         specs = list(result.scalars().all())
 
-        return render(
+        return await render(
             request,
             "spec_builder/list.html",
             {"drafts": drafts, "specs": specs, "workspaces": workspaces},
@@ -160,7 +165,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             workspace = await get_or_create_default_workspace(session, tenant_id)
             workspaces = [workspace]
 
-        return render(
+        return await render(
             request,
             "spec_builder/new.html",
             {
@@ -235,7 +240,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             workspace = await get_or_create_default_workspace(session, tenant_id)
             workspaces = [workspace]
 
-        return render(
+        return await render(
             request,
             "spec_builder/import.html",
             {
@@ -267,7 +272,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
 
         if not spec_file.filename.endswith((".yaml", ".yml")):
             workspaces = await get_user_workspaces(session, user_id, tenant_id)
-            return render(
+            return await render(
                 request,
                 "spec_builder/import.html",
                 {
@@ -283,7 +288,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             spec = parse_spec_from_yaml(yaml_content)
         except UnicodeDecodeError:
             workspaces = await get_user_workspaces(session, user_id, tenant_id)
-            return render(
+            return await render(
                 request,
                 "spec_builder/import.html",
                 {
@@ -294,7 +299,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             )
         except ValueError as e:
             workspaces = await get_user_workspaces(session, user_id, tenant_id)
-            return render(
+            return await render(
                 request,
                 "spec_builder/import.html",
                 {
@@ -391,7 +396,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
         )
         members = list(members_result.scalars().all())
 
-        return render(
+        return await render(
             request,
             "spec_builder/base.html",
             {
@@ -595,7 +600,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
             SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
         )
 
-        return render(
+        return await render(
             request,
             "spec_builder/view.html",
             {
