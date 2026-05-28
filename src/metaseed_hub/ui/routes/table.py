@@ -248,13 +248,23 @@ async def add_table_row(
     For primitive lists, adds a new empty value to the list.
     For entity lists, creates a new child entity with default values.
     """
+    import logging
+
+    logger = logging.getLogger("metaseed_hub")
+    logger.info(f"add_table_row: parent_node_id={parent_node_id}, field_name={field_name}")
+
     dataset, state = dataset_state
 
     if parent_node_id not in state.nodes_by_id:
+        logger.warning(f"add_table_row: parent_node_id {parent_node_id} not found")
         return HTMLResponse("<tr><td>Parent entity not found</td></tr>")
 
     parent_node = state.nodes_by_id[parent_node_id]
     facade = state.get_or_create_facade()
+
+    if facade is None:
+        logger.error("add_table_row: facade is None")
+        return HTMLResponse("<tr><td>Error: Could not load profile</td></tr>")
 
     # Get the nested entity type from the parent's field info
     try:
