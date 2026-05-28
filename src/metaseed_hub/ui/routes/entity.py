@@ -111,24 +111,28 @@ async def dataset_entity_create(
     values = extract_entity_values(form_data, helper, existing_values)
     logger.debug(f"Final values for create: {values}")
 
-    # Create or update instance
+    # Create or update instance - use model_construct to skip validation
+    # This allows saving entities without all required nested entities
     try:
-        instance = helper.create(**values)
-        if hasattr(instance, "model_dump"):
-            logger.debug(f"Created instance: {instance.model_dump(exclude_none=True)}")
-    except Exception as create_error:
-        # Validation failed - try model_construct to allow saving without all required fields
-        # This enables "save first, add nested entities later" workflow
-        logger.warning(
-            f"Validation failed for {entity_type}, using model_construct: {create_error}"
+        model_class = helper._model
+        instance = model_class.model_construct(**values)
+        logger.debug(f"Created {entity_type} with model_construct")
+    except Exception as e:
+        logger.exception(f"Failed to construct {entity_type}")
+        form_context = build_entity_form_context(state, helper, node_id, parent_id)
+        form_context["values"] = values
+        return render_template(
+            request=request,
+            name="partials/entity_form.html",
+            context={
+                "dataset_id": dataset_id,
+                "entity_type": entity_type,
+                "node_id": node_id,
+                "parent_id": parent_id,
+                "error": str(e),
+                **form_context,
+            },
         )
-        try:
-            model_class = helper._model
-            instance = model_class.model_construct(**values)
-            logger.info(f"Created {entity_type} with model_construct - validation skipped")
-        except Exception as construct_error:
-            logger.error(f"model_construct also failed: {construct_error}")
-            raise create_error  # Re-raise original error
 
     if node_id and node_id in state.nodes_by_id:
         # Update existing node
