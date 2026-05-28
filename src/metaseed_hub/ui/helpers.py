@@ -69,9 +69,6 @@ def add_entity_node(
     return node
 
 
-# Shared dataset state cache - maps dataset_id to AppState
-dataset_states: dict[str, AppState] = {}
-
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
 
 # Fields to check when determining entity labels, in priority order
@@ -696,24 +693,20 @@ def get_tree_data_from_nodes(state: AppState) -> list[dict[str, Any]]:
     return [node_to_dict(n) for n in state.entity_tree]
 
 
-def get_dataset_state(dataset: Dataset, dataset_states: dict[str, AppState]) -> AppState:
-    """Get or create AppState for a dataset, loading from database if needed.
+def get_dataset_state(dataset: Dataset) -> AppState:
+    """Create AppState for a dataset from database.
 
     Args:
         dataset: Dataset model with profile, version, and data fields.
-        dataset_states: Cache dict to store dataset states.
 
     Returns:
         AppState populated with dataset's entity tree.
     """
-    dataset_id = dataset.id
-    # Always reload from database to ensure fresh data
     state = AppState()
     state.profile = dataset.profile
     state.version = dataset.version
     if dataset.data:
         deserialize_tree(state, dataset.data)
-    dataset_states[dataset_id] = state
     return state
 
 
@@ -740,30 +733,7 @@ async def ensure_dataset_facade(
 
     from metaseed_hub.models import SpecDraft
 
-    dataset_id = dataset.id
-
-    # Check cache first - use cached state to preserve in-memory changes
-    # The cache is populated after first load and updated after each save
-    if dataset_id in dataset_states:
-        cached_state = dataset_states[dataset_id]
-        # For draft specs, verify the facade is still valid
-        if dataset.spec_draft_id:
-            if cached_state.facade is not None:
-                logger.debug(f"ensure_dataset_facade: using cached state for draft {dataset_id}")
-                return cached_state
-            # Facade is None, need to reload
-            logger.debug(
-                f"ensure_dataset_facade: cached state has no facade, reloading {dataset_id}"
-            )
-        else:
-            logger.debug(f"ensure_dataset_facade: using cached state for {dataset_id}")
-            return cached_state
-
-    logger.debug(
-        f"ensure_dataset_facade: fresh state for {dataset_id}, draft={dataset.spec_draft_id}"
-    )
-
-    # Create state without deserializing tree yet
+    # Always load fresh from database - no caching
     state = AppState()
     state.profile = dataset.profile
     state.version = dataset.version
@@ -800,7 +770,6 @@ async def ensure_dataset_facade(
         deserialize_tree(state, dataset.data)
         logger.debug(f"Deserialized {len(state.entity_tree)} root nodes for dataset {dataset.id}")
 
-    dataset_states[dataset_id] = state
     return state
 
 

@@ -36,7 +36,6 @@ from metaseed_hub.ui.dependencies import (
 from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
-    dataset_states,
     ensure_dataset_facade,
     get_dataset_state,
     get_tree_data_from_nodes,
@@ -320,7 +319,7 @@ async def dataset_import(
         spec = loader.load_profile(version, profile)
         root_entity = spec.root_entity or "Investigation"
 
-        state = get_dataset_state(dataset, dataset_states)
+        state = get_dataset_state(dataset)
         state.reset()
         state.profile = profile
         state.version = version
@@ -452,7 +451,7 @@ async def dataset_create(
                 spec = loader.load_profile(version, profile)
                 root_entity = spec.root_entity or "Investigation"
 
-                state = get_dataset_state(dataset, dataset_states)
+                state = get_dataset_state(dataset)
                 state.reset()
                 state.profile = profile
                 state.version = version
@@ -502,10 +501,6 @@ async def dataset_delete(
         return response
 
     workspace_id = dataset.workspace_id
-
-    # Clear state cache
-    if dataset_id in dataset_states:
-        del dataset_states[dataset_id]
 
     try:
         # Manually delete related records (in case CASCADE not set in DB)
@@ -605,7 +600,7 @@ async def dataset_load_example(
     root_entity = spec.root_entity or "Investigation"
 
     # Load example into dataset state (append, don't replace)
-    state = get_dataset_state(dataset, dataset_states)
+    state = get_dataset_state(dataset)
     facade = state.get_or_create_facade()
 
     try:
@@ -1862,10 +1857,6 @@ async def restore_dataset_version(
     flag_modified(dataset, "data")
     session.add(dataset)
     await session.commit()
-
-    # Clear cached state
-    if dataset_id in dataset_states:
-        del dataset_states[dataset_id]
 
     # Return redirect to reload page
     response = HTMLResponse(status_code=200)

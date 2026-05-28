@@ -210,20 +210,18 @@ class TestGetDatasetState:
     """Tests for get_dataset_state function."""
 
     def test_creates_new_state(self) -> None:
-        """Creates new state for dataset without cache."""
+        """Creates new state for dataset."""
         dataset = Mock()
         dataset.id = "ds-1"
         dataset.profile = "miappe"
         dataset.version = "1.1"
         dataset.data = None
 
-        cache: dict = {}
-        state = get_dataset_state(dataset, cache)
+        state = get_dataset_state(dataset)
 
         assert state is not None
         assert state.profile == "miappe"
         assert state.version == "1.1"
-        assert "ds-1" in cache
 
     def test_loads_from_data(self) -> None:
         """Loads entity tree from dataset data."""
@@ -245,8 +243,7 @@ class TestGetDatasetState:
             ],
         }
 
-        cache: dict = {}
-        state = get_dataset_state(dataset, cache)
+        state = get_dataset_state(dataset)
 
         # Note: Deserialization requires facade, so tree may be empty
         # This tests that the function runs without error
