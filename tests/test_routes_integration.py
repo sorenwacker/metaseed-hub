@@ -1679,3 +1679,131 @@ class TestDatasetWithDraftSpec:
         facade = state.get_or_create_facade()
         assert facade is not None
         assert hasattr(facade, "Investigation")
+
+
+class TestDeserializeTreeWithValidationErrors:
+    """Tests for deserializing entities that fail validation."""
+
+    @pytest.mark.asyncio
+    async def test_entity_with_missing_required_field_still_shows(self, session: AsyncMock) -> None:
+        """Entities with missing required fields must still appear in the tree.
+
+        When a spec is modified to add a new required field, existing entities
+        that don't have that field should still be displayed so users can edit
+        them and add the missing data.
+        """
+        from uuid import uuid4
+
+        from metaseed_hub.models import (
+            Dataset,
+            SpecDraft,
+            Tenant,
+            User,
+            Workspace,
+        )
+        from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+        # Create tenant and workspace
+        tenant = Tenant(name="Test Tenant", slug="test-val")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create user
+        user = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="user@test.com",
+            display_name="User",
+        )
+        session.add(user)
+        await session.flush()
+
+        # Create spec with a required field that won't be in the saved data
+        spec_data = {
+            "spec": {
+                "name": "test_spec",
+                "display_name": "Test Spec",
+                "version": "1.0",
+                "description": "Spec with required field",
+                "root_entity": "Investigation",
+                "entities": {
+                    "Investigation": {
+                        "description": "An investigation",
+                        "fields": [
+                            {
+                                "name": "unique_id",
+                                "type": "string",
+                                "required": True,
+                                "description": "Unique identifier",
+                            },
+                            {
+                                "name": "principal_investigator",
+                                "type": "string",
+                                "required": True,
+                                "description": "Lead researcher",
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+        spec_draft = SpecDraft(
+            name="Test Spec",
+            user_id=user.id,
+            workspace_id=workspace.id,
+            version="1.0",
+            spec_data=spec_data,
+        )
+        session.add(spec_draft)
+        await session.flush()
+
+        # Create dataset with saved data MISSING the required field
+        dataset = Dataset(
+            name="Dataset with incomplete entity",
+            workspace_id=workspace.id,
+            profile="test_spec",
+            version="1.0",
+            spec_draft_id=spec_draft.id,
+            data={
+                "profile": "test_spec",
+                "version": "1.0",
+                "tree": [
+                    {
+                        "id": "node-123",
+                        "entity_type": "Investigation",
+                        "label": "My Investigation",
+                        "parent_id": None,
+                        "data": {
+                            "unique_id": "INV-001",
+                            # NOTE: principal_investigator is MISSING
+                        },
+                        "children": [],
+                    }
+                ],
+            },
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Load the dataset - entity should still appear even with validation error
+        state = await ensure_dataset_facade(dataset, session)
+
+        # CRITICAL: The entity must be in the tree, not skipped
+        assert len(state.entity_tree) == 1, "Entity with validation error must not be skipped"
+
+        node = state.entity_tree[0]
+        assert node.id == "node-123"
+        assert node.entity_type == "Investigation"
+        assert node.label == "My Investigation"
+
+        # The node should have an instance so it can be edited
+        assert node.instance is not None, "Node must have instance so it can be edited"
