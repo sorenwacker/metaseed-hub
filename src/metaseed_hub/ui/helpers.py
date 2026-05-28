@@ -742,11 +742,22 @@ async def ensure_dataset_facade(
 
     dataset_id = dataset.id
 
-    # Check cache first - but only for built-in profiles
-    # Draft specs need fresh loads to ensure facade is properly configured
-    if dataset_id in dataset_states and not dataset.spec_draft_id:
-        logger.debug(f"ensure_dataset_facade: returning cached state for {dataset_id}")
-        return dataset_states[dataset_id]
+    # Check cache first - use cached state to preserve in-memory changes
+    # The cache is populated after first load and updated after each save
+    if dataset_id in dataset_states:
+        cached_state = dataset_states[dataset_id]
+        # For draft specs, verify the facade is still valid
+        if dataset.spec_draft_id:
+            if cached_state.facade is not None:
+                logger.debug(f"ensure_dataset_facade: using cached state for draft {dataset_id}")
+                return cached_state
+            # Facade is None, need to reload
+            logger.debug(
+                f"ensure_dataset_facade: cached state has no facade, reloading {dataset_id}"
+            )
+        else:
+            logger.debug(f"ensure_dataset_facade: using cached state for {dataset_id}")
+            return cached_state
 
     logger.debug(
         f"ensure_dataset_facade: fresh state for {dataset_id}, draft={dataset.spec_draft_id}"
