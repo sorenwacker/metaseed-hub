@@ -130,64 +130,43 @@ async def dataset_entity_create(
             logger.error(f"model_construct also failed: {construct_error}")
             raise create_error  # Re-raise original error
 
-    try:
-        if node_id and node_id in state.nodes_by_id:
-            # Update existing node
-            node = state.nodes_by_id[node_id]
-            node.instance = instance
-            # Update label from instance using helper's get_label method
-            label = helper.get_label(instance)
-            if label:
-                node.label = label
-            success_msg = f"{entity_type} updated successfully."
-        else:
-            # Create new node
-            node = state.add_node(entity_type, instance, parent_id=parent_id)
-            node_id = node.id
-            success_msg = f"{entity_type} created successfully."
+    if node_id and node_id in state.nodes_by_id:
+        # Update existing node
+        node = state.nodes_by_id[node_id]
+        node.instance = instance
+        # Update label from instance using helper's get_label method
+        label = helper.get_label(instance)
+        if label:
+            node.label = label
+        success_msg = f"{entity_type} updated successfully."
+    else:
+        # Create new node
+        node = state.add_node(entity_type, instance, parent_id=parent_id)
+        node_id = node.id
+        success_msg = f"{entity_type} created successfully."
 
-        # Save to database
-        await save_dataset_state(session, dataset, state)
+    # Save to database
+    await save_dataset_state(session, dataset, state)
 
-        # Build form context with updated values from saved instance
-        form_context = build_entity_form_context(state, helper, node_id, parent_id)
-        # Override values with the freshly saved instance data
-        form_context["values"] = instance.model_dump(exclude_none=True)
+    # Build form context with updated values from saved instance
+    form_context = build_entity_form_context(state, helper, node_id, parent_id)
+    # Override values with the freshly saved instance data
+    form_context["values"] = values  # Use submitted values since model_dump may fail
 
-        response = render_template(
-            request=request,
-            name="partials/entity_form.html",
-            context={
-                "dataset_id": dataset_id,
-                "entity_type": entity_type,
-                "node_id": node_id,
-                "parent_id": parent_id,
-                "success": success_msg,
-                **form_context,
-            },
-        )
-        response.headers["HX-Trigger"] = "entityChanged"
-        return response
-
-    except Exception as e:
-        logger.exception(f"Error creating/updating {entity_type}")
-
-        # Build form context and preserve submitted values for error display
-        form_context = build_entity_form_context(state, helper, node_id, parent_id)
-        form_context["values"] = values  # Keep submitted values for user to correct
-
-        return render_template(
-            request=request,
-            name="partials/entity_form.html",
-            context={
-                "dataset_id": dataset_id,
-                "entity_type": entity_type,
-                "node_id": node_id,
-                "parent_id": parent_id,
-                "error": str(e),
-                **form_context,
-            },
-        )
+    response = render_template(
+        request=request,
+        name="partials/entity_form.html",
+        context={
+            "dataset_id": dataset_id,
+            "entity_type": entity_type,
+            "node_id": node_id,
+            "parent_id": parent_id,
+            "success": success_msg,
+            **form_context,
+        },
+    )
+    response.headers["HX-Trigger"] = "entityChanged"
+    return response
 
 
 @router.get("/entity/{node_id}", response_class=HTMLResponse)
