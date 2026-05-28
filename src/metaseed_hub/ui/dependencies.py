@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, Tenant, Workspace
+from metaseed_hub.models import Dataset, DatasetMember, Tenant, User, Workspace
 from metaseed_hub.ui.helpers import dataset_states, get_dataset_state, validate_csrf_token
 
 if TYPE_CHECKING:
@@ -170,10 +170,11 @@ async def get_dataset_for_user(
     session: AsyncSession,
     user: TokenUser,
 ) -> Dataset:
-    """Get dataset if user has access through workspace membership.
+    """Get dataset if user has access through workspace or sharing.
 
-    A user has access to a dataset if their tenant owns the workspace
-    that contains the dataset.
+    A user has access to a dataset if:
+    1. Their tenant owns the workspace that contains the dataset, OR
+    2. They have been granted access via DatasetMember
 
     Args:
         dataset_id: ID of the dataset to retrieve.
@@ -192,10 +193,28 @@ async def get_dataset_for_user(
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Verify user has access to the workspace
-    await verify_workspace_access(dataset.workspace_id, session, user)
+    # First, try workspace access (owner)
+    try:
+        await verify_workspace_access(dataset.workspace_id, session, user)
+        return dataset
+    except HTTPException:
+        pass  # Not workspace owner, check DatasetMember
 
-    return dataset
+    # Check if user has access via DatasetMember
+    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+    db_user = db_user_result.scalar_one_or_none()
+
+    if db_user:
+        member_result = await session.execute(
+            select(DatasetMember).where(
+                DatasetMember.dataset_id == dataset_id,
+                DatasetMember.user_id == db_user.id,
+            )
+        )
+        if member_result.scalar_one_or_none():
+            return dataset
+
+    raise HTTPException(status_code=403, detail="Access denied")
 
 
 # Type aliases for cleaner route signatures

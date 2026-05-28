@@ -47,7 +47,7 @@ class TestAuthorizationIntegration:
 
     @pytest.mark.asyncio
     async def test_get_dataset_for_user_verifies_access(self) -> None:
-        """get_dataset_for_user calls verify_workspace_access."""
+        """get_dataset_for_user denies access when user has no access."""
         from metaseed_hub.ui.dependencies import get_dataset_for_user
 
         # Mock dataset
@@ -55,22 +55,28 @@ class TestAuthorizationIntegration:
         dataset.id = "ds-1"
         dataset.workspace_id = "ws-1"
 
-        # Mock session that returns dataset
+        # Mock session that returns:
+        # 1. dataset (first query for Dataset)
+        # 2. None (workspace not found for workspace access check)
+        # 3. None (user not found for DatasetMember check)
         session = AsyncMock()
-        result_mock = Mock()
-        result_mock.scalar_one_or_none.return_value = dataset
-        session.execute.return_value = result_mock
+        result_mocks = [
+            Mock(scalar_one_or_none=Mock(return_value=dataset)),  # Dataset query
+            Mock(scalar_one_or_none=Mock(return_value=None)),  # Workspace query
+            Mock(scalar_one_or_none=Mock(return_value=None)),  # User query
+        ]
+        session.execute.side_effect = result_mocks
 
         # Mock user
         user = Mock()
         user.keycloak_id = "user12345678"
 
-        # This will fail because verify_workspace_access is called
-        # and the workspace won't be found
-        with pytest.raises(HTTPException):
+        # This will fail because user has no workspace access
+        # and no DatasetMember record (user lookup returns None)
+        with pytest.raises(HTTPException) as exc_info:
             await get_dataset_for_user("ds-1", session, user)
 
-        # It should try to verify workspace access
+        assert exc_info.value.status_code == 403
         assert session.execute.called
 
     @pytest.mark.asyncio
@@ -1264,3 +1270,213 @@ class TestSpecRBAC:
         mem = result.scalar_one()
 
         assert mem.role == SpecDraftRole.EDITOR
+
+
+class TestDatasetAccessViaSharing:
+    """Tests for dataset access via DatasetMember (sharing).
+
+    Uses real database session to test get_dataset_for_user function.
+    """
+
+    @pytest.mark.asyncio
+    async def test_shared_user_can_access_dataset(self, session: AsyncMock) -> None:
+        """User with DatasetMember record can access shared dataset."""
+        from uuid import uuid4
+
+        from metaseed_hub.auth import TokenUser
+        from metaseed_hub.models import (
+            Dataset,
+            DatasetMember,
+            DatasetRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
+
+        # Create owner's tenant and workspace
+        owner_tenant = Tenant(name="Owner Tenant", slug="owner-te")
+        session.add(owner_tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Owner Workspace",
+            tenant_id=owner_tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create viewer in a DIFFERENT tenant (simulates cross-tenant sharing)
+        viewer_tenant = Tenant(name="Viewer Tenant", slug="viewer-t")
+        session.add(viewer_tenant)
+        await session.flush()
+
+        viewer_keycloak_id = str(uuid4())
+        viewer = User(
+            keycloak_id=viewer_keycloak_id,
+            tenant_id=viewer_tenant.id,
+            email="viewer@other.com",
+            display_name="Viewer",
+        )
+        session.add(viewer)
+        await session.flush()
+
+        # Create dataset in owner's workspace
+        dataset = Dataset(
+            name="Shared Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.flush()
+
+        # Share dataset with viewer via DatasetMember
+        membership = DatasetMember(
+            dataset_id=dataset.id,
+            user_id=viewer.id,
+            role=DatasetRole.VIEWER,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Create TokenUser for the viewer (as returned by auth)
+        token_user = TokenUser(
+            sub=viewer_keycloak_id,
+            email="viewer@other.com",
+            name="Viewer",
+            roles=[],
+        )
+
+        # Viewer should be able to access the dataset via DatasetMember
+        result = await get_dataset_for_user(dataset.id, session, token_user)
+        assert result.id == dataset.id
+        assert result.name == "Shared Dataset"
+
+    @pytest.mark.asyncio
+    async def test_unshared_user_denied_access(self, session: AsyncMock) -> None:
+        """User without workspace access or DatasetMember is denied."""
+        from uuid import uuid4
+
+        from metaseed_hub.auth import TokenUser
+        from metaseed_hub.models import (
+            Dataset,
+            Tenant,
+            User,
+            Workspace,
+        )
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
+
+        # Create owner's tenant and workspace
+        owner_tenant = Tenant(name="Owner Tenant", slug="owner-t2")
+        session.add(owner_tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Owner Workspace",
+            tenant_id=owner_tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create unrelated user in a different tenant (no membership)
+        unrelated_tenant = Tenant(name="Unrelated Tenant", slug="unrela2")
+        session.add(unrelated_tenant)
+        await session.flush()
+
+        unrelated_keycloak_id = str(uuid4())
+        unrelated_user = User(
+            keycloak_id=unrelated_keycloak_id,
+            tenant_id=unrelated_tenant.id,
+            email="unrelated@other.com",
+            display_name="Unrelated",
+        )
+        session.add(unrelated_user)
+        await session.flush()
+
+        # Create dataset in owner's workspace (NOT shared with unrelated_user)
+        dataset = Dataset(
+            name="Private Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Create TokenUser for the unrelated user
+        token_user = TokenUser(
+            sub=unrelated_keycloak_id,
+            email="unrelated@other.com",
+            name="Unrelated",
+            roles=[],
+        )
+
+        # Unrelated user should be denied access
+        with pytest.raises(HTTPException) as exc_info:
+            await get_dataset_for_user(dataset.id, session, token_user)
+
+        assert exc_info.value.status_code == 403
+        assert "Access denied" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_workspace_owner_can_access_dataset(self, session: AsyncMock) -> None:
+        """User who owns workspace can access datasets in it."""
+        from uuid import uuid4
+
+        from metaseed_hub.auth import TokenUser
+        from metaseed_hub.models import (
+            Dataset,
+            Tenant,
+            User,
+            Workspace,
+        )
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
+
+        # Create owner's tenant (slug must match first 8 chars of keycloak_id)
+        owner_keycloak_id = "owner123" + str(uuid4())[8:]
+        owner_tenant = Tenant(name="Owner Tenant", slug=owner_keycloak_id[:8])
+        session.add(owner_tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Owner Workspace",
+            tenant_id=owner_tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        owner = User(
+            keycloak_id=owner_keycloak_id,
+            tenant_id=owner_tenant.id,
+            email="owner@example.com",
+            display_name="Owner",
+        )
+        session.add(owner)
+        await session.flush()
+
+        # Create dataset in owner's workspace
+        dataset = Dataset(
+            name="My Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Create TokenUser for the owner
+        token_user = TokenUser(
+            sub=owner_keycloak_id,
+            email="owner@example.com",
+            name="Owner",
+            roles=[],
+        )
+
+        # Owner should be able to access via workspace ownership
+        result = await get_dataset_for_user(dataset.id, session, token_user)
+        assert result.id == dataset.id
+        assert result.name == "My Dataset"
