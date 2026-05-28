@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, SpecDraft, Tenant, Workspace
+from metaseed_hub.models import Dataset, SpecDraft, SpecDraftMember, Tenant, User, Workspace
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     OptionalUser,
@@ -40,6 +40,7 @@ from metaseed_hub.ui.routes import (
     init_dataset_templates,
     init_entity_templates,
     init_workspace_templates,
+    ontology_router,
     table_router,
     workspace_router,
 )
@@ -233,6 +234,7 @@ def create_hub_app() -> FastAPI:
     app.include_router(dataset_router)
     app.include_router(entity_router)
     app.include_router(table_router)
+    app.include_router(ontology_router)
 
     # Add spec builder routes
     spec_builder_router = create_spec_builder_router(templates)
@@ -306,6 +308,12 @@ def create_hub_app() -> FastAPI:
         # Get or create tenant for user
         tenant = await get_or_create_tenant(session, user)
 
+        # Get the database User record for shared spec queries
+        db_user_result = await session.execute(
+            select(User).where(User.keycloak_id == user.keycloak_id)
+        )
+        db_user = db_user_result.scalar_one_or_none()
+
         # Get user's workspaces
         result = await session.execute(select(Workspace).where(Workspace.tenant_id == tenant.id))
         workspaces = list(result.scalars().all())
@@ -321,15 +329,34 @@ def create_hub_app() -> FastAPI:
             )
             datasets = list(ds_result.scalars().all())
 
-        # Get all spec drafts across user's workspaces
-        specs: list[SpecDraft] = []
+        # Get owned spec drafts from user's workspaces
+        owned_specs: list[SpecDraft] = []
         if workspace_ids:
             spec_result = await session.execute(
                 select(SpecDraft)
                 .where(SpecDraft.workspace_id.in_(workspace_ids))
                 .order_by(SpecDraft.updated_at.desc())
             )
-            specs = list(spec_result.scalars().all())
+            owned_specs = list(spec_result.scalars().all())
+
+        # Get specs shared with this user via SpecDraftMember
+        shared_specs: list[SpecDraft] = []
+        if db_user:
+            shared_result = await session.execute(
+                select(SpecDraft)
+                .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+                .where(SpecDraftMember.user_id == db_user.id)
+                .order_by(SpecDraft.updated_at.desc())
+            )
+            shared_specs = list(shared_result.scalars().all())
+
+        # Combine and deduplicate specs
+        seen_ids: set[str] = set()
+        specs: list[SpecDraft] = []
+        for spec in owned_specs + shared_specs:
+            if spec.id not in seen_ids:
+                seen_ids.add(spec.id)
+                specs.append(spec)
 
         return render_template(
             request=request,

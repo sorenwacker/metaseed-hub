@@ -6233,3 +6233,77 @@ a.start-option-card:hover {
     gap: var(--space-sm);
     margin-top: var(--space-md);
 }
+
+/* Ontology Autocomplete */
+.ontology-autocomplete-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.ontology-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid var(--clr-border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    z-index: 1000;
+}
+
+.ontology-autocomplete-dropdown.hidden {
+    display: none;
+}
+
+.ontology-option {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--clr-border-light);
+    transition: background var(--transition-fast);
+}
+
+.ontology-option:last-child {
+    border-bottom: none;
+}
+
+.ontology-option:hover,
+.ontology-option.highlighted {
+    background: var(--clr-success-bg);
+}
+
+.ontology-option-label {
+    font-weight: 500;
+    color: var(--clr-ink);
+    flex: 1 0 auto;
+}
+
+.ontology-option-id {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--clr-moss);
+    background: var(--clr-paper);
+    padding: 0.1rem 0.3rem;
+    border-radius: var(--radius-sm);
+}
+
+.ontology-option-source {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ontology-no-results {
+    padding: var(--space-md);
+    color: var(--clr-ink-light);
+    font-style: italic;
+    text-align: center;
+}

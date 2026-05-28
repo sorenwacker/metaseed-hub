@@ -48,9 +48,11 @@
         </div>
         <div class="form-group compact">
             <label class="form-label">Ontology</label>
-            <input type="text" name="ontology" class="form-input" value="{{ spec.ontology or '' }}" placeholder="PPEO"
+            <input type="text" name="ontology" class="form-input" value="{{ spec.ontology or '' }}"
+                   placeholder="Search ontologies..."
+                   data-ontology-autocomplete
                    hx-post="/hub/spec-builder/{{ draft_id }}/profile-metadata"
-                   hx-trigger="change, keyup delay:500ms changed"
+                   hx-trigger="change"
                    hx-target="#profile-metadata-panel"
                    hx-include="#profile-metadata-form">
         </div>

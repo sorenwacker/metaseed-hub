@@ -813,6 +813,186 @@ window.SpecBuilder = (function() {
     };
 })();
 
+// =========================================================================
+// Ontology Autocomplete
+// =========================================================================
+
+window.OntologyAutocomplete = (function() {
+    'use strict';
+
+    var DEBOUNCE_MS = 300;
+    var MIN_QUERY_LENGTH = 2;
+    var activeRequest = null;
+    var debounceTimer = null;
+
+    function init() {
+        document.querySelectorAll('[data-ontology-autocomplete]').forEach(attachAutocomplete);
+
+        // Re-attach after HTMX swaps
+        document.body.addEventListener('htmx:afterSwap', function(e) {
+            e.detail.elt.querySelectorAll('[data-ontology-autocomplete]').forEach(attachAutocomplete);
+        });
+    }
+
+    function attachAutocomplete(input) {
+        if (input.dataset.autocompleteAttached) return;
+        input.dataset.autocompleteAttached = 'true';
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'ontology-autocomplete-wrapper';
+        wrapper.style.position = 'relative';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+
+        var dropdown = document.createElement('div');
+        dropdown.className = 'ontology-autocomplete-dropdown hidden';
+        wrapper.appendChild(dropdown);
+
+        input.addEventListener('input', function() {
+            handleInput(input, dropdown);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            handleKeydown(e, input, dropdown);
+        });
+
+        input.addEventListener('blur', function() {
+            setTimeout(function() { hideDropdown(dropdown); }, 200);
+        });
+
+        dropdown.addEventListener('mousedown', function(e) {
+            if (e.target.classList.contains('ontology-option')) {
+                selectOption(input, dropdown, e.target);
+            }
+        });
+    }
+
+    function handleInput(input, dropdown) {
+        var query = input.value.trim();
+
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (activeRequest) activeRequest.abort();
+
+        if (query.length < MIN_QUERY_LENGTH) {
+            hideDropdown(dropdown);
+            return;
+        }
+
+        debounceTimer = setTimeout(function() {
+            fetchSuggestions(query, input, dropdown);
+        }, DEBOUNCE_MS);
+    }
+
+    function fetchSuggestions(query, input, dropdown) {
+        var ontologyFilter = input.dataset.ontologyFilter || '';
+        var url = '/hub/api/ontology/suggest?q=' + encodeURIComponent(query);
+        if (ontologyFilter) {
+            url += '&ontology=' + encodeURIComponent(ontologyFilter);
+        }
+
+        var controller = new AbortController();
+        activeRequest = controller;
+
+        fetch(url, { signal: controller.signal })
+            .then(function(response) {
+                if (!response.ok) throw new Error('OLS request failed');
+                return response.json();
+            })
+            .then(function(data) {
+                renderDropdown(data, input, dropdown);
+            })
+            .catch(function(err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Ontology autocomplete error:', err);
+                    hideDropdown(dropdown);
+                }
+            })
+            .finally(function() {
+                activeRequest = null;
+            });
+    }
+
+    function renderDropdown(data, input, dropdown) {
+        var suggestions = data.suggestions || [];
+
+        if (suggestions.length === 0) {
+            dropdown.innerHTML = '<div class="ontology-no-results">No matching terms found</div>';
+            showDropdown(dropdown);
+            return;
+        }
+
+        var html = suggestions.map(function(s, idx) {
+            var label = escapeHtml(s.label || 'Unknown');
+            var id = escapeHtml(s.id || '');
+            var ontology = escapeHtml(s.ontology || '');
+            return '<div class="ontology-option" data-value="' + id + '" data-index="' + idx + '">' +
+                   '<span class="ontology-option-label">' + label + '</span>' +
+                   '<span class="ontology-option-id">' + id + '</span>' +
+                   '<span class="ontology-option-source">' + ontology + '</span>' +
+                   '</div>';
+        }).join('');
+
+        dropdown.innerHTML = html;
+        showDropdown(dropdown);
+    }
+
+    function handleKeydown(e, input, dropdown) {
+        var options = dropdown.querySelectorAll('.ontology-option');
+        var current = dropdown.querySelector('.ontology-option.highlighted');
+        var currentIdx = current ? parseInt(current.dataset.index) : -1;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            var nextIdx = Math.min(currentIdx + 1, options.length - 1);
+            highlightOption(options, nextIdx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            var prevIdx = Math.max(currentIdx - 1, 0);
+            highlightOption(options, prevIdx);
+        } else if (e.key === 'Enter' && current) {
+            e.preventDefault();
+            selectOption(input, dropdown, current);
+        } else if (e.key === 'Escape') {
+            hideDropdown(dropdown);
+        }
+    }
+
+    function highlightOption(options, idx) {
+        options.forEach(function(opt) { opt.classList.remove('highlighted'); });
+        if (options[idx]) {
+            options[idx].classList.add('highlighted');
+            options[idx].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function selectOption(input, dropdown, option) {
+        input.value = option.dataset.value;
+        hideDropdown(dropdown);
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function showDropdown(dropdown) {
+        dropdown.classList.remove('hidden');
+    }
+
+    function hideDropdown(dropdown) {
+        dropdown.classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState !== 'loading') {
+        setTimeout(init, 50);
+    }
+
+    return { init: init, attachAutocomplete: attachAutocomplete };
+})();
+
 // Expose functions globally for onclick handlers in HTML
 var autoLayout = SpecBuilder.autoLayout;
 var showPreview = SpecBuilder.showPreview;

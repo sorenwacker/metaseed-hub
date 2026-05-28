@@ -53,12 +53,13 @@
                 </div>
                 <div class="form-row-2">
                     <div class="form-group">
-                        <label class="form-label">Ontology</label>
+                        <label class="form-label">Ontology Term</label>
                         <input type="text"
                                name="ontology_term"
                                class="form-input"
                                value="{{ field.ontology_term or '' }}"
-                               placeholder="MIAPPE:DM-1">
+                               placeholder="Search ontology terms..."
+                               data-ontology-autocomplete>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Unique Within</label>
