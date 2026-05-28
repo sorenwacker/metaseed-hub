@@ -719,8 +719,7 @@ async def ensure_dataset_facade(
                 )
         except Exception as e:
             logger.error(f"Failed to load spec for dataset {dataset.id}: {e}")
-            # Re-raise so the caller can handle the error properly
-            raise
+            # Don't re-raise - let downstream code handle missing facade
 
     # NOW deserialize tree (which requires facade)
     if dataset.data:
