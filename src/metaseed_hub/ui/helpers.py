@@ -89,9 +89,17 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         data: Dictionary loaded from database JSONB.
     """
     if not data or "tree" not in data:
+        logger.debug(
+            f"deserialize_tree: no tree in data, keys={list(data.keys()) if data else 'None'}"
+        )
         return
 
     facade = state.get_or_create_facade()
+    if facade is None:
+        logger.error("deserialize_tree: facade is None, cannot deserialize")
+        return
+
+    logger.debug(f"deserialize_tree: facade entities={facade.entities}")
 
     def deserialize_node(
         node_data: dict[str, Any],
@@ -99,11 +107,13 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
     ) -> TreeNode | None:
         entity_type = node_data.get("entity_type")
         if not entity_type:
+            logger.warning("deserialize_node: no entity_type in node_data")
             return None
 
         try:
             helper = getattr(facade, entity_type)
         except AttributeError:
+            logger.warning(f"deserialize_node: entity_type '{entity_type}' not in facade")
             return None
 
         # Create instance from stored data
@@ -112,19 +122,18 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
         try:
             instance = helper.create(**instance_data)
         except Exception as e:
-            logger.warning(
-                f"Failed to create {entity_type} from stored data: {e}\n"
-                f"Data keys: {list(instance_data.keys())}"
-            )
+            logger.warning(f"Validation failed for {entity_type}, using model_construct: {e}")
             # Try creating with validation disabled by using model_construct
             try:
                 model_class = helper._model
                 instance = model_class.model_construct(**instance_data)
-                logger.info(f"Created {entity_type} with model_construct (validation skipped)")
+                logger.info(f"Created {entity_type} with model_construct - data preserved")
             except Exception as e2:
-                logger.warning(f"Failed to construct {entity_type}: {e2}")
-                # Still create the node without an instance so it's visible
+                logger.error(f"model_construct also failed for {entity_type}: {e2}")
                 instance = None
+
+        if instance is None:
+            logger.error(f"No instance created for {entity_type} - node will have no data")
 
         node = TreeNode(
             id=node_data.get("id", ""),
