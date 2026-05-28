@@ -334,9 +334,22 @@ class EntityService:
             model_class = helper._model
             instance = model_class(**values)
         except ValidationError as e:
-            # Extract validation error messages
+            # Extract validation error messages, but skip "Field required" for
+            # nested fields that have SOME data (user may be filling in progressively)
             for error in e.errors():
                 field_path = ".".join(str(loc) for loc in error["loc"])
+                error_type = error.get("type", "")
+                field_name = error["loc"][0] if error["loc"] else ""
+
+                # Skip "missing" errors for nested fields that have partial data
+                if error_type == "missing" and field_name in values:
+                    field_value = values.get(field_name)
+                    # If field has some data (dict with values, non-empty list), skip warning
+                    if isinstance(field_value, dict) and field_value:
+                        continue
+                    if isinstance(field_value, list) and field_value:
+                        continue
+
                 validation_errors.append(f"{field_path}: {error['msg']}")
 
             # Fall back to model_construct (skips validation)
