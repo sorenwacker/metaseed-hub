@@ -50,11 +50,11 @@ def extract_entity_values(
     values: dict[str, Any] = {}
 
     # Start with existing values if provided (for updates)
+    # This preserves both simple fields and nested fields (list/entity types)
+    # because nested fields are edited separately via inline table routes
     if existing_values:
         for field_name in helper.all_fields:
-            info = helper.field_info(field_name)
-            # Only copy non-nested existing values
-            if info.get("type") not in ("list", "entity") and field_name in existing_values:
+            if field_name in existing_values:
                 values[field_name] = existing_values[field_name]
 
     # Override with form values
