@@ -1480,3 +1480,202 @@ class TestDatasetAccessViaSharing:
         result = await get_dataset_for_user(dataset.id, session, token_user)
         assert result.id == dataset.id
         assert result.name == "My Dataset"
+
+
+class TestDatasetWithDraftSpec:
+    """Tests for datasets using custom draft specs stored in database."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_dataset_facade_loads_draft_spec(self, session: AsyncMock) -> None:
+        """ensure_dataset_facade loads spec from database for datasets with spec_draft_id.
+
+        This tests the fix for "add row" failing with 500 error when datasets use
+        custom specs stored in the database instead of built-in profiles.
+        The SpecLoader only knows built-in profiles, so we must load the spec
+        from the SpecDraft table and inject it into the facade.
+        """
+        from uuid import uuid4
+
+        from metaseed_hub.models import (
+            Dataset,
+            SpecDraft,
+            Tenant,
+            User,
+            Workspace,
+        )
+        from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+        # Create tenant and workspace
+        tenant = Tenant(name="Test Tenant", slug="test-dfs")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create user
+        user = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="user@test.com",
+            display_name="User",
+        )
+        session.add(user)
+        await session.flush()
+
+        # Create a custom spec draft with a complete ProfileSpec structure
+        # Note: EntityDefSpec (used in entities dict) only has description, fields, example
+        # (no name/version - those come from the profile level)
+        spec_data = {
+            "spec": {
+                "name": "custom_spec",
+                "display_name": "Custom Spec",
+                "version": "1.0",
+                "description": "A custom spec for testing",
+                "root_entity": "Investigation",
+                "entities": {
+                    "Investigation": {
+                        "description": "A research investigation",
+                        "fields": [
+                            {
+                                "name": "unique_id",
+                                "type": "string",
+                                "required": True,
+                                "description": "Unique identifier",
+                            },
+                            {
+                                "name": "title",
+                                "type": "string",
+                                "required": True,
+                                "description": "Investigation title",
+                            },
+                        ],
+                    },
+                    "Study": {
+                        "description": "A study within an investigation",
+                        "fields": [
+                            {
+                                "name": "unique_id",
+                                "type": "string",
+                                "required": True,
+                                "description": "Unique identifier",
+                            },
+                            {
+                                "name": "investigation_id",
+                                "type": "string",
+                                "required": True,
+                                "description": "Parent investigation ID",
+                            },
+                            {
+                                "name": "title",
+                                "type": "string",
+                                "required": False,
+                                "description": "Study title",
+                            },
+                        ],
+                    },
+                },
+            }
+        }
+
+        spec_draft = SpecDraft(
+            name="Custom Spec",
+            user_id=user.id,
+            workspace_id=workspace.id,
+            version="1.0",
+            spec_data=spec_data,
+        )
+        session.add(spec_draft)
+        await session.flush()
+
+        # Create dataset that references the draft spec
+        dataset = Dataset(
+            name="Dataset with Custom Spec",
+            workspace_id=workspace.id,
+            profile="custom_spec",
+            version="1.0",
+            spec_draft_id=spec_draft.id,
+            data={
+                "profile": "custom_spec",
+                "version": "1.0",
+                "tree": [],
+            },
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Call ensure_dataset_facade - this should load the spec from database
+        state = await ensure_dataset_facade(dataset, session)
+
+        # Verify state has the correct profile
+        assert state.profile == "custom_spec"
+        assert state.version == "1.0"
+
+        # Verify facade was created and has the correct entity types
+        facade = state.get_or_create_facade()
+        assert facade is not None
+
+        # Check that the facade has helpers for the entities in the spec
+        assert hasattr(facade, "Investigation")
+        assert hasattr(facade, "Study")
+
+        # Verify we can create entity instances using the facade
+        investigation = facade.Investigation.create(
+            unique_id="INV-001",
+            title="Test Investigation",
+        )
+        assert investigation is not None
+
+    @pytest.mark.asyncio
+    async def test_ensure_dataset_facade_falls_back_to_builtin(self, session: AsyncMock) -> None:
+        """ensure_dataset_facade works for built-in profiles without spec_draft_id."""
+        from metaseed_hub.models import (
+            Dataset,
+            Tenant,
+            Workspace,
+        )
+        from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+        # Create tenant and workspace
+        tenant = Tenant(name="Test Tenant", slug="test-fb")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create dataset using built-in miappe profile (no spec_draft_id)
+        dataset = Dataset(
+            name="MIAPPE Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+            data={
+                "profile": "miappe",
+                "version": "1.2",
+                "tree": [],
+            },
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Call ensure_dataset_facade
+        state = await ensure_dataset_facade(dataset, session)
+
+        # Verify state has the correct profile
+        assert state.profile == "miappe"
+
+        # Verify facade was created for built-in profile
+        facade = state.get_or_create_facade()
+        assert facade is not None
+        assert hasattr(facade, "Investigation")

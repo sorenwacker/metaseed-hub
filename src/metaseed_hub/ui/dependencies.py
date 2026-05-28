@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, DatasetMember, Tenant, User, Workspace
-from metaseed_hub.ui.helpers import dataset_states, get_dataset_state, validate_csrf_token
+from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
 
 if TYPE_CHECKING:
     from metaseed.ui.state import AppState
@@ -280,6 +280,7 @@ async def get_dataset_state_for_mutation(
         )
 
     # Get or create AppState for the dataset
-    state = get_dataset_state(dataset, dataset_states)
+    # Use ensure_dataset_facade to properly load specs from database for draft specs
+    state = await ensure_dataset_facade(dataset, session)
 
     return dataset, state
