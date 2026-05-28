@@ -709,3 +709,118 @@ class TestSpecDraftSharing:
 
         assert len(all_specs) == 1, "Demo should see 1 spec total on home page"
         assert all_specs[0].name == "Alice's Shared Spec"
+
+    @pytest.mark.asyncio
+    async def test_home_page_shows_shared_datasets(self, session: AsyncMock) -> None:
+        """Home page query includes datasets shared via DatasetMember.
+
+        This tests the fix for shared datasets not appearing on the home page.
+        The home page must query both:
+        1. Datasets in user's workspaces (owned)
+        2. Datasets shared with user via DatasetMember
+        """
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            Dataset,
+            DatasetMember,
+            DatasetRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create two tenants (simulating different users/orgs)
+        tenant_alice = Tenant(name="Alice Tenant", slug="alice-t")
+        tenant_demo = Tenant(name="Demo Tenant", slug="demo-t")
+        session.add(tenant_alice)
+        session.add(tenant_demo)
+        await session.flush()
+
+        # Create workspaces for each tenant
+        ws_alice = Workspace(
+            name="Alice Workspace",
+            tenant_id=tenant_alice.id,
+            description="Alice's workspace",
+        )
+        ws_demo = Workspace(
+            name="Demo Workspace",
+            tenant_id=tenant_demo.id,
+            description="Demo's workspace",
+        )
+        session.add(ws_alice)
+        session.add(ws_demo)
+        await session.flush()
+
+        # Create users
+        alice = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant_alice.id,
+            email="alice@example.com",
+            display_name="Alice",
+        )
+        demo = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant_demo.id,
+            email="demo@example.com",
+            display_name="Demo",
+        )
+        session.add(alice)
+        session.add(demo)
+        await session.flush()
+
+        # Alice creates a dataset in her workspace
+        alice_dataset = Dataset(
+            name="Alice's Shared Dataset",
+            workspace_id=ws_alice.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(alice_dataset)
+        await session.flush()
+
+        # Alice shares her dataset with Demo as VIEWER
+        membership = DatasetMember(
+            dataset_id=alice_dataset.id,
+            user_id=demo.id,
+            role=DatasetRole.VIEWER,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Simulate home page query for Demo user
+        # Step 1: Get Demo's workspaces (only ws_demo)
+        demo_workspace_ids = [ws_demo.id]
+
+        # Step 2: Query datasets from Demo's workspaces (should be empty)
+        result = await session.execute(
+            select(Dataset).where(
+                Dataset.workspace_id.in_(demo_workspace_ids),
+                Dataset.deleted_at.is_(None),
+            )
+        )
+        owned_datasets = list(result.scalars().all())
+        assert len(owned_datasets) == 0, "Demo has no datasets in own workspace"
+
+        # Step 3: Query datasets shared with Demo via DatasetMember
+        result = await session.execute(
+            select(Dataset)
+            .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
+            .where(DatasetMember.user_id == demo.id, Dataset.deleted_at.is_(None))
+        )
+        shared_datasets = list(result.scalars().all())
+        assert len(shared_datasets) == 1, "Demo should see Alice's shared dataset"
+        assert shared_datasets[0].name == "Alice's Shared Dataset"
+
+        # Step 4: Combine (as home page now does after the fix)
+        seen_ids: set[str] = set()
+        all_datasets = []
+        for ds in owned_datasets + shared_datasets:
+            if ds.id not in seen_ids:
+                seen_ids.add(ds.id)
+                all_datasets.append(ds)
+
+        assert len(all_datasets) == 1, "Demo should see 1 dataset total on home page"
+        assert all_datasets[0].name == "Alice's Shared Dataset"

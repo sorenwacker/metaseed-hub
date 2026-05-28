@@ -20,7 +20,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, SpecDraft, SpecDraftMember, Tenant, User, Workspace
+from metaseed_hub.models import (
+    Dataset,
+    DatasetMember,
+    SpecDraft,
+    SpecDraftMember,
+    Tenant,
+    User,
+    Workspace,
+)
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     OptionalUser,
@@ -319,15 +327,34 @@ def create_hub_app() -> FastAPI:
         workspaces = list(result.scalars().all())
         workspace_ids = [w.id for w in workspaces]
 
-        # Get all datasets across user's workspaces
-        datasets: list[Dataset] = []
+        # Get owned datasets from user's workspaces
+        owned_datasets: list[Dataset] = []
         if workspace_ids:
             ds_result = await session.execute(
                 select(Dataset)
                 .where(Dataset.workspace_id.in_(workspace_ids), Dataset.deleted_at.is_(None))
                 .order_by(Dataset.updated_at.desc())
             )
-            datasets = list(ds_result.scalars().all())
+            owned_datasets = list(ds_result.scalars().all())
+
+        # Get datasets shared with this user via DatasetMember
+        shared_datasets: list[Dataset] = []
+        if db_user:
+            shared_ds_result = await session.execute(
+                select(Dataset)
+                .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
+                .where(DatasetMember.user_id == db_user.id, Dataset.deleted_at.is_(None))
+                .order_by(Dataset.updated_at.desc())
+            )
+            shared_datasets = list(shared_ds_result.scalars().all())
+
+        # Combine and deduplicate datasets
+        seen_ds_ids: set[str] = set()
+        datasets: list[Dataset] = []
+        for ds in owned_datasets + shared_datasets:
+            if ds.id not in seen_ds_ids:
+                seen_ds_ids.add(ds.id)
+                datasets.append(ds)
 
         # Get owned spec drafts from user's workspaces
         owned_specs: list[SpecDraft] = []
