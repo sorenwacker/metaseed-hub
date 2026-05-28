@@ -116,7 +116,21 @@ async def dataset_entity_create(
         instance = helper.create(**values)
         if hasattr(instance, "model_dump"):
             logger.debug(f"Created instance: {instance.model_dump(exclude_none=True)}")
+    except Exception as create_error:
+        # Validation failed - try model_construct to allow saving without all required fields
+        # This enables "save first, add nested entities later" workflow
+        logger.warning(
+            f"Validation failed for {entity_type}, using model_construct: {create_error}"
+        )
+        try:
+            model_class = helper._model
+            instance = model_class.model_construct(**values)
+            logger.info(f"Created {entity_type} with model_construct - validation skipped")
+        except Exception as construct_error:
+            logger.error(f"model_construct also failed: {construct_error}")
+            raise create_error  # Re-raise original error
 
+    try:
         if node_id and node_id in state.nodes_by_id:
             # Update existing node
             node = state.nodes_by_id[node_id]
