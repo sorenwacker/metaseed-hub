@@ -824,3 +824,443 @@ class TestSpecDraftSharing:
 
         assert len(all_datasets) == 1, "Demo should see 1 dataset total on home page"
         assert all_datasets[0].name == "Alice's Shared Dataset"
+
+
+class TestDatasetRBAC:
+    """Tests for dataset role-based access control."""
+
+    @pytest.mark.asyncio
+    async def test_dataset_roles_all_types(self, session: AsyncMock) -> None:
+        """Test all dataset roles (OWNER, CURATOR, VIEWER)."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            Dataset,
+            DatasetMember,
+            DatasetRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create tenant and workspace
+        tenant = Tenant(name="Test Tenant", slug="test-t")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        # Create dataset owner
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@example.com",
+            display_name="Owner",
+        )
+        session.add(owner)
+        await session.flush()
+
+        # Create dataset
+        dataset = Dataset(
+            name="Test Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.flush()
+
+        # Create users with different roles
+        roles_to_test = [
+            ("curator@example.com", "Curator", DatasetRole.CURATOR),
+            ("viewer@example.com", "Viewer", DatasetRole.VIEWER),
+            ("coowner@example.com", "Co-Owner", DatasetRole.OWNER),
+        ]
+
+        for email, name, role in roles_to_test:
+            user = User(
+                keycloak_id=str(uuid4()),
+                tenant_id=tenant.id,
+                email=email,
+                display_name=name,
+            )
+            session.add(user)
+            await session.flush()
+
+            membership = DatasetMember(
+                dataset_id=dataset.id,
+                user_id=user.id,
+                role=role,
+            )
+            session.add(membership)
+
+        await session.commit()
+
+        # Verify all memberships
+        result = await session.execute(
+            select(DatasetMember).where(DatasetMember.dataset_id == dataset.id)
+        )
+        memberships = list(result.scalars().all())
+
+        assert len(memberships) == 3
+        roles = {m.role for m in memberships}
+        assert DatasetRole.CURATOR in roles
+        assert DatasetRole.VIEWER in roles
+        assert DatasetRole.OWNER in roles
+
+    @pytest.mark.asyncio
+    async def test_dataset_viewer_can_see_shared_dataset(self, session: AsyncMock) -> None:
+        """Viewer role can see datasets shared with them."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            Dataset,
+            DatasetMember,
+            DatasetRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        tenant = Tenant(name="Test", slug="test")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(name="WS", tenant_id=tenant.id, description="")
+        session.add(workspace)
+        await session.flush()
+
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@test.com",
+            display_name="Owner",
+        )
+        viewer = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="viewer@test.com",
+            display_name="Viewer",
+        )
+        session.add(owner)
+        session.add(viewer)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Shared Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.flush()
+
+        membership = DatasetMember(
+            dataset_id=dataset.id,
+            user_id=viewer.id,
+            role=DatasetRole.VIEWER,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Query as viewer
+        result = await session.execute(
+            select(Dataset)
+            .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
+            .where(DatasetMember.user_id == viewer.id)
+        )
+        visible_datasets = list(result.scalars().all())
+
+        assert len(visible_datasets) == 1
+        assert visible_datasets[0].name == "Shared Dataset"
+
+    @pytest.mark.asyncio
+    async def test_dataset_curator_has_edit_role(self, session: AsyncMock) -> None:
+        """Curator role is stored correctly for datasets."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            Dataset,
+            DatasetMember,
+            DatasetRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        tenant = Tenant(name="Test", slug="test")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(name="WS", tenant_id=tenant.id, description="")
+        session.add(workspace)
+        await session.flush()
+
+        curator = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="curator@test.com",
+            display_name="Curator",
+        )
+        session.add(curator)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Curated Dataset",
+            workspace_id=workspace.id,
+            profile="miappe",
+            version="1.2",
+        )
+        session.add(dataset)
+        await session.flush()
+
+        membership = DatasetMember(
+            dataset_id=dataset.id,
+            user_id=curator.id,
+            role=DatasetRole.CURATOR,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Query membership
+        result = await session.execute(
+            select(DatasetMember).where(
+                DatasetMember.dataset_id == dataset.id,
+                DatasetMember.user_id == curator.id,
+            )
+        )
+        mem = result.scalar_one()
+
+        assert mem.role == DatasetRole.CURATOR
+
+
+class TestSpecRBAC:
+    """Tests for spec draft role-based access control."""
+
+    @pytest.mark.asyncio
+    async def test_spec_roles_all_types(self, session: AsyncMock) -> None:
+        """Test all spec draft roles (OWNER, EDITOR, VIEWER)."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        tenant = Tenant(name="Test Tenant", slug="test-t")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(
+            name="Test Workspace",
+            tenant_id=tenant.id,
+            description="Test",
+        )
+        session.add(workspace)
+        await session.flush()
+
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@example.com",
+            display_name="Owner",
+        )
+        session.add(owner)
+        await session.flush()
+
+        draft = SpecDraft(
+            name="Test Spec",
+            user_id=owner.id,
+            workspace_id=workspace.id,
+            version="1.0",
+        )
+        session.add(draft)
+        await session.flush()
+
+        roles_to_test = [
+            ("editor@example.com", "Editor", SpecDraftRole.EDITOR),
+            ("viewer@example.com", "Viewer", SpecDraftRole.VIEWER),
+            ("coowner@example.com", "Co-Owner", SpecDraftRole.OWNER),
+        ]
+
+        for email, name, role in roles_to_test:
+            user = User(
+                keycloak_id=str(uuid4()),
+                tenant_id=tenant.id,
+                email=email,
+                display_name=name,
+            )
+            session.add(user)
+            await session.flush()
+
+            membership = SpecDraftMember(
+                spec_draft_id=draft.id,
+                user_id=user.id,
+                role=role,
+            )
+            session.add(membership)
+
+        await session.commit()
+
+        result = await session.execute(
+            select(SpecDraftMember).where(SpecDraftMember.spec_draft_id == draft.id)
+        )
+        memberships = list(result.scalars().all())
+
+        assert len(memberships) == 3
+        roles = {m.role for m in memberships}
+        assert SpecDraftRole.EDITOR in roles
+        assert SpecDraftRole.VIEWER in roles
+        assert SpecDraftRole.OWNER in roles
+
+    @pytest.mark.asyncio
+    async def test_spec_viewer_can_see_shared_spec(self, session: AsyncMock) -> None:
+        """Viewer role can see specs shared with them."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        tenant = Tenant(name="Test", slug="test")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(name="WS", tenant_id=tenant.id, description="")
+        session.add(workspace)
+        await session.flush()
+
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@test.com",
+            display_name="Owner",
+        )
+        viewer = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="viewer@test.com",
+            display_name="Viewer",
+        )
+        session.add(owner)
+        session.add(viewer)
+        await session.flush()
+
+        spec = SpecDraft(
+            name="Shared Spec",
+            user_id=owner.id,
+            workspace_id=workspace.id,
+            version="1.0",
+        )
+        session.add(spec)
+        await session.flush()
+
+        membership = SpecDraftMember(
+            spec_draft_id=spec.id,
+            user_id=viewer.id,
+            role=SpecDraftRole.VIEWER,
+        )
+        session.add(membership)
+        await session.commit()
+
+        result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == viewer.id)
+        )
+        visible_specs = list(result.scalars().all())
+
+        assert len(visible_specs) == 1
+        assert visible_specs[0].name == "Shared Spec"
+
+    @pytest.mark.asyncio
+    async def test_spec_editor_has_edit_role(self, session: AsyncMock) -> None:
+        """Editor role is stored correctly for specs."""
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        tenant = Tenant(name="Test", slug="test")
+        session.add(tenant)
+        await session.flush()
+
+        workspace = Workspace(name="WS", tenant_id=tenant.id, description="")
+        session.add(workspace)
+        await session.flush()
+
+        owner = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="owner@test.com",
+            display_name="Owner",
+        )
+        editor = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant.id,
+            email="editor@test.com",
+            display_name="Editor",
+        )
+        session.add(owner)
+        session.add(editor)
+        await session.flush()
+
+        spec = SpecDraft(
+            name="Editable Spec",
+            user_id=owner.id,
+            workspace_id=workspace.id,
+            version="1.0",
+        )
+        session.add(spec)
+        await session.flush()
+
+        membership = SpecDraftMember(
+            spec_draft_id=spec.id,
+            user_id=editor.id,
+            role=SpecDraftRole.EDITOR,
+        )
+        session.add(membership)
+        await session.commit()
+
+        result = await session.execute(
+            select(SpecDraftMember).where(
+                SpecDraftMember.spec_draft_id == spec.id,
+                SpecDraftMember.user_id == editor.id,
+            )
+        )
+        mem = result.scalar_one()
+
+        assert mem.role == SpecDraftRole.EDITOR
