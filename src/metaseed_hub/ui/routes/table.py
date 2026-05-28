@@ -134,12 +134,11 @@ def _get_default_values(
         if fname in ("unique_id", "id", "identifier"):
             default_values[fname] = str(uuid.uuid4())[:8]
         elif fname.endswith("_id"):
-            # Check if this references the parent type
+            # Check if this references the parent type - only auto-fill if it does
             ref_type = fname[:-3]  # Remove "_id" suffix
             if ref_type == parent_type_lower and parent_identifier:
                 default_values[fname] = str(parent_identifier)
-            else:
-                default_values[fname] = str(uuid.uuid4())[:8]
+            # Otherwise leave empty for user to fill in
         elif field_type == "integer":
             default_values[fname] = 0
         elif field_type == "float":
