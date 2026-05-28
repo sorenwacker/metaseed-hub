@@ -108,19 +108,23 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
 
         # Create instance from stored data
         instance_data = node_data.get("data", {})
+        instance = None
         try:
             instance = helper.create(**instance_data)
         except Exception as e:
-            logger.error(
+            logger.warning(
                 f"Failed to create {entity_type} from stored data: {e}\n"
                 f"Data keys: {list(instance_data.keys())}"
             )
-            # Create empty instance to preserve node structure
+            # Try creating with validation disabled by using model_construct
             try:
-                instance = helper.create()
+                model_class = helper._model
+                instance = model_class.model_construct(**instance_data)
+                logger.info(f"Created {entity_type} with model_construct (validation skipped)")
             except Exception as e2:
-                logger.error(f"Failed to create empty {entity_type}: {e2}")
-                return None
+                logger.warning(f"Failed to construct {entity_type}: {e2}")
+                # Still create the node without an instance so it's visible
+                instance = None
 
         node = TreeNode(
             id=node_data.get("id", ""),
