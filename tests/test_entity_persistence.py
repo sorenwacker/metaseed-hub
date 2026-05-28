@@ -492,9 +492,12 @@ class TestInlineTablePersistence:
         parent.label = "Parent"
 
         # Add child node (like add_table_row does)
+        # Study requires investigation_id as a required field
         child = state.add_node(
             "Study",
-            MockInstance({"unique_id": "study-1", "title": "Child Study"}),
+            MockInstance(
+                {"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child Study"}
+            ),
             parent_id=parent.id,
         )
         child.label = "Child Study"
@@ -533,9 +536,10 @@ class TestInlineTablePersistence:
             "Investigation",
             MockInstance({"unique_id": "inv-1", "title": "Parent"}),
         )
+        # Study requires investigation_id as a required field
         child = state.add_node(
             "Study",
-            MockInstance({"unique_id": "study-1", "study_id": "inv-1", "title": "Child"}),
+            MockInstance({"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child"}),
             parent_id=parent.id,
         )
 
@@ -583,9 +587,12 @@ class TestInlineTablePersistence:
             "Investigation",
             MockInstance({"unique_id": "inv-1", "title": "Original Parent"}),
         )
+        # Study requires investigation_id as a required field
         child = state.add_node(
             "Study",
-            MockInstance({"unique_id": "study-1", "title": "Child Study"}),
+            MockInstance(
+                {"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child Study"}
+            ),
             parent_id=parent.id,
         )
 
@@ -638,9 +645,10 @@ class TestExampleLoading:
         )
 
         # Add nested items as child nodes (like the fixed load_example does)
+        # Study requires investigation_id as a required field
         nested_items = [
-            {"unique_id": "study-001", "title": "Study 1"},
-            {"unique_id": "study-002", "title": "Study 2"},
+            {"unique_id": "study-001", "investigation_id": "inv-001", "title": "Study 1"},
+            {"unique_id": "study-002", "investigation_id": "inv-001", "title": "Study 2"},
         ]
         for item_data in nested_items:
             state.add_node(
@@ -681,10 +689,17 @@ class TestExampleLoading:
             "Investigation",
             MockInstance({"unique_id": "inv-001", "title": "Parent"}),
         )
+        # Study requires investigation_id as a required field
         for i in range(3):
             state.add_node(
                 "Study",
-                MockInstance({"unique_id": f"study-{i}", "title": f"Study {i}"}),
+                MockInstance(
+                    {
+                        "unique_id": f"study-{i}",
+                        "investigation_id": "inv-001",
+                        "title": f"Study {i}",
+                    }
+                ),
                 parent_id=parent.id,
             )
 
@@ -723,18 +738,21 @@ class TestExampleLoading:
                 return self._data
 
         # Create 3-level hierarchy: Investigation -> Study -> ObservationUnit
+        # Each entity requires its parent's ID as a required field
         investigation = state.add_node(
             "Investigation",
             MockInstance({"unique_id": "inv-001", "title": "Investigation"}),
         )
         study = state.add_node(
             "Study",
-            MockInstance({"unique_id": "study-001", "title": "Study"}),
+            MockInstance(
+                {"unique_id": "study-001", "investigation_id": "inv-001", "title": "Study"}
+            ),
             parent_id=investigation.id,
         )
         obs_unit = state.add_node(
             "ObservationUnit",
-            MockInstance({"unique_id": "ou-001", "title": "Observation Unit"}),
+            MockInstance({"unique_id": "ou-001", "study_id": "study-001"}),
             parent_id=study.id,
         )
 

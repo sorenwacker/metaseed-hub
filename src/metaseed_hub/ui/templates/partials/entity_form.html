@@ -20,6 +20,17 @@
     <div class="success-message">{{ success }}</div>
     {% endif %}
 
+    {% if validation_warnings %}
+    <div class="warning-message">
+        <strong>Saved with validation warnings:</strong>
+        <ul>
+            {% for warning in validation_warnings %}
+            <li>{{ warning }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
     {% if error %}
     <div class="error-message">{{ error }}</div>
     {% endif %}

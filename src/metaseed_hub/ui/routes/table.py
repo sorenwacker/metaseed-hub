@@ -271,10 +271,11 @@ async def add_table_row(
                 dataset_id, parent_node, field_name, nested_type, state
             )
 
-            # Update parent instance with new list
+            # Update parent instance with new list (use model_construct to skip validation)
             update_data = parent_node.instance.model_dump(exclude_none=True)
             update_data[field_name] = current_list
-            updated_instance = parent_helper.create(**update_data)
+            model_class = parent_helper._model
+            updated_instance = model_class.model_construct(**update_data)
             state.update_node(parent_node_id, updated_instance)
 
             # Save to database
@@ -306,11 +307,22 @@ async def add_table_row(
     # Generate default values for required fields
     default_values = _get_default_values(nested_helper, parent_node, parent_identifier)
 
-    # Create instance with defaults
-    instance = nested_helper.create(**default_values)
+    # Create instance with defaults (use model_construct to skip validation)
+    model_class = nested_helper._model
+    instance = model_class.model_construct(**default_values)
 
-    # Add as child of parent
-    child_node = state.add_node(nested_type, instance, parent_id=parent_node_id)
+    # Add as child of parent (create TreeNode directly to skip facade validation)
+    node_id = str(uuid.uuid4())
+    label = nested_helper.get_label(instance) or f"New {nested_type}"
+    child_node = TreeNode(
+        id=node_id,
+        entity_type=nested_type,
+        instance=instance,
+        label=label,
+        parent_id=parent_node_id,
+    )
+    parent_node.children.append(child_node)
+    state.nodes_by_id[node_id] = child_node
 
     # Save to database
     await save_dataset_state(session, dataset, state)
@@ -409,7 +421,8 @@ async def update_table_cell(
         else:
             current_values[field_name] = raw_str
 
-    instance = helper.create(**current_values)
+    model_class = helper._model
+    instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
     await save_dataset_state(session, dataset, state)
 
@@ -460,8 +473,9 @@ async def update_primitive_list_item(
         current_list[idx] = new_value
     current_values[field_name] = current_list
 
-    # Create updated instance
-    instance = helper.create(**current_values)
+    # Create updated instance (skip validation)
+    model_class = helper._model
+    instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
     # Save to database
@@ -507,8 +521,9 @@ async def delete_primitive_list_item(
         current_list.pop(idx)
     current_values[field_name] = current_list
 
-    # Create updated instance
-    instance = helper.create(**current_values)
+    # Create updated instance (skip validation)
+    model_class = helper._model
+    instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
     # Save to database
@@ -590,8 +605,9 @@ async def update_single_entity_field(
     # Update the nested field
     current_values[field_name] = nested_data
 
-    # Create updated parent instance
-    instance = helper.create(**current_values)
+    # Create updated parent instance (skip validation)
+    model_class = helper._model
+    instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
     # Save to database
@@ -641,8 +657,9 @@ async def delete_single_entity_field(
     if field_name in current_values:
         del current_values[field_name]
 
-    # Create updated parent instance
-    instance = helper.create(**current_values)
+    # Create updated parent instance (skip validation)
+    model_class = helper._model
+    instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
     # Save to database

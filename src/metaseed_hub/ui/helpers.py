@@ -3,6 +3,7 @@
 import logging
 import re
 import secrets
+import uuid
 from typing import Any
 
 from fastapi import Request
@@ -11,6 +12,62 @@ from metaseed.ui.state import AppState, TreeNode
 from metaseed_hub.models import Dataset, DatasetVersion
 
 logger = logging.getLogger("metaseed_hub")
+
+
+def add_entity_node(
+    state: AppState,
+    entity_type: str,
+    data: dict[str, Any],
+    parent_id: str | None = None,
+    helper: Any = None,
+) -> TreeNode:
+    """Add an entity node without validation.
+
+    Creates a TreeNode directly using model_construct to skip Pydantic validation.
+    This allows saving entities with missing required fields.
+
+    Args:
+        state: AppState to add the node to.
+        entity_type: Type of entity (e.g., "Investigation", "Study").
+        data: Field values for the entity.
+        parent_id: Optional parent node ID for hierarchy.
+        helper: Optional entity helper. If not provided, will be fetched from facade.
+
+    Returns:
+        Created TreeNode.
+    """
+    facade = state.get_or_create_facade()
+    if helper is None:
+        helper = getattr(facade, entity_type)
+
+    # Create instance using model_construct (skips validation)
+    model_class = helper._model
+    instance = model_class.model_construct(**data)
+
+    # Generate node ID and label
+    node_id = str(uuid.uuid4())
+    label = helper.get_label(instance) or f"New {entity_type}"
+
+    # Create TreeNode directly
+    node = TreeNode(
+        id=node_id,
+        entity_type=entity_type,
+        instance=instance,
+        label=label,
+        parent_id=parent_id,
+    )
+
+    # Add to state's tree structure
+    if parent_id and parent_id in state.nodes_by_id:
+        parent_node = state.nodes_by_id[parent_id]
+        parent_node.children.append(node)
+    else:
+        state.entity_tree.append(node)
+
+    state.nodes_by_id[node_id] = node
+
+    return node
+
 
 # Shared dataset state cache - maps dataset_id to AppState
 dataset_states: dict[str, AppState] = {}
@@ -221,8 +278,9 @@ def create_nested_nodes(
                 continue
 
             try:
-                child_instance = nested_helper.create(**item_data)
-                child_node = state.add_node(nested_type, child_instance, parent_id=parent_node.id)
+                child_node = add_entity_node(
+                    state, nested_type, item_data, parent_id=parent_node.id, helper=nested_helper
+                )
 
                 # Set label from common identifier fields
                 label_set = False

@@ -34,6 +34,7 @@ from metaseed_hub.ui.dependencies import (
     verify_workspace_access,
 )
 from metaseed_hub.ui.helpers import (
+    add_entity_node,
     create_nested_nodes,
     dataset_states,
     ensure_dataset_facade,
@@ -192,7 +193,6 @@ async def dataset_import(
     import json
 
     import yaml
-    from metaseed.models import get_model
     from metaseed.specs.loader import SpecLoader
 
     from metaseed_hub.ui.helpers import validate_csrf_token
@@ -341,14 +341,12 @@ async def dataset_import(
 
                 for entity_data in entities_by_type[entity_type]:
                     try:
-                        Model = get_model(entity_type, version, profile=profile)
                         # Filter out empty values
                         clean_data = {
                             k: v for k, v in entity_data.items() if v is not None and str(v).strip()
                         }
                         if clean_data:
-                            instance = Model(**clean_data)
-                            node = state.add_node(entity_type, instance)
+                            node = add_entity_node(state, entity_type, clean_data)
                             if not state.editing_node_id:
                                 state.editing_node_id = node.id
                     except Exception as e:
@@ -359,7 +357,6 @@ async def dataset_import(
             entities_data = data.get("entities", []) if isinstance(data, dict) else []
             if not entities_data and isinstance(data, dict):
                 # Try to use the data directly as root entity
-                Model = get_model(root_entity, version, profile=profile)
                 # Filter out metadata fields
                 entity_data = {
                     k: v
@@ -367,8 +364,7 @@ async def dataset_import(
                     if not k.startswith("_") and k not in ("profile", "version")
                 }
                 if entity_data:
-                    instance = Model(**entity_data)
-                    node = state.add_node(root_entity, instance)
+                    node = add_entity_node(state, root_entity, entity_data)
                     state.editing_node_id = node.id
                     create_nested_nodes(
                         state, facade, node, root_entity, copy.deepcopy(entity_data)
@@ -403,7 +399,6 @@ async def dataset_create(
     """Create a new dataset."""
     import metaseed
     import yaml
-    from metaseed.models import get_model
     from metaseed.specs.loader import SpecLoader
 
     from metaseed_hub.ui.helpers import validate_csrf_token
@@ -464,9 +459,7 @@ async def dataset_create(
                 state.facade = None
                 facade = state.get_or_create_facade()
 
-                Model = get_model(root_entity, version, profile=profile)
-                instance = Model(**example_data)
-                node = state.add_node(root_entity, instance)
+                node = add_entity_node(state, root_entity, example_data)
                 state.editing_node_id = node.id
 
                 # Create nested child nodes from the unmodified copy
@@ -574,7 +567,6 @@ async def dataset_load_example(
     """Load example data into a dataset from YAML files."""
     import metaseed
     import yaml
-    from metaseed.models import get_model
     from metaseed.specs.loader import SpecLoader
 
     try:
@@ -617,9 +609,7 @@ async def dataset_load_example(
     facade = state.get_or_create_facade()
 
     try:
-        Model = get_model(root_entity, dataset.version, profile=dataset.profile)
-        instance = Model(**example_data)
-        node = state.add_node(root_entity, instance)
+        node = add_entity_node(state, root_entity, example_data)
         state.editing_node_id = node.id
 
         # Create nested child nodes from the unmodified copy
@@ -1113,7 +1103,6 @@ async def dataset_import_into_existing(
     from io import BytesIO
 
     import yaml
-    from metaseed.models import get_model
     from sqlalchemy.orm.attributes import flag_modified
 
     try:
@@ -1230,15 +1219,13 @@ async def dataset_import_into_existing(
 
         for entity_data in entities_by_type[entity_type]:
             try:
-                Model = get_model(entity_type, dataset.version, profile=dataset.profile)
                 clean_data = {
                     k: v
                     for k, v in entity_data.items()
                     if v is not None and str(v).strip() and not k.startswith("_")
                 }
                 if clean_data:
-                    instance = Model(**clean_data)
-                    state.add_node(entity_type, instance)
+                    add_entity_node(state, entity_type, clean_data)
                     imported_count += 1
             except Exception as e:
                 errors.append(f"{entity_type}: {e}")

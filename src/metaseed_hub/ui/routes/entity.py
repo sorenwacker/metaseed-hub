@@ -8,14 +8,11 @@ from fastapi.templating import Jinja2Templates
 
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_dataset_for_user
 from metaseed_hub.ui.forms import extract_entity_values
-from metaseed_hub.ui.helpers import (
-    build_entity_form_context,
-    ensure_dataset_facade,
-    save_dataset_state,
-)
+from metaseed_hub.ui.helpers import build_entity_form_context
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
+from metaseed_hub.ui.services import EntityService, EntityServiceError
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -41,13 +38,16 @@ async def dataset_entity_form(
     """Return form for creating or editing an entity."""
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_dataset_facade(dataset, session)
-    facade = state.get_or_create_facade()
+    service = EntityService(session, dataset)
+    try:
+        state = await service.ensure_state()
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
     try:
-        helper = getattr(facade, entity_type)
-    except AttributeError:
-        return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
+        helper = service.get_helper(entity_type)
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
     form_context = build_entity_form_context(state, helper, node_id, parent_id)
 
@@ -74,9 +74,8 @@ async def dataset_entity_create(
 ) -> Response:
     """Create or update an entity.
 
-    Uses model_construct to skip Pydantic validation, allowing entities
-    to be saved without all required nested entities. This enables the
-    "save first, add related entities later" workflow.
+    Uses EntityService which saves entities even when validation fails.
+    Validation errors are returned as warnings, not blockers.
     """
     try:
         validate_csrf_or_error(request)
@@ -91,14 +90,15 @@ async def dataset_entity_create(
     if not entity_type:
         return HTMLResponse("<div class='error'>Missing entity type</div>")
 
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    service = EntityService(session, dataset)
+
     try:
-        dataset = await get_dataset_for_user(dataset_id, session, user)
-        state = await ensure_dataset_facade(dataset, session)
-        facade = state.get_or_create_facade()
-        helper = getattr(facade, entity_type)
-    except Exception as e:
-        logger.exception(f"Failed to load dataset or facade for {entity_type}")
-        return HTMLResponse(f"<div class='error'>Failed to load: {e}</div>")
+        state = await service.ensure_state()
+        helper = service.get_helper(entity_type)
+    except EntityServiceError as e:
+        logger.error(f"Failed to load dataset or facade for {entity_type}: {e.message}")
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
     # Get existing values if updating
     existing_node = state.nodes_by_id.get(node_id) if node_id else None
@@ -109,12 +109,15 @@ async def dataset_entity_create(
     # Extract and type-convert form values
     values = extract_entity_values(form_data, helper, existing_values)
 
-    # Create instance using model_construct (skips validation)
-    try:
-        model_class = helper._model
-        instance = model_class.model_construct(**values)
-    except Exception as e:
-        logger.exception(f"Failed to construct {entity_type}")
+    # Create or update entity using service
+    result = await service.create_or_update_entity(
+        entity_type=entity_type,
+        values=values,
+        node_id=node_id,
+        parent_id=parent_id,
+    )
+
+    if not result.success:
         form_context = build_entity_form_context(state, helper, node_id, parent_id)
         form_context["values"] = values
         return render_template(
@@ -125,46 +128,16 @@ async def dataset_entity_create(
                 "entity_type": entity_type,
                 "node_id": node_id,
                 "parent_id": parent_id,
-                "error": f"Failed to create: {e}",
+                "error": result.error_message,
                 **form_context,
             },
         )
 
-    # Update or create node
-    if node_id and node_id in state.nodes_by_id:
-        node = state.nodes_by_id[node_id]
-        node.instance = instance
-        label = helper.get_label(instance)
-        if label:
-            node.label = label
-        success_msg = f"{entity_type} updated successfully."
-    else:
-        node = state.add_node(entity_type, instance, parent_id=parent_id)
-        node_id = node.id
-        success_msg = f"{entity_type} created successfully."
+    # Build success response
+    is_update = node_id is not None and existing_node is not None
+    success_msg = f"{entity_type} {'updated' if is_update else 'created'} successfully."
 
-    # Save to database
-    try:
-        await save_dataset_state(session, dataset, state)
-    except Exception as e:
-        logger.exception(f"Failed to save {entity_type}")
-        form_context = build_entity_form_context(state, helper, node_id, parent_id)
-        form_context["values"] = values
-        return render_template(
-            request=request,
-            name="partials/entity_form.html",
-            context={
-                "dataset_id": dataset_id,
-                "entity_type": entity_type,
-                "node_id": node_id,
-                "parent_id": parent_id,
-                "error": f"Failed to save: {e}",
-                **form_context,
-            },
-        )
-
-    # Return success response
-    form_context = build_entity_form_context(state, helper, node_id, parent_id)
+    form_context = build_entity_form_context(state, helper, result.node_id, parent_id)
     form_context["values"] = values
 
     response = render_template(
@@ -173,9 +146,10 @@ async def dataset_entity_create(
         context={
             "dataset_id": dataset_id,
             "entity_type": entity_type,
-            "node_id": node_id,
+            "node_id": result.node_id,
             "parent_id": parent_id,
             "success": success_msg,
+            "validation_warnings": result.validation_errors,
             **form_context,
         },
     )
@@ -193,19 +167,23 @@ async def dataset_entity_edit(
 ) -> Response:
     """Return form for editing an existing entity."""
     dataset = await get_dataset_for_user(dataset_id, session, user)
-    state = await ensure_dataset_facade(dataset, session)
+
+    service = EntityService(session, dataset)
+    try:
+        state = await service.ensure_state()
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
 
     node = state.nodes_by_id[node_id]
     entity_type = node.entity_type
-    facade = state.get_or_create_facade()
 
     try:
-        helper = getattr(facade, entity_type)
-    except AttributeError:
-        return HTMLResponse(f"<div class='error'>Unknown entity type: {entity_type}</div>")
+        helper = service.get_helper(entity_type)
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
     form_context = build_entity_form_context(state, helper, node_id, node.parent_id)
 
@@ -238,18 +216,18 @@ async def dataset_entity_delete(
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_dataset_facade(dataset, session)
+    service = EntityService(session, dataset)
+    try:
+        state = await service.ensure_state()
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
 
-    if node_id not in state.nodes_by_id:
-        return HTMLResponse("<div class='error'>Entity not found</div>")
+    result = await service.delete_entity(node_id)
 
-    # Delete the node
-    state.delete_node(node_id)
+    if not result.success:
+        return HTMLResponse(f"<div class='error'>{result.error_message}</div>")
 
-    # Save to database
-    await save_dataset_state(session, dataset, state)
-
-    # Return updated tree + out-of-band editor update
+    # Return updated tree
     tree_data = state.get_tree_data()
 
     return render_template(
