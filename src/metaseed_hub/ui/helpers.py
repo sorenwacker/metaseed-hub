@@ -672,8 +672,17 @@ async def ensure_dataset_facade(
     dataset_id = dataset.id
 
     # Check cache first - return existing state if available
+    # For datasets with spec_draft_id, verify the cached state has a valid facade
+    # (cached states from get_dataset_state won't have the facade set up correctly)
     if dataset_id in dataset_states:
-        return dataset_states[dataset_id]
+        cached_state = dataset_states[dataset_id]
+        if not dataset.spec_draft_id:
+            # Built-in profiles can use cache
+            return cached_state
+        elif cached_state.facade is not None:
+            # Draft spec with valid facade already loaded
+            return cached_state
+        # else: fall through to reload for draft specs without facade
 
     # Create state without deserializing tree yet
     state = AppState()

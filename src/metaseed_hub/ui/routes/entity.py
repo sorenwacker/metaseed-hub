@@ -10,9 +10,7 @@ from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_dataset_for
 from metaseed_hub.ui.forms import extract_entity_values
 from metaseed_hub.ui.helpers import (
     build_entity_form_context,
-    dataset_states,
     ensure_dataset_facade,
-    get_dataset_state,
     save_dataset_state,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -233,7 +231,7 @@ async def dataset_entity_delete(
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = get_dataset_state(dataset, dataset_states)
+    state = await ensure_dataset_facade(dataset, session)
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
