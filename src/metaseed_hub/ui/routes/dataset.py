@@ -23,6 +23,7 @@ from metaseed_hub.models import (
     Note,
     ReactionType,
     SpecDraft,
+    SpecDraftMember,
     User,
     Workspace,
 )
@@ -124,7 +125,28 @@ async def dataset_new(
     drafts_result = await session.execute(
         select(SpecDraft).where(SpecDraft.workspace_id == workspace_id)
     )
-    drafts = drafts_result.scalars().all()
+    owned_drafts = list(drafts_result.scalars().all())
+
+    # Also get specs shared with this user via SpecDraftMember
+    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+    db_user = db_user_result.scalar_one_or_none()
+
+    shared_drafts: list[SpecDraft] = []
+    if db_user:
+        shared_result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == db_user.id)
+        )
+        shared_drafts = list(shared_result.scalars().all())
+
+    # Combine and deduplicate
+    seen_ids: set[str] = set()
+    drafts: list[SpecDraft] = []
+    for draft in owned_drafts + shared_drafts:
+        if draft.id not in seen_ids:
+            seen_ids.add(draft.id)
+            drafts.append(draft)
 
     for draft in drafts:
         if draft.name:

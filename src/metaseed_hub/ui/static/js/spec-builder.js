@@ -1019,3 +1019,28 @@ var hideSelectedEntity = SpecBuilder.hideSelectedEntity;
 var dragNewEntity = SpecBuilder.dragNewEntity;
 var dropNewEntity = SpecBuilder.dropNewEntity;
 var addEntityAtPosition = SpecBuilder.addEntityAtPosition;
+
+/**
+ * Copy YAML content to clipboard
+ */
+function copyYamlToClipboard(btn) {
+    var container = btn.closest('.yaml-preview-container');
+    var code = container.querySelector('code');
+    var text = code.textContent;
+
+    navigator.clipboard.writeText(text).then(function() {
+        var originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function() {
+            btn.textContent = originalText;
+            btn.classList.remove('copied');
+        }, 2000);
+    }).catch(function(err) {
+        console.error('Failed to copy:', err);
+        btn.textContent = 'Failed';
+        setTimeout(function() {
+            btn.textContent = 'Copy';
+        }, 2000);
+    });
+}
