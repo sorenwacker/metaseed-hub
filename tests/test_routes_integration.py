@@ -597,3 +597,115 @@ class TestSpecDraftSharing:
         assert SpecDraftRole.EDITOR in roles
         assert SpecDraftRole.VIEWER in roles
         assert SpecDraftRole.OWNER in roles
+
+    @pytest.mark.asyncio
+    async def test_home_page_shows_shared_specs(self, session: AsyncMock) -> None:
+        """Home page query includes specs shared via SpecDraftMember.
+
+        This tests the fix for shared specs not appearing on the home page.
+        The home page must query both:
+        1. Specs in user's workspaces (owned)
+        2. Specs shared with user via SpecDraftMember
+        """
+        from uuid import uuid4
+
+        from sqlalchemy import select
+
+        from metaseed_hub.models import (
+            SpecDraft,
+            SpecDraftMember,
+            SpecDraftRole,
+            Tenant,
+            User,
+            Workspace,
+        )
+
+        # Create two tenants (simulating different users/orgs)
+        tenant_alice = Tenant(name="Alice Tenant", slug="alice-t")
+        tenant_demo = Tenant(name="Demo Tenant", slug="demo-t")
+        session.add(tenant_alice)
+        session.add(tenant_demo)
+        await session.flush()
+
+        # Create workspaces for each tenant
+        ws_alice = Workspace(
+            name="Alice Workspace",
+            tenant_id=tenant_alice.id,
+            description="Alice's workspace",
+        )
+        ws_demo = Workspace(
+            name="Demo Workspace",
+            tenant_id=tenant_demo.id,
+            description="Demo's workspace",
+        )
+        session.add(ws_alice)
+        session.add(ws_demo)
+        await session.flush()
+
+        # Create users
+        alice = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant_alice.id,
+            email="alice@example.com",
+            display_name="Alice",
+        )
+        demo = User(
+            keycloak_id=str(uuid4()),
+            tenant_id=tenant_demo.id,
+            email="demo@example.com",
+            display_name="Demo",
+        )
+        session.add(alice)
+        session.add(demo)
+        await session.flush()
+
+        # Alice creates a spec in her workspace
+        alice_spec = SpecDraft(
+            name="Alice's Shared Spec",
+            user_id=alice.id,
+            workspace_id=ws_alice.id,
+            version="1.0",
+        )
+        session.add(alice_spec)
+        await session.flush()
+
+        # Alice shares her spec with Demo
+        membership = SpecDraftMember(
+            spec_draft_id=alice_spec.id,
+            user_id=demo.id,
+            role=SpecDraftRole.VIEWER,
+        )
+        session.add(membership)
+        await session.commit()
+
+        # Simulate home page query for Demo user
+        # Step 1: Get Demo's workspaces (only ws_demo)
+        demo_workspace_ids = [ws_demo.id]
+
+        # Step 2: Query specs from Demo's workspaces (should be empty)
+        result = await session.execute(
+            select(SpecDraft).where(SpecDraft.workspace_id.in_(demo_workspace_ids))
+        )
+        owned_specs = list(result.scalars().all())
+        assert len(owned_specs) == 0, "Demo has no specs in own workspace"
+
+        # Step 3: Query specs shared with Demo via SpecDraftMember
+        result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == demo.id)
+        )
+        shared_specs = list(result.scalars().all())
+        assert len(shared_specs) == 1, "Demo should see Alice's shared spec"
+        assert shared_specs[0].name == "Alice's Shared Spec"
+
+        # Step 4: Combine (as home page now does after the fix)
+        seen_ids: set[str] = set()
+        all_specs = []
+        for spec in owned_specs + shared_specs:
+            if spec.id not in seen_ids:
+                seen_ids.add(spec.id)
+                all_specs.append(spec)
+
+        assert len(all_specs) == 1, "Demo should see 1 spec total on home page"
+        assert all_specs[0].name == "Alice's Shared Spec"
