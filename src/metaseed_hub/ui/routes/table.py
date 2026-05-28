@@ -601,8 +601,13 @@ async def update_single_entity_field(
     if hasattr(node.instance, "model_dump"):
         current_values = node.instance.model_dump(exclude_none=True)
 
-    # Update the nested field
-    current_values[field_name] = nested_data
+    # Merge new values with existing nested field data (don't replace entirely)
+    existing_nested = current_values.get(field_name, {}) or {}
+    if isinstance(existing_nested, dict):
+        existing_nested.update(nested_data)
+        current_values[field_name] = existing_nested
+    else:
+        current_values[field_name] = nested_data
 
     # Create updated parent instance (skip validation)
     model_class = helper._model
