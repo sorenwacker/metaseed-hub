@@ -69,8 +69,8 @@ def spec_to_yaml(spec: ProfileSpec) -> str:
     Returns:
         YAML string representation of the spec.
     """
-    # Convert to dict, handling Pydantic models
-    data = spec.model_dump(exclude_none=True, exclude_defaults=False)
+    # Convert to dict, using mode='json' to serialize enums as strings
+    data = spec.model_dump(mode="json", exclude_none=True, exclude_defaults=False)
 
     # Custom representer for cleaner output
     def str_representer(dumper: yaml.Dumper, data: str) -> yaml.Node:
@@ -97,9 +97,9 @@ def spec_to_dict(spec: ProfileSpec) -> dict[str, Any]:
         spec: The ProfileSpec to convert.
 
     Returns:
-        Dictionary representation of the spec.
+        Dictionary representation of the spec with enums as strings.
     """
-    result: dict[str, Any] = spec.model_dump(exclude_none=True, exclude_defaults=False)
+    result: dict[str, Any] = spec.model_dump(mode="json", exclude_none=True, exclude_defaults=False)
     return result
 
 
