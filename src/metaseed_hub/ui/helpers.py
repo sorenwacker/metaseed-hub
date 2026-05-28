@@ -671,18 +671,10 @@ async def ensure_dataset_facade(
 
     dataset_id = dataset.id
 
-    # Check cache first - return existing state if available
-    # For datasets with spec_draft_id, verify the cached state has a valid facade
-    # (cached states from get_dataset_state won't have the facade set up correctly)
-    if dataset_id in dataset_states:
-        cached_state = dataset_states[dataset_id]
-        if not dataset.spec_draft_id:
-            # Built-in profiles can use cache
-            return cached_state
-        elif cached_state.facade is not None:
-            # Draft spec with valid facade already loaded
-            return cached_state
-        # else: fall through to reload for draft specs without facade
+    # Check cache first - but only for built-in profiles
+    # Draft specs need fresh loads to ensure facade is properly configured
+    if dataset_id in dataset_states and not dataset.spec_draft_id:
+        return dataset_states[dataset_id]
 
     # Create state without deserializing tree yet
     state = AppState()
@@ -706,12 +698,21 @@ async def ensure_dataset_facade(
                 )
                 # Update state.profile to match facade's lowercased version
                 state.profile = state.facade.profile
+                logger.debug(f"Loaded draft spec for dataset {dataset.id}: {dataset.profile}")
+            else:
+                logger.warning(
+                    f"No spec data found for dataset {dataset.id} "
+                    f"spec_draft_id={dataset.spec_draft_id}"
+                )
         except Exception as e:
-            logger.warning(f"Failed to load spec for dataset {dataset.id}: {e}")
+            logger.error(f"Failed to load spec for dataset {dataset.id}: {e}")
+            # Re-raise so the caller can handle the error properly
+            raise
 
     # NOW deserialize tree (which requires facade)
     if dataset.data:
         deserialize_tree(state, dataset.data)
+        logger.debug(f"Deserialized {len(state.entity_tree)} root nodes for dataset {dataset.id}")
 
     dataset_states[dataset_id] = state
     return state
