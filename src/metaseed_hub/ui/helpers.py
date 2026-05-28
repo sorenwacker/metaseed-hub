@@ -745,7 +745,12 @@ async def ensure_dataset_facade(
     # Check cache first - but only for built-in profiles
     # Draft specs need fresh loads to ensure facade is properly configured
     if dataset_id in dataset_states and not dataset.spec_draft_id:
+        logger.debug(f"ensure_dataset_facade: returning cached state for {dataset_id}")
         return dataset_states[dataset_id]
+
+    logger.debug(
+        f"ensure_dataset_facade: fresh state for {dataset_id}, draft={dataset.spec_draft_id}"
+    )
 
     # Create state without deserializing tree yet
     state = AppState()

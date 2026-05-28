@@ -550,9 +550,15 @@ async def update_single_entity_field(
     Single entity fields are nested objects that are not lists - they contain
     a single instance of another entity type embedded in the parent.
     """
+    import logging
+
+    logger = logging.getLogger("metaseed_hub")
+    logger.info(f"update_single_entity_field: node_id={node_id}, field_name={field_name}")
+
     dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
+        logger.warning(f"update_single_entity_field: node_id {node_id} not found in state")
         return HTMLResponse(status_code=404)
 
     node = state.nodes_by_id[node_id]
@@ -601,6 +607,11 @@ async def update_single_entity_field(
     if hasattr(node.instance, "model_dump"):
         current_values = node.instance.model_dump(exclude_none=True)
 
+    logger.info(f"update_single_entity_field: nested_data={nested_data}")
+    logger.info(
+        f"update_single_entity_field: current_values BEFORE={current_values.get(field_name)}"
+    )
+
     # Merge new values with existing nested field data (don't replace entirely)
     existing_nested = current_values.get(field_name, {}) or {}
     if isinstance(existing_nested, dict):
@@ -609,6 +620,10 @@ async def update_single_entity_field(
     else:
         current_values[field_name] = nested_data
 
+    logger.info(
+        f"update_single_entity_field: current_values AFTER={current_values.get(field_name)}"
+    )
+
     # Create updated parent instance (skip validation)
     model_class = helper._model
     instance = model_class.model_construct(**current_values)
@@ -616,6 +631,7 @@ async def update_single_entity_field(
 
     # Save to database
     await save_dataset_state(session, dataset, state)
+    logger.info("update_single_entity_field: saved successfully")
 
     return HTMLResponse(
         status_code=200,
