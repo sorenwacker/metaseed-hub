@@ -170,14 +170,14 @@ def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
             logger.warning(f"deserialize_node: entity_type '{entity_type}' not in facade")
             return None
 
-        # Create instance from stored data
+        # Create instance from stored data using skip_validation for permissive loading
         instance_data = node_data.get("data", {})
         instance = None
         try:
-            instance = helper.create(**instance_data)
+            instance = helper.create(skip_validation=True, **instance_data)
         except Exception as e:
-            logger.warning(f"Validation failed for {entity_type}, using model_construct: {e}")
-            # Try creating with validation disabled by using model_construct
+            logger.warning(f"Failed to create {entity_type} with skip_validation: {e}")
+            # Fall back to model_construct as last resort
             try:
                 model_class = helper._model
                 instance = model_class.model_construct(**instance_data)

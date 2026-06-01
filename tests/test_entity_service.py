@@ -310,7 +310,8 @@ class TestEntityServiceWithDraftSpec:
         with pytest.raises(FacadeLoadError) as exc_info:
             await service.ensure_state()
 
-        assert "invalid structure" in exc_info.value.user_message.lower()
+        # Error message mentions profile initialization failure
+        assert "could not initialize" in exc_info.value.user_message.lower()
 
     @pytest.mark.asyncio
     async def test_unknown_entity_type_returns_clear_error(self, session: AsyncSession) -> None:

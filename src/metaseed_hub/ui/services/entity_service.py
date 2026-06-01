@@ -1,20 +1,19 @@
 """Entity service for Hub UI operations.
 
 This module provides a service layer for entity CRUD operations that:
-- Guarantees facade is valid before operations
+- Guarantees client is valid before operations
 - Always saves entities (validation errors become warnings, not blockers)
 - Returns user-friendly error messages instead of 500 errors
 - Provides comprehensive logging
+
+Uses MetaseedClient public API exclusively - no internal access needed.
 """
 
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from metaseed.facade import ProfileFacade
-from metaseed.specs.schema import ProfileSpec
-from metaseed.ui.state import AppState, TreeNode
-from pydantic import ValidationError
+from metaseed import MetaseedClient, ProfileNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, SpecDraft
@@ -43,7 +42,7 @@ class EntitySaveResult:
 
     success: bool
     node_id: str | None = None
-    node: TreeNode | None = None
+    node: Any | None = None  # TreeNode, kept as Any to avoid circular import
     validation_errors: list[str] = field(default_factory=list)
     error_message: str | None = None
 
@@ -52,10 +51,12 @@ class EntityService:
     """Service for entity CRUD operations with proper error handling.
 
     This service centralizes entity operations and ensures:
-    1. Facade is validated before any operation
+    1. MetaseedClient is validated before any operation
     2. Validation errors don't block saves (they become warnings)
     3. All errors return user-friendly messages
     4. Comprehensive logging for debugging
+
+    Uses MetaseedClient public API exclusively for all operations.
 
     Args:
         session: Database session for async operations.
@@ -65,33 +66,43 @@ class EntityService:
     def __init__(self, session: AsyncSession, dataset: Dataset):
         self._session = session
         self._dataset = dataset
-        self._state: AppState | None = None
-        self._facade: ProfileFacade | None = None
+        self._client: MetaseedClient | None = None
+        self._state: Any | None = None  # AppState, imported lazily
 
     @property
-    def state(self) -> AppState | None:
+    def client(self) -> MetaseedClient | None:
+        """Get the MetaseedClient, if loaded."""
+        return self._client
+
+    @property
+    def state(self) -> Any | None:
         """Get the current AppState, if loaded."""
         return self._state
 
     @property
-    def facade(self) -> ProfileFacade | None:
-        """Get the current ProfileFacade, if loaded."""
-        return self._facade
+    def facade(self) -> Any | None:
+        """Get the ProfileFacade from the client, if loaded.
 
-    async def ensure_state(self) -> AppState:
-        """Ensure AppState is loaded with a valid facade.
+        Provided for backward compatibility with code that needs facade access.
+        """
+        return self._client.facade if self._client else None
+
+    async def ensure_state(self) -> Any:
+        """Ensure AppState is loaded with a valid client.
 
         For datasets using custom specs (spec_draft_id), loads the spec from
-        the database and creates a ProfileFacade with dependency injection.
-        For built-in profiles, creates a standard facade.
+        the database and creates a MetaseedClient with from_spec().
+        For built-in profiles, creates a standard client.
 
         Returns:
             Populated AppState ready for entity operations.
 
         Raises:
             SpecNotFoundError: If spec_draft_id is set but spec cannot be found.
-            FacadeLoadError: If facade creation fails for any reason.
+            FacadeLoadError: If client creation fails for any reason.
         """
+        from metaseed.ui.state import AppState
+
         if self._state is not None:
             return self._state
 
@@ -100,45 +111,57 @@ class EntityService:
         state.profile = self._dataset.profile
         state.version = self._dataset.version
 
-        # Load spec from database if dataset uses a custom spec
+        # Load client (from custom spec or built-in profile)
         if self._dataset.spec_draft_id:
-            await self._load_facade_for_draft_spec(state)
+            await self._load_client_for_draft_spec()
         else:
-            # Built-in profile - let facade load from filesystem
-            try:
-                facade = state.get_or_create_facade()
-                if facade is None:
-                    profile = self._dataset.profile
-                    raise FacadeLoadError(
-                        f"Failed to create facade for {profile}",
-                        user_message=f"Could not load profile '{profile}'. "
-                        "Please check that this profile exists.",
-                    )
-                self._facade = facade
-            except Exception as e:
-                if isinstance(e, EntityServiceError):
-                    raise
-                raise FacadeLoadError(
-                    f"Failed to create facade: {e}",
-                    user_message=f"Could not load profile '{self._dataset.profile}': {e}",
-                ) from e
+            self._load_builtin_client()
 
-        # Deserialize existing tree data
+        # Inject facade into state for compatibility with existing code
+        if self._client:
+            state.facade = self._client.facade
+
+        # Deserialize existing tree data using client.load()
         if self._dataset.data:
-            self._deserialize_tree(state, self._dataset.data)
+            self._load_tree_data(self._dataset.data)
+            # Invalidate AppState cache to rebuild from client
+            state.invalidate_cache()
 
         self._state = state
         return state
 
-    async def _load_facade_for_draft_spec(self, state: AppState) -> None:
-        """Load spec from database and create facade with injected spec.
+    def _load_builtin_client(self) -> None:
+        """Load MetaseedClient for a built-in profile.
 
-        Args:
-            state: AppState to configure with the loaded facade.
+        Raises:
+            FacadeLoadError: If profile not found or client creation fails.
+        """
+        try:
+            self._client = MetaseedClient(
+                self._dataset.profile,
+                self._dataset.version,
+            )
+            logger.debug(f"Loaded built-in profile: {self._dataset.profile}")
+        except ProfileNotFoundError as e:
+            raise FacadeLoadError(
+                f"Profile not found: {e}",
+                user_message=f"Could not load profile '{self._dataset.profile}'. "
+                "Please check that this profile exists.",
+            ) from e
+        except Exception as e:
+            raise FacadeLoadError(
+                f"Failed to create client: {e}",
+                user_message=f"Could not load profile '{self._dataset.profile}': {e}",
+            ) from e
+
+    async def _load_client_for_draft_spec(self) -> None:
+        """Load MetaseedClient from database spec draft.
+
+        Uses MetaseedClient.from_spec() for clean API access.
 
         Raises:
             SpecNotFoundError: If spec draft cannot be found or has no data.
-            FacadeLoadError: If ProfileSpec validation or facade creation fails.
+            FacadeLoadError: If spec validation or client creation fails.
         """
         spec_draft = await self._session.get(SpecDraft, self._dataset.spec_draft_id)
 
@@ -162,102 +185,37 @@ class EntityService:
             raw_data = raw_data["spec"]
 
         try:
-            profile_spec = ProfileSpec.model_validate(raw_data)
-        except ValidationError as e:
-            logger.error(f"Invalid spec structure for draft {spec_draft.id}: {e}")
-            raise FacadeLoadError(
-                f"Invalid spec structure: {e}",
-                user_message="The specification has an invalid structure. "
-                "Please fix the specification in the spec builder.",
-            ) from e
-
-        try:
-            facade = ProfileFacade(
-                profile=self._dataset.profile,
-                spec=profile_spec,
-            )
-            state.facade = facade
-            state.profile = facade.profile
-            self._facade = facade
+            self._client = MetaseedClient.from_spec(raw_data)
             logger.debug(f"Loaded draft spec for dataset {self._dataset.id}")
         except Exception as e:
-            logger.error(f"Failed to create facade from draft spec: {e}")
+            logger.error(f"Failed to create client from draft spec: {e}")
             raise FacadeLoadError(
-                f"Failed to create facade: {e}",
+                f"Failed to create client: {e}",
                 user_message="Could not initialize the profile. "
                 "Please check the specification is complete.",
             ) from e
 
-    def _deserialize_tree(self, state: AppState, data: dict[str, Any]) -> None:
-        """Deserialize JSON data into AppState entity tree.
+    def _load_tree_data(self, data: dict[str, Any]) -> None:
+        """Load tree data into client using public API.
 
-        Uses model_construct to skip validation, allowing entities with
-        missing required fields to still load and be edited.
+        Uses client.load() which auto-detects tree vs flat format.
 
         Args:
-            state: AppState to populate.
             data: Dictionary loaded from database JSONB.
         """
-        if not data or "tree" not in data:
+        if not data:
             return
 
-        facade = state.get_or_create_facade()
-        if facade is None:
-            logger.error("Cannot deserialize tree: facade is None")
+        if not self._client:
+            logger.error("Cannot load tree: client is None")
             return
 
-        def deserialize_node(
-            node_data: dict[str, Any],
-            parent_id: str | None = None,
-        ) -> TreeNode | None:
-            entity_type = node_data.get("entity_type")
-            if not entity_type:
-                return None
-
-            try:
-                helper = getattr(facade, entity_type)
-            except AttributeError:
-                logger.warning(f"Entity type '{entity_type}' not in facade")
-                return None
-
-            instance_data = node_data.get("data", {})
-            instance = None
-
-            # Try normal creation first, fall back to model_construct
-            try:
-                instance = helper.create(**instance_data)
-            except Exception as e:
-                logger.debug(f"Validation failed for {entity_type}, using model_construct: {e}")
-                try:
-                    model_class = helper._model
-                    instance = model_class.model_construct(**instance_data)
-                except Exception as e2:
-                    logger.error(f"model_construct failed for {entity_type}: {e2}")
-
-            node = TreeNode(
-                id=node_data.get("id", ""),
-                entity_type=entity_type,
-                instance=instance,
-                label=node_data.get("label", f"New {entity_type}"),
-                parent_id=parent_id,
-            )
-
-            for child_data in node_data.get("children", []):
-                child = deserialize_node(child_data, parent_id=node.id)
-                if child:
-                    node.children.append(child)
-                    state.nodes_by_id[child.id] = child
-
-            return node
-
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        for node_data in data.get("tree", []):
-            node = deserialize_node(node_data)
-            if node:
-                state.entity_tree.append(node)
-                state.nodes_by_id[node.id] = node
+        try:
+            # client.load() auto-detects tree vs flat format
+            count = self._client.load(data)
+            logger.debug(f"Loaded {count} entities from database")
+        except Exception as e:
+            logger.error(f"Failed to load tree data: {e}")
 
     def get_helper(self, entity_type: str) -> Any:
         """Get the helper for an entity type.
@@ -269,23 +227,25 @@ class EntityService:
             Entity helper from the facade.
 
         Raises:
-            EntityTypeNotFoundError: If entity type doesn't exist in the facade.
-            FacadeLoadError: If facade hasn't been loaded.
+            EntityTypeNotFoundError: If entity type doesn't exist.
+            FacadeLoadError: If client hasn't been loaded.
         """
-        if self._facade is None:
+        if self._client is None:
             raise FacadeLoadError(
-                "Facade not loaded",
+                "Client not loaded",
                 user_message="Please call ensure_state() before accessing entity helpers.",
             )
 
-        try:
-            return getattr(self._facade, entity_type)
-        except AttributeError:
+        # Check if entity type exists using public API
+        if entity_type not in self._client.list_entity_types():
             raise EntityTypeNotFoundError(
-                f"Entity type '{entity_type}' not found in facade",
+                f"Entity type '{entity_type}' not found",
                 user_message=f"Unknown entity type: {entity_type}. "
                 "Please check the specification includes this entity.",
             )
+
+        # Return helper for backward compatibility (still needs facade access)
+        return getattr(self._client.facade, entity_type)
 
     async def create_or_update_entity(
         self,
@@ -298,6 +258,8 @@ class EntityService:
 
         Always saves the entity even if validation fails. Validation errors
         are returned as warnings in the result.
+
+        Uses MetaseedClient public API with skip_validation=True.
 
         Args:
             entity_type: Type of entity to create/update.
@@ -316,76 +278,56 @@ class EntityService:
                 error_message=e.user_message,
             )
 
-        # Get helper for entity type
-        try:
-            helper = self.get_helper(entity_type)
-        except EntityServiceError as e:
+        # Client is guaranteed to be set after ensure_state()
+        assert self._client is not None
+
+        # Validate entity type exists using public API
+        if entity_type not in self._client.list_entity_types():
             return EntitySaveResult(
                 success=False,
-                error_message=e.user_message,
+                error_message=f"Unknown entity type: {entity_type}. "
+                "Please check the specification includes this entity.",
             )
 
-        # Collect validation errors but don't block save
+        # Collect validation warnings using client.validate_entity() after creation
         validation_errors: list[str] = []
 
-        # Try creating with full validation first
-        instance = None
-        try:
-            model_class = helper._model
-            instance = model_class(**values)
-        except ValidationError as e:
-            # Extract validation error messages, but skip "Field required" for
-            # nested fields that have SOME data (user may be filling in progressively)
-            for error in e.errors():
-                field_path = ".".join(str(loc) for loc in error["loc"])
-                error_type = error.get("type", "")
-                field_name = error["loc"][0] if error["loc"] else ""
-
-                # Skip "missing" errors for nested fields that have partial data
-                if error_type == "missing" and field_name in values:
-                    field_value = values.get(field_name)
-                    # If field has some data (dict with values, non-empty list), skip warning
-                    if isinstance(field_value, dict) and field_value:
-                        continue
-                    if isinstance(field_value, list) and field_value:
-                        continue
-
-                validation_errors.append(f"{field_path}: {error['msg']}")
-
-            # Fall back to model_construct (skips validation)
+        # Update or create using MetaseedClient public API
+        if node_id and node_id in state.nodes_by_id:
+            # Update existing entity
             try:
-                instance = model_class.model_construct(**values)
-                logger.debug(f"Created {entity_type} with model_construct due to validation errors")
-            except Exception as e2:
-                logger.error(f"model_construct failed: {e2}")
+                entity = self._client.update_entity(node_id, values, skip_validation=True)
+                # Invalidate AppState cache to rebuild from client
+                state.invalidate_cache()
+                node = state.nodes_by_id.get(node_id)
+
+                # Get validation warnings
+                validation_errors = self._get_validation_warnings(entity_type, values)
+            except Exception as e:
+                logger.error(f"Failed to update {entity_type}: {e}")
                 return EntitySaveResult(
                     success=False,
-                    error_message=f"Failed to create {entity_type}: {e2}",
+                    error_message=f"Failed to update {entity_type}: {e}",
                 )
-        except Exception as e:
-            logger.error(f"Unexpected error creating {entity_type}: {e}")
-            return EntitySaveResult(
-                success=False,
-                error_message=f"Failed to create {entity_type}: {e}",
-            )
-
-        # Update or create node
-        if node_id and node_id in state.nodes_by_id:
-            # Update existing node
-            node = state.nodes_by_id[node_id]
-            node.instance = instance
-            label = helper.get_label(instance)
-            if label:
-                node.label = label
         else:
-            # Create new node - bypass facade validation if we have validation errors
-            if validation_errors:
-                # Create TreeNode directly to skip facade's validation
-                node = self._create_node_directly(state, entity_type, instance, parent_id, helper)
-            else:
-                # Use normal flow which validates
-                node = state.add_node(entity_type, instance, parent_id=parent_id)
-            node_id = node.id
+            # Create new entity
+            try:
+                entity = self._client.create_entity(
+                    entity_type, values, parent_id=parent_id, skip_validation=True
+                )
+                # Invalidate AppState cache to rebuild with new entity
+                state.invalidate_cache()
+                node_id = entity.id
+                node = state.nodes_by_id.get(node_id)
+
+                # Get validation warnings
+                validation_errors = self._get_validation_warnings(entity_type, values)
+            except Exception as e:
+                logger.error(f"Failed to create {entity_type}: {e}")
+                return EntitySaveResult(
+                    success=False,
+                    error_message=f"Failed to create {entity_type}: {e}",
+                )
 
         # Save to database
         try:
@@ -406,6 +348,48 @@ class EntityService:
             node=node,
             validation_errors=validation_errors,
         )
+
+    def _get_validation_warnings(self, entity_type: str, values: dict[str, Any]) -> list[str]:
+        """Get validation warnings for entity data without blocking.
+
+        Attempts to create entity with full validation to capture errors.
+
+        Args:
+            entity_type: Type of entity.
+            values: Field values to validate.
+
+        Returns:
+            List of validation warning messages.
+        """
+        warnings: list[str] = []
+
+        if not self._client:
+            return warnings
+
+        # Try creating with validation to capture errors
+        try:
+            # Use public API to get model class
+            model_class = self._client.get_model(entity_type)
+            model_class(**values)
+        except Exception as e:
+            # Extract validation error messages
+            if hasattr(e, "errors"):
+                for error in e.errors():
+                    field_path = ".".join(str(loc) for loc in error["loc"])
+                    error_type = error.get("type", "")
+                    field_name = error["loc"][0] if error["loc"] else ""
+
+                    # Skip "missing" errors for nested fields with partial data
+                    if error_type == "missing" and field_name in values:
+                        field_value = values.get(field_name)
+                        if isinstance(field_value, dict) and field_value:
+                            continue
+                        if isinstance(field_value, list) and field_value:
+                            continue
+
+                    warnings.append(f"{field_path}: {error['msg']}")
+
+        return warnings
 
     async def delete_entity(self, node_id: str) -> EntitySaveResult:
         """Delete an entity by its node ID.
@@ -430,8 +414,20 @@ class EntityService:
                 error_message="Entity not found.",
             )
 
-        # Delete the node
-        state.delete_node(node_id)
+        # Client is guaranteed to be set after ensure_state()
+        assert self._client is not None
+
+        # Delete using MetaseedClient public API
+        try:
+            self._client.delete_entity(node_id)
+            # Invalidate AppState cache to rebuild without deleted entity
+            state.invalidate_cache()
+        except Exception as e:
+            logger.error(f"Failed to delete entity: {e}")
+            return EntitySaveResult(
+                success=False,
+                error_message="Failed to delete entity.",
+            )
 
         # Save to database
         try:
@@ -445,67 +441,18 @@ class EntityService:
 
         return EntitySaveResult(success=True)
 
-    def _create_node_directly(
-        self,
-        state: AppState,
-        entity_type: str,
-        instance: Any,
-        parent_id: str | None,
-        helper: Any,
-    ) -> TreeNode:
-        """Create a TreeNode directly without facade validation.
-
-        Used when we need to save entities that have validation errors.
-        Bypasses facade.add_entity() which would validate and reject.
-
-        Args:
-            state: AppState to add the node to.
-            entity_type: Type of entity.
-            instance: The entity instance (already created with model_construct).
-            parent_id: Optional parent node ID.
-            helper: Entity helper for label extraction.
-
-        Returns:
-            Created TreeNode.
-        """
-        import uuid
-
-        # Generate node ID
-        node_id = str(uuid.uuid4())
-
-        # Get label from instance
-        label = helper.get_label(instance) if helper else f"New {entity_type}"
-        if not label:
-            label = f"New {entity_type}"
-
-        # Create TreeNode
-        node = TreeNode(
-            id=node_id,
-            entity_type=entity_type,
-            instance=instance,
-            label=label,
-            parent_id=parent_id,
-        )
-
-        # Add to state's tree structure
-        if parent_id and parent_id in state.nodes_by_id:
-            parent_node = state.nodes_by_id[parent_id]
-            parent_node.children.append(node)
-        else:
-            state.entity_tree.append(node)
-
-        state.nodes_by_id[node_id] = node
-
-        return node
-
     async def _save_state(self) -> None:
-        """Save current state to database."""
-        from metaseed_hub.ui.helpers import save_dataset_state
-
-        if self._state is None:
+        """Save current state to database using client.serialize()."""
+        if self._client is None:
             raise EntityServiceError(
-                "Cannot save: state not loaded",
-                user_message="Internal error: state not initialized.",
+                "Cannot save: client not loaded",
+                user_message="Internal error: client not initialized.",
             )
 
-        await save_dataset_state(self._session, self._dataset, self._state)
+        # Use client.serialize(format='tree') for database storage
+        tree_data = self._client.serialize(format="tree")
+
+        # Update dataset
+        self._dataset.data = tree_data
+        self._session.add(self._dataset)
+        await self._session.commit()
