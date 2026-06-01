@@ -462,8 +462,6 @@ async def dataset_delete(
         )
         return response
 
-    tenant_id = dataset.tenant_id
-
     try:
         # Manually delete related records (in case CASCADE not set in DB)
         await session.execute(
@@ -491,27 +489,14 @@ async def dataset_delete(
         )
         return response
 
-    # If request target is body, redirect to home (called from dataset page)
-    hx_target = request.headers.get("HX-Target", "")
-    if hx_target == "body":
-        # Return HTML with redirect script as fallback
-        response = Response(
-            content='<script>window.location.href="/hub/";</script>',
-            status_code=200,
-            media_type="text/html",
-        )
-        response.headers["HX-Redirect"] = "/hub/"
-        return response
-
-    # Return updated dataset grid
-    result = await session.execute(select(Dataset).where(Dataset.tenant_id == tenant_id))
-    datasets = list(result.scalars().all())
-
-    return render_template(
-        request=request,
-        name="partials/dataset_grid.html",
-        context={"datasets": datasets},
+    # Always redirect to home after delete
+    response = Response(
+        content='<script>window.location.href="/hub/";</script>',
+        status_code=200,
+        media_type="text/html",
     )
+    response.headers["HX-Redirect"] = "/hub/"
+    return response
 
 
 @router.post("/{dataset_id}/load-example", response_class=HTMLResponse)
