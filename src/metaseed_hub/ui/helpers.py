@@ -717,9 +717,11 @@ async def ensure_dataset_facade(
     """Get dataset state and ensure facade is properly set for user-defined specs.
 
     For datasets using database-stored specs (spec_draft_id), this loads the spec
-    and creates a ProfileFacade with dependency injection BEFORE deserializing
-    the tree (which requires a facade). For built-in profiles, it creates a
-    standard facade.
+    and creates a MetaseedClient with from_spec(). For built-in profiles, it creates
+    a standard client.
+
+    Uses MetaseedClient.load() to populate the facade's internal entity store,
+    which is required for operations like to_graph() and get_roots().
 
     Args:
         dataset: Dataset model with profile, version, and optional spec_draft_id.
@@ -728,8 +730,7 @@ async def ensure_dataset_facade(
     Returns:
         AppState with facade ready to use.
     """
-    from metaseed.facade import ProfileFacade
-    from metaseed.specs.schema import ProfileSpec
+    from metaseed import MetaseedClient
 
     from metaseed_hub.models import SpecDraft
 
@@ -737,6 +738,8 @@ async def ensure_dataset_facade(
     state = AppState()
     state.profile = dataset.profile
     state.version = dataset.version
+
+    client: MetaseedClient | None = None
 
     # Load spec from database FIRST if dataset uses a user-defined spec
     if dataset.spec_draft_id:
@@ -747,12 +750,9 @@ async def ensure_dataset_facade(
                 raw_data = spec_draft.spec_data
                 if isinstance(raw_data, dict) and "spec" in raw_data:
                     raw_data = raw_data["spec"]
-                profile_spec = ProfileSpec.model_validate(raw_data)
-                # Create facade with injected spec (bypasses file loader)
-                state.facade = ProfileFacade(
-                    profile=dataset.profile,
-                    spec=profile_spec,
-                )
+                # Create client from custom spec
+                client = MetaseedClient.from_spec(raw_data)
+                state.facade = client.facade
                 # Update state.profile to match facade's lowercased version
                 state.profile = state.facade.profile
                 logger.debug(f"Loaded draft spec for dataset {dataset.id}: {dataset.profile}")
@@ -764,11 +764,24 @@ async def ensure_dataset_facade(
         except Exception as e:
             logger.error(f"Failed to load spec for dataset {dataset.id}: {e}")
             # Don't re-raise - let downstream code handle missing facade
+    else:
+        # Built-in profile: create standard client
+        try:
+            client = MetaseedClient(dataset.profile, dataset.version)
+            state.facade = client.facade
+        except Exception as e:
+            logger.error(f"Failed to load profile {dataset.profile}: {e}")
 
-    # NOW deserialize tree (which requires facade)
-    if dataset.data:
-        deserialize_tree(state, dataset.data)
-        logger.debug(f"Deserialized {len(state.entity_tree)} root nodes for dataset {dataset.id}")
+    # Load entities into facade's internal store using client.load()
+    # This is required for to_graph() and other facade operations
+    if client and dataset.data:
+        try:
+            count = client.load(dataset.data)
+            logger.debug(f"Loaded {count} entities for dataset {dataset.id}")
+            # Invalidate AppState cache to rebuild from facade
+            state.invalidate_cache()
+        except Exception as e:
+            logger.error(f"Failed to load entities for dataset {dataset.id}: {e}")
 
     return state
 

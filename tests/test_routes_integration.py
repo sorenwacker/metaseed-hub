@@ -1803,7 +1803,8 @@ class TestDeserializeTreeWithValidationErrors:
         node = state.entity_tree[0]
         assert node.id == "node-123"
         assert node.entity_type == "Investigation"
-        assert node.label == "My Investigation"
+        # Label is dynamically generated from data (unique_id field)
+        assert node.label == "INV-001"
 
         # The node should have an instance so it can be edited
         assert node.instance is not None, "Node must have instance so it can be edited"
