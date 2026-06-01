@@ -3953,10 +3953,51 @@ a.spec-editor-close:hover {
     margin: 0;
     font-family: var(--font-display);
     font-size: 1.125rem;
+    color: var(--clr-ink);
 }
 
 .modal-body {
     padding: var(--space-lg);
+}
+
+/* Ensure modal form elements have proper text colors */
+.modal-dialog,
+.modal-dialog .modal-header,
+.modal-dialog .modal-body,
+.modal-dialog .modal-footer {
+    color: var(--clr-ink);
+}
+
+.modal-dialog .form-group label,
+.modal-dialog .form-label {
+    color: var(--clr-ink);
+}
+
+.modal-dialog .form-group input,
+.modal-dialog .form-group select,
+.modal-dialog .form-group textarea,
+.modal-dialog .form-input {
+    color: var(--clr-ink);
+    background: white;
+    border: 1px solid var(--clr-border);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    font-size: 0.9375rem;
+}
+
+.modal-dialog .form-group input::placeholder,
+.modal-dialog .form-input::placeholder {
+    color: var(--clr-ink-light);
+}
+
+.modal-dialog .form-help,
+.modal-dialog small {
+    color: var(--clr-ink-light);
+}
+
+.modal-dialog .required {
+    color: var(--clr-error);
 }
 
 .modal-footer {
