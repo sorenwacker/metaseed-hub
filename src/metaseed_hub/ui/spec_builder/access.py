@@ -1,6 +1,6 @@
 """Access control helpers for spec builder.
 
-Provides authentication, authorization, and workspace access functions.
+Provides authentication, authorization, and tenant access functions.
 """
 
 from __future__ import annotations
@@ -25,8 +25,6 @@ from metaseed_hub.models import (
     TeamRole,
     Tenant,
     User,
-    Workspace,
-    WorkspaceTeam,
 )
 
 from .cache import state_cache
@@ -104,91 +102,19 @@ async def get_user_context(
     return user.id, tenant.id
 
 
-async def get_user_workspaces(
+async def can_access_tenant(
     session: AsyncSession,
     user_id: str,
     tenant_id: str,
-) -> list[Workspace]:
-    """Get workspaces accessible to user through team membership.
-
-    A user can access a workspace if:
-    - They are a member of a team that has access to the workspace
-    - OR the workspace belongs to their tenant (temporary fallback for migration)
-
-    Args:
-        session: Database session
-        user_id: User ID
-        tenant_id: Tenant ID
-
-    Returns:
-        List of accessible workspaces
-    """
-    result = await session.execute(
-        select(Workspace)
-        .join(WorkspaceTeam, Workspace.id == WorkspaceTeam.workspace_id)
-        .join(Team, WorkspaceTeam.team_id == Team.id)
-        .join(TeamMembership, Team.id == TeamMembership.team_id)
-        .where(
-            TeamMembership.user_id == user_id,
-            Workspace.deleted_at.is_(None),
-        )
-        .distinct()
-    )
-    team_workspaces = list(result.scalars().all())
-
-    if team_workspaces:
-        return team_workspaces
-
-    # Fallback: return all workspaces in the tenant
-    logger.warning(
-        "User %s has no team memberships, falling back to tenant-wide workspace access.",
-        user_id,
-    )
-    result = await session.execute(
-        select(Workspace).where(
-            Workspace.tenant_id == tenant_id,
-            Workspace.deleted_at.is_(None),
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def can_access_workspace(
-    session: AsyncSession,
-    user_id: str,
-    workspace_id: str,
 ) -> bool:
-    """Check if user has access to workspace via team membership."""
+    """Check if user belongs to tenant."""
     result = await session.execute(
-        select(WorkspaceTeam)
-        .join(Team, WorkspaceTeam.team_id == Team.id)
-        .join(TeamMembership, Team.id == TeamMembership.team_id)
-        .where(
-            WorkspaceTeam.workspace_id == workspace_id,
-            TeamMembership.user_id == user_id,
-        )
-    )
-    if result.scalar_one_or_none():
-        return True
-
-    # Fallback: check if workspace is in user's tenant
-    result = await session.execute(
-        select(Workspace)
-        .join(User, Workspace.tenant_id == User.tenant_id)
-        .where(
-            Workspace.id == workspace_id,
+        select(User).where(
             User.id == user_id,
-            Workspace.deleted_at.is_(None),
+            User.tenant_id == tenant_id,
         )
     )
-    has_fallback_access = result.scalar_one_or_none() is not None
-    if has_fallback_access:
-        logger.warning(
-            "User %s accessing workspace %s via tenant fallback.",
-            user_id,
-            workspace_id,
-        )
-    return has_fallback_access
+    return result.scalar_one_or_none() is not None
 
 
 async def can_edit_spec(
@@ -196,7 +122,7 @@ async def can_edit_spec(
     user_id: str,
     spec_id: str,
 ) -> bool:
-    """Check if user can edit spec (workspace member with ADMIN/OWNER role or author)."""
+    """Check if user can edit spec (tenant member with ADMIN/OWNER role or author)."""
     result = await session.execute(
         select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
     )
@@ -207,46 +133,18 @@ async def can_edit_spec(
     if spec.created_by_id == user_id:
         return True
 
+    # Check if user is admin/owner in a team within the same tenant
     result = await session.execute(
         select(TeamMembership)
         .join(Team, TeamMembership.team_id == Team.id)
-        .join(WorkspaceTeam, Team.id == WorkspaceTeam.team_id)
+        .join(User, User.tenant_id == Team.tenant_id)
         .where(
-            WorkspaceTeam.workspace_id == spec.workspace_id,
+            Team.tenant_id == spec.tenant_id,
             TeamMembership.user_id == user_id,
             TeamMembership.role.in_([TeamRole.ADMIN, TeamRole.OWNER]),
         )
     )
     return result.scalar_one_or_none() is not None
-
-
-async def get_or_create_default_workspace(
-    session: AsyncSession,
-    tenant_id: str,
-) -> Workspace:
-    """Get or create a default workspace for a tenant."""
-    result = await session.execute(
-        select(Workspace)
-        .where(
-            Workspace.tenant_id == tenant_id,
-            Workspace.deleted_at.is_(None),
-        )
-        .order_by(Workspace.created_at)
-    )
-    workspace = result.scalars().first()
-
-    if workspace:
-        return workspace
-
-    workspace = Workspace(
-        tenant_id=tenant_id,
-        name="Default",
-        description="Default workspace",
-    )
-    session.add(workspace)
-    await session.commit()
-    await session.refresh(workspace)
-    return workspace
 
 
 async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:
@@ -271,7 +169,17 @@ async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_i
             SpecDraftMember.user_id == user_id,
         )
     )
-    return member_result.scalar_one_or_none() is not None
+    if member_result.scalar_one_or_none() is not None:
+        return True
+
+    # Check if user belongs to the same tenant
+    result = await session.execute(
+        select(User).where(
+            User.id == user_id,
+            User.tenant_id == draft.tenant_id,
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def load_state_for_draft(
@@ -296,7 +204,7 @@ async def load_state_for_draft(
     if cached_state is not None:
         result = await session.execute(
             select(SpecDraft)
-            .options(selectinload(SpecDraft.workspace))
+            .options(selectinload(SpecDraft.tenant))
             .where(SpecDraft.id == draft_id)
         )
         draft = result.scalar_one_or_none()
@@ -304,7 +212,7 @@ async def load_state_for_draft(
             return cached_state, draft
 
     result = await session.execute(
-        select(SpecDraft).options(selectinload(SpecDraft.workspace)).where(SpecDraft.id == draft_id)
+        select(SpecDraft).options(selectinload(SpecDraft.tenant)).where(SpecDraft.id == draft_id)
     )
     draft = result.scalar_one_or_none()
 
@@ -353,20 +261,20 @@ async def save_state_to_draft(
 async def create_new_draft(
     session: AsyncSession,
     user_id: str,
-    workspace_id: str,
+    tenant_id: str,
     name: str,
     spec: ProfileSpec,
     template_source: tuple[str, str] | None = None,
     source_spec_id: str | None = None,
 ) -> SpecDraft:
-    """Create a new draft in a workspace."""
+    """Create a new draft in a tenant."""
     state = SpecBuilderState()
     state.spec = spec
     state.template_source = template_source
 
     draft = SpecDraft(
         user_id=user_id,
-        workspace_id=workspace_id,
+        tenant_id=tenant_id,
         source_spec_id=source_spec_id,
         name=name,
         version=spec.version,

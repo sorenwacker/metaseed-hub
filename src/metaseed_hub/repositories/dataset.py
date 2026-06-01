@@ -85,29 +85,29 @@ def _entities_to_tree(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
     """Database-backed dataset storage for metaseed-hub.
 
-    This repository is workspace-scoped. Each instance operates within
-    a single workspace context.
+    This repository is tenant-scoped. Each instance operates within
+    a single tenant context.
     """
 
-    def __init__(self, session: AsyncSession, workspace_id: str) -> None:
-        """Initialize repository with database session and workspace.
+    def __init__(self, session: AsyncSession, tenant_id: str) -> None:
+        """Initialize repository with database session and tenant.
 
         Args:
             session: Async SQLAlchemy session.
-            workspace_id: Workspace to scope operations to.
+            tenant_id: Tenant to scope operations to.
         """
         self._session = session
-        self._workspace_id = workspace_id
+        self._tenant_id = tenant_id
 
     async def list(self) -> list[DatasetInfo]:
-        """List all datasets in the workspace.
+        """List all datasets in the tenant.
 
         Returns:
             List of dataset info summaries.
         """
         result = await self._session.execute(
             select(Dataset).where(
-                Dataset.workspace_id == self._workspace_id,
+                Dataset.tenant_id == self._tenant_id,
                 Dataset.deleted_at.is_(None),
             )
         )
@@ -143,7 +143,7 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
 
         result = await self._session.execute(
             select(Dataset).where(
-                Dataset.workspace_id == self._workspace_id,
+                Dataset.tenant_id == self._tenant_id,
                 Dataset.name == name,
                 Dataset.deleted_at.is_(None),
             )
@@ -163,7 +163,7 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
             dataset.data = db_data
         else:
             dataset = Dataset(
-                workspace_id=self._workspace_id,
+                tenant_id=self._tenant_id,
                 name=name,
                 profile=data.profile,
                 version=data.version,
@@ -196,7 +196,7 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
         """
         result = await self._session.execute(
             select(Dataset).where(
-                Dataset.workspace_id == self._workspace_id,
+                Dataset.tenant_id == self._tenant_id,
                 Dataset.name == name,
                 Dataset.deleted_at.is_(None),
             )
@@ -229,7 +229,7 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
         """
         result = await self._session.execute(
             select(Dataset).where(
-                Dataset.workspace_id == self._workspace_id,
+                Dataset.tenant_id == self._tenant_id,
                 Dataset.name == name,
                 Dataset.deleted_at.is_(None),
             )
@@ -256,7 +256,7 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
             select(func.count())
             .select_from(Dataset)
             .where(
-                Dataset.workspace_id == self._workspace_id,
+                Dataset.tenant_id == self._tenant_id,
                 Dataset.name == name,
                 Dataset.deleted_at.is_(None),
             )

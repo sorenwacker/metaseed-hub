@@ -7,7 +7,7 @@ so we test them indirectly through the app or by recreating the logic here.
 from metaseed.ui.state import AppState, TreeNode
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .factories import make_dataset, make_tenant, make_workspace
+from .factories import make_dataset, make_tenant
 
 
 # Recreate serialize/deserialize logic for testing
@@ -245,11 +245,7 @@ class TestEntityPersistence:
         session.add(tenant)
         await session.flush()
 
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-
-        dataset = make_dataset(workspace=workspace, profile="miappe", version="1.1")
+        dataset = make_dataset(tenant=tenant, profile="miappe", version="1.1")
         session.add(dataset)
         await session.flush()
         await session.refresh(dataset)
@@ -395,11 +391,7 @@ class TestFieldUpdates:
         session.add(tenant)
         await session.flush()
 
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-
-        dataset = make_dataset(workspace=workspace, profile="miappe", version="1.1")
+        dataset = make_dataset(tenant=tenant, profile="miappe", version="1.1")
         session.add(dataset)
         await session.flush()
         await session.refresh(dataset)

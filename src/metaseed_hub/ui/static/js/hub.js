@@ -372,3 +372,5 @@ function toggleSidebar() {
         layout.classList.toggle('sidebar-collapsed');
     }
 }
+
+// Ontology lookup is now handled by metaseed's lookup.js

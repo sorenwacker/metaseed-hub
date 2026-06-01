@@ -50,18 +50,8 @@
         </h4>
 
         <div class="fields-list">
-            {# Sort fields: regular fields first, then relationship fields #}
-            {% set regular_fields = [] %}
-            {% set relation_fields = [] %}
             {% for field in entity.fields %}
-                {% if field.type in ['list', 'entity'] and field.items %}
-                    {% set _ = relation_fields.append((loop.index0, field)) %}
-                {% else %}
-                    {% set _ = regular_fields.append((loop.index0, field)) %}
-                {% endif %}
-            {% endfor %}
-            {% set sorted_fields = regular_fields + relation_fields %}
-            {% for idx, field in sorted_fields %}
+            {% set idx = loop.index0 %}
             <div class="field-item {% if idx == editing_field_idx %}editing{% endif %}"
                  id="field-card-{{ idx }}">
                 <div class="field-header"
@@ -75,14 +65,34 @@
                         <span class="field-required" title="Required">*</span>
                         {% endif %}
                     </div>
-                    <button class="btn-icon-sm danger"
-                            hx-delete="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}"
-                            hx-target="#editor-content"
-                            hx-swap="innerHTML"
-                            hx-confirm="Delete field '{{ field.name }}'?"
-                            onclick="event.stopPropagation();">
-                        &times;
-                    </button>
+                    <div class="field-actions">
+                        <button class="btn-icon-sm move{% if loop.first %} disabled{% endif %}"
+                                hx-post="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}/move-up"
+                                hx-target="#editor-content"
+                                hx-swap="innerHTML"
+                                onclick="event.stopPropagation();"
+                                title="Move up"
+                                {% if loop.first %}disabled{% endif %}>
+                            &#9650;
+                        </button>
+                        <button class="btn-icon-sm move{% if loop.last %} disabled{% endif %}"
+                                hx-post="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}/move-down"
+                                hx-target="#editor-content"
+                                hx-swap="innerHTML"
+                                onclick="event.stopPropagation();"
+                                title="Move down"
+                                {% if loop.last %}disabled{% endif %}>
+                            &#9660;
+                        </button>
+                        <button class="btn-icon-sm danger"
+                                hx-delete="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}/field/{{ idx }}"
+                                hx-target="#editor-content"
+                                hx-swap="innerHTML"
+                                hx-confirm="Delete field '{{ field.name }}'?"
+                                onclick="event.stopPropagation();">
+                            &times;
+                        </button>
+                    </div>
                 </div>
                 {% if field.items %}
                 <div class="field-meta">

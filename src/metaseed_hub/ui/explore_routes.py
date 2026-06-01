@@ -185,7 +185,6 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             SpecStatus,
             Tenant,
             User,
-            Workspace,
         )
         from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 
@@ -210,7 +209,7 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 except Exception:
                     profile_display_names[profile] = profile
 
-            # Get user's tenant to find their workspaces
+            # Get user's tenant
             tenant_slug = user.keycloak_id[:8]
             result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
             tenant = result.scalar_one_or_none()
@@ -223,26 +222,21 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             db_user = db_user_result.scalar_one_or_none()
 
             if tenant:
-                ws_result = await session.execute(
-                    select(Workspace).where(Workspace.tenant_id == tenant.id)
+                # Get drafts owned by tenant
+                drafts_result = await session.execute(
+                    select(SpecDraft).where(SpecDraft.tenant_id == tenant.id)
                 )
-                workspaces = list(ws_result.scalars().all())
-                workspace_ids = [ws.id for ws in workspaces]
+                user_drafts = list(drafts_result.scalars().all())
 
-                if workspace_ids:
-                    drafts_result = await session.execute(
-                        select(SpecDraft).where(SpecDraft.workspace_id.in_(workspace_ids))
+                # Get published specs for tenant
+                specs_result = await session.execute(
+                    select(Spec).where(
+                        Spec.tenant_id == tenant.id,
+                        Spec.status == SpecStatus.PUBLISHED,
+                        Spec.deleted_at.is_(None),
                     )
-                    user_drafts = list(drafts_result.scalars().all())
-
-                    specs_result = await session.execute(
-                        select(Spec).where(
-                            Spec.workspace_id.in_(workspace_ids),
-                            Spec.status == SpecStatus.PUBLISHED,
-                            Spec.deleted_at.is_(None),
-                        )
-                    )
-                    published_specs = list(specs_result.scalars().all())
+                )
+                published_specs = list(specs_result.scalars().all())
 
             # Also include drafts shared with user via SpecDraftMember
             if db_user:

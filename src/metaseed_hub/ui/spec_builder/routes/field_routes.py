@@ -239,3 +239,83 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "field_types": [t.value for t in FieldType],
             },
         )
+
+    @router.post(
+        "/{draft_id}/entity/{entity_name}/field/{idx}/move-up", response_class=HTMLResponse
+    )
+    async def move_field_up(
+        request: Request,
+        entity_name: str,
+        idx: int,
+        ctx: DraftContextDep,
+        session: SessionDep,
+    ) -> HTMLResponse:
+        """Move a field up in the list."""
+        if entity_name not in ctx.spec.entities:
+            raise HTTPException(status_code=404, detail=f"Entity '{entity_name}' not found")
+
+        entity = ctx.spec.entities[entity_name]
+        if idx < 0 or idx >= len(entity.fields):
+            raise HTTPException(status_code=404, detail="Field not found")
+
+        if idx > 0:
+            # Swap field with previous field
+            entity.fields[idx], entity.fields[idx - 1] = (
+                entity.fields[idx - 1],
+                entity.fields[idx],
+            )
+            ctx.builder.mark_changed()
+            await ctx.save(session)
+
+        return templates.TemplateResponse(
+            request,
+            "spec_builder/partials/entity_editor.html",
+            {
+                "draft_id": ctx.draft.id,
+                "spec": ctx.spec,
+                "entity_name": entity_name,
+                "entity": entity,
+                "editing_field_idx": None,
+                "field_types": [t.value for t in FieldType],
+            },
+        )
+
+    @router.post(
+        "/{draft_id}/entity/{entity_name}/field/{idx}/move-down", response_class=HTMLResponse
+    )
+    async def move_field_down(
+        request: Request,
+        entity_name: str,
+        idx: int,
+        ctx: DraftContextDep,
+        session: SessionDep,
+    ) -> HTMLResponse:
+        """Move a field down in the list."""
+        if entity_name not in ctx.spec.entities:
+            raise HTTPException(status_code=404, detail=f"Entity '{entity_name}' not found")
+
+        entity = ctx.spec.entities[entity_name]
+        if idx < 0 or idx >= len(entity.fields):
+            raise HTTPException(status_code=404, detail="Field not found")
+
+        if idx < len(entity.fields) - 1:
+            # Swap field with next field
+            entity.fields[idx], entity.fields[idx + 1] = (
+                entity.fields[idx + 1],
+                entity.fields[idx],
+            )
+            ctx.builder.mark_changed()
+            await ctx.save(session)
+
+        return templates.TemplateResponse(
+            request,
+            "spec_builder/partials/entity_editor.html",
+            {
+                "draft_id": ctx.draft.id,
+                "spec": ctx.spec,
+                "entity_name": entity_name,
+                "entity": entity,
+                "editing_field_idx": None,
+                "field_types": [t.value for t in FieldType],
+            },
+        )

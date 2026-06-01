@@ -24,14 +24,14 @@ from metaseed_hub.models import (
     ReactionType,
     SpecDraft,
     SpecDraftMember,
+    Tenant,
     User,
-    Workspace,
 )
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
+    ensure_tenant_and_user,
     get_dataset_for_user,
-    verify_workspace_access,
 )
 from metaseed_hub.ui.helpers import (
     add_entity_node,
@@ -60,28 +60,12 @@ async def dataset_new(
     request: Request,
     session: DbSession,
     user: CurrentUser,
-    workspace_id: str | None = None,
 ) -> Response:
     """Return dataset creation form."""
     from metaseed.specs.loader import SpecLoader
 
-    # If no workspace_id provided, get user's first workspace
-    if not workspace_id:
-        # Get user's tenant using sub (keycloak ID)
-        tenant_result = await session.execute(
-            select(Workspace)
-            .join(Workspace.tenant)
-            .where(Workspace.tenant.has(slug=user.sub[:8]))
-            .limit(1)
-        )
-        workspace = tenant_result.scalar_one_or_none()
-        if workspace:
-            workspace_id = workspace.id
-        else:
-            # No workspace found - this shouldn't happen normally
-            return Response(
-                content="<p>No workspace found. Please create one first.</p>", status_code=400
-            )
+    # Get or create tenant and user
+    tenant, db_user = await ensure_tenant_and_user(session, user)
 
     # Get available profiles and versions from metaseed
     loader = SpecLoader()
@@ -121,24 +105,18 @@ async def dataset_new(
             }
         )
 
-    # Get spec drafts from this workspace
-    drafts_result = await session.execute(
-        select(SpecDraft).where(SpecDraft.workspace_id == workspace_id)
-    )
+    # Get spec drafts from this tenant
+    drafts_result = await session.execute(select(SpecDraft).where(SpecDraft.tenant_id == tenant.id))
     owned_drafts = list(drafts_result.scalars().all())
 
     # Also get specs shared with this user via SpecDraftMember
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
-
     shared_drafts: list[SpecDraft] = []
-    if db_user:
-        shared_result = await session.execute(
-            select(SpecDraft)
-            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-            .where(SpecDraftMember.user_id == db_user.id)
-        )
-        shared_drafts = list(shared_result.scalars().all())
+    shared_result = await session.execute(
+        select(SpecDraft)
+        .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+        .where(SpecDraftMember.user_id == db_user.id)
+    )
+    shared_drafts = list(shared_result.scalars().all())
 
     # Combine and deduplicate
     seen_ids: set[str] = set()
@@ -168,7 +146,7 @@ async def dataset_new(
         name="dataset_new.html",
         context={
             "user": user,
-            "workspace_id": workspace_id,
+            "tenant_id": tenant.id,
             "profiles": profiles_data,
             "user_specs": [],  # TODO: load user's custom specs
             "nav_active": "home",
@@ -183,7 +161,6 @@ async def dataset_import(
     user: CurrentUser,
     file: Annotated[UploadFile, File()],
     name: Annotated[str, Form()],
-    workspace_id: Annotated[str | None, Form()] = None,
     profile: Annotated[str | None, Form()] = None,
     version: Annotated[str | None, Form()] = None,
     csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
@@ -199,21 +176,8 @@ async def dataset_import(
     if not validate_csrf_token(request, csrf_token):
         return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
 
-    # Get workspace if not provided
-    if not workspace_id:
-        tenant_result = await session.execute(
-            select(Workspace)
-            .join(Workspace.tenant)
-            .where(Workspace.tenant.has(slug=user.sub[:8]))
-            .limit(1)
-        )
-        workspace = tenant_result.scalar_one_or_none()
-        if workspace:
-            workspace_id = workspace.id
-        else:
-            return RedirectResponse("/hub/?error=no_workspace", status_code=302)
-
-    await verify_workspace_access(workspace_id, session, user)
+    # Get or create tenant and user
+    tenant, db_user = await ensure_tenant_and_user(session, user)
 
     # Read file content
     content = await file.read()
@@ -303,7 +267,7 @@ async def dataset_import(
 
     # Create dataset
     dataset = Dataset(
-        workspace_id=workspace_id,
+        tenant_id=tenant.id,
         name=name,
         profile=profile,
         version=version,
@@ -388,7 +352,6 @@ async def dataset_create(
     request: Request,
     session: DbSession,
     user: CurrentUser,
-    workspace_id: Annotated[str, Form()],
     name: Annotated[str, Form()],
     profile: Annotated[str, Form()],
     version: Annotated[str, Form()],
@@ -403,11 +366,10 @@ async def dataset_create(
     from metaseed_hub.ui.helpers import validate_csrf_token
 
     if not validate_csrf_token(request, csrf_token):
-        url = f"/hub/workspaces/{workspace_id}?error=csrf_validation_failed"
-        return RedirectResponse(url, status_code=302)
+        return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
 
-    # Verify user has access to the workspace
-    await verify_workspace_access(workspace_id, session, user)
+    # Get or create tenant and user
+    tenant, db_user = await ensure_tenant_and_user(session, user)
 
     # Check if using a draft spec
     spec_draft_id = None
@@ -421,7 +383,7 @@ async def dataset_create(
             version = draft.version
 
     dataset = Dataset(
-        workspace_id=workspace_id,
+        tenant_id=tenant.id,
         name=name,
         profile=profile,
         version=version,
@@ -500,7 +462,7 @@ async def dataset_delete(
         )
         return response
 
-    workspace_id = dataset.workspace_id
+    tenant_id = dataset.tenant_id
 
     try:
         # Manually delete related records (in case CASCADE not set in DB)
@@ -542,7 +504,7 @@ async def dataset_delete(
         return response
 
     # Return updated dataset grid
-    result = await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id))
+    result = await session.execute(select(Dataset).where(Dataset.tenant_id == tenant_id))
     datasets = list(result.scalars().all())
 
     return render_template(
@@ -712,8 +674,8 @@ async def dataset_editor(
     # Verify user has access to this dataset
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    # Load workspace for breadcrumb
-    workspace = await session.get(Workspace, dataset.workspace_id)
+    # Load tenant for breadcrumb
+    tenant = await session.get(Tenant, dataset.tenant_id)
 
     # Load members with user info
     members_result = await session.execute(
@@ -736,7 +698,7 @@ async def dataset_editor(
             context={
                 "user": user,
                 "dataset": dataset,
-                "workspace": workspace,
+                "tenant": tenant,
                 "members": members,
                 "state": None,
                 "root_types": [],
@@ -756,7 +718,7 @@ async def dataset_editor(
         context={
             "user": user,
             "dataset": dataset,
-            "workspace": workspace,
+            "tenant": tenant,
             "members": members,
             "state": ctx["state"],
             "root_types": root_types,
@@ -912,24 +874,55 @@ async def dataset_validate(
                 }
             )
 
+    # Count entities by type
+    entity_counts: dict[str, int] = {}
+    for node in state.nodes_by_id.values():
+        entity_counts[node.entity_type] = entity_counts.get(node.entity_type, 0) + 1
+
     # Build HTML response
     total = len(state.nodes_by_id)
+    valid_count = total - len(errors)
+
+    html = '<div class="validation-results">'
+
+    # Summary section
     if not errors:
-        html = f"""
-        <div class="validation-results success">
-            <div class="validation-header success-message">
-                All {total} entities are valid.
+        html += f"""
+        <div class="validation-summary validation-success">
+            <div class="validation-icon">&#10003;</div>
+            <div class="validation-summary-text">
+                <strong>All {total} entities are valid</strong>
+                <p>Your dataset passes all validation checks.</p>
             </div>
         </div>
         """
     else:
-        html = f"""
-        <div class="validation-results">
-            <div class="validation-header error-message">
-                {len(errors)} of {total} entities have validation errors.
+        html += f"""
+        <div class="validation-summary validation-error">
+            <div class="validation-icon">&#10007;</div>
+            <div class="validation-summary-text">
+                <strong>{len(errors)} of {total} entities have issues</strong>
+                <p>{valid_count} valid. Fix issues below.</p>
             </div>
-            <div class="validation-errors">
+        </div>
         """
+
+    # Entity type breakdown
+    html += '<div class="validation-breakdown"><h4>Entity Summary</h4><div class="breakdown-grid">'
+    for entity_type, count in sorted(entity_counts.items()):
+        error_count = sum(1 for e in errors if e["entity_type"] == entity_type)
+        status_class = "valid" if error_count == 0 else "invalid"
+        html += f"""
+        <div class="breakdown-item {status_class}">
+            <span class="breakdown-type">{entity_type}</span>
+            <span class="breakdown-count">{count - error_count}/{count} valid</span>
+        </div>
+        """
+    html += "</div></div>"
+
+    # Detailed errors
+    if errors:
+        html += '<div class="validation-errors"><h4>Issues to Fix</h4>'
         for err in errors:
             html += f"""
             <div class="validation-error-item">
@@ -944,9 +937,11 @@ async def dataset_validate(
             """
             for field_err in err["errors"]:
                 field = field_err["field"] or "(general)"
-                html += f"<li><strong>{field}:</strong> {field_err['message']}</li>"
+                html += f'<li><code>{field}</code>: {field_err["message"]}</li>'
             html += "</ul></div>"
-        html += "</div></div>"
+        html += "</div>"
+
+    html += "</div>"
 
     return HTMLResponse(html)
 

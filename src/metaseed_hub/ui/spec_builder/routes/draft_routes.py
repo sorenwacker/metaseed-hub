@@ -12,7 +12,7 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.spec_builder.access import (
-    can_access_workspace,
+    can_access_tenant,
     can_edit_spec,
     create_new_draft,
     load_state_for_draft,
@@ -69,7 +69,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {
                 "draft": draft,
                 "draft_id": draft_id,
-                "workspace": draft.workspace,
+                "tenant": draft.tenant,
                 "spec": builder.spec,
                 "editing_entity": builder.editing_entity,
                 "has_unsaved_changes": builder.has_unsaved_changes,
@@ -182,7 +182,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 raise HTTPException(status_code=403, detail="Cannot edit this spec")
 
         spec = Spec(
-            workspace_id=draft.workspace_id,
+            tenant_id=draft.tenant_id,
             name=builder.spec.name,
             version=builder.spec.version,
             description=builder.spec.description,
@@ -241,7 +241,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         result = await session.execute(
             select(Spec)
-            .options(selectinload(Spec.workspace), selectinload(Spec.created_by))
+            .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
             .where(Spec.id == spec_id, Spec.deleted_at.is_(None))
         )
         spec = result.scalar_one_or_none()
@@ -249,7 +249,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if not spec:
             raise HTTPException(status_code=404, detail="Spec not found")
 
-        if not await can_access_workspace(session, user_id, spec.workspace_id):
+        if not await can_access_tenant(session, user_id, spec.tenant_id):
             raise HTTPException(status_code=403, detail="Access denied")
 
         builder = (
@@ -262,7 +262,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {
                 "spec_record": spec,
                 "spec": builder.spec,
-                "workspace": spec.workspace,
+                "tenant": spec.tenant,
                 "can_edit": await can_edit_spec(session, user_id, spec_id),
             },
         )
@@ -285,7 +285,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if not spec:
             raise HTTPException(status_code=404, detail="Spec not found")
 
-        if not await can_access_workspace(session, user_id, spec.workspace_id):
+        if not await can_access_tenant(session, user_id, spec.tenant_id):
             raise HTTPException(status_code=403, detail="Access denied")
 
         builder = (
@@ -298,7 +298,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         draft = await create_new_draft(
             session,
             user_id=user_id,
-            workspace_id=spec.workspace_id,
+            tenant_id=spec.tenant_id,
             name=spec.name,
             spec=builder.spec,
             source_spec_id=spec.id,

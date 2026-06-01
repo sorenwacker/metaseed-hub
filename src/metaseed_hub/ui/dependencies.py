@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, DatasetMember, Tenant, User, Workspace
+from metaseed_hub.models import Dataset, DatasetMember, Tenant, User
 from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
 
 if TYPE_CHECKING:
@@ -113,7 +113,7 @@ async def get_dataset_by_id(
 
 
 async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
-    """Get or create tenant for user based on keycloak_id.
+    """Get tenant for user based on keycloak_id.
 
     Args:
         session: Database session.
@@ -127,42 +127,84 @@ async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant 
     return result.scalar_one_or_none()
 
 
-async def verify_workspace_access(
-    workspace_id: str,
-    session: AsyncSession,
-    user: TokenUser,
-) -> Workspace:
-    """Verify user has access to workspace and return it.
+async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tuple[Tenant, User]:
+    """Get or create tenant and user for authenticated user.
 
-    A user has access to a workspace if their tenant owns the workspace.
+    Auto-creates tenant and user if they don't exist.
+    This simplifies onboarding - users don't need to manually set up.
 
     Args:
-        workspace_id: ID of the workspace to verify.
         session: Database session.
         user: Authenticated user.
 
     Returns:
-        Workspace if user has access.
+        Tuple of (Tenant, User).
+    """
+    slug = user.keycloak_id[:8]
+
+    # Get or create tenant
+    tenant_result = await session.execute(select(Tenant).where(Tenant.slug == slug))
+    tenant = tenant_result.scalar_one_or_none()
+    if not tenant:
+        tenant = Tenant(
+            name=user.name or user.email.split("@")[0],
+            slug=slug,
+        )
+        session.add(tenant)
+        await session.flush()
+
+    # Get or create user
+    user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+    db_user = user_result.scalar_one_or_none()
+    if not db_user:
+        db_user = User(
+            keycloak_id=user.keycloak_id,
+            email=user.email,
+            display_name=user.name or user.email.split("@")[0],
+            tenant_id=tenant.id,
+        )
+        session.add(db_user)
+        await session.commit()
+
+    return tenant, db_user
+
+
+async def verify_tenant_access(
+    tenant_id: str,
+    session: AsyncSession,
+    user: TokenUser,
+) -> Tenant:
+    """Verify user has access to tenant and return it.
+
+    A user has access to a tenant if their keycloak_id matches the tenant slug.
+
+    Args:
+        tenant_id: ID of the tenant to verify.
+        session: Database session.
+        user: Authenticated user.
+
+    Returns:
+        Tenant if user has access.
 
     Raises:
-        HTTPException: 404 if workspace not found, 403 if access denied.
+        HTTPException: 404 if tenant not found, 403 if access denied.
     """
-    result = await session.execute(select(Workspace).where(Workspace.id == workspace_id))
-    workspace = result.scalar_one_or_none()
+    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
 
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
 
     # Get user's tenant
-    tenant = await get_tenant_for_user(session, user)
-    if not tenant:
+    user_tenant = await get_tenant_for_user(session, user)
+    if not user_tenant:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Verify workspace belongs to user's tenant
-    if workspace.tenant_id != tenant.id:
+    # Verify tenant matches user's tenant
+    if tenant.id != user_tenant.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    return workspace
+    return tenant
 
 
 async def get_dataset_for_user(
@@ -170,10 +212,10 @@ async def get_dataset_for_user(
     session: AsyncSession,
     user: TokenUser,
 ) -> Dataset:
-    """Get dataset if user has access through workspace or sharing.
+    """Get dataset if user has access through tenant or sharing.
 
     A user has access to a dataset if:
-    1. Their tenant owns the workspace that contains the dataset, OR
+    1. Their tenant owns the dataset, OR
     2. They have been granted access via DatasetMember
 
     Args:
@@ -193,12 +235,12 @@ async def get_dataset_for_user(
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # First, try workspace access (owner)
+    # First, try tenant access (owner)
     try:
-        await verify_workspace_access(dataset.workspace_id, session, user)
+        await verify_tenant_access(dataset.tenant_id, session, user)
         return dataset
     except HTTPException:
-        pass  # Not workspace owner, check DatasetMember
+        pass  # Not tenant owner, check DatasetMember
 
     # Check if user has access via DatasetMember
     db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))

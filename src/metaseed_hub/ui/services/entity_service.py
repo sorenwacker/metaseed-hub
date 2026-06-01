@@ -441,6 +441,36 @@ class EntityService:
 
         return EntitySaveResult(success=True)
 
+    async def validate_entity(
+        self,
+        entity_type: str,
+        values: dict[str, Any],
+    ) -> list[str]:
+        """Validate entity data without saving.
+
+        Uses the same validation as create/update but only returns errors.
+
+        Args:
+            entity_type: Type of entity to validate.
+            values: Field values to validate.
+
+        Returns:
+            List of validation error messages, empty if valid.
+        """
+        try:
+            await self.ensure_state()
+        except EntityServiceError as e:
+            return [e.user_message]
+
+        # Client is guaranteed to be set after ensure_state()
+        assert self._client is not None
+
+        # Validate entity type exists using public API
+        if entity_type not in self._client.list_entity_types():
+            return [f"Unknown entity type: {entity_type}"]
+
+        return self._get_validation_warnings(entity_type, values)
+
     async def _save_state(self) -> None:
         """Save current state to database using client.serialize()."""
         if self._client is None:

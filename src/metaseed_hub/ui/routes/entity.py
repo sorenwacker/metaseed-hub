@@ -157,6 +157,58 @@ async def dataset_entity_create(
     return response
 
 
+@router.post("/entities/validate", response_class=HTMLResponse)
+async def dataset_entity_validate(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Validate entity data without saving.
+
+    Returns validation result as HTML for display in the form.
+    """
+    form_data = await request.form()
+    entity_type = str(form_data.get("_entity_type", ""))
+    node_id = str(form_data.get("_node_id", "")) or None
+
+    if not entity_type:
+        return HTMLResponse("<div class='error-message'>Missing entity type</div>")
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    service = EntityService(session, dataset)
+
+    try:
+        state = await service.ensure_state()
+        helper = service.get_helper(entity_type)
+    except EntityServiceError as e:
+        return HTMLResponse(f"<div class='error-message'>{e.user_message}</div>")
+
+    # Get existing values if validating existing entity
+    existing_node = state.nodes_by_id.get(node_id) if node_id else None
+    existing_values = None
+    if existing_node and hasattr(existing_node.instance, "model_dump"):
+        existing_values = existing_node.instance.model_dump(exclude_none=True)
+
+    # Extract and type-convert form values
+    values = extract_entity_values(form_data, helper, existing_values)
+
+    # Validate without saving
+    errors = await service.validate_entity(entity_type, values)
+
+    if not errors:
+        return HTMLResponse(
+            "<div class='success-message'>Validation passed. No errors found.</div>"
+        )
+
+    # Format errors as list
+    error_html = "<div class='warning-message'><strong>Validation issues:</strong><ul>"
+    for error in errors:
+        error_html += f"<li>{error}</li>"
+    error_html += "</ul></div>"
+    return HTMLResponse(error_html)
+
+
 @router.get("/entity/{node_id}", response_class=HTMLResponse)
 async def dataset_entity_edit(
     request: Request,

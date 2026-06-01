@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Metaseed Hub{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <div class="admin-header">
+        <h1>Admin Dashboard</h1>
+        <p class="admin-subtitle">System monitoring and user management</p>
+    </div>
+
+    <!-- Summary Statistics -->
+    <section class="admin-section">
+        <h2>System Overview</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.users }}</div>
+                <div class="stat-label">Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.datasets }}</div>
+                <div class="stat-label">Datasets</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ stats.tenants }}</div>
+                <div class="stat-label">Tenants</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Activity Over Time -->
+    <section class="admin-section">
+        <h2>Activity (Last 30 Days)</h2>
+        <div class="activity-grid">
+            <div class="activity-panel">
+                <h3>User Registrations</h3>
+                {% if user_activity %}
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>New Users</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for date, count in user_activity %}
+                        <tr>
+                            <td>{{ date }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">No user registrations in the last 30 days.</p>
+                {% endif %}
+            </div>
+            <div class="activity-panel">
+                <h3>Dataset Creations</h3>
+                {% if dataset_activity %}
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>New Datasets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for date, count in dataset_activity %}
+                        <tr>
+                            <td>{{ date }}</td>
+                            <td>{{ count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty-state">No datasets created in the last 30 days.</p>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <!-- User Directory -->
+    <section class="admin-section">
+        <h2>User Directory</h2>
+        <p class="section-description">Registered users with their tenant associations.</p>
+        {% if users %}
+        <table class="admin-table admin-table-full">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Display Name</th>
+                    <th>Tenant</th>
+                    <th>Registered</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.email }}</td>
+                    <td>{{ u.display_name }}</td>
+                    <td>{{ u.tenant.name if u.tenant else '-' }}</td>
+                    <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No users registered yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

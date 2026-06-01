@@ -70,6 +70,11 @@ def create_app() -> FastAPI:
     # Include API routes
     app.include_router(api_router, prefix="/api")
 
+    # Include ontology API at /api/ontology for metaseed lookup.js compatibility
+    from metaseed_hub.ui.routes.ontology_api import router as ontology_router
+
+    app.include_router(ontology_router)
+
     # Include Hub UI routes
     from metaseed_hub.ui.app import create_hub_app
 

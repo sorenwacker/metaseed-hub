@@ -48,7 +48,7 @@ async def search_ontology_terms(
                 "total_found": len(results),
                 "results": [
                     {
-                        "id": r.id,
+                        "value": r.term_id,
                         "label": r.label,
                         "ontology": r.ontology,
                         "iri": r.iri,
@@ -92,7 +92,7 @@ async def suggest_ontology_terms(
                 "ontology": ontology,
                 "suggestions": [
                     {
-                        "id": r.id,
+                        "id": r.term_id,
                         "label": r.label,
                         "ontology": r.ontology,
                     }

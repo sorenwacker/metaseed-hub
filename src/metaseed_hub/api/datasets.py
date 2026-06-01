@@ -17,7 +17,7 @@ router = APIRouter()
 class DatasetCreate(BaseModel):
     """Schema for creating a dataset."""
 
-    workspace_id: str
+    tenant_id: str
     name: str
     profile: str
     version: str
@@ -37,7 +37,7 @@ class DatasetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    workspace_id: str
+    tenant_id: str
     name: str
     profile: str
     version: str
@@ -46,21 +46,21 @@ class DatasetResponse(BaseModel):
 
 @router.get("", response_model=list[DatasetResponse])
 async def list_datasets(
-    workspace_id: str,
+    tenant_id: str,
     _user: Annotated[TokenUser, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[Dataset]:
-    """List all datasets in a workspace.
+    """List all datasets in a tenant.
 
     Args:
-        workspace_id: Workspace to list datasets from.
+        tenant_id: Tenant to list datasets from.
         _user: Current authenticated user.
         session: Database session.
 
     Returns:
-        List of datasets in the workspace.
+        List of datasets in the tenant.
     """
-    result = await session.execute(select(Dataset).where(Dataset.workspace_id == workspace_id))
+    result = await session.execute(select(Dataset).where(Dataset.tenant_id == tenant_id))
     return list(result.scalars().all())
 
 
@@ -81,7 +81,7 @@ async def create_dataset(
         Created dataset.
     """
     dataset = Dataset(
-        workspace_id=dataset_data.workspace_id,
+        tenant_id=dataset_data.tenant_id,
         name=dataset_data.name,
         profile=dataset_data.profile,
         version=dataset_data.version,

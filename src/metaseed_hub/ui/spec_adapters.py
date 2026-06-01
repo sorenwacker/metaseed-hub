@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.models import Spec, SpecStatus
 
 if TYPE_CHECKING:
-    from metaseed_hub.models import User, Workspace
+    from metaseed_hub.models import Tenant, User
 
 
 class SpecPersistence(ABC):
@@ -101,7 +101,7 @@ BUILTIN_PROFILES = {"miappe", "isa", "dissco", "darwin-core"}
 class DatabaseSpecPersistence(SpecPersistence):
     """Database-backed implementation of SpecPersistence.
 
-    Stores specs in PostgreSQL via SQLAlchemy, supporting workspaces
+    Stores specs in PostgreSQL via SQLAlchemy, supporting tenants
     and user ownership.
     """
 
@@ -109,18 +109,18 @@ class DatabaseSpecPersistence(SpecPersistence):
         self,
         session: AsyncSession,
         user: User,
-        workspace: Workspace | None = None,
+        tenant: Tenant | None = None,
     ) -> None:
         """Initialize database persistence.
 
         Args:
             session: Async SQLAlchemy session.
             user: Current user for ownership.
-            workspace: Optional workspace context.
+            tenant: Optional tenant context.
         """
         self._session = session
         self._user = user
-        self._workspace = workspace
+        self._tenant = tenant
         self._loader = SpecLoader()
 
     async def save(self, spec: ProfileSpec, name: str | None = None) -> str:
@@ -157,7 +157,7 @@ class DatabaseSpecPersistence(SpecPersistence):
             version=spec.version or "1.0",
             description=spec.description,
             spec_data=builder.to_dict(),
-            workspace_id=self._workspace.id if self._workspace else None,
+            tenant_id=self._tenant.id if self._tenant else self._user.tenant_id,
             created_by_id=self._user.id,
             status=SpecStatus.DRAFT,
         )
@@ -190,8 +190,8 @@ class DatabaseSpecPersistence(SpecPersistence):
         )
         if version:
             query = query.where(Spec.version == version)
-        if self._workspace:
-            query = query.where(Spec.workspace_id == self._workspace.id)
+        if self._tenant:
+            query = query.where(Spec.tenant_id == self._tenant.id)
 
         result = await self._session.execute(query)
         specs = result.scalars().all()
@@ -214,8 +214,8 @@ class DatabaseSpecPersistence(SpecPersistence):
             Spec.deleted_at.is_(None),
             Spec.status == SpecStatus.PUBLISHED,
         )
-        if self._workspace:
-            query = query.where(Spec.workspace_id == self._workspace.id)
+        if self._tenant:
+            query = query.where(Spec.tenant_id == self._tenant.id)
 
         query = query.order_by(Spec.name, Spec.version.desc())
         result = await self._session.execute(query)

@@ -126,9 +126,9 @@ class TestAuthorizationDependencies:
     """Tests for authorization dependency functions."""
 
     @pytest.mark.asyncio
-    async def test_verify_workspace_access_not_found(self) -> None:
-        """Raises 404 when workspace not found."""
-        from metaseed_hub.ui.dependencies import verify_workspace_access
+    async def test_verify_tenant_access_not_found(self) -> None:
+        """Raises 404 when tenant not found."""
+        from metaseed_hub.ui.dependencies import verify_tenant_access
 
         session = AsyncMock()
         result_mock = Mock()
@@ -139,32 +139,39 @@ class TestAuthorizationDependencies:
         user.keycloak_id = "user12345678"
 
         with pytest.raises(HTTPException) as exc_info:
-            await verify_workspace_access("nonexistent", session, user)
+            await verify_tenant_access("nonexistent", session, user)
 
         assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_verify_workspace_access_denied(self) -> None:
-        """Raises 403 when user doesn't own workspace."""
-        from metaseed_hub.ui.dependencies import verify_workspace_access
+    async def test_verify_tenant_access_denied(self) -> None:
+        """Raises 403 when user doesn't belong to tenant."""
+        from unittest.mock import patch
 
-        workspace = Mock()
-        workspace.id = "ws-1"
-        workspace.tenant_id = "tenant-other"
+        from metaseed_hub.ui.dependencies import verify_tenant_access
+
+        requested_tenant = Mock()
+        requested_tenant.id = "tenant-1"
+        requested_tenant.slug = "other-user"
+
+        user_tenant = Mock()
+        user_tenant.id = "tenant-2"  # Different tenant
+        user_tenant.slug = "user1234"
 
         session = AsyncMock()
-        # First call returns workspace, second call returns None for tenant
-        result_mock1 = Mock()
-        result_mock1.scalar_one_or_none.return_value = workspace
-        result_mock2 = Mock()
-        result_mock2.scalar_one_or_none.return_value = None
-        session.execute.side_effect = [result_mock1, result_mock2]
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = requested_tenant
+        session.execute.return_value = result_mock
 
         user = Mock()
         user.keycloak_id = "user12345678"
 
-        with pytest.raises(HTTPException) as exc_info:
-            await verify_workspace_access("ws-1", session, user)
+        with patch(
+            "metaseed_hub.ui.dependencies.get_tenant_for_user",
+            return_value=user_tenant,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_tenant_access("tenant-1", session, user)
 
         assert exc_info.value.status_code == 403
 

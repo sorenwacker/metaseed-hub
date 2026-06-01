@@ -15,8 +15,6 @@ from metaseed_hub.models import (
     TeamRole,
     Tenant,
     User,
-    Workspace,
-    WorkspaceTeam,
 )
 
 
@@ -110,32 +108,9 @@ def make_team_membership(
     )
 
 
-def make_workspace(
-    *,
-    tenant: Tenant,
-    name: str | None = None,
-    description: str | None = None,
-) -> Workspace:
-    """Create a Workspace instance for testing.
-
-    Args:
-        tenant: Parent tenant for the workspace.
-        name: Workspace name. Auto-generated if not provided.
-        description: Optional workspace description.
-
-    Returns:
-        Workspace model instance (not yet persisted).
-    """
-    return Workspace(
-        tenant_id=tenant.id,
-        name=name or f"Workspace {uuid4().hex[:8]}",
-        description=description,
-    )
-
-
 def make_dataset(
     *,
-    workspace: Workspace,
+    tenant: Tenant,
     name: str | None = None,
     profile: str = "miappe",
     version: str = "1.1",
@@ -144,7 +119,7 @@ def make_dataset(
     """Create a Dataset instance for testing.
 
     Args:
-        workspace: Parent workspace for the dataset.
+        tenant: Parent tenant for the dataset.
         name: Dataset name. Auto-generated if not provided.
         profile: Metaseed profile type.
         version: Profile version.
@@ -154,7 +129,7 @@ def make_dataset(
         Dataset model instance (not yet persisted).
     """
     return Dataset(
-        workspace_id=workspace.id,
+        tenant_id=tenant.id,
         name=name or f"Dataset {uuid4().hex[:8]}",
         profile=profile,
         version=version,
@@ -214,29 +189,9 @@ def make_chat_message(
     )
 
 
-def make_workspace_team(
-    *,
-    workspace: Workspace,
-    team: Team,
-) -> WorkspaceTeam:
-    """Create a WorkspaceTeam association for testing.
-
-    Args:
-        workspace: Workspace to associate with team.
-        team: Team to grant access to workspace.
-
-    Returns:
-        WorkspaceTeam model instance (not yet persisted).
-    """
-    return WorkspaceTeam(
-        workspace_id=workspace.id,
-        team_id=team.id,
-    )
-
-
 def make_spec(
     *,
-    workspace: Workspace,
+    tenant: Tenant,
     created_by: User,
     name: str | None = None,
     version: str = "1.0.0",
@@ -247,7 +202,7 @@ def make_spec(
     """Create a Spec instance for testing.
 
     Args:
-        workspace: Parent workspace for the spec.
+        tenant: Parent tenant for the spec.
         created_by: User who created the spec.
         name: Spec name. Auto-generated if not provided.
         version: Spec version.
@@ -259,7 +214,7 @@ def make_spec(
         Spec model instance (not yet persisted).
     """
     return Spec(
-        workspace_id=workspace.id,
+        tenant_id=tenant.id,
         created_by_id=created_by.id,
         name=name or f"Spec{uuid4().hex[:8]}",
         version=version,
@@ -271,7 +226,7 @@ def make_spec(
 
 def make_spec_draft(
     *,
-    workspace: Workspace,
+    tenant: Tenant,
     user: User,
     name: str | None = None,
     version: str = "0.1",
@@ -282,7 +237,7 @@ def make_spec_draft(
     """Create a SpecDraft instance for testing.
 
     Args:
-        workspace: Parent workspace for the draft.
+        tenant: Parent tenant for the draft.
         user: User who owns the draft.
         name: Draft name. Auto-generated if not provided.
         version: Draft version.
@@ -294,7 +249,7 @@ def make_spec_draft(
         SpecDraft model instance (not yet persisted).
     """
     return SpecDraft(
-        workspace_id=workspace.id,
+        tenant_id=tenant.id,
         user_id=user.id,
         source_spec_id=source_spec.id if source_spec else None,
         name=name or f"Draft{uuid4().hex[:8]}",

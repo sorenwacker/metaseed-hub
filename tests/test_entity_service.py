@@ -17,7 +17,6 @@ from metaseed_hub.models import (
     SpecDraft,
     Tenant,
     User,
-    Workspace,
 )
 from metaseed_hub.ui.services import (
     EntityService,
@@ -34,17 +33,9 @@ class TestEntityServiceWithDraftSpec:
         self, session: AsyncSession
     ) -> None:
         """Entity with validation errors should save with warnings returned."""
-        # Setup: Create tenant, workspace, user, and spec draft
+        # Setup: Create tenant, user, and spec draft
         tenant = Tenant(name="Test Tenant", slug="test-val")
         session.add(tenant)
-        await session.flush()
-
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
         await session.flush()
 
         user = User(
@@ -89,7 +80,7 @@ class TestEntityServiceWithDraftSpec:
         spec_draft = SpecDraft(
             name="Test Spec",
             user_id=user.id,
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             version="1.0",
             spec_data=spec_data,
         )
@@ -99,7 +90,7 @@ class TestEntityServiceWithDraftSpec:
         # Create dataset using the spec
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="test_spec",
             version="1.0",
             spec_draft_id=spec_draft.id,
@@ -138,14 +129,6 @@ class TestEntityServiceWithDraftSpec:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         user = User(
             keycloak_id=str(uuid4()),
             tenant_id=tenant.id,
@@ -159,7 +142,7 @@ class TestEntityServiceWithDraftSpec:
         spec_draft = SpecDraft(
             name="Will Be Deleted",
             user_id=user.id,
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             version="1.0",
             spec_data={
                 "spec": {
@@ -177,7 +160,7 @@ class TestEntityServiceWithDraftSpec:
         # Create dataset referencing the spec
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="temp",
             version="1.0",
             spec_draft_id=spec_draft_id,
@@ -208,14 +191,6 @@ class TestEntityServiceWithDraftSpec:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         user = User(
             keycloak_id=str(uuid4()),
             tenant_id=tenant.id,
@@ -229,7 +204,7 @@ class TestEntityServiceWithDraftSpec:
         spec_draft = SpecDraft(
             name="Empty Spec",
             user_id=user.id,
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             version="1.0",
             spec_data={},  # Empty!
         )
@@ -238,7 +213,7 @@ class TestEntityServiceWithDraftSpec:
 
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="empty_spec",
             version="1.0",
             spec_draft_id=spec_draft.id,
@@ -261,14 +236,6 @@ class TestEntityServiceWithDraftSpec:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         user = User(
             keycloak_id=str(uuid4()),
             tenant_id=tenant.id,
@@ -282,7 +249,7 @@ class TestEntityServiceWithDraftSpec:
         spec_draft = SpecDraft(
             name="Invalid Spec",
             user_id=user.id,
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             version="1.0",
             spec_data={
                 "spec": {
@@ -296,7 +263,7 @@ class TestEntityServiceWithDraftSpec:
 
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="invalid_spec",
             version="1.0",
             spec_draft_id=spec_draft.id,
@@ -318,14 +285,6 @@ class TestEntityServiceWithDraftSpec:
         """Unknown entity type returns clear error."""
         tenant = Tenant(name="Test Tenant", slug="test-unk")
         session.add(tenant)
-        await session.flush()
-
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
         await session.flush()
 
         user = User(
@@ -363,7 +322,7 @@ class TestEntityServiceWithDraftSpec:
         spec_draft = SpecDraft(
             name="Test Spec",
             user_id=user.id,
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             version="1.0",
             spec_data=spec_data,
         )
@@ -372,7 +331,7 @@ class TestEntityServiceWithDraftSpec:
 
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="test_spec",
             version="1.0",
             spec_draft_id=spec_draft.id,
@@ -405,18 +364,10 @@ class TestEntityServiceWithBuiltinProfile:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         # Dataset using built-in miappe profile
         dataset = Dataset(
             name="MIAPPE Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="miappe",
             version="1.2",
             data={"profile": "miappe", "version": "1.2", "tree": []},
@@ -446,18 +397,10 @@ class TestEntityServiceDelete:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         # Dataset using built-in miappe profile
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="miappe",
             version="1.2",
             data={"profile": "miappe", "version": "1.2", "tree": []},
@@ -490,17 +433,9 @@ class TestEntityServiceDelete:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="miappe",
             version="1.2",
             data={"profile": "miappe", "version": "1.2", "tree": []},
@@ -528,17 +463,9 @@ class TestEntityServiceUpdate:
         session.add(tenant)
         await session.flush()
 
-        workspace = Workspace(
-            name="Test Workspace",
-            tenant_id=tenant.id,
-            description="",
-        )
-        session.add(workspace)
-        await session.flush()
-
         dataset = Dataset(
             name="Test Dataset",
-            workspace_id=workspace.id,
+            tenant_id=tenant.id,
             profile="miappe",
             version="1.2",
             data={"profile": "miappe", "version": "1.2", "tree": []},

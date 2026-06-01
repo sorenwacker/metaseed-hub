@@ -61,7 +61,9 @@ class Tenant(TimestampMixin, SoftDeleteMixin, Base):
     # Relationships
     teams: Mapped[list["Team"]] = relationship("Team", back_populates="tenant")
     users: Mapped[list["User"]] = relationship("User", back_populates="tenant")
-    workspaces: Mapped[list["Workspace"]] = relationship("Workspace", back_populates="tenant")
+    datasets: Mapped[list["Dataset"]] = relationship("Dataset", back_populates="tenant")
+    specs: Mapped[list["Spec"]] = relationship("Spec", back_populates="tenant")
+    spec_drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="tenant")
 
 
 class Team(TimestampMixin, SoftDeleteMixin, Base):
@@ -90,7 +92,6 @@ class Team(TimestampMixin, SoftDeleteMixin, Base):
     memberships: Mapped[list["TeamMembership"]] = relationship(
         "TeamMembership", back_populates="team"
     )
-    workspaces: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="team")
 
 
 class User(TimestampMixin, SoftDeleteMixin, Base):
@@ -121,9 +122,6 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
     memberships: Mapped[list["TeamMembership"]] = relationship(
         "TeamMembership", back_populates="user"
-    )
-    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
-        "WorkspaceMember", back_populates="user"
     )
     dataset_memberships: Mapped[list["DatasetMember"]] = relationship(
         "DatasetMember", back_populates="user"
@@ -172,91 +170,13 @@ class TeamMembership(Base):
     team: Mapped["Team"] = relationship("Team", back_populates="memberships")
 
 
-class WorkspaceTeam(Base):
-    """Association between workspaces and teams for access control.
+class Dataset(TimestampMixin, SoftDeleteMixin, Base):
+    """Dataset containing a single spec instance with entity data."""
 
-    Links workspaces to teams, enabling team-based access to workspace resources.
-    A workspace can be accessible to multiple teams, and a team can access
-    multiple workspaces.
-    """
-
-    __tablename__ = "workspace_teams"
+    __tablename__ = "datasets"
     __table_args__ = (
-        Index("ix_workspace_teams_workspace_id", "workspace_id"),
-        Index("ix_workspace_teams_team_id", "team_id"),
-    )
-
-    workspace_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    team_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("teams.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="teams")
-    team: Mapped["Team"] = relationship("Team", back_populates="workspaces")
-
-
-class WorkspaceRole(StrEnum):
-    """Role within a workspace."""
-
-    OWNER = "owner"
-    EDITOR = "editor"
-    VIEWER = "viewer"
-
-
-class WorkspaceMember(Base):
-    """Direct user membership in a workspace."""
-
-    __tablename__ = "workspace_members"
-    __table_args__ = (
-        Index("ix_workspace_members_workspace_id", "workspace_id"),
-        Index("ix_workspace_members_user_id", "user_id"),
-    )
-
-    workspace_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role: Mapped[WorkspaceRole] = mapped_column(
-        Enum(WorkspaceRole),
-        nullable=False,
-        default=WorkspaceRole.EDITOR,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="members")
-    user: Mapped["User"] = relationship("User", back_populates="workspace_memberships")
-
-
-class Workspace(TimestampMixin, SoftDeleteMixin, Base):
-    """Workspace for organizing projects."""
-
-    __tablename__ = "workspaces"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "name", name="uq_workspaces_tenant_name"),
-        Index("ix_workspaces_tenant_id", "tenant_id"),
+        UniqueConstraint("tenant_id", "name", name="uq_datasets_tenant_name"),
+        Index("ix_datasets_tenant_id", "tenant_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -267,39 +187,6 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     tenant_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # Relationships
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="workspaces")
-    datasets: Mapped[list["Dataset"]] = relationship("Dataset", back_populates="workspace")
-    teams: Mapped[list["WorkspaceTeam"]] = relationship("WorkspaceTeam", back_populates="workspace")
-    members: Mapped[list["WorkspaceMember"]] = relationship(
-        "WorkspaceMember", back_populates="workspace"
-    )
-    specs: Mapped[list["Spec"]] = relationship("Spec", back_populates="workspace")
-    spec_drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="workspace")
-
-
-class Dataset(TimestampMixin, SoftDeleteMixin, Base):
-    """Dataset containing a single spec instance with entity data."""
-
-    __tablename__ = "datasets"
-    __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_datasets_workspace_name"),
-        Index("ix_datasets_workspace_id", "workspace_id"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        primary_key=True,
-        default=lambda: str(uuid4()),
-    )
-    workspace_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
     spec_draft_id: Mapped[str | None] = mapped_column(
@@ -313,7 +200,7 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="datasets")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="datasets")
     spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="dataset")
     chat_messages: Mapped[list["ChatMessage"]] = relationship(
@@ -626,16 +513,16 @@ class SpecCommentReaction(Base):
 
 
 class Spec(TimestampMixin, SoftDeleteMixin, Base):
-    """Published specification that belongs to a workspace.
+    """Published specification that belongs to a tenant.
 
     Represents a finalized specification accessible to all team members
-    with access to the workspace. Supports versioning for tracking changes.
+    within the tenant. Supports versioning for tracking changes.
     """
 
     __tablename__ = "specs"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", "version", name="uq_specs_workspace_name_version"),
-        Index("ix_specs_workspace_id", "workspace_id"),
+        UniqueConstraint("tenant_id", "name", "version", name="uq_specs_tenant_name_version"),
+        Index("ix_specs_tenant_id", "tenant_id"),
         Index("ix_specs_created_by_id", "created_by_id"),
     )
 
@@ -644,9 +531,9 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    workspace_id: Mapped[str] = mapped_column(
+    tenant_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -665,7 +552,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     )
 
     # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="specs")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="specs")
     created_by: Mapped["User"] = relationship("User")
     drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="source_spec")
     members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
@@ -719,15 +606,13 @@ class SpecDraft(TimestampMixin, Base):
 
     Stores the working state of a spec being built, allowing users to
     save progress and resume later. Users can have multiple drafts within
-    a workspace, each with a unique name.
+    a tenant, each with a unique name per user.
     """
 
     __tablename__ = "spec_drafts"
     __table_args__ = (
-        UniqueConstraint(
-            "workspace_id", "user_id", "name", name="uq_spec_drafts_workspace_user_name"
-        ),
-        Index("ix_spec_drafts_workspace_id", "workspace_id"),
+        UniqueConstraint("tenant_id", "user_id", "name", name="uq_spec_drafts_tenant_user_name"),
+        Index("ix_spec_drafts_tenant_id", "tenant_id"),
         Index("ix_spec_drafts_user_id", "user_id"),
     )
 
@@ -736,9 +621,9 @@ class SpecDraft(TimestampMixin, Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    workspace_id: Mapped[str] = mapped_column(
+    tenant_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(
@@ -757,7 +642,7 @@ class SpecDraft(TimestampMixin, Base):
     template_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
-    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="spec_drafts")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="spec_drafts")
     user: Mapped["User"] = relationship("User")
     source_spec: Mapped["Spec | None"] = relationship("Spec", back_populates="drafts")
     members: Mapped[list["SpecDraftMember"]] = relationship(
@@ -822,6 +707,7 @@ __all__ = [
     "Dataset",
     "DatasetMember",
     "DatasetRole",
+    "DatasetVersion",
     "Note",
     "ReactionType",
     "SoftDeleteMixin",
@@ -840,8 +726,4 @@ __all__ = [
     "Tenant",
     "TimestampMixin",
     "User",
-    "Workspace",
-    "WorkspaceMember",
-    "WorkspaceRole",
-    "WorkspaceTeam",
 ]

@@ -17,8 +17,6 @@
     </header>
 
     <div class="new-dataset-form">
-        <input type="hidden" id="workspace-id" value="{{ workspaces[0].id if workspaces else '' }}">
-
         <div class="form-section">
             <label for="spec-name" class="form-label">Name</label>
             <input type="text" id="spec-name" name="name"
@@ -134,10 +132,8 @@ if (importZone) {
 
 async function createEmptySpec() {
     const name = document.getElementById('spec-name').value || 'Untitled';
-    const workspaceId = document.getElementById('workspace-id').value;
 
     const formData = new FormData();
-    formData.append('workspace_id', workspaceId);
     formData.append('name', name);
     formData.append('template', '');
 
@@ -161,11 +157,9 @@ async function createEmptySpec() {
 
 async function createFromTemplate(templateName) {
     const name = document.getElementById('spec-name').value || templateName;
-    const workspaceId = document.getElementById('workspace-id').value;
     const version = document.getElementById('version-' + templateName).value;
 
     const formData = new FormData();
-    formData.append('workspace_id', workspaceId);
     formData.append('name', name);
     formData.append('template', templateName + ':' + version);
 
@@ -192,12 +186,10 @@ async function handleImport(input) {
     if (!file) return;
 
     const name = document.getElementById('spec-name').value || file.name.replace(/\.(yaml|yml)$/i, '');
-    const workspaceId = document.getElementById('workspace-id').value;
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('name', name);
-    formData.append('workspace_id', workspaceId);
 
     try {
         const response = await fetch('/hub/spec-builder/import', {

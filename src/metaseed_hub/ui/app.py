@@ -27,7 +27,6 @@ from metaseed_hub.models import (
     SpecDraftMember,
     Tenant,
     User,
-    Workspace,
 )
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
@@ -42,15 +41,16 @@ from metaseed_hub.ui.helpers import (
     humanize_field_name,
 )
 from metaseed_hub.ui.routes import (
+    admin_router,
     auth_router,
     dataset_router,
     entity_router,
+    init_admin_templates,
     init_dataset_templates,
     init_entity_templates,
-    init_workspace_templates,
+    is_admin,
     ontology_router,
     table_router,
-    workspace_router,
 )
 from metaseed_hub.ui.routes.auth import (
     ACCESS_TOKEN_COOKIE,
@@ -225,9 +225,12 @@ def create_hub_app() -> FastAPI:
     templates.env.filters["humanize"] = humanize_field_name
 
     # Initialize templates for route modules
-    init_workspace_templates(templates)
     init_dataset_templates(templates)
     init_entity_templates(templates)
+    init_admin_templates(templates)
+
+    # Register is_admin as template global for conditional nav rendering
+    templates.env.globals["is_admin"] = is_admin
 
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
@@ -238,11 +241,11 @@ def create_hub_app() -> FastAPI:
 
     # Include route modules
     app.include_router(auth_router)
-    app.include_router(workspace_router)
     app.include_router(dataset_router)
     app.include_router(entity_router)
     app.include_router(table_router)
     app.include_router(ontology_router)
+    app.include_router(admin_router)
 
     # Add spec builder routes
     spec_builder_router = create_spec_builder_router(templates)
@@ -316,26 +319,19 @@ def create_hub_app() -> FastAPI:
         # Get or create tenant for user
         tenant = await get_or_create_tenant(session, user)
 
-        # Get the database User record for shared spec queries
+        # Get the database User record for shared queries
         db_user_result = await session.execute(
             select(User).where(User.keycloak_id == user.keycloak_id)
         )
         db_user = db_user_result.scalar_one_or_none()
 
-        # Get user's workspaces
-        result = await session.execute(select(Workspace).where(Workspace.tenant_id == tenant.id))
-        workspaces = list(result.scalars().all())
-        workspace_ids = [w.id for w in workspaces]
-
-        # Get owned datasets from user's workspaces
-        owned_datasets: list[Dataset] = []
-        if workspace_ids:
-            ds_result = await session.execute(
-                select(Dataset)
-                .where(Dataset.workspace_id.in_(workspace_ids), Dataset.deleted_at.is_(None))
-                .order_by(Dataset.updated_at.desc())
-            )
-            owned_datasets = list(ds_result.scalars().all())
+        # Get owned datasets from tenant
+        ds_result = await session.execute(
+            select(Dataset)
+            .where(Dataset.tenant_id == tenant.id, Dataset.deleted_at.is_(None))
+            .order_by(Dataset.updated_at.desc())
+        )
+        owned_datasets = list(ds_result.scalars().all())
 
         # Get datasets shared with this user via DatasetMember
         shared_datasets: list[Dataset] = []
@@ -356,15 +352,13 @@ def create_hub_app() -> FastAPI:
                 seen_ds_ids.add(ds.id)
                 datasets.append(ds)
 
-        # Get owned spec drafts from user's workspaces
-        owned_specs: list[SpecDraft] = []
-        if workspace_ids:
-            spec_result = await session.execute(
-                select(SpecDraft)
-                .where(SpecDraft.workspace_id.in_(workspace_ids))
-                .order_by(SpecDraft.updated_at.desc())
-            )
-            owned_specs = list(spec_result.scalars().all())
+        # Get owned spec drafts from tenant
+        spec_result = await session.execute(
+            select(SpecDraft)
+            .where(SpecDraft.tenant_id == tenant.id)
+            .order_by(SpecDraft.updated_at.desc())
+        )
+        owned_specs = list(spec_result.scalars().all())
 
         # Get specs shared with this user via SpecDraftMember
         shared_specs: list[SpecDraft] = []
@@ -390,7 +384,7 @@ def create_hub_app() -> FastAPI:
             name="home.html",
             context={
                 "user": user,
-                "workspaces": workspaces,
+                "tenant": tenant,
                 "datasets": datasets,
                 "specs": specs,
                 "nav_active": "home",

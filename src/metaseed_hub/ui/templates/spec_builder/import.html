@@ -24,21 +24,15 @@
         <div class="form-section">
             <h2>Import Settings</h2>
 
-            {% if workspaces|length > 1 %}
             <div class="form-group">
-                <label for="workspace_id" class="form-label">Workspace <span class="required">*</span></label>
-                <select name="workspace_id" id="workspace_id" class="form-input" required>
-                    {% for workspace in workspaces %}
-                    <option value="{{ workspace.id }}" {% if workspace.id == selected_workspace_id %}selected{% endif %}>
-                        {{ workspace.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <small class="form-help">Select the workspace where this specification will be stored.</small>
+                <label for="name" class="form-label">Name (optional)</label>
+                <input type="text"
+                       name="name"
+                       id="name"
+                       class="form-input"
+                       placeholder="Leave blank to use name from file">
+                <small class="form-help">Override the specification name from the YAML file.</small>
             </div>
-            {% else %}
-            <input type="hidden" name="workspace_id" value="{{ workspaces[0].id }}">
-            {% endif %}
 
             <div class="form-group">
                 <label for="spec_file" class="form-label">YAML File <span class="required">*</span></label>

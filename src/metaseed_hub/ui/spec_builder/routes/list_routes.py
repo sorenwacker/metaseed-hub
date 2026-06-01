@@ -11,10 +11,7 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
 from metaseed_hub.ui.spec_builder.access import (
-    can_access_workspace,
     create_new_draft,
-    get_or_create_default_workspace,
-    get_user_workspaces,
 )
 from metaseed_hub.ui.spec_builder_helpers import (
     clone_spec,
@@ -42,20 +39,13 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         """Render the specs list page showing drafts and published specs."""
         user_id, tenant_id = user_ctx
 
-        workspaces = await get_user_workspaces(session, user_id, tenant_id)
-        if not workspaces:
-            workspace = await get_or_create_default_workspace(session, tenant_id)
-            workspaces = [workspace]
-
-        workspace_ids = [w.id for w in workspaces]
-
-        # Get drafts user owns (user_id from get_user_context is already User.id)
+        # Get drafts user owns
         owned_result = await session.execute(
             select(SpecDraft)
-            .options(selectinload(SpecDraft.workspace))
+            .options(selectinload(SpecDraft.tenant))
             .where(
                 SpecDraft.user_id == user_id,
-                SpecDraft.workspace_id.in_(workspace_ids),
+                SpecDraft.tenant_id == tenant_id,
             )
             .order_by(SpecDraft.updated_at.desc())
         )
@@ -64,7 +54,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         # Get drafts shared with user
         shared_result = await session.execute(
             select(SpecDraft)
-            .options(selectinload(SpecDraft.workspace))
+            .options(selectinload(SpecDraft.tenant))
             .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
             .where(SpecDraftMember.user_id == user_id)
             .order_by(SpecDraft.updated_at.desc())
@@ -81,9 +71,9 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
 
         result = await session.execute(
             select(Spec)
-            .options(selectinload(Spec.workspace), selectinload(Spec.created_by))
+            .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
             .where(
-                Spec.workspace_id.in_(workspace_ids),
+                Spec.tenant_id == tenant_id,
                 Spec.deleted_at.is_(None),
                 Spec.status == SpecStatus.PUBLISHED,
             )
@@ -94,7 +84,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         return await render(
             request,
             "spec_builder/list.html",
-            {"drafts": drafts, "specs": specs, "workspaces": workspaces},
+            {"drafts": drafts, "specs": specs, "tenant_id": tenant_id},
         )
 
     @router.get("/new", response_model=None)
@@ -102,22 +92,15 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         request: Request,
         session: SessionDep,
         user_ctx: UserContextDep,
-        workspace_id: str | None = None,
     ) -> Response:
         """Show form to create a new spec draft."""
         user_id, tenant_id = user_ctx
-
-        workspaces = await get_user_workspaces(session, user_id, tenant_id)
-        if not workspaces:
-            workspace = await get_or_create_default_workspace(session, tenant_id)
-            workspaces = [workspace]
 
         return await render(
             request,
             "spec_builder/new.html",
             {
-                "workspaces": workspaces,
-                "selected_workspace_id": workspace_id or (workspaces[0].id if workspaces else None),
+                "tenant_id": tenant_id,
                 "templates": list_available_templates(),
             },
         )
@@ -127,15 +110,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         request: Request,
         session: SessionDep,
         user_ctx: UserContextDep,
-        workspace_id: str = Form(...),
         name: str = Form(""),
         template: str = Form(""),
     ) -> Response:
         """Create a new spec draft."""
         user_id, tenant_id = user_ctx
-
-        if not await can_access_workspace(session, user_id, workspace_id):
-            raise HTTPException(status_code=403, detail="Access denied to workspace")
 
         template_source = None
         if template and ":" in template:
@@ -156,7 +135,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         draft = await create_new_draft(
             session,
             user_id=user_id,
-            workspace_id=workspace_id,
+            tenant_id=tenant_id,
             name=draft_name,
             spec=spec,
             template_source=template_source,
@@ -169,23 +148,14 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         request: Request,
         session: SessionDep,
         user_ctx: UserContextDep,
-        workspace_id: str | None = None,
     ) -> Response:
         """Show form to import a spec from YAML file."""
         user_id, tenant_id = user_ctx
 
-        workspaces = await get_user_workspaces(session, user_id, tenant_id)
-        if not workspaces:
-            workspace = await get_or_create_default_workspace(session, tenant_id)
-            workspaces = [workspace]
-
         return await render(
             request,
             "spec_builder/import.html",
-            {
-                "workspaces": workspaces,
-                "selected_workspace_id": workspace_id or (workspaces[0].id if workspaces else None),
-            },
+            {"tenant_id": tenant_id},
         )
 
     @router.post("/import", response_model=None)
@@ -193,26 +163,21 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         request: Request,
         session: SessionDep,
         user_ctx: UserContextDep,
-        workspace_id: str = Form(...),
         spec_file: UploadFile = File(...),
+        name: str = Form(""),
     ) -> Response:
         """Import a spec from uploaded YAML file."""
         user_id, tenant_id = user_ctx
-
-        if not await can_access_workspace(session, user_id, workspace_id):
-            raise HTTPException(status_code=403, detail="Access denied to workspace")
 
         if not spec_file.filename:
             raise HTTPException(status_code=400, detail="No file provided")
 
         if not spec_file.filename.endswith((".yaml", ".yml")):
-            workspaces = await get_user_workspaces(session, user_id, tenant_id)
             return await render(
                 request,
                 "spec_builder/import.html",
                 {
-                    "workspaces": workspaces,
-                    "selected_workspace_id": workspace_id,
+                    "tenant_id": tenant_id,
                     "error": "File must be a YAML file (.yaml or .yml)",
                 },
             )
@@ -222,34 +187,30 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             yaml_content = content.decode("utf-8")
             spec = parse_spec_from_yaml(yaml_content)
         except UnicodeDecodeError:
-            workspaces = await get_user_workspaces(session, user_id, tenant_id)
             return await render(
                 request,
                 "spec_builder/import.html",
                 {
-                    "workspaces": workspaces,
-                    "selected_workspace_id": workspace_id,
+                    "tenant_id": tenant_id,
                     "error": "File must be UTF-8 encoded",
                 },
             )
         except ValueError as e:
-            workspaces = await get_user_workspaces(session, user_id, tenant_id)
             return await render(
                 request,
                 "spec_builder/import.html",
                 {
-                    "workspaces": workspaces,
-                    "selected_workspace_id": workspace_id,
+                    "tenant_id": tenant_id,
                     "error": str(e),
                 },
             )
 
-        draft_name = spec.name if spec.name else "Imported Spec"
+        draft_name = name.strip() if name.strip() else (spec.name if spec.name else "Imported Spec")
 
         draft = await create_new_draft(
             session,
             user_id=user_id,
-            workspace_id=workspace_id,
+            tenant_id=tenant_id,
             name=draft_name,
             spec=spec,
         )
@@ -263,7 +224,6 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         version: str,
         session: SessionDep,
         user_ctx: UserContextDep,
-        workspace_id: str | None = None,
     ) -> Response:
         """Clone an existing spec as a template."""
         user_id, tenant_id = user_ctx
@@ -273,21 +233,10 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-        if workspace_id:
-            if not await can_access_workspace(session, user_id, workspace_id):
-                raise HTTPException(status_code=403, detail="Access denied to workspace")
-        else:
-            workspaces = await get_user_workspaces(session, user_id, tenant_id)
-            if not workspaces:
-                workspace = await get_or_create_default_workspace(session, tenant_id)
-                workspace_id = workspace.id
-            else:
-                workspace_id = workspaces[0].id
-
         draft = await create_new_draft(
             session,
             user_id=user_id,
-            workspace_id=workspace_id,
+            tenant_id=tenant_id,
             name=spec.name,
             spec=spec,
             template_source=(profile, version),

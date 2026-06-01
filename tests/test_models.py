@@ -11,7 +11,6 @@ from .factories import (
     make_team,
     make_tenant,
     make_user,
-    make_workspace,
 )
 
 
@@ -176,85 +175,24 @@ class TestTeamModel:
         assert team.updated_at is not None
 
 
-class TestWorkspaceModel:
-    """Tests for Workspace model constraints."""
+class TestDatasetModel:
+    """Tests for Dataset model constraints."""
 
-    async def test_workspace_name_unique_per_tenant(self, session: AsyncSession) -> None:
-        """Workspace name should be unique within a tenant."""
+    async def test_dataset_name_unique_per_tenant(self, session: AsyncSession) -> None:
+        """Dataset name should be unique within a tenant."""
         tenant1 = make_tenant(slug="tenant-1")
         tenant2 = make_tenant(slug="tenant-2")
         session.add_all([tenant1, tenant2])
         await session.flush()
 
         # Same name in different tenants should work
-        ws1 = make_workspace(tenant=tenant1, name="Research")
-        ws2 = make_workspace(tenant=tenant2, name="Research")
-        session.add_all([ws1, ws2])
-        await session.flush()
-
-        # Same name in same tenant should fail
-        ws3 = make_workspace(tenant=tenant1, name="Research")
-        session.add(ws3)
-
-        with pytest.raises(IntegrityError):
-            await session.flush()
-
-    async def test_workspace_has_timestamps(self, session: AsyncSession) -> None:
-        """Workspace should have created_at and updated_at timestamps."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-        await session.refresh(workspace)
-
-        assert workspace.created_at is not None
-        assert workspace.updated_at is not None
-
-    async def test_workspace_soft_delete(self, session: AsyncSession) -> None:
-        """Workspace should support soft delete."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-        await session.refresh(workspace)
-
-        assert workspace.is_deleted is False
-
-        workspace.soft_delete()
-        await session.flush()
-        await session.refresh(workspace)
-
-        assert workspace.is_deleted is True
-
-
-class TestDatasetModel:
-    """Tests for Dataset model constraints."""
-
-    async def test_dataset_name_unique_per_workspace(self, session: AsyncSession) -> None:
-        """Dataset name should be unique within a workspace."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        ws1 = make_workspace(tenant=tenant, name="Workspace 1")
-        ws2 = make_workspace(tenant=tenant, name="Workspace 2")
-        session.add_all([ws1, ws2])
-        await session.flush()
-
-        # Same name in different workspaces should work
-        ds1 = make_dataset(workspace=ws1, name="Analysis")
-        ds2 = make_dataset(workspace=ws2, name="Analysis")
+        ds1 = make_dataset(tenant=tenant1, name="Analysis")
+        ds2 = make_dataset(tenant=tenant2, name="Analysis")
         session.add_all([ds1, ds2])
         await session.flush()
 
-        # Same name in same workspace should fail
-        ds3 = make_dataset(workspace=ws1, name="Analysis")
+        # Same name in same tenant should fail
+        ds3 = make_dataset(tenant=tenant1, name="Analysis")
         session.add(ds3)
 
         with pytest.raises(IntegrityError):
@@ -266,11 +204,7 @@ class TestDatasetModel:
         session.add(tenant)
         await session.flush()
 
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-
-        dataset = make_dataset(workspace=workspace)
+        dataset = make_dataset(tenant=tenant)
         session.add(dataset)
         await session.flush()
         await session.refresh(dataset)
@@ -284,11 +218,7 @@ class TestDatasetModel:
         session.add(tenant)
         await session.flush()
 
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-
-        dataset = make_dataset(workspace=workspace)
+        dataset = make_dataset(tenant=tenant)
         session.add(dataset)
         await session.flush()
         await session.refresh(dataset)
@@ -309,11 +239,7 @@ class TestDatasetModel:
         session.add(tenant)
         await session.flush()
 
-        workspace = make_workspace(tenant=tenant)
-        session.add(workspace)
-        await session.flush()
-
-        dataset = make_dataset(workspace=workspace)
+        dataset = make_dataset(tenant=tenant)
         session.add(dataset)
         await session.flush()
         await session.refresh(dataset)

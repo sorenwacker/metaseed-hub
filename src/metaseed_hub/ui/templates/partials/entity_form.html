@@ -125,6 +125,25 @@
                            value="{{ values.get(field.name, '') }}"
                            placeholder="https://..." required>
 
+                    {% elif field.type == "ontology_term" or field.name.endswith('_term') or field.name.endswith('_accession') or 'ontology' in field.name.lower() %}
+                    <div class="ontology-input-wrapper">
+                        <input class="form-input lookup-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
+                               value="{{ values.get(field.name, '') }}"
+                               data-lookup-type="ontology"
+                               {% if field.ontology_id %}data-ontology-id="{{ field.ontology_id }}"{% endif %}
+                               {% if field.constraints %}
+                               {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
+                               {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
+                               {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
+                               {% endif %}
+                               autocomplete="off"
+                               placeholder="{% if field.ontology_id %}Search {{ field.ontology_id | upper }}...{% else %}Search all ontologies...{% endif %}"
+                               required>
+                        {% if field.ontology_id %}
+                        <span class="ontology-badge">{{ field.ontology_id | upper }}</span>
+                        {% endif %}
+                    </div>
+
                     {% else %}
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                            value="{{ values.get(field.name, '') }}"
@@ -204,6 +223,24 @@
                            value="{{ values.get(field.name, '') }}"
                            placeholder="https://...">
 
+                    {% elif field.type == "ontology_term" or field.name.endswith('_term') or field.name.endswith('_accession') or 'ontology' in field.name.lower() %}
+                    <div class="ontology-input-wrapper">
+                        <input class="form-input lookup-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
+                               value="{{ values.get(field.name, '') }}"
+                               data-lookup-type="ontology"
+                               {% if field.ontology_id %}data-ontology-id="{{ field.ontology_id }}"{% endif %}
+                               {% if field.constraints %}
+                               {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
+                               {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
+                               {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
+                               {% endif %}
+                               autocomplete="off"
+                               placeholder="{% if field.ontology_id %}Search {{ field.ontology_id | upper }}...{% else %}Search all ontologies...{% endif %}">
+                        {% if field.ontology_id %}
+                        <span class="ontology-badge">{{ field.ontology_id | upper }}</span>
+                        {% endif %}
+                    </div>
+
                     {% else %}
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                            value="{{ values.get(field.name, '') }}"
@@ -250,9 +287,17 @@
                     onclick="document.getElementById('editor').innerHTML='<div class=editor-placeholder><p>Select an entity or create a new one.</p></div>'">
                 Cancel
             </button>
+            <button type="button" class="btn btn-secondary"
+                    hx-post="/hub/datasets/{{ dataset_id }}/entities/validate"
+                    hx-include="closest form"
+                    hx-target="#validation-result"
+                    hx-swap="innerHTML">
+                Validate
+            </button>
             <button type="submit" class="btn btn-primary">
                 {{ "Save Changes" if node_id else "Create " + entity_type }}
             </button>
         </div>
+        <div id="validation-result" style="margin-top: var(--space-sm);"></div>
     </form>
 </div>
