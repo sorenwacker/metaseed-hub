@@ -3916,6 +3916,7 @@ a.spec-editor-close:hover {
 
 .modal-dialog {
     background: white;
+    color: var(--clr-ink);
     border-radius: var(--radius-lg);
     width: 90%;
     max-width: 400px;
