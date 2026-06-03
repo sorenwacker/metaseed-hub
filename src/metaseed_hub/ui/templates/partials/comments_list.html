@@ -75,12 +75,24 @@
 </div>
 {% endmacro %}
 
-{% if comments %}
+{% if comments or is_load_more %}
+{% if not is_load_more %}
 <div class="comments-thread">
+{% endif %}
     {% for comment in comments %}
         {{ render_comment(comment, dataset_id, current_user_id) }}
     {% endfor %}
+    {% if has_more %}
+    <div class="load-more-trigger"
+         hx-get="/hub/datasets/{{ dataset_id }}/comments?offset={{ next_offset }}"
+         hx-trigger="revealed"
+         hx-swap="outerHTML">
+        <span class="loading-text">Loading more...</span>
+    </div>
+    {% endif %}
+{% if not is_load_more %}
 </div>
+{% endif %}
 {% else %}
 <p class="empty-state-inline">No comments yet. Be the first to add one.</p>
 {% endif %}

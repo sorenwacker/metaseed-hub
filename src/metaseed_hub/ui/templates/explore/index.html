@@ -33,7 +33,7 @@
             </div>
 
             <div class="form-section">
-                <label class="form-label">Compare Against <span style="font-weight: normal; color: #888;">(optional)</span></label>
+                <label class="form-label">Compare Against <span style="font-weight: normal; color: var(--clr-ink-light);">(optional)</span></label>
                 <div class="profile-selector">
                     <select id="compare-profile" class="form-select" onchange="updateVersions('compare'); updateButtonText();">
                         <option value="">None (Explore only)</option>
@@ -348,7 +348,7 @@ function buildGraphData(graphData) {
             label: edge.label || '',
             arrows: { to: { enabled: true, type: 'arrow' } },
             color: { color: edgeColor, highlight: edgeColor },
-            font: { size: 10, color: '#666', background: 'white' },
+            font: { size: 10, color: '#2c3e35', background: '#faf8f5' },
             smooth: { type: 'cubicBezier', roundness: 0.4 },
             width: 2,
             title: edge.title || ''

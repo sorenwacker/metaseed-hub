@@ -9,7 +9,7 @@ from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from metaseed.ui.state import AppState
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
@@ -1363,12 +1363,22 @@ async def _get_comments_html(
     dataset_id: str,
     session: DbSession,
     keycloak_sub: str,
+    offset: int = 0,
+    limit: int = 20,
 ) -> Response:
     """Render the comments list partial."""
     # Get database user ID from keycloak sub
     user_result = await session.execute(select(User).where(User.keycloak_id == keycloak_sub))
     db_user = user_result.scalar_one_or_none()
     current_user_id = db_user.id if db_user else None
+
+    # Get total count of top-level comments
+    count_result = await session.execute(
+        select(func.count(Comment.id)).where(
+            Comment.dataset_id == dataset_id, Comment.parent_id.is_(None)
+        )
+    )
+    total_count = count_result.scalar() or 0
 
     # Get top-level comments (no parent) with all nested relationships eagerly loaded
     result = await session.execute(
@@ -1385,8 +1395,13 @@ async def _get_comments_html(
             .selectinload(Comment.reactions),
         )
         .order_by(Comment.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
     comments = list(result.scalars().all())
+
+    has_more = (offset + len(comments)) < total_count
+    next_offset = offset + limit
 
     return render_template(
         request=request,
@@ -1395,6 +1410,9 @@ async def _get_comments_html(
             "comments": comments,
             "dataset_id": dataset_id,
             "current_user_id": current_user_id,
+            "has_more": has_more,
+            "next_offset": next_offset,
+            "is_load_more": offset > 0,
         },
     )
 
@@ -1405,10 +1423,11 @@ async def get_dataset_comments(
     dataset_id: str,
     session: DbSession,
     user: CurrentUser,
+    offset: int = 0,
 ) -> Response:
     """Get all comments for a dataset."""
     await get_dataset_for_user(dataset_id, session, user)
-    return await _get_comments_html(request, dataset_id, session, user.sub)
+    return await _get_comments_html(request, dataset_id, session, user.sub, offset=offset)
 
 
 @router.post("/{dataset_id}/comments", response_class=HTMLResponse)
