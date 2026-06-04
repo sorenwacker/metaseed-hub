@@ -33,6 +33,9 @@ oidc_client_id: APP-CC24314E-7800-4E8F-8E8D-C8730A89B0BF
 # Application URL
 app_url: https://metaseed.ewi.tudelft.nl
 
+# Admin role (SRAM entitlement)
+admin_role: "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+
 # Nginx
 nginx_server_name: metaseed.ewi.tudelft.nl
 ssl_certificate: /etc/letsencrypt/live/metaseed.ewi.tudelft.nl/fullchain.pem
