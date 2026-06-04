@@ -24,9 +24,7 @@
                 <a href="/hub/spec-builder" class="nav-btn {% if nav_active == 'spec-builder' %}active{% endif %}">Specs</a>
                 <a href="/hub/explore/" class="nav-btn {% if nav_active == 'explore' %}active{% endif %}">Explorer</a>
                 <a href="https://sorenwacker.github.io/metaseed-hub/" class="nav-btn" target="_blank" rel="noopener">Docs</a>
-                {% if user and is_admin(user) %}
-                <a href="/hub/admin/" class="nav-btn {% if nav_active == 'admin' %}active{% endif %}">Admin</a>
-                {% endif %}
+                {# Admin hidden until SRAM configured #}
             </nav>
             <div class="header-breadcrumb">
                 {% block nav %}{% endblock %}
