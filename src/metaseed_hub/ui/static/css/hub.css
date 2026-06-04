@@ -796,6 +796,13 @@ body {
     margin-bottom: var(--space-lg);
 }
 
+.login-card .version-info {
+    font-size: 0.75rem;
+    color: var(--clr-ink-muted, #999);
+    margin-top: var(--space-lg);
+    margin-bottom: 0;
+}
+
 /* Project Editor */
 .project-container {
     flex: 1;
