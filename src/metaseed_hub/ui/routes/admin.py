@@ -1,10 +1,9 @@
 """Admin dashboard routes for system monitoring.
 
 Provides GDPR-compliant aggregated statistics and admin-only user management.
-Access is controlled via ADMIN_ROLE environment variable (checks user.roles from OIDC token).
+Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
 """
 
-import os
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
@@ -18,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from metaseed_hub.auth import TokenUser
+from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, Tenant, User
 from metaseed_hub.ui.dependencies import require_user
@@ -33,12 +33,12 @@ def init_templates(templates: "Jinja2Templates") -> None:  # noqa: F821
 
 
 def get_admin_role() -> str:
-    """Get the admin role name from environment variable.
+    """Get the admin role name from settings.
 
     Returns:
         Role name that grants admin access (default: "admin").
     """
-    return os.getenv("ADMIN_ROLE", "admin")
+    return get_settings().admin_role
 
 
 def _has_admin_role(user: TokenUser) -> bool:

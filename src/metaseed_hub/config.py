@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost:7001"
     secret_key: str = "dev-secret-change-in-production"
 
+    # Admin access (SRAM entitlement or role name)
+    admin_role: str = "admin"
+
     @property
     def effective_issuer(self) -> str:
         """Return the OIDC issuer URL (supports legacy Keycloak config)."""
