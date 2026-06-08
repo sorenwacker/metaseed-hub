@@ -1194,8 +1194,8 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.7.3"
-source = { git = "https://github.com/sorenwacker/metaseed.git?rev=v0.7.3#938655606d6d9d6d4c02d23e9defe0d7b7aa52a1" }
+version = "0.7.4.dev2"
+source = { git = "https://github.com/sorenwacker/metaseed.git?rev=main#b530d65291561fd2ec29b78e980492809babefca" }
 dependencies = [
     { name = "fastapi" },
     { name = "jinja2" },
@@ -1261,7 +1261,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
-    { name = "metaseed", git = "https://github.com/sorenwacker/metaseed.git?rev=v0.7.3" },
+    { name = "metaseed", git = "https://github.com/sorenwacker/metaseed.git?rev=main" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
