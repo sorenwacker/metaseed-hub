@@ -16,25 +16,35 @@ logger = logging.getLogger("metaseed_hub")
 
 
 def make_json_serializable(obj: Any) -> Any:
-    """Recursively convert date/datetime objects to ISO format strings.
+    """Recursively convert non-JSON-serializable objects to serializable types.
+
+    Handles: date, datetime, Pydantic URLs (AnyUrl, HttpUrl), and other objects
+    by converting them to strings.
 
     Use this before storing data in JSONB columns to avoid serialization errors.
 
     Args:
-        obj: Any object that may contain date/datetime values.
+        obj: Any object that may contain non-serializable values.
 
     Returns:
-        Object with all date/datetime converted to ISO strings.
+        Object with all non-serializable types converted to JSON-compatible types.
     """
+    # Handle None and basic JSON types first
+    if obj is None or isinstance(obj, bool | int | float | str):
+        return obj
+    # Handle datetime before date (datetime is subclass of date)
     if isinstance(obj, datetime):
         return obj.isoformat()
     if isinstance(obj, date):
         return obj.isoformat()
+    # Handle collections
     if isinstance(obj, dict):
         return {k: make_json_serializable(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    if isinstance(obj, list | tuple):
         return [make_json_serializable(item) for item in obj]
-    return obj
+    # Handle Pydantic URL types and any other object with string representation
+    # This catches AnyUrl, HttpUrl, and similar Pydantic types
+    return str(obj)
 
 
 def add_entity_node(

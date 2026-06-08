@@ -396,3 +396,61 @@ class TestMakeJsonSerializable:
         """Handles empty dicts and lists."""
         assert make_json_serializable({}) == {}
         assert make_json_serializable([]) == []
+
+    def test_pydantic_url_types(self) -> None:
+        """Converts Pydantic URL types to strings."""
+        from pydantic import AnyUrl, HttpUrl
+
+        url = AnyUrl("https://example.com/path")
+        result = make_json_serializable(url)
+        assert result == "https://example.com/path"
+        assert isinstance(result, str)
+
+        http_url = HttpUrl("https://example.org/api")
+        result = make_json_serializable(http_url)
+        assert result == "https://example.org/api"
+        assert isinstance(result, str)
+
+    def test_nested_pydantic_urls(self) -> None:
+        """Converts Pydantic URLs in nested structures."""
+        from pydantic import AnyUrl
+
+        data = {
+            "name": "Test",
+            "website": AnyUrl("https://example.com"),
+            "links": [
+                AnyUrl("https://link1.com"),
+                AnyUrl("https://link2.com"),
+            ],
+        }
+        result = make_json_serializable(data)
+        assert result["website"] == "https://example.com/"
+        assert result["links"][0] == "https://link1.com/"
+        assert result["links"][1] == "https://link2.com/"
+
+    def test_tuple_converted_to_list(self) -> None:
+        """Converts tuples to lists."""
+        data = (1, 2, date(2024, 1, 1))
+        result = make_json_serializable(data)
+        assert result == [1, 2, "2024-01-01"]
+        assert isinstance(result, list)
+
+    def test_actual_json_serializable(self) -> None:
+        """Result can actually be serialized to JSON."""
+        import json
+
+        from pydantic import AnyUrl
+
+        data = {
+            "date": date(2024, 6, 8),
+            "datetime": datetime(2024, 6, 8, 12, 0),
+            "url": AnyUrl("https://example.com"),
+            "nested": {
+                "urls": [AnyUrl("https://a.com"), AnyUrl("https://b.com")],
+            },
+        }
+        result = make_json_serializable(data)
+        # This should not raise
+        json_str = json.dumps(result)
+        assert "2024-06-08" in json_str
+        assert "example.com" in json_str
