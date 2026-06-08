@@ -300,8 +300,8 @@ class TestOAuthScopes:
     """Tests for OAuth scope configuration."""
 
     @pytest.mark.asyncio
-    async def test_login_includes_offline_access_scope(self) -> None:
-        """Login redirect includes offline_access scope for refresh tokens."""
+    async def test_login_uses_configured_scope(self) -> None:
+        """Login redirect uses configured oidc_scope from settings."""
         from unittest.mock import AsyncMock, patch
 
         from metaseed_hub.ui.routes.auth import auth_login
@@ -313,6 +313,7 @@ class TestOAuthScopes:
         mock_settings.app_url = "https://example.com"
         mock_settings.effective_client_id = "test-client"
         mock_settings.debug = False
+        mock_settings.oidc_scope = "openid email profile offline_access eduperson_entitlement"
 
         mock_oidc_config = {
             "authorization_endpoint": "https://auth.example.com/authorize",
@@ -331,9 +332,10 @@ class TestOAuthScopes:
         ):
             response = await auth_login(mock_request)
 
-        # Check that the redirect URL contains offline_access
+        # Check that the redirect URL contains the configured scope
         redirect_url = response.headers["location"]
         assert "offline_access" in redirect_url
+        assert "eduperson_entitlement" in redirect_url
         assert "scope=" in redirect_url
 
 

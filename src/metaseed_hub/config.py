@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     oidc_issuer: str = "http://localhost:7080/realms/metaseed"
     oidc_client_id: str = "metaseed-hub"
     oidc_client_secret: str = "metaseed-hub-dev-secret"
+    oidc_scope: str = "openid email profile"  # Add offline_access eduperson_entitlement for SRAM
 
     # Legacy Keycloak settings (for backwards compatibility)
     keycloak_url: str = ""
