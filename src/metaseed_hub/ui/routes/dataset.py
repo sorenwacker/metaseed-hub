@@ -39,7 +39,7 @@ from metaseed_hub.ui.helpers import (
     ensure_dataset_facade,
     get_dataset_state,
     get_tree_data_from_nodes,
-    serialize_tree,
+    save_dataset_state,
 )
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
@@ -333,13 +333,8 @@ async def dataset_import(
                         state, facade, node, root_entity, copy.deepcopy(entity_data)
                     )
 
-        # Save to database
-        from sqlalchemy.orm.attributes import flag_modified
-
-        dataset.data = serialize_tree(state)
-        flag_modified(dataset, "data")
-        session.add(dataset)
-        await session.commit()
+        # Save to database with version history
+        await save_dataset_state(session, dataset, state)
 
     except Exception as e:
         logger.warning(f"Could not import entities, dataset created empty: {e}")
@@ -426,12 +421,8 @@ async def dataset_create(
                 # Create nested child nodes from the unmodified copy
                 create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
-                from sqlalchemy.orm.attributes import flag_modified
-
-                dataset.data = serialize_tree(state)
-                flag_modified(dataset, "data")
-                session.add(dataset)
-                await session.commit()
+                # Save to database with version history
+                await save_dataset_state(session, dataset, state)
             except Exception as e:
                 logger.exception(f"Failed to load example data: {e}")
 
@@ -557,10 +548,7 @@ async def dataset_load_example(
         # Create nested child nodes from the unmodified copy
         create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
-        # Save to database
-        from sqlalchemy.orm.attributes import flag_modified
-
-        dataset.data = serialize_tree(state)
+        # Save to database with version history
         logger.info(f"Saving tree with {len(state.entity_tree)} root nodes")
         for n in state.entity_tree:
             if n.instance:
@@ -571,9 +559,7 @@ async def dataset_load_example(
                     cdata = c.instance.model_dump(exclude_none=True)
                     logger.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
 
-        flag_modified(dataset, "data")
-        session.add(dataset)
-        await session.commit()
+        await save_dataset_state(session, dataset, state)
 
     except Exception as e:
         import traceback
@@ -1078,7 +1064,6 @@ async def dataset_import_into_existing(
     from io import BytesIO
 
     import yaml
-    from sqlalchemy.orm.attributes import flag_modified
 
     try:
         validate_csrf_or_error(request)
@@ -1205,11 +1190,8 @@ async def dataset_import_into_existing(
             except Exception as e:
                 errors.append(f"{entity_type}: {e}")
 
-    # Save to database
-    dataset.data = serialize_tree(state)
-    flag_modified(dataset, "data")
-    session.add(dataset)
-    await session.commit()
+    # Save to database with version history
+    await save_dataset_state(session, dataset, state)
 
     if errors:
         msg = f"Imported {imported_count} entities with {len(errors)} errors"
