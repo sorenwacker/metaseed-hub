@@ -454,3 +454,54 @@ class TestMakeJsonSerializable:
         json_str = json.dumps(result)
         assert "2024-06-08" in json_str
         assert "example.com" in json_str
+
+
+class TestMetaseedSerializeContract:
+    """Tests that verify metaseed returns JSON-serializable data.
+
+    These tests verify metaseed's contract - if they fail, metaseed has a bug.
+    metaseed-hub should not work around these issues; metaseed must fix them.
+    """
+
+    def test_isa_serialize_is_json_serializable(self) -> None:
+        """ISA profile serialize() output must be JSON-serializable."""
+        import json
+
+        from metaseed import MetaseedClient
+
+        client = MetaseedClient("isa", "1.0")
+        client.create_entity(
+            "Investigation",
+            {
+                "identifier": "test-inv",
+                "title": "Test Investigation",
+                "submission_date": "2024-01-01",
+            },
+        )
+
+        tree_data = client.serialize(format="tree")
+
+        # This must not raise - if it does, metaseed has a bug
+        json.dumps(tree_data)
+
+    def test_miappe_serialize_is_json_serializable(self) -> None:
+        """MIAPPE profile serialize() output must be JSON-serializable."""
+        import json
+
+        from metaseed import MetaseedClient
+
+        client = MetaseedClient("miappe", "1.1")
+        client.create_entity(
+            "Investigation",
+            {
+                "unique_id": "test-inv",
+                "title": "Test Investigation",
+                "submission_date": "2024-01-01",
+                "public_release_date": "2024-12-31",
+            },
+        )
+
+        tree_data = client.serialize(format="tree")
+
+        # This must not raise - if it does, metaseed has a bug
+        json.dumps(tree_data)
