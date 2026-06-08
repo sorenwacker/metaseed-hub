@@ -497,3 +497,67 @@ class TestEntityServiceUpdate:
         state = service.state
         node = state.nodes_by_id[node_id]
         assert node.instance.title == "Updated Title"
+
+
+class TestEntityServiceVersionHistory:
+    """Tests for dataset version history creation."""
+
+    @pytest.mark.asyncio
+    async def test_entity_changes_create_version_history(self, session: AsyncSession) -> None:
+        """Changing entities creates version history records."""
+        from sqlalchemy import select
+
+        from metaseed_hub.models import DatasetVersion
+
+        tenant = Tenant(name="Test Tenant", slug="test-ver")
+        session.add(tenant)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Test Dataset",
+            tenant_id=tenant.id,
+            profile="miappe",
+            version="1.2",
+            data={"profile": "miappe", "version": "1.2", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+
+        # Check no versions exist yet
+        result = await session.execute(
+            select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)
+        )
+        versions = result.scalars().all()
+        assert len(versions) == 0
+
+        service = EntityService(session, dataset)
+
+        # Create first entity
+        await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "First Investigation"},
+        )
+
+        # Check version was created
+        result = await session.execute(
+            select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)
+        )
+        versions = result.scalars().all()
+        assert len(versions) == 1
+        assert versions[0].version_number == 1
+
+        # Create second entity
+        await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-002", "title": "Second Investigation"},
+        )
+
+        # Check second version was created
+        result = await session.execute(
+            select(DatasetVersion)
+            .where(DatasetVersion.dataset_id == dataset.id)
+            .order_by(DatasetVersion.version_number)
+        )
+        versions = result.scalars().all()
+        assert len(versions) == 2
+        assert versions[1].version_number == 2
