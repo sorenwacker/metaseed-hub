@@ -62,11 +62,13 @@ class EntityService:
     Args:
         session: Database session for async operations.
         dataset: Dataset model containing entity data.
+        user_id: Optional user ID for version tracking.
     """
 
-    def __init__(self, session: AsyncSession, dataset: Dataset):
+    def __init__(self, session: AsyncSession, dataset: Dataset, user_id: str | None = None):
         self._session = session
         self._dataset = dataset
+        self._user_id = user_id
         self._client: MetaseedClient | None = None
         self._state: Any | None = None  # AppState, imported lazily
 
@@ -474,6 +476,11 @@ class EntityService:
 
     async def _save_state(self) -> None:
         """Save current state to database using client.serialize()."""
+        from sqlalchemy import func, select
+        from sqlalchemy.orm.attributes import flag_modified
+
+        from metaseed_hub.models import DatasetVersion
+
         if self._client is None:
             raise EntityServiceError(
                 "Cannot save: client not loaded",
@@ -486,7 +493,27 @@ class EntityService:
         # Ensure all date/datetime objects are converted to ISO strings for JSON
         tree_data = make_json_serializable(tree_data)
 
+        # Only create version if data changed
+        if tree_data != self._dataset.data:
+            # Get next version number
+            result = await self._session.execute(
+                select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
+                    DatasetVersion.dataset_id == self._dataset.id
+                )
+            )
+            max_version = result.scalar() or 0
+
+            # Create version with new data
+            version = DatasetVersion(
+                dataset_id=self._dataset.id,
+                version_number=max_version + 1,
+                data=tree_data,
+                created_by_id=self._user_id,  # Database User.id, not keycloak_id
+            )
+            self._session.add(version)
+
         # Update dataset
         self._dataset.data = tree_data
+        flag_modified(self._dataset, "data")
         self._session.add(self._dataset)
         await self._session.commit()
