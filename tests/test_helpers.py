@@ -1,6 +1,7 @@
 """Tests for helper functions in metaseed_hub.ui.helpers."""
 
 import secrets
+from datetime import date, datetime
 from unittest.mock import Mock
 
 from fastapi import Request
@@ -14,6 +15,7 @@ from metaseed_hub.ui.helpers import (
     get_or_create_csrf_token,
     get_tree_data_from_nodes,
     humanize_field_name,
+    make_json_serializable,
     validate_csrf_token,
 )
 
@@ -321,3 +323,76 @@ class TestBuildEntityFormContext:
         assert len(result["required_fields"]) == 1
         assert len(result["optional_fields"]) == 1
         assert result["values"] == {}
+
+
+class TestMakeJsonSerializable:
+    """Tests for make_json_serializable function."""
+
+    def test_date_converted_to_iso_string(self) -> None:
+        """Converts date objects to ISO format strings."""
+        d = date(2024, 6, 8)
+        result = make_json_serializable(d)
+        assert result == "2024-06-08"
+
+    def test_datetime_converted_to_iso_string(self) -> None:
+        """Converts datetime objects to ISO format strings."""
+        dt = datetime(2024, 6, 8, 14, 30, 0)
+        result = make_json_serializable(dt)
+        assert result == "2024-06-08T14:30:00"
+
+    def test_nested_dict_with_dates(self) -> None:
+        """Converts dates in nested dictionaries."""
+        data = {
+            "name": "Test",
+            "start_date": date(2024, 1, 1),
+            "nested": {
+                "end_date": date(2024, 12, 31),
+                "value": 42,
+            },
+        }
+        result = make_json_serializable(data)
+        assert result["start_date"] == "2024-01-01"
+        assert result["nested"]["end_date"] == "2024-12-31"
+        assert result["nested"]["value"] == 42
+        assert result["name"] == "Test"
+
+    def test_list_with_dates(self) -> None:
+        """Converts dates in lists."""
+        data = [date(2024, 1, 1), date(2024, 2, 1), "string", 123]
+        result = make_json_serializable(data)
+        assert result == ["2024-01-01", "2024-02-01", "string", 123]
+
+    def test_mixed_nested_structure(self) -> None:
+        """Handles complex nested structures with dates."""
+        data = {
+            "entities": [
+                {
+                    "type": "Investigation",
+                    "data": {
+                        "submission_date": date(2024, 6, 1),
+                        "created_at": datetime(2024, 6, 1, 10, 0, 0),
+                    },
+                },
+                {
+                    "type": "Study",
+                    "dates": [date(2024, 7, 1), date(2024, 8, 1)],
+                },
+            ],
+        }
+        result = make_json_serializable(data)
+        assert result["entities"][0]["data"]["submission_date"] == "2024-06-01"
+        assert result["entities"][0]["data"]["created_at"] == "2024-06-01T10:00:00"
+        assert result["entities"][1]["dates"] == ["2024-07-01", "2024-08-01"]
+
+    def test_primitives_unchanged(self) -> None:
+        """Leaves primitive types unchanged."""
+        assert make_json_serializable("string") == "string"
+        assert make_json_serializable(42) == 42
+        assert make_json_serializable(3.14) == 3.14
+        assert make_json_serializable(True) is True
+        assert make_json_serializable(None) is None
+
+    def test_empty_structures(self) -> None:
+        """Handles empty dicts and lists."""
+        assert make_json_serializable({}) == {}
+        assert make_json_serializable([]) == []

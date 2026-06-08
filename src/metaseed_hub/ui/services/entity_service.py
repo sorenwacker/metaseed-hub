@@ -17,6 +17,7 @@ from metaseed import MetaseedClient, ProfileNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, SpecDraft
+from metaseed_hub.ui.helpers import make_json_serializable
 
 from .exceptions import (
     EntityServiceError,
@@ -481,6 +482,9 @@ class EntityService:
 
         # Use client.serialize(format='tree') for database storage
         tree_data = self._client.serialize(format="tree")
+
+        # Ensure all date/datetime objects are converted to ISO strings for JSON
+        tree_data = make_json_serializable(tree_data)
 
         # Update dataset
         self._dataset.data = tree_data

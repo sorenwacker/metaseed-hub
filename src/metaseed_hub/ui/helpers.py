@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 import uuid
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import Request
@@ -12,6 +13,28 @@ from metaseed.ui.state import AppState, TreeNode
 from metaseed_hub.models import Dataset, DatasetVersion
 
 logger = logging.getLogger("metaseed_hub")
+
+
+def make_json_serializable(obj: Any) -> Any:
+    """Recursively convert date/datetime objects to ISO format strings.
+
+    Use this before storing data in JSONB columns to avoid serialization errors.
+
+    Args:
+        obj: Any object that may contain date/datetime values.
+
+    Returns:
+        Object with all date/datetime converted to ISO strings.
+    """
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [make_json_serializable(item) for item in obj]
+    return obj
 
 
 def add_entity_node(
@@ -128,11 +151,14 @@ def serialize_tree(state: AppState) -> dict[str, Any]:
             node_data["children"] = [serialize_node(c) for c in node.children]
         return node_data
 
-    return {
+    result = {
         "profile": state.profile,
         "version": state.version,
         "tree": [serialize_node(n) for n in state.entity_tree],
     }
+    # Ensure all date/datetime objects are converted to strings for JSON storage
+    serialized: dict[str, Any] = make_json_serializable(result)
+    return serialized
 
 
 def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
