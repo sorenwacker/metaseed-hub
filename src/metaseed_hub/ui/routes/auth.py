@@ -67,7 +67,7 @@ async def auth_login(request: Request) -> RedirectResponse:
     params = {
         "client_id": settings.effective_client_id,
         "response_type": "code",
-        "scope": "openid email profile eduperson_entitlement",
+        "scope": "openid email profile eduperson_entitlement offline_access",
         "redirect_uri": redirect_uri,
         "state": state,
         "prompt": "consent",

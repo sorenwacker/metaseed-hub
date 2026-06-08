@@ -360,14 +360,44 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {"yaml_content": yaml_content, "draft_id": ctx.draft.id},
         )
 
-    @router.get("/{draft_id}/export")
+    @router.get("/{draft_id}/export", response_model=None)
     async def export_yaml(
         request: Request,
-        ctx: DraftContextDep,
-    ) -> StreamingResponse:
-        """Download the spec as a YAML file."""
-        yaml_content = spec_to_yaml(ctx.spec)
-        filename = f"{ctx.spec.name or 'profile'}.yaml"
+        draft_id: str,
+        session: SessionDep,
+    ) -> StreamingResponse | RedirectResponse:
+        """Download the spec as a YAML file.
+
+        Handles authentication gracefully - redirects to login instead of 401
+        so browser downloads don't fail silently.
+        """
+        from metaseed_hub.ui.spec_builder.access import (
+            LoginRequiredRedirectError,
+            get_user_context,
+            load_state_for_draft,
+        )
+
+        # Handle authentication with redirect instead of 401
+        try:
+            user_id, _tenant_id = await get_user_context(
+                request, session, redirect_on_unauthorized=True
+            )
+        except LoginRequiredRedirectError:
+            return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+        # Load draft state
+        try:
+            state, draft = await load_state_for_draft(session, draft_id, user_id)
+        except HTTPException as e:
+            if e.status_code in (401, 403):
+                return RedirectResponse(url="/hub/auth/login", status_code=302)
+            raise
+
+        if state.spec is None:
+            raise HTTPException(status_code=400, detail="No spec in progress")
+
+        yaml_content = spec_to_yaml(state.spec)
+        filename = f"{state.spec.name or 'profile'}.yaml"
 
         return StreamingResponse(
             iter([yaml_content]),

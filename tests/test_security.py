@@ -294,3 +294,171 @@ class TestFormProcessing:
 
         values = {"field1": "value1", "field2": "value2"}
         assert get_label_from_values(values) is None
+
+
+class TestOAuthScopes:
+    """Tests for OAuth scope configuration."""
+
+    @pytest.mark.asyncio
+    async def test_login_includes_offline_access_scope(self) -> None:
+        """Login redirect includes offline_access scope for refresh tokens."""
+        from unittest.mock import AsyncMock, patch
+
+        from metaseed_hub.ui.routes.auth import auth_login
+
+        mock_request = Mock()
+        mock_request.cookies = {}
+
+        mock_settings = Mock()
+        mock_settings.app_url = "https://example.com"
+        mock_settings.effective_client_id = "test-client"
+        mock_settings.debug = False
+
+        mock_oidc_config = {
+            "authorization_endpoint": "https://auth.example.com/authorize",
+        }
+
+        with (
+            patch(
+                "metaseed_hub.ui.routes.auth.get_settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "metaseed_hub.ui.routes.auth.get_oidc_config",
+                new_callable=AsyncMock,
+                return_value=mock_oidc_config,
+            ),
+        ):
+            response = await auth_login(mock_request)
+
+        # Check that the redirect URL contains offline_access
+        redirect_url = response.headers["location"]
+        assert "offline_access" in redirect_url
+        assert "scope=" in redirect_url
+
+
+class TestSpecExportAuth:
+    """Tests for spec builder export authentication handling."""
+
+    @pytest.mark.asyncio
+    async def test_export_redirects_to_login_when_unauthenticated(self) -> None:
+        """Export endpoint redirects to login instead of 401 when not authenticated."""
+        from pathlib import Path
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import APIRouter
+        from fastapi.responses import RedirectResponse
+        from fastapi.templating import Jinja2Templates
+
+        from metaseed_hub.ui.spec_builder.access import LoginRequiredRedirectError
+
+        mock_request = Mock()
+        mock_request.cookies = {}
+        mock_session = AsyncMock()
+
+        # Mock get_user_context to raise LoginRequiredRedirectError
+        async def mock_get_user_context(*args, **kwargs):
+            if kwargs.get("redirect_on_unauthorized"):
+                raise LoginRequiredRedirectError()
+            return ("user-id", "tenant-id")
+
+        # Patch at the source module since the import happens inside the function
+        with patch(
+            "metaseed_hub.ui.spec_builder.access.get_user_context",
+            side_effect=mock_get_user_context,
+        ):
+            from metaseed_hub.ui.spec_builder.routes.draft_routes import (
+                register_draft_routes,
+            )
+
+            # Create a minimal router to get the export function
+            router = APIRouter()
+            templates = Jinja2Templates(
+                directory=str(Path(__file__).parent.parent / "src/metaseed_hub/ui/templates")
+            )
+            register_draft_routes(router, templates)
+
+            # Find the export route handler
+            export_route = None
+            for route in router.routes:
+                if hasattr(route, "path") and "/export" in route.path:
+                    export_route = route
+                    break
+
+            assert export_route is not None
+
+            # Call the endpoint directly
+            response = await export_route.endpoint(
+                request=mock_request,
+                draft_id="test-draft-id",
+                session=mock_session,
+            )
+
+            assert isinstance(response, RedirectResponse)
+            assert response.status_code == 302
+            assert response.headers["location"] == "/hub/auth/login"
+
+    @pytest.mark.asyncio
+    async def test_export_returns_yaml_when_authenticated(self) -> None:
+        """Export endpoint returns YAML file when authenticated."""
+        from pathlib import Path
+        from unittest.mock import AsyncMock, patch
+
+        from fastapi import APIRouter
+        from fastapi.responses import StreamingResponse
+        from fastapi.templating import Jinja2Templates
+        from metaseed.specs.schema import ProfileSpec
+
+        mock_request = Mock()
+        mock_request.cookies = {"metaseed_access_token": "valid-token"}
+        mock_session = AsyncMock()
+
+        # Create a mock spec state
+        mock_spec = ProfileSpec(name="TestSpec", version="1.0")
+        mock_state = Mock()
+        mock_state.spec = mock_spec
+
+        mock_draft = Mock()
+        mock_draft.id = "test-draft-id"
+
+        # Patch at the source module since the import happens inside the function
+        with (
+            patch(
+                "metaseed_hub.ui.spec_builder.access.get_user_context",
+                new_callable=AsyncMock,
+                return_value=("user-id", "tenant-id"),
+            ),
+            patch(
+                "metaseed_hub.ui.spec_builder.access.load_state_for_draft",
+                new_callable=AsyncMock,
+                return_value=(mock_state, mock_draft),
+            ),
+        ):
+            from metaseed_hub.ui.spec_builder.routes.draft_routes import (
+                register_draft_routes,
+            )
+
+            router = APIRouter()
+            templates = Jinja2Templates(
+                directory=str(Path(__file__).parent.parent / "src/metaseed_hub/ui/templates")
+            )
+            register_draft_routes(router, templates)
+
+            # Find the export route handler
+            export_route = None
+            for route in router.routes:
+                if hasattr(route, "path") and "/export" in route.path:
+                    export_route = route
+                    break
+
+            assert export_route is not None
+
+            response = await export_route.endpoint(
+                request=mock_request,
+                draft_id="test-draft-id",
+                session=mock_session,
+            )
+
+            assert isinstance(response, StreamingResponse)
+            assert response.media_type == "application/x-yaml"
+            assert 'attachment; filename="TestSpec.yaml"' in response.headers["content-disposition"]
