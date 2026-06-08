@@ -53,15 +53,6 @@
                 </button>
             </div>
 
-            <div id="export-section" class="form-section" style="display: none; margin-top: 16px;">
-                <label class="form-label">Export Report</label>
-                <div style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button class="btn btn-sm" onclick="exportReport('markdown')">MD</button>
-                    <button class="btn btn-sm" onclick="exportReport('csv')">CSV</button>
-                    <button class="btn btn-sm" onclick="exportReport('html')">HTML</button>
-                </div>
-            </div>
-
             <div id="filter-section" class="form-section" style="display: none; margin-top: 16px;">
                 <label class="form-label">Show/Hide</label>
                 <div class="filter-toggles">
@@ -277,7 +268,6 @@ async function runComparison() {
         originalGraphData = data.graph;
         hiddenEntities.clear();
         initERD(data.graph);
-        document.getElementById('export-section').style.display = 'block';
 
         if (exploreMode) {
             document.getElementById('filter-section').style.display = 'none';
@@ -454,11 +444,6 @@ function selectEntity(nodeId) {
 
 function closeEditorPanel() {
     document.getElementById('editor-panel').classList.remove('open');
-}
-
-function exportReport(format) {
-    if (currentProfiles.length < 1) return;
-    window.open(`${BASE_URL}/explore/report/${format}/${currentProfiles.join(',')}`, '_blank');
 }
 
 function applyFilters() {
