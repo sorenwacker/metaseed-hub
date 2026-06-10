@@ -18,6 +18,7 @@ from metaseed_hub.ui.spec_builder_helpers import (
     create_empty_spec,
     list_available_templates,
     parse_spec_from_yaml,
+    slugify_spec_name,
 )
 
 from ._common import SessionDep, UserContextDep, create_render_helper
@@ -128,7 +129,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             spec = create_empty_spec()
 
         if name.strip():
-            spec.name = name.strip()
+            spec.name = slugify_spec_name(name)
 
         draft_name = spec.name if hasattr(spec, "name") and spec.name else "Untitled"
 

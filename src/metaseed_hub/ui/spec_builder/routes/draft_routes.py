@@ -20,7 +20,11 @@ from metaseed_hub.ui.spec_builder.access import (
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
-from metaseed_hub.ui.spec_builder_helpers import create_empty_spec, spec_to_yaml
+from metaseed_hub.ui.spec_builder_helpers import (
+    create_empty_spec,
+    slugify_spec_name,
+    spec_to_yaml,
+)
 
 from ._common import DraftContextDep, SessionDep, UserContextDep, create_render_helper
 
@@ -331,7 +335,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         root_entity: str = Form(""),
     ) -> HTMLResponse:
         """Update profile metadata."""
-        ctx.spec.name = name.strip()
+        ctx.spec.name = slugify_spec_name(name)
         ctx.spec.version = version.strip() or "0.1"
         ctx.spec.display_name = display_name.strip() or None
         ctx.spec.description = description.strip()

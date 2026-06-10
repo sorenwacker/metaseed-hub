@@ -7,9 +7,37 @@ objects used by the spec builder UI.
 from __future__ import annotations
 
 import copy
+import re
 from typing import TYPE_CHECKING, Any
 
 import yaml
+
+
+def slugify_spec_name(name: str) -> str:
+    """Convert a spec name to lowercase slug format.
+
+    Converts CamelCase, spaces, and underscores to hyphens.
+    Removes invalid characters.
+
+    Args:
+        name: The input name (e.g., "MySpec", "My Spec", "my_spec")
+
+    Returns:
+        Lowercase slug (e.g., "my-spec")
+    """
+    if not name:
+        return ""
+    # Insert hyphen before uppercase letters (for CamelCase)
+    s = re.sub(r"([a-z])([A-Z])", r"\1-\2", name)
+    # Replace spaces and underscores with hyphens
+    s = re.sub(r"[\s_]+", "-", s)
+    # Remove invalid characters (keep only alphanumeric and hyphens)
+    s = re.sub(r"[^a-zA-Z0-9-]", "", s)
+    # Collapse multiple hyphens
+    s = re.sub(r"-+", "-", s)
+    # Strip leading/trailing hyphens and lowercase
+    return s.strip("-").lower()
+
 
 if TYPE_CHECKING:
     from metaseed.specs.schema import ProfileSpec
