@@ -131,6 +131,7 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         required: bool = Form(False),
         description: str = Form(""),
         ontology_term: str = Form(""),
+        ontologies: str = Form(""),
         codename: str = Form(""),
         items: str = Form(""),
         parent_ref: str = Form(""),
@@ -160,6 +161,7 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
             required=required,
             description=description,
             ontology_term=ontology_term,
+            ontologies=ontologies,
             codename=codename,
             items=items,
             parent_ref=parent_ref,
@@ -181,6 +183,14 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.required = form_data.required
         field.description = form_data.description.strip()
         field.ontology_term = form_data.ontology_term.strip() or None
+        # Parse ontologies from comma/newline-separated string to list
+        ontologies_str = form_data.ontologies.strip()
+        if ontologies_str:
+            field.ontologies = [
+                o.strip().lower() for o in ontologies_str.replace("\n", ",").split(",") if o.strip()
+            ]
+        else:
+            field.ontologies = None
         field.codename = form_data.codename.strip() or None
         field.items = form_data.items.strip() or None
         field.parent_ref = form_data.parent_ref.strip() or None

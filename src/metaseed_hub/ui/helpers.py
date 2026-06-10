@@ -357,17 +357,8 @@ def build_entity_form_context(
         info = helper.field_info(field_name)
         field_type = info.get("type", "string")
         is_nested = field_type in ("list", "entity") and info.get("items") is not None
-        # Extract ontology_id from ontology_term metadata
-        # Handles: "PO:0000001" -> "po", "ncbitaxon" -> "ncbitaxon", "PO" -> "po"
-        ontology_term = info.get("ontology_term")
-        ontology_id = None
-        if ontology_term:
-            if ":" in ontology_term:
-                # CURIE format: extract prefix
-                ontology_id = ontology_term.split(":")[0].lower()
-            else:
-                # Simple ontology ID
-                ontology_id = ontology_term.lower()
+        # Get ontologies list for OLS lookup filtering
+        ontologies = info.get("ontologies")  # list[str] | None
 
         fields.append(
             {
@@ -379,7 +370,7 @@ def build_entity_form_context(
                 "item_type": info.get("items"),
                 "is_nested": is_nested,
                 "is_single_entity": field_type == "entity" and info.get("items") is not None,
-                "ontology_id": ontology_id,
+                "ontologies": ontologies,
             }
         )
 

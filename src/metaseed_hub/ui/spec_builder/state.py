@@ -34,6 +34,8 @@ def _field_to_dict(f: FieldSpec) -> dict[str, Any]:
         field_dict["items"] = f.items
     if f.ontology_term:
         field_dict["ontology_term"] = f.ontology_term
+    if f.ontologies:
+        field_dict["ontologies"] = f.ontologies
     if f.parent_ref:
         field_dict["parent_ref"] = f.parent_ref
     if f.unique_within:
@@ -137,6 +139,7 @@ def _dict_to_field(f: dict[str, Any]) -> FieldSpec:
         required=f.get("required", False),
         description=f.get("description") or "",
         ontology_term=f.get("ontology_term"),
+        ontologies=f.get("ontologies"),
         constraints=constraints,
         items=f.get("items"),
         parent_ref=f.get("parent_ref"),

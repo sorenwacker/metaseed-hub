@@ -1233,7 +1233,6 @@ body {
 
 .form-input {
     width: 100%;
-    max-width: 380px;
     padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--clr-parchment);
     border-radius: var(--radius-md);
@@ -6010,11 +6009,19 @@ a.start-option-card:hover {
     border-radius: var(--radius-md);
     padding: var(--space-lg);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    display: flex;
+    flex-direction: column;
 }
 
-.standard-card:hover {
+.standard-card:hover:not(.disabled) {
     border-color: var(--clr-primary);
     box-shadow: var(--shadow-sm);
+}
+
+.standard-card.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    filter: grayscale(0.3);
 }
 
 .standard-header {
@@ -6060,11 +6067,17 @@ a.start-option-card:hover {
 .standard-actions {
     display: flex;
     gap: var(--space-sm);
+    margin-top: auto;
+    padding-top: var(--space-md);
 }
 
 .standard-actions .btn {
-    flex: 1;
     text-align: center;
+    flex: 0 0 calc(50% - var(--space-sm) / 2);
+}
+
+.standard-actions .btn-ghost {
+    margin-left: auto;
 }
 
 /* Import Options */

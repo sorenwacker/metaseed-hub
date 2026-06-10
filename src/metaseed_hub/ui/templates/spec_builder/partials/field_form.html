@@ -62,6 +62,17 @@
                                data-ontology-autocomplete>
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Ontologies</label>
+                        <input type="text"
+                               name="ontologies"
+                               class="form-input"
+                               value="{{ field.ontologies | join(', ') if field.ontologies else '' }}"
+                               placeholder="po, pato, ncbitaxon">
+                        <small class="form-help">OLS IDs to search (comma-separated)</small>
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
                         <label class="form-label">Unique Within</label>
                         <select name="unique_within" class="form-input">
                             <option value="">Not unique</option>
@@ -69,6 +80,7 @@
                             <option value="global" {% if field.unique_within == 'global' %}selected{% endif %}>Globally</option>
                         </select>
                     </div>
+                    <div class="form-group"></div>
                 </div>
             </div>
         </details>

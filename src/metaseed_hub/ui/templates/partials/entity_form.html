@@ -130,17 +130,17 @@
                         <input class="form-input lookup-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                                value="{{ values.get(field.name, '') }}"
                                data-lookup-type="ontology"
-                               {% if field.ontology_id %}data-ontology-id="{{ field.ontology_id }}"{% endif %}
+                               {% if field.ontologies %}data-ontologies="{{ field.ontologies | join(',') }}"{% endif %}
                                {% if field.constraints %}
                                {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
                                {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
                                {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
                                {% endif %}
                                autocomplete="off"
-                               placeholder="{% if field.ontology_id %}Search {{ field.ontology_id | upper }}...{% else %}Search all ontologies...{% endif %}"
+                               placeholder="{% if field.ontologies %}Search {{ field.ontologies | join(', ') | upper }}...{% else %}Search all ontologies...{% endif %}"
                                required>
-                        {% if field.ontology_id %}
-                        <span class="ontology-badge">{{ field.ontology_id | upper }}</span>
+                        {% if field.ontologies %}
+                        <span class="ontology-badge">{{ field.ontologies | join(', ') | upper }}</span>
                         {% endif %}
                     </div>
 
@@ -228,16 +228,16 @@
                         <input class="form-input lookup-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
                                value="{{ values.get(field.name, '') }}"
                                data-lookup-type="ontology"
-                               {% if field.ontology_id %}data-ontology-id="{{ field.ontology_id }}"{% endif %}
+                               {% if field.ontologies %}data-ontologies="{{ field.ontologies | join(',') }}"{% endif %}
                                {% if field.constraints %}
                                {% if field.constraints.pattern %}pattern="{{ field.constraints.pattern | escape_pattern }}"{% endif %}
                                {% if field.constraints.min_length %}minlength="{{ field.constraints.min_length }}"{% endif %}
                                {% if field.constraints.max_length %}maxlength="{{ field.constraints.max_length }}"{% endif %}
                                {% endif %}
                                autocomplete="off"
-                               placeholder="{% if field.ontology_id %}Search {{ field.ontology_id | upper }}...{% else %}Search all ontologies...{% endif %}">
-                        {% if field.ontology_id %}
-                        <span class="ontology-badge">{{ field.ontology_id | upper }}</span>
+                               placeholder="{% if field.ontologies %}Search {{ field.ontologies | join(', ') | upper }}...{% else %}Search all ontologies...{% endif %}">
+                        {% if field.ontologies %}
+                        <span class="ontology-badge">{{ field.ontologies | join(', ') | upper }}</span>
                         {% endif %}
                     </div>
 

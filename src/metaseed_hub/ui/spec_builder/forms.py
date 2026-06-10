@@ -19,6 +19,7 @@ class FieldFormData:
     required: bool = False
     description: str = ""
     ontology_term: str = ""
+    ontologies: str = ""
     codename: str = ""
     items: str = ""
     parent_ref: str = ""

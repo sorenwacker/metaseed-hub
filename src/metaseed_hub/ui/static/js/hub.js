@@ -373,4 +373,4 @@ function toggleSidebar() {
     }
 }
 
-// Ontology lookup is now handled by metaseed's lookup.js
+// Ontology lookup is handled by metaseed's lookup.js

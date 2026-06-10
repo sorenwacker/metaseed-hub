@@ -68,7 +68,12 @@ async def dataset_new(
     tenant, db_user = await ensure_tenant_and_user(session, user)
 
     # Get available profiles and versions from metaseed
+    from pathlib import Path
+
+    import metaseed
+
     loader = SpecLoader()
+    examples_dir = Path(metaseed.__file__).parent / "examples"
     profiles_data = []
     for profile_name in loader.list_profiles():
         versions = loader.list_versions(profile_name)
@@ -93,6 +98,13 @@ async def dataset_new(
                 root_entity = spec.root_entity or "Investigation"
             except Exception:
                 pass
+
+        # Check if examples exist for this profile (check latest version)
+        has_example = False
+        if versions:
+            example_path = examples_dir / profile_name / versions[0]
+            has_example = example_path.exists() and any(example_path.glob("*.yaml"))
+
         profiles_data.append(
             {
                 "name": profile_name,
@@ -102,6 +114,7 @@ async def dataset_new(
                 "versions": versions,
                 "latest_version": versions[0] if versions else "",
                 "source": "builtin",
+                "has_example": has_example,
             }
         )
 
@@ -374,7 +387,7 @@ async def dataset_create(
         draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == spec_draft_id))
         draft = draft_result.scalar_one_or_none()
         if draft:
-            profile = draft.name
+            profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
             version = draft.version
 
     dataset = Dataset(

@@ -884,10 +884,11 @@ window.OntologyAutocomplete = (function() {
     }
 
     function fetchSuggestions(query, input, dropdown) {
-        var ontologyFilter = input.dataset.ontologyFilter || '';
+        // Support both data-ontologies (comma-separated list) and data-ontology-filter (single)
+        var ontologies = input.dataset.ontologies || input.dataset.ontologyFilter || '';
         var url = '/hub/api/ontology/suggest?q=' + encodeURIComponent(query);
-        if (ontologyFilter) {
-            url += '&ontology=' + encodeURIComponent(ontologyFilter);
+        if (ontologies) {
+            url += '&ontology=' + encodeURIComponent(ontologies);
         }
 
         var controller = new AbortController();
@@ -966,7 +967,10 @@ window.OntologyAutocomplete = (function() {
     }
 
     function selectOption(input, dropdown, option) {
-        input.value = option.dataset.value;
+        var label = option.querySelector('.ontology-option-label')?.textContent || '';
+        var id = option.dataset.value;
+        // Store as "label (ID)" for readability, but keep ID extractable
+        input.value = label ? label + ' (' + id + ')' : id;
         hideDropdown(dropdown);
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
