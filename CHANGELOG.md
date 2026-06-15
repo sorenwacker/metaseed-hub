@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.56] - 2026-06-15
+## [0.4.57] - 2026-06-15
 
 ### Changed
 - Updated metaseed to v0.8.1
