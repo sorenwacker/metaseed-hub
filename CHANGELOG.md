@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.58] - 2026-06-15
+
+### Fixed
+- Keycloak user sync returning 403 by authenticating as the master-realm admin
+
 ## [0.4.57] - 2026-06-15
 
 ### Changed

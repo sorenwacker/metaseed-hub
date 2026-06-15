@@ -6,6 +6,7 @@ It uses direct access grants with a temporary admin user for API access.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -13,25 +14,28 @@ import httpx
 
 KEYCLOAK_URL = "http://localhost:7080"
 REALM_NAME = "metaseed"
-CLIENT_ID = "metaseed-hub"
-CLIENT_SECRET = "metaseed-hub-dev-secret"
+ADMIN_USERNAME = os.environ.get("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
 REALM_CONFIG = Path(__file__).parent.parent / "docker" / "keycloak-realm.json"
 
 
 def get_service_token() -> str | None:
-    """Get access token using client credentials.
+    """Get an admin access token for the Keycloak Admin API.
 
-    Note: This requires serviceAccountsEnabled=true on the client,
-    which we don't have. Fall back to using an existing admin user.
+    Authenticates the master-realm bootstrap admin through the built-in
+    admin-cli client. That account holds the realm-management roles required
+    to list and create users in the metaseed realm; a regular realm user does
+    not, which previously caused 403 responses when syncing users.
+
+    Returns:
+        An admin access token, or None if authentication fails.
     """
-    # Try with existing admin user from realm config
     response = httpx.post(
-        f"{KEYCLOAK_URL}/realms/{REALM_NAME}/protocol/openid-connect/token",
+        f"{KEYCLOAK_URL}/realms/master/protocol/openid-connect/token",
         data={
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "username": "admin",
-            "password": "admin123",
+            "client_id": "admin-cli",
+            "username": ADMIN_USERNAME,
+            "password": ADMIN_PASSWORD,
             "grant_type": "password",
         },
         timeout=10,
