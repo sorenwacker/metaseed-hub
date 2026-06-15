@@ -1,6 +1,8 @@
 #!/bin/bash
-# Auto-deploy script - deploys new commits on main branch
-# Runs via systemd timer
+# Auto-deploy script - deploys the latest release tag (vX.Y.Z)
+# Runs via systemd timer. Pushing commits to main does not deploy;
+# only pushing a new release tag does, so the running build is always
+# a tagged semver version and never a setuptools-scm dev build.
 
 set -euo pipefail
 
@@ -51,8 +53,13 @@ if ! git fetch origin --tags --force 2>&1 | tee -a "$LOG_FILE"; then
     exit 1
 fi
 
-# Get latest commit on main
-LATEST=$(git rev-parse origin/main)
+# Resolve the latest release tag (highest semver among v* tags)
+LATEST_TAG=$(git tag -l 'v*' --sort=-version:refname | head -1)
+if [ -z "$LATEST_TAG" ]; then
+    log "No release tags found; nothing to deploy"
+    exit 0
+fi
+LATEST=$(git rev-list -n1 "$LATEST_TAG")
 
 # Check current deployed commit
 CURRENT=""
@@ -61,23 +68,23 @@ if [ -f "$COMMIT_FILE" ]; then
 fi
 
 if [ "$CURRENT" = "$LATEST" ]; then
-    exit 0  # Already on latest commit
+    exit 0  # Already on latest release tag
 fi
 
 SHORT_LATEST=$(echo "$LATEST" | cut -c1-7)
 SHORT_CURRENT=$(echo "$CURRENT" | cut -c1-7)
 log "========================================="
-log "Deploying: $SHORT_LATEST (current: ${SHORT_CURRENT:-none})"
+log "Deploying: $LATEST_TAG ($SHORT_LATEST, current: ${SHORT_CURRENT:-none})"
 log "========================================="
 
 # Show what changed
 log "Changes:"
-git log --oneline "${CURRENT:-HEAD~5}..origin/main" 2>/dev/null | head -10 | tee -a "$LOG_FILE" || true
+git log --oneline "${CURRENT:-HEAD~5}..$LATEST_TAG" 2>/dev/null | head -10 | tee -a "$LOG_FILE" || true
 
-# Reset to latest origin/main
-log "Resetting to origin/main..."
-if ! git reset --hard origin/main 2>&1 | tee -a "$LOG_FILE"; then
-    log_error "git reset failed"
+# Check out the release tag
+log "Checking out $LATEST_TAG..."
+if ! git reset --hard "$LATEST_TAG" 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "git reset to $LATEST_TAG failed"
     exit 1
 fi
 
