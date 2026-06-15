@@ -1,13 +1,55 @@
 """Shared template rendering utilities for Hub UI routes."""
 
+import time
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from fastapi import Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+
+HUB_REPO = "sorenwacker/metaseed-hub"
+_STARS_OK_TTL_SECONDS = 3600
+_STARS_FAIL_TTL_SECONDS = 300
+# repo -> (fetched_at_monotonic, star_count_or_none, ttl_seconds)
+_stars_cache: dict[str, tuple[float, int | None, int]] = {}
+
+
+def get_repo_stars(repo: str = HUB_REPO) -> int | None:
+    """Get the GitHub stargazer count for a repository, cached.
+
+    Successful results are cached for an hour; failures are cached briefly and
+    fall back to the last known value so a transient GitHub outage neither
+    blocks page rendering nor drops the count from the footer.
+
+    Args:
+        repo: GitHub repository in "owner/name" form.
+
+    Returns:
+        The stargazer count, or None if it has never been retrieved.
+    """
+    now = time.monotonic()
+    cached = _stars_cache.get(repo)
+    if cached is not None and now - cached[0] < cached[2]:
+        return cached[1]
+
+    try:
+        response = httpx.get(
+            f"https://api.github.com/repos/{repo}",
+            headers={"Accept": "application/vnd.github+json"},
+            timeout=2.0,
+        )
+        response.raise_for_status()
+        stars = int(response.json()["stargazers_count"])
+        _stars_cache[repo] = (now, stars, _STARS_OK_TTL_SECONDS)
+        return stars
+    except (httpx.HTTPError, KeyError, ValueError, TypeError):
+        prior = cached[1] if cached is not None else None
+        _stars_cache[repo] = (now, prior, _STARS_FAIL_TTL_SECONDS)
+        return prior
 
 
 @lru_cache(maxsize=1)

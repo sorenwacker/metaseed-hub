@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.4.58] - 2026-06-15
 
+### Added
+- GitHub star count for the hub repository in the footer
+
 ### Fixed
 - Keycloak user sync returning 403 by authenticating as the master-realm admin
 

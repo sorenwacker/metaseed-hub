@@ -40,6 +40,7 @@ from metaseed_hub.ui.helpers import (
     escape_pattern_hyphen,
     humanize_field_name,
 )
+from metaseed_hub.ui.render import get_repo_stars
 from metaseed_hub.ui.routes import (
     admin_router,
     auth_router,
@@ -231,6 +232,9 @@ def create_hub_app() -> FastAPI:
 
     # Register is_admin as template global for conditional nav rendering
     templates.env.globals["is_admin"] = is_admin
+
+    # Expose the cached GitHub star count to the footer on every page
+    templates.env.globals["get_repo_stars"] = get_repo_stars
 
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
