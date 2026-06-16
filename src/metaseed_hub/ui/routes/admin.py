@@ -14,12 +14,11 @@ if TYPE_CHECKING:
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, Tenant, User
+from metaseed_hub.models import Dataset, User
 from metaseed_hub.ui.dependencies import require_user
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
@@ -108,7 +107,7 @@ async def admin_dashboard(
     """Admin dashboard with system statistics.
 
     Shows aggregated metrics (GDPR-compliant):
-    - Total counts of users, datasets, tenants
+    - Total counts of users and datasets
     - User registration activity over last 30 days
     - Dataset creation activity over last 30 days
     - User directory for admin contact purposes
@@ -120,7 +119,6 @@ async def admin_dashboard(
             select(func.count(Dataset.id)).where(Dataset.deleted_at.is_(None))
         )
         or 0,
-        "tenants": await session.scalar(select(func.count(Tenant.id))) or 0,
     }
 
     # Activity over time (last 30 days) - aggregated counts only
@@ -144,10 +142,8 @@ async def admin_dashboard(
     )
     dataset_activity = [(row.date, row.count) for row in dataset_activity_result]
 
-    # User list for admin (with tenant relationship)
-    users_result = await session.execute(
-        select(User).options(selectinload(User.tenant)).order_by(User.created_at.desc())
-    )
+    # User list for admin
+    users_result = await session.execute(select(User).order_by(User.created_at.desc()))
     users = list(users_result.scalars().all())
 
     return render_template(

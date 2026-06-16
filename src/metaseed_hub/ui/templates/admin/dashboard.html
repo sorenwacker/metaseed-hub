@@ -21,10 +21,6 @@
                 <div class="stat-value">{{ stats.datasets }}</div>
                 <div class="stat-label">Datasets</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value">{{ stats.tenants }}</div>
-                <div class="stat-label">Tenants</div>
-            </div>
         </div>
     </section>
 
@@ -84,14 +80,13 @@
     <!-- User Directory -->
     <section class="admin-section">
         <h2>User Directory</h2>
-        <p class="section-description">Registered users with their tenant associations.</p>
+        <p class="section-description">Registered users.</p>
         {% if users %}
         <table class="admin-table admin-table-full">
             <thead>
                 <tr>
                     <th>Email</th>
                     <th>Display Name</th>
-                    <th>Tenant</th>
                     <th>Registered</th>
                 </tr>
             </thead>
@@ -100,7 +95,6 @@
                 <tr>
                     <td>{{ u.email }}</td>
                     <td>{{ u.display_name }}</td>
-                    <td>{{ u.tenant.name if u.tenant else '-' }}</td>
                     <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
                 </tr>
                 {% endfor %}
