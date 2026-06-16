@@ -29,6 +29,9 @@ redis_port: 6379
 oidc_url: https://proxy.sram.surf.nl
 oidc_realm: ""
 oidc_client_id: APP-CC24314E-7800-4E8F-8E8D-C8730A89B0BF
+# eduperson_entitlement releases SRAM group memberships (admin access);
+# offline_access is required for SRAM to return a refresh token.
+oidc_scope: "openid email profile eduperson_entitlement offline_access"
 
 # Application URL
 app_url: https://metaseed.ewi.tudelft.nl
