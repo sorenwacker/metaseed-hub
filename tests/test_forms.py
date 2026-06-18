@@ -219,3 +219,8 @@ class TestGetLabelFromValues:
         """Title takes priority over name."""
         result = get_label_from_values({"title": "Title", "name": "Name"})
         assert result == "Title"
+
+    def test_identifier_field_wins_over_person_name(self) -> None:
+        """An identifier field is preferred over a first/last-name composite."""
+        result = get_label_from_values({"name": "Lab Strain", "last_name": "Doe"})
+        assert result == "Lab Strain"

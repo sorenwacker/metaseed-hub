@@ -11,6 +11,7 @@ from fastapi import Request
 from metaseed.ui.state import AppState, TreeNode
 
 from metaseed_hub.models import Dataset, DatasetVersion
+from metaseed_hub.ui.forms import get_label_from_values
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -103,9 +104,6 @@ def add_entity_node(
 
 
 CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
-
-# Fields to check when determining entity labels, in priority order
-LABEL_FIELDS = ("title", "name", "unique_id", "alias", "id", "identifier")
 
 
 def get_or_create_csrf_token(request: Request) -> str:
@@ -315,17 +313,11 @@ def create_nested_nodes(
                     state, nested_type, item_data, parent_id=parent_node.id, helper=nested_helper
                 )
 
-                # Set label from common identifier fields
-                label_set = False
-                for label_field in LABEL_FIELDS:
-                    if item_data.get(label_field):
-                        child_node.label = str(item_data[label_field])
-                        label_set = True
-                        break
-                # Special case for Person: combine first_name and last_name
-                if not label_set and item_data.get("first_name") or item_data.get("last_name"):
-                    parts = [item_data.get("first_name", ""), item_data.get("last_name", "")]
-                    child_node.label = " ".join(p for p in parts if p)
+                # Set label from common identifier fields (falling back to a
+                # first/last-name composite only when no identifier is present).
+                label = get_label_from_values(item_data)
+                if label:
+                    child_node.label = label
 
                 # Recursively process this child's nested fields
                 create_nested_nodes(state, facade, child_node, nested_type, item_data)

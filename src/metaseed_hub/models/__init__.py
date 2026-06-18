@@ -554,7 +554,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
         nullable=False,
         default=SpecStatus.PUBLISHED,
     )
-    created_by_id: Mapped[str] = mapped_column(
+    created_by_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -562,7 +562,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="specs")
-    created_by: Mapped["User"] = relationship("User")
+    created_by: Mapped["User | None"] = relationship("User")
     drafts: Mapped[list["SpecDraft"]] = relationship("SpecDraft", back_populates="source_spec")
     members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
 

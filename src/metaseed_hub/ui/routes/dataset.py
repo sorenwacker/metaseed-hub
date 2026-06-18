@@ -196,10 +196,9 @@ async def dataset_import(
     content = await file.read()
     filename = file.filename or ""
 
-    # Parse based on file type
+    # Parse based on file type. Keep the form-supplied profile/version; the
+    # detection below only fills them in when the user did not select them.
     data = None
-    profile = None
-    version = None
 
     try:
         if filename.endswith((".yaml", ".yml")):
