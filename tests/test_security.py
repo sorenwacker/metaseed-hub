@@ -224,6 +224,43 @@ class TestXSSPrevention:
         assert "&lt;script&gt;" in result
         assert "<script>" not in result
 
+    def test_entity_row_html_escapes_cell_values(self) -> None:
+        """User-controlled cell values are escaped when building table-row HTML."""
+        from metaseed.ui.state import TreeNode
+
+        from metaseed_hub.ui.routes.table import _build_entity_row_html
+
+        payload = "<script>alert(1)</script>"
+        breakout = '"><img src=x onerror=alert(1)>'
+        node = TreeNode(
+            id="node-1",
+            entity_type="Sample",
+            instance=None,
+            label="Sample 1",
+            parent_id="parent-1",
+        )
+
+        html = _build_entity_row_html(
+            dataset_id="ds-1",
+            field_name="samples",
+            row_idx=0,
+            child_node=node,
+            nested_type="Sample",
+            columns=["editable_col", "inherited_col"],
+            column_types={"editable_col": "string", "inherited_col": "string"},
+            inherited_cols={"inherited_col"},
+            instance_data={"editable_col": payload, "inherited_col": breakout},
+        )
+
+        # No raw tag from the payloads may survive into the markup, and the
+        # attribute-breakout quote must be neutralised.
+        assert "<script>" not in html
+        assert "<img" not in html
+        assert '"><img' not in html
+        # Their escaped forms should be present instead.
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+        assert "&lt;img src=x onerror=alert(1)&gt;" in html
+
 
 class TestFormProcessing:
     """Tests for form processing utilities."""

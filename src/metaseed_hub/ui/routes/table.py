@@ -4,6 +4,7 @@ Handles CRUD operations for inline entity tables and primitive lists.
 """
 
 import uuid
+from html import escape
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -187,11 +188,12 @@ def _build_entity_row_html(
     for col in columns:
         col_type = column_types.get(col, "string")
         cell_value = instance_data.get(col, "")
+        safe_cell_value = escape(str(cell_value)) if cell_value != "" else ""
 
         # Inherited columns are read-only
         if col in inherited_cols:
             html += f"""<td class="readonly-cell" data-col="{col}">
-                <span class="cell-display inherited">{cell_value}</span>
+                <span class="cell-display inherited">{safe_cell_value}</span>
             </td>"""
         else:
             if col_type in ("integer", "float"):
@@ -203,13 +205,13 @@ def _build_entity_row_html(
             else:
                 input_type = "text"
             step = 'step="any"' if col_type == "float" else ""
-            display_value = cell_value or "Click to edit"
+            display_value = safe_cell_value or "Click to edit"
             placeholder_class = " placeholder" if not cell_value else ""
             post_url = f"/hub/datasets/{dataset_id}/table/{child_node.id}/cell"
             html += f"""<td class="editable-cell" data-col="{col}">
                 <span class="cell-display{placeholder_class}">{display_value}</span>
                 <input type="{input_type}" class="cell-input" name="{col}"
-                       value="{cell_value}" {step}
+                       value="{safe_cell_value}" {step}
                        hx-post="{post_url}" hx-trigger="change, blur" hx-swap="none">
             </td>"""
 
