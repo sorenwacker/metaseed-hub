@@ -2,6 +2,22 @@
 
 Date: 2026-06-18. Reviewed source root `src/metaseed_hub` (38 source files, ~12,090 LOC) with a per-module multi-agent pass; every high/medium finding was adversarially verified before inclusion. metaseed dependency was at v0.9.1 during the review.
 
+## Remediation status
+
+All 31 confirmed findings were remediated on 2026-06-18, each with a failing test first where testable, atomic commits, and the full gate suite green throughout. Summary by theme:
+
+- Multi-tenant isolation / authorization (#3, #6, #8, #18, #24): dataset REST API scoped to the caller's tenant; spec-builder membership requires draft ownership; comments require draft access; explore profile loading scoped to tenant.
+- Soft-delete consistency (#1, #2, #15): API uses soft-delete and filters `deleted_at`; `save()` restores a soft-deleted name instead of colliding.
+- HTML injection (#5): inline table cell values are escaped.
+- WebSocket fan-out (#7, #27): delivery routed through the Redis listener; no duplicate local send.
+- Reaction enum (#4): persists lowercase values matching the migration.
+- Data loss (#14, #19, #20, #25): `save()` no longer mutates caller entities; correct label derivation; import honors the selected profile/version; spec-builder state round-trips losslessly via Pydantic.
+- Auth hot path (#9, #10, #11): standalone `verify_token` reuses the singleton; JWKS refreshes on key rotation; the always-None `TokenUser.tenant_id` removed.
+- Duplication / dead code (#16, #22, #23, #28, #29, #30, #31): single `render_template`/`get_version_info`; dead `spec_adapters` module and unused functions removed.
+- Typing / consistency / size (#12, #13, #21, plus the 1000-LOC rule): nullable `created_by` typing; dataset listing ordered by modified; `entityChanged` emitted on primitive-list edits; `dataset.py` split into a package.
+
+The findings below are retained as the original review record. The unverified appendix items remain candidates; those below the project's vulture threshold were intentionally left in place.
+
 ## Baseline gates
 
 These are the project's own canonical commands (Makefile / pre-commit), run before the review.
