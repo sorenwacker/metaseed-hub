@@ -37,9 +37,7 @@ downgrade  # noqa: F821
 type_annotation_map  # noqa: F821
 
 # Mixin properties used by models
-is_deleted  # noqa: F821
 soft_delete  # noqa: F821
-restore  # noqa: F821
 created_at  # noqa: F821
 updated_at  # noqa: F821
 deleted_at  # noqa: F821

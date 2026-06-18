@@ -52,21 +52,25 @@ def _entities_to_tree(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     roots: list[dict[str, Any]] = []
 
     for entity in entities:
-        entity_type = entity.pop("_type", None)
-        parent_unique_id = entity.pop("_parent_unique_id", None)
+        entity_type = entity.get("_type")
+        parent_unique_id = entity.get("_parent_unique_id")
 
         if not entity_type:
             continue
 
-        unique_id = entity.get("unique_id", str(uuid4()))
-        label = entity.get("title") or entity.get("name") or f"New {entity_type}"
+        # Build the node data without the structural keys, leaving the caller's
+        # entity dict untouched (do not pop from the input).
+        data = {k: v for k, v in entity.items() if k not in ("_type", "_parent_unique_id")}
+
+        unique_id = data.get("unique_id", str(uuid4()))
+        label = data.get("title") or data.get("name") or f"New {entity_type}"
 
         node = {
             "id": str(uuid4()),
             "entity_type": entity_type,
             "label": label,
             "parent_id": None,
-            "data": entity,
+            "data": data,
             "children": [],
         }
 
@@ -141,16 +145,19 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
         if error:
             raise ValueError(error)
 
+        # Look up by (tenant, name) without filtering deleted_at: the unique
+        # constraint uq_datasets_tenant_name is not scoped to deleted_at, so at
+        # most one row exists per (tenant, name). If it was soft-deleted, reuse
+        # and restore it instead of inserting a colliding row.
         result = await self._session.execute(
             select(Dataset).where(
                 Dataset.tenant_id == self._tenant_id,
                 Dataset.name == name,
-                Dataset.deleted_at.is_(None),
             )
         )
         dataset = result.scalar_one_or_none()
 
-        tree = _entities_to_tree(data.entities.copy())
+        tree = _entities_to_tree(data.entities)
         db_data = {
             "profile": data.profile,
             "version": data.version,
@@ -158,6 +165,8 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
         }
 
         if dataset:
+            if dataset.is_deleted:
+                dataset.restore()
             dataset.profile = data.profile
             dataset.version = data.version
             dataset.data = db_data
