@@ -1,0 +1,243 @@
+"""Tests for the dataset REST API tenant scoping and soft-delete behavior.
+
+These exercise the mounted ``/api/datasets`` router with the database session
+and the authenticated user dependency overridden, verifying that:
+
+- queries are scoped to the caller's tenant (no cross-tenant access),
+- soft-deleted rows are never returned, and
+- delete performs a soft delete rather than removing the row.
+"""
+
+from collections.abc import AsyncGenerator
+
+import pytest
+import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from metaseed_hub.api import api_router
+from metaseed_hub.auth import TokenUser, get_current_user
+from metaseed_hub.database import get_session
+from metaseed_hub.models import Dataset, Tenant
+from tests.factories import make_dataset, make_tenant
+
+CALLER_SUB = "caller01-rest-api"
+
+
+def _build_client(session: AsyncSession, user: TokenUser) -> AsyncClient:
+    """Build an httpx client for the API router with deps overridden."""
+    app = FastAPI()
+    app.include_router(api_router, prefix="/api")
+
+    async def _override_session() -> AsyncGenerator[AsyncSession, None]:
+        yield session
+
+    def _override_user() -> TokenUser:
+        return user
+
+    app.dependency_overrides[get_session] = _override_session
+    app.dependency_overrides[get_current_user] = _override_user
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+@pytest_asyncio.fixture
+async def caller(session: AsyncSession) -> TokenUser:
+    """An authenticated user whose tenant slug matches ``CALLER_SUB[:8]``."""
+    return TokenUser(
+        sub=CALLER_SUB,
+        email="caller@example.com",
+        name="Caller",
+        roles=[],
+    )
+
+
+@pytest_asyncio.fixture
+async def own_tenant_id(session: AsyncSession) -> str:
+    """Persist the caller's tenant (slug derived from CALLER_SUB) and return its id."""
+    tenant = make_tenant(name="Caller Tenant", slug=CALLER_SUB[:8])
+    session.add(tenant)
+    await session.commit()
+    return tenant.id
+
+
+@pytest_asyncio.fixture
+async def other_tenant_id(session: AsyncSession) -> str:
+    """Persist a second tenant that the caller must not be able to reach."""
+    tenant = make_tenant(name="Other Tenant", slug="other999")
+    session.add(tenant)
+    await session.commit()
+    return tenant.id
+
+
+async def _add_dataset(session: AsyncSession, tenant_id: str, name: str) -> Dataset:
+    tenant = await session.get(Tenant, tenant_id)
+    assert tenant is not None
+    dataset = make_dataset(tenant=tenant, name=name)
+    session.add(dataset)
+    await session.commit()
+    return dataset
+
+
+@pytest.mark.asyncio
+async def test_list_scoped_to_own_tenant_excludes_other_tenants(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """list_datasets returns only the caller tenant's rows."""
+    await _add_dataset(session, own_tenant_id, "mine-1")
+    await _add_dataset(session, own_tenant_id, "mine-2")
+    await _add_dataset(session, other_tenant_id, "theirs")
+
+    async with _build_client(session, caller) as client:
+        resp = await client.get("/api/datasets", params={"tenant_id": own_tenant_id})
+
+    assert resp.status_code == 200
+    names = {d["name"] for d in resp.json()}
+    assert names == {"mine-1", "mine-2"}
+
+
+@pytest.mark.asyncio
+async def test_list_rejects_other_tenant_id(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """Requesting another tenant's datasets is denied."""
+    async with _build_client(session, caller) as client:
+        resp = await client.get("/api/datasets", params={"tenant_id": other_tenant_id})
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_list_excludes_soft_deleted(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """Soft-deleted datasets do not appear in the listing."""
+    keep = await _add_dataset(session, own_tenant_id, "keep")
+    gone = await _add_dataset(session, own_tenant_id, "gone")
+    gone.soft_delete()
+    await session.commit()
+
+    async with _build_client(session, caller) as client:
+        resp = await client.get("/api/datasets", params={"tenant_id": own_tenant_id})
+
+    assert resp.status_code == 200
+    assert {d["name"] for d in resp.json()} == {"keep"}
+    assert keep.id  # keep referenced
+
+
+@pytest.mark.asyncio
+async def test_get_other_tenant_dataset_returns_404(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """Fetching a dataset owned by another tenant returns 404, not the row."""
+    other = await _add_dataset(session, other_tenant_id, "secret")
+
+    async with _build_client(session, caller) as client:
+        resp = await client.get(f"/api/datasets/{other.id}")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_soft_deleted_returns_404(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """A soft-deleted dataset is not retrievable."""
+    ds = await _add_dataset(session, own_tenant_id, "deleted")
+    ds.soft_delete()
+    await session.commit()
+
+    async with _build_client(session, caller) as client:
+        resp = await client.get(f"/api/datasets/{ds.id}")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_other_tenant_dataset_returns_404(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """Updating another tenant's dataset is not possible."""
+    other = await _add_dataset(session, other_tenant_id, "secret")
+
+    async with _build_client(session, caller) as client:
+        resp = await client.patch(f"/api/datasets/{other.id}", json={"name": "hijacked"})
+
+    assert resp.status_code == 404
+    await session.refresh(other)
+    assert other.name == "secret"
+
+
+@pytest.mark.asyncio
+async def test_delete_performs_soft_delete(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """Delete marks the row deleted instead of removing it."""
+    ds = await _add_dataset(session, own_tenant_id, "to-delete")
+    ds_id = ds.id
+
+    async with _build_client(session, caller) as client:
+        resp = await client.delete(f"/api/datasets/{ds_id}")
+
+    assert resp.status_code == 204
+
+    # Row still exists but is marked deleted.
+    row = (await session.execute(select(Dataset).where(Dataset.id == ds_id))).scalar_one_or_none()
+    assert row is not None
+    assert row.deleted_at is not None
+
+    # And it is no longer retrievable through the API.
+    async with _build_client(session, caller) as client:
+        resp = await client.get(f"/api/datasets/{ds_id}")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_other_tenant_dataset_returns_404(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """Delete cannot reach another tenant's dataset."""
+    other = await _add_dataset(session, other_tenant_id, "secret")
+
+    async with _build_client(session, caller) as client:
+        resp = await client.delete(f"/api/datasets/{other.id}")
+
+    assert resp.status_code == 404
+    await session.refresh(other)
+    assert other.deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_other_tenant(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str, other_tenant_id: str
+) -> None:
+    """Creating a dataset under another tenant is denied."""
+    payload = {
+        "tenant_id": other_tenant_id,
+        "name": "intruder",
+        "profile": "miappe",
+        "version": "1.1",
+    }
+    async with _build_client(session, caller) as client:
+        resp = await client.post("/api/datasets", json=payload)
+
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_create_in_own_tenant_succeeds(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """Creating a dataset under the caller's own tenant works."""
+    payload = {
+        "tenant_id": own_tenant_id,
+        "name": "legit",
+        "profile": "miappe",
+        "version": "1.1",
+    }
+    async with _build_client(session, caller) as client:
+        resp = await client.post("/api/datasets", json=payload)
+
+    assert resp.status_code == 201
+    assert resp.json()["name"] == "legit"
