@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -10,6 +11,8 @@ import redis.asyncio as redis
 from fastapi import WebSocket, WebSocketDisconnect
 
 from metaseed_hub.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -60,10 +63,76 @@ class WebSocketManager:
         self._listener_task: asyncio.Task[None] | None = None
 
     async def connect_redis(self) -> None:
-        """Connect to Redis for pub/sub."""
+        """Connect to Redis for pub/sub and start the message listener.
+
+        The listener consumes messages published to subscribed project channels
+        and delivers them to this instance's local connections, which is how
+        broadcasts fan out across multiple application instances.
+        """
         settings = get_settings()
         self._redis = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         self._pubsub = self._redis.pubsub()
+        self._listener_task = asyncio.create_task(self._listen())
+
+    async def _listen(self) -> None:
+        """Consume published messages and deliver them to local connections.
+
+        Runs until cancelled (on shutdown). Errors are logged and the loop
+        continues so a single bad message does not stop delivery.
+        """
+        assert self._pubsub is not None
+        while True:
+            try:
+                message = await self._pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("WebSocket pub/sub listener error")
+                await asyncio.sleep(0.5)
+                continue
+
+            if not message or message.get("type") != "message":
+                continue
+
+            try:
+                await self._dispatch_local(message["channel"], message["data"])
+            except Exception:
+                logger.exception("Failed to dispatch pub/sub message")
+
+    async def _dispatch_local(self, channel: str | bytes, payload: str | bytes) -> None:
+        """Deliver a published message to this instance's local connections.
+
+        Args:
+            channel: Redis channel the message arrived on.
+            payload: JSON envelope of ``{"exclude": connection_id|None, "message": {...}}``.
+        """
+        if isinstance(channel, bytes):
+            channel = channel.decode()
+        if isinstance(payload, bytes):
+            payload = payload.decode()
+
+        project_id = channel.split(":", 2)[1]
+        if project_id not in self._rooms:
+            return
+
+        envelope = json.loads(payload)
+        exclude_connection = envelope.get("exclude")
+        message_json = json.dumps(envelope["message"])
+
+        room = self._rooms[project_id]
+        disconnected: list[str] = []
+        for conn_id, connection in room.connections.items():
+            if conn_id == exclude_connection:
+                continue
+            try:
+                await connection.websocket.send_text(message_json)
+            except Exception:
+                disconnected.append(conn_id)
+
+        for conn_id in disconnected:
+            await self.leave_room(project_id, conn_id)
 
     async def disconnect_redis(self) -> None:
         """Disconnect from Redis."""
@@ -178,18 +247,22 @@ class WebSocketManager:
             message: Message to broadcast.
             exclude_connection: Optional connection ID to exclude from broadcast.
         """
+        if self._redis:
+            # Route delivery through Redis. This instance is subscribed to the
+            # channel and receives its own message back via the listener, which
+            # then delivers it locally. Sending locally here as well would
+            # duplicate every message for users on the publishing instance.
+            channel = self._get_channel_name(project_id)
+            envelope = json.dumps({"exclude": exclude_connection, "message": message})
+            await self._redis.publish(channel, envelope)
+            return
+
+        # No Redis configured: deliver directly to local connections.
         if project_id not in self._rooms:
             return
 
         room = self._rooms[project_id]
         message_json = json.dumps(message)
-
-        # Publish to Redis for other instances
-        if self._redis:
-            channel = self._get_channel_name(project_id)
-            await self._redis.publish(channel, message_json)
-
-        # Send to local connections
         disconnected: list[str] = []
         for conn_id, connection in room.connections.items():
             if conn_id == exclude_connection:
