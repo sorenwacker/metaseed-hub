@@ -17,8 +17,10 @@ from metaseed_hub.models import (
     DatasetMember,
     DatasetVersion,
     Note,
+    Spec,
     SpecDraft,
     SpecDraftMember,
+    SpecStatus,
 )
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
@@ -139,6 +141,18 @@ async def dataset_new(
                 }
             )
 
+    # Published specs owned by this tenant, offered as starting points.
+    specs_result = await session.execute(
+        select(Spec)
+        .where(
+            Spec.tenant_id == tenant.id,
+            Spec.deleted_at.is_(None),
+            Spec.status == SpecStatus.PUBLISHED,
+        )
+        .order_by(Spec.updated_at.desc())
+    )
+    user_specs = list(specs_result.scalars().all())
+
     return render_template(
         request=request,
         name="dataset_new.html",
@@ -146,7 +160,7 @@ async def dataset_new(
             "user": user,
             "tenant_id": tenant.id,
             "profiles": profiles_data,
-            "user_specs": [],  # TODO: load user's custom specs
+            "user_specs": user_specs,
             "nav_active": "home",
         },
     )
