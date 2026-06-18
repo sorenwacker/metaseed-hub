@@ -421,7 +421,11 @@ class CommentReaction(Base):
         primary_key=True,
     )
     reaction: Mapped[ReactionType] = mapped_column(
-        Enum(ReactionType),
+        Enum(
+            ReactionType,
+            name="reactiontype",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -498,7 +502,12 @@ class SpecCommentReaction(Base):
         primary_key=True,
     )
     reaction: Mapped[ReactionType] = mapped_column(
-        Enum(ReactionType, name="reactiontype", create_type=False),
+        Enum(
+            ReactionType,
+            name="reactiontype",
+            create_type=False,
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(

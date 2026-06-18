@@ -283,3 +283,29 @@ class TestTimestampBehavior:
         assert tenant.updated_at is not None
         # updated_at should equal created_at on new records
         assert tenant.updated_at >= tenant.created_at
+
+
+class TestReactionEnumPersistence:
+    """Tests that reaction columns persist the migration's lowercase values."""
+
+    def test_comment_reaction_enum_uses_lowercase_values(self) -> None:
+        """CommentReaction.reaction persists enum values, not member names.
+
+        The reactiontype PostgreSQL enum (migration 03d97af76817) only allows
+        the lowercase values 'like'/'dislike'. The column must therefore persist
+        the StrEnum values, not the uppercase member names.
+        """
+        from metaseed_hub.models import CommentReaction
+
+        enum_type = CommentReaction.__table__.c.reaction.type
+        assert list(enum_type.enums) == ["like", "dislike"]
+        assert enum_type.name == "reactiontype"
+
+    def test_spec_comment_reaction_enum_matches_comment_reaction(self) -> None:
+        """Both reaction columns are configured identically."""
+        from metaseed_hub.models import CommentReaction, SpecCommentReaction
+
+        comment_type = CommentReaction.__table__.c.reaction.type
+        spec_type = SpecCommentReaction.__table__.c.reaction.type
+        assert list(spec_type.enums) == list(comment_type.enums)
+        assert spec_type.name == comment_type.name
