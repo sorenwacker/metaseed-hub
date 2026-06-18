@@ -77,8 +77,8 @@ async def render_with_context(
     context: dict[str, Any],
 ) -> Response:
     """Render template with version info, nav_active, and user included."""
-    from metaseed_hub.ui.app import get_version_info
     from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+    from metaseed_hub.ui.render import get_version_info
 
     context["version_info"] = get_version_info()
     context["nav_active"] = "spec-builder"

@@ -185,8 +185,8 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
     Returns:
         Configured APIRouter.
     """
-    from metaseed_hub.ui.app import get_version_info
     from metaseed_hub.ui.helpers import get_or_create_csrf_token
+    from metaseed_hub.ui.render import get_version_info
 
     router = APIRouter(prefix="/explore", tags=["explore"])
 

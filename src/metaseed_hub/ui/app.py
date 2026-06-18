@@ -5,9 +5,7 @@ on top of the base metaseed entity editing UI.
 """
 
 import logging
-import subprocess
 import sys
-from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -31,16 +29,14 @@ from metaseed_hub.models import (
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     OptionalUser,
-    get_or_create_csrf_token,
     handle_auth_required_error,
 )
 from metaseed_hub.ui.explore_routes import create_explore_router
 from metaseed_hub.ui.helpers import (
-    CSRF_TOKEN_COOKIE,
     escape_pattern_hyphen,
     humanize_field_name,
 )
-from metaseed_hub.ui.render import get_repo_stars
+from metaseed_hub.ui.render import get_repo_stars, render_template
 from metaseed_hub.ui.routes import (
     admin_router,
     auth_router,
@@ -73,63 +69,6 @@ logger = logging.getLogger("metaseed_hub")
 UI_DIR = Path(__file__).parent
 TEMPLATES_DIR = UI_DIR / "templates"
 STATIC_DIR = UI_DIR / "static"
-
-
-@lru_cache(maxsize=1)
-def get_version_info() -> dict[str, str]:
-    """Get version information from git and package.
-
-    Returns:
-        Dictionary with version, commit hash and branch name.
-    """
-    info = {"version": "dev", "commit": "unknown", "branch": "unknown", "short_commit": "unknown"}
-
-    # Get package version
-    try:
-        from metaseed_hub._version import __version__
-
-        info["version"] = __version__
-    except ImportError:
-        pass
-
-    try:
-        # Get short commit hash
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=UI_DIR,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            info["short_commit"] = result.stdout.strip()
-
-        # Get full commit hash
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=UI_DIR,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            info["commit"] = result.stdout.strip()
-
-        # Get branch name
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=UI_DIR,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            info["branch"] = result.stdout.strip()
-
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        pass
-
-    return info
 
 
 def create_hub_app() -> FastAPI:
@@ -258,38 +197,6 @@ def create_hub_app() -> FastAPI:
     # Add explore routes
     explore_router = create_explore_router(templates)
     app.include_router(explore_router)
-
-    def render_template(
-        request: Request,
-        name: str,
-        context: dict[str, Any],
-        status_code: int = 200,
-    ) -> Response:
-        """Render template with CSRF token and version info included."""
-        csrf_token = get_or_create_csrf_token(request)
-        context["csrf_token"] = csrf_token
-        context["request"] = request
-        context["version_info"] = get_version_info()
-
-        response = templates.TemplateResponse(
-            request=request,
-            name=name,
-            context=context,
-            status_code=status_code,
-        )
-
-        # Set CSRF cookie if not already set
-        if not request.cookies.get(CSRF_TOKEN_COOKIE):
-            response.set_cookie(
-                key=CSRF_TOKEN_COOKIE,
-                value=csrf_token,
-                httponly=True,
-                secure=request.url.scheme == "https",
-                samesite="lax",
-                max_age=3600 * 24,  # 24 hours
-            )
-
-        return response
 
     async def get_or_create_tenant(session: AsyncSession, user: OptionalUser) -> Tenant:
         """Get or create tenant for user based on keycloak_id."""
