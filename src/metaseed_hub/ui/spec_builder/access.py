@@ -182,6 +182,66 @@ async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_i
     return result.scalar_one_or_none() is not None
 
 
+async def require_draft_owner(
+    session: AsyncSession,
+    draft_id: str,
+    user_id: str,
+) -> SpecDraft:
+    """Load a draft, requiring the caller to be its owner.
+
+    Used to gate membership management, which only the draft owner may perform.
+
+    Args:
+        session: Database session.
+        draft_id: Draft identifier.
+        user_id: Database User.id (not keycloak_id) of the caller.
+
+    Returns:
+        The draft owned by the caller.
+
+    Raises:
+        HTTPException: 404 if the draft does not exist, 403 if the caller does
+            not own it.
+    """
+    result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
+    draft = result.scalar_one_or_none()
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if draft.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return draft
+
+
+async def require_draft_access(
+    session: AsyncSession,
+    draft_id: str,
+    user_id: str,
+) -> SpecDraft:
+    """Load a draft, requiring the caller to be its owner or a member.
+
+    Used to gate reading and commenting on a draft.
+
+    Args:
+        session: Database session.
+        draft_id: Draft identifier.
+        user_id: Database User.id (not keycloak_id) of the caller.
+
+    Returns:
+        The draft the caller may access.
+
+    Raises:
+        HTTPException: 404 if the draft does not exist, 403 if the caller may
+            not access it.
+    """
+    result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
+    draft = result.scalar_one_or_none()
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    if not await _user_can_access_draft(session, draft, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return draft
+
+
 async def load_state_for_draft(
     session: AsyncSession,
     draft_id: str,

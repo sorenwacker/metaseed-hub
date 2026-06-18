@@ -193,6 +193,97 @@ class TestAuthorizationDependencies:
 
         assert exc_info.value.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_require_draft_owner_not_found(self) -> None:
+        """Raises 404 when the draft does not exist."""
+        from metaseed_hub.ui.spec_builder.access import require_draft_owner
+
+        session = AsyncMock()
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = None
+        session.execute.return_value = result_mock
+
+        with pytest.raises(HTTPException) as exc_info:
+            await require_draft_owner(session, "missing", "user-1")
+
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_require_draft_owner_denies_non_owner(self) -> None:
+        """Raises 403 when the caller does not own the draft."""
+        from metaseed_hub.ui.spec_builder.access import require_draft_owner
+
+        draft = Mock()
+        draft.user_id = "owner-1"
+
+        session = AsyncMock()
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = draft
+        session.execute.return_value = result_mock
+
+        with pytest.raises(HTTPException) as exc_info:
+            await require_draft_owner(session, "draft-1", "intruder-2")
+
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_require_draft_owner_allows_owner(self) -> None:
+        """Returns the draft when the caller owns it."""
+        from metaseed_hub.ui.spec_builder.access import require_draft_owner
+
+        draft = Mock()
+        draft.user_id = "owner-1"
+
+        session = AsyncMock()
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = draft
+        session.execute.return_value = result_mock
+
+        assert await require_draft_owner(session, "draft-1", "owner-1") is draft
+
+    @pytest.mark.asyncio
+    async def test_require_draft_access_denies_outsider(self) -> None:
+        """Raises 403 when the caller can neither own nor access the draft."""
+        from unittest.mock import patch
+
+        from metaseed_hub.ui.spec_builder.access import require_draft_access
+
+        draft = Mock()
+
+        session = AsyncMock()
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = draft
+        session.execute.return_value = result_mock
+
+        with patch(
+            "metaseed_hub.ui.spec_builder.access._user_can_access_draft",
+            return_value=False,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await require_draft_access(session, "draft-1", "outsider-2")
+
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_require_draft_access_allows_member(self) -> None:
+        """Returns the draft when the caller may access it."""
+        from unittest.mock import patch
+
+        from metaseed_hub.ui.spec_builder.access import require_draft_access
+
+        draft = Mock()
+
+        session = AsyncMock()
+        result_mock = Mock()
+        result_mock.scalar_one_or_none.return_value = draft
+        session.execute.return_value = result_mock
+
+        with patch(
+            "metaseed_hub.ui.spec_builder.access._user_can_access_draft",
+            return_value=True,
+        ):
+            assert await require_draft_access(session, "draft-1", "member-2") is draft
+
 
 class TestXSSPrevention:
     """Tests for XSS prevention in templates and handlers."""

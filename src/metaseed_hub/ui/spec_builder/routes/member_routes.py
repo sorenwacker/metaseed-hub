@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import SpecDraft, SpecDraftMember, SpecDraftRole, User
+from metaseed_hub.ui.spec_builder.access import require_draft_owner
 
 from ._common import SessionDep, UserContextDep
 
@@ -76,6 +77,7 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
     ) -> HTMLResponse:
         """Add a member to a spec draft by email."""
         current_user_id, _ = user_ctx
+        await require_draft_owner(session, draft_id, current_user_id)
 
         # Find user by email
         result = await session.execute(select(User).where(User.email == email))
@@ -122,6 +124,7 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
     ) -> HTMLResponse:
         """Update a member's role in a spec draft."""
         current_user_id, _ = user_ctx
+        await require_draft_owner(session, draft_id, current_user_id)
 
         result = await session.execute(
             select(SpecDraftMember).where(
@@ -147,6 +150,7 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
     ) -> HTMLResponse:
         """Remove a member from a spec draft."""
         current_user_id, _ = user_ctx
+        await require_draft_owner(session, draft_id, current_user_id)
 
         result = await session.execute(
             select(SpecDraftMember).where(

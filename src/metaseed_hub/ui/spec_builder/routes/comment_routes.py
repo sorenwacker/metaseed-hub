@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import ReactionType, SpecComment, SpecCommentReaction
+from metaseed_hub.ui.spec_builder.access import require_draft_access
 
 from ._common import SessionDep, UserContextDep
 
@@ -67,6 +68,7 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
     ) -> Response:
         """Get all comments for a spec draft."""
         user_id, _ = user_ctx
+        await require_draft_access(session, draft_id, user_id)
 
         return await _get_spec_comments_html(request, draft_id, session, user_id)
 
@@ -81,6 +83,7 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
     ) -> Response:
         """Add a comment to a spec draft."""
         user_id, _ = user_ctx
+        await require_draft_access(session, draft_id, user_id)
 
         comment = SpecComment(
             spec_draft_id=draft_id,
@@ -125,6 +128,7 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
     ) -> Response:
         """Add or toggle a reaction on a spec comment."""
         user_id, _ = user_ctx
+        await require_draft_access(session, draft_id, user_id)
 
         # Check for existing reaction
         existing_result = await session.execute(
