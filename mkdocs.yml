@@ -20,6 +20,7 @@ nav:
     - Import and Export: guide/import-export.md
   - Architecture: architecture.md
   - API Reference: api.md
+  - Code Review: REVIEW.md
 
 markdown_extensions:
   - tables
