@@ -492,7 +492,7 @@ async def update_primitive_list_item(
     # Save to database
     await save_dataset_state(session, dataset, state)
 
-    return HTMLResponse(status_code=200)
+    return HTMLResponse(status_code=200, headers={"HX-Trigger": "entityChanged"})
 
 
 @router.delete(

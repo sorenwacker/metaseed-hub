@@ -110,10 +110,12 @@ class DatabaseDatasetRepository(AsyncDatasetRepository):  # type: ignore[misc]
             List of dataset info summaries.
         """
         result = await self._session.execute(
-            select(Dataset).where(
+            select(Dataset)
+            .where(
                 Dataset.tenant_id == self._tenant_id,
                 Dataset.deleted_at.is_(None),
             )
+            .order_by(Dataset.updated_at.desc())
         )
         datasets = result.scalars().all()
 

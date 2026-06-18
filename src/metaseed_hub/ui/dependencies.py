@@ -164,7 +164,11 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
             tenant_id=tenant.id,
         )
         session.add(db_user)
-        await session.commit()
+
+    # Commit unconditionally: a newly created tenant must be persisted even when
+    # the user already exists, otherwise it is rolled back when the session
+    # closes (get_session does not commit on exit).
+    await session.commit()
 
     return tenant, db_user
 

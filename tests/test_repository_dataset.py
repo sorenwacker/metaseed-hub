@@ -25,6 +25,26 @@ async def _repo(session: AsyncSession) -> DatabaseDatasetRepository:
 
 
 @pytest.mark.asyncio
+async def test_list_orders_by_modified_most_recent_first(session: AsyncSession) -> None:
+    """list() returns datasets ordered by most-recently-updated first."""
+    repo = await _repo(session)
+
+    def _data(name: str, profile: str = "miappe", version: str = "1.1") -> DatasetData:
+        return DatasetData(name=name, profile=profile, version=version, entities=[])
+
+    await repo.save("alpha", _data("alpha"))
+    await repo.save("beta", _data("beta"))
+    # Touch "alpha" so it becomes the most recently updated.
+    await repo.save("alpha", _data("alpha", profile="isa", version="1.0"))
+
+    listing = await repo.list()
+
+    names = [info.name for info in listing]
+    assert names[0] == "alpha"
+    assert set(names) == {"alpha", "beta"}
+
+
+@pytest.mark.asyncio
 async def test_save_does_not_mutate_caller_entities(session: AsyncSession) -> None:
     """save() leaves the caller's entity dicts (including _type) intact."""
     repo = await _repo(session)
