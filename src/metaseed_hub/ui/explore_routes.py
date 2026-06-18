@@ -1,7 +1,7 @@
 """Explore routes for Metaseed Hub.
 
-Reuses metaseed's Explorer (merge) interface with authentication
-and DatabaseSpecProvider for unified spec access.
+Reuses metaseed's Explorer (merge) interface with authentication and
+tenant-scoped loading of database-backed specs.
 """
 
 from __future__ import annotations

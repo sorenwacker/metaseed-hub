@@ -94,7 +94,6 @@ project_metaseed_ui  # noqa: F821
 
 # WebSocket manager methods called dynamically
 send_to_connection  # noqa: F821
-get_room_presence  # noqa: F821
 
 # Model fields used by SQLAlchemy ORM
 display_name  # noqa: F821

@@ -8,7 +8,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
-from metaseed.ui.state import AppState
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
@@ -591,22 +590,6 @@ async def dataset_load_example(
     response = HTMLResponse(status_code=200)
     response.headers["HX-Redirect"] = f"/hub/datasets/{dataset_id}"
     return response
-
-
-def _get_entity_info(state: AppState) -> list[dict[str, str]]:
-    """Get entity type information including descriptions."""
-    facade = state.get_or_create_facade()
-    entity_info = []
-    for entity_name in facade.entities:
-        helper = getattr(facade, entity_name, None)
-        if helper:
-            entity_info.append(
-                {
-                    "name": entity_name,
-                    "description": helper.description or "",
-                }
-            )
-    return entity_info
 
 
 async def _build_dataset_context(

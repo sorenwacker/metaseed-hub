@@ -302,19 +302,6 @@ class WebSocketManager:
         except Exception:
             await self.leave_room(project_id, connection_id)
 
-    def get_room_presence(self, project_id: str) -> list[dict[str, Any]]:
-        """Get presence information for a room.
-
-        Args:
-            project_id: Project identifier.
-
-        Returns:
-            List of users in the room.
-        """
-        if project_id not in self._rooms:
-            return []
-        return self._rooms[project_id].get_presence()
-
     async def handle_connection(
         self,
         websocket: WebSocket,

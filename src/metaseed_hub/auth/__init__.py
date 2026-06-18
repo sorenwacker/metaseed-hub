@@ -21,7 +21,6 @@ class TokenUser:
     email: str
     name: str
     roles: list[str]
-    tenant_id: str | None = None
 
     @property
     def keycloak_id(self) -> str:
