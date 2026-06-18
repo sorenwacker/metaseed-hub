@@ -72,23 +72,37 @@ class HubSpecLoader(SpecLoader):  # type: ignore[misc]
 
 
 async def load_profile_spec(
-    session: AsyncSession, profile_key: str, version: str
+    session: AsyncSession, profile_key: str, version: str, tenant_id: str | None
 ) -> tuple[str, ProfileSpec] | None:
     """Load a profile spec from built-in or database.
+
+    Database-backed drafts and published specs are scoped to ``tenant_id`` so a
+    caller cannot load specs belonging to another tenant. Built-in profiles are
+    tenant-independent.
 
     Args:
         session: Database session.
         profile_key: Profile identifier (name, draft:id, or spec:id).
         version: Version string.
+        tenant_id: Caller's tenant; database specs are only returned when they
+            belong to this tenant. ``None`` means no database spec is accessible.
 
     Returns:
-        Tuple of (display_name, ProfileSpec) or None if not found.
+        Tuple of (display_name, ProfileSpec) or None if not found or not
+        accessible to the caller's tenant.
     """
     from metaseed_hub.models import Spec, SpecDraft
 
     if profile_key.startswith("draft:"):
+        if tenant_id is None:
+            return None
         draft_id = profile_key[6:]
-        result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
+        result = await session.execute(
+            select(SpecDraft).where(
+                SpecDraft.id == draft_id,
+                SpecDraft.tenant_id == tenant_id,
+            )
+        )
         draft = result.scalar_one_or_none()
         if draft and draft.spec_data:
             spec_data = _extract_spec_data(draft.spec_data)
@@ -97,8 +111,16 @@ async def load_profile_spec(
         return None
 
     elif profile_key.startswith("spec:"):
+        if tenant_id is None:
+            return None
         spec_id = profile_key[5:]
-        result = await session.execute(select(Spec).where(Spec.id == spec_id))
+        result = await session.execute(
+            select(Spec).where(
+                Spec.id == spec_id,
+                Spec.tenant_id == tenant_id,
+                Spec.deleted_at.is_(None),
+            )
+        )
         db_spec = result.scalar_one_or_none()
         if db_spec and db_spec.spec_data:
             spec_data = _extract_spec_data(db_spec.spec_data)
@@ -119,14 +141,18 @@ async def load_profile_spec(
 async def load_profiles_for_comparison(
     session: AsyncSession,
     profile_specs: list[str],
+    tenant_id: str | None,
 ) -> tuple[dict[str, ProfileSpec], list[tuple[str, str]]]:
     """Load profiles from various sources for comparison.
 
     Consolidates the common logic used by compare and get_diff_graph endpoints.
+    Database-backed specs are scoped to the caller's tenant.
 
     Args:
         session: Database session.
         profile_specs: List of profile spec strings in "profile/version" format.
+        tenant_id: Caller's tenant used to scope database specs; ``None`` means
+            no database spec is accessible.
 
     Returns:
         Tuple of (db_specs dict, profile_tuples list).
@@ -141,7 +167,7 @@ async def load_profiles_for_comparison(
             profile_tuples.append((profile_key, version))
 
             if profile_key.startswith("draft:") or profile_key.startswith("spec:"):
-                loaded = await load_profile_spec(session, profile_key, version)
+                loaded = await load_profile_spec(session, profile_key, version, tenant_id)
                 if loaded:
                     db_specs[f"{profile_key}/{version}"] = loaded[1]
 
@@ -306,7 +332,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> JSONResponse:
         """Compare/explore profiles - matches metaseed's API."""
-        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+        from metaseed_hub.ui.dependencies import (
+            get_current_user_from_cookie,
+            get_tenant_for_user,
+        )
 
         user = await get_current_user_from_cookie(request)
         if not user:
@@ -318,8 +347,9 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         if len(profile_specs) < 1:
             return JSONResponse({"error": "Select at least 1 profile"}, status_code=400)
 
+        tenant = await get_tenant_for_user(session, user)
         db_specs, profile_tuples = await load_profiles_for_comparison(
-            session, [str(s) for s in profile_specs]
+            session, [str(s) for s in profile_specs], tenant.id if tenant else None
         )
 
         if len(profile_tuples) < 1:
@@ -361,7 +391,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> JSONResponse:
         """Get diff visualization data - matches metaseed's API."""
-        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+        from metaseed_hub.ui.dependencies import (
+            get_current_user_from_cookie,
+            get_tenant_for_user,
+        )
 
         user = await get_current_user_from_cookie(request)
         if not user:
@@ -372,7 +405,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         if len(profile_specs) < 1:
             return JSONResponse({"error": "At least 1 profile required"}, status_code=400)
 
-        db_specs, profile_tuples = await load_profiles_for_comparison(session, profile_specs)
+        tenant = await get_tenant_for_user(session, user)
+        db_specs, profile_tuples = await load_profiles_for_comparison(
+            session, profile_specs, tenant.id if tenant else None
+        )
 
         try:
             loader = HubSpecLoader(db_specs=db_specs)
