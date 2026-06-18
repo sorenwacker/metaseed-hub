@@ -98,6 +98,37 @@ class OIDCAuth:
                     detail=f"Failed to fetch JWKS: {e}",
                 ) from e
 
+    @staticmethod
+    def _find_key(jwks: dict[str, list[dict[str, str]]], kid: str | None) -> dict[str, str] | None:
+        """Find the signing key matching ``kid`` in a JWKS document."""
+        for key in jwks.get("keys", []):
+            if key.get("kid") == kid:
+                return key
+        return None
+
+    async def _get_signing_key(self, kid: str | None) -> dict[str, str]:
+        """Resolve the signing key for ``kid``, refreshing the JWKS if needed.
+
+        If no key matches (e.g. after the provider rotated signing keys), the
+        cached JWKS is invalidated and fetched once more before giving up, so a
+        long-lived process does not reject valid tokens until restart.
+
+        Raises:
+            HTTPException: 401 if no matching key is found after a refresh.
+        """
+        jwks = await self.get_jwks()
+        rsa_key = self._find_key(jwks, kid)
+        if rsa_key is None:
+            self._jwks = None
+            jwks = await self.get_jwks()
+            rsa_key = self._find_key(jwks, kid)
+        if rsa_key is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unable to find appropriate key",
+            )
+        return rsa_key
+
     async def verify_token(self, token: str) -> TokenUser:
         """Verify JWT token and extract user information.
 
@@ -111,25 +142,13 @@ class OIDCAuth:
             HTTPException: If token is invalid or expired.
         """
         try:
-            jwks = await self.get_jwks()
             oidc_config = await self.get_oidc_config()
 
             # Decode without verification first to get the key ID
             unverified_header = jwt.get_unverified_header(token)
             kid = unverified_header.get("kid")
 
-            # Find the matching key
-            rsa_key = None
-            for key in jwks.get("keys", []):
-                if key.get("kid") == kid:
-                    rsa_key = key
-                    break
-
-            if rsa_key is None:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Unable to find appropriate key",
-                )
+            rsa_key = await self._get_signing_key(kid)
 
             # Verify and decode the token
             issuer = oidc_config.get("issuer", self._settings.effective_issuer)
@@ -246,7 +265,9 @@ async def verify_token(token: str, settings: Settings | None = None) -> TokenUse
     """
     if settings is None:
         settings = get_settings()
-    auth = OIDCAuth(settings)
+    # Reuse the shared singleton so the OIDC discovery and JWKS caches are
+    # shared across requests instead of refetched on every call.
+    auth = get_oidc_auth(settings)
     return await auth.verify_token(token)
 
 
