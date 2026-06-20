@@ -106,9 +106,16 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
     ) -> Response:
         """Delete a spec comment (only by owner)."""
         user_id, _ = user_ctx
+        await require_draft_access(session, draft_id, user_id)
 
-        # Find comment and verify ownership
-        result = await session.execute(select(SpecComment).where(SpecComment.id == comment_id))
+        # Find comment and verify ownership. Scope by spec_draft_id so the
+        # comment can only be deleted through the draft it belongs to, matching
+        # the sibling comment routes which all gate on require_draft_access.
+        result = await session.execute(
+            select(SpecComment).where(
+                SpecComment.id == comment_id, SpecComment.spec_draft_id == draft_id
+            )
+        )
         comment = result.scalar_one_or_none()
 
         if comment and comment.user_id == user_id:

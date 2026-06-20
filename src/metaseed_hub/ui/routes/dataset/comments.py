@@ -158,8 +158,12 @@ async def delete_dataset_comment(
     if not db_user:
         return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
 
-    # Find comment and verify ownership
-    result = await session.execute(select(Comment).where(Comment.id == comment_id))
+    # Find comment and verify ownership. Scope by dataset_id so a comment can
+    # only be deleted through the dataset it actually belongs to; the URL grant
+    # is for dataset_id, but the comment was previously resolved globally.
+    result = await session.execute(
+        select(Comment).where(Comment.id == comment_id, Comment.dataset_id == dataset_id)
+    )
     comment = result.scalar_one_or_none()
 
     if comment and comment.user_id == db_user.id:
@@ -192,6 +196,15 @@ async def react_to_comment(
 
     if not db_user:
         return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
+
+    # Confirm the comment belongs to the URL dataset before reacting. Without
+    # this, a user with access to one dataset could toggle reactions on another
+    # dataset's comment by supplying its comment_id.
+    comment_result = await session.execute(
+        select(Comment).where(Comment.id == comment_id, Comment.dataset_id == dataset_id)
+    )
+    if comment_result.scalar_one_or_none() is None:
+        return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
 
     # Check for existing reaction
     existing_result = await session.execute(

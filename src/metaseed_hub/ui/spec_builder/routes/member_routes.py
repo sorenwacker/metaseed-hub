@@ -76,11 +76,15 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         email: str = Form(...),
     ) -> HTMLResponse:
         """Add a member to a spec draft by email."""
-        current_user_id, _ = user_ctx
+        current_user_id, tenant_id = user_ctx
         await require_draft_owner(session, draft_id, current_user_id)
 
-        # Find user by email
-        result = await session.execute(select(User).where(User.email == email))
+        # Find user by email, scoped to the caller's tenant. User.email is unique
+        # only per tenant (uq_users_tenant_email), so an unscoped lookup could
+        # match a foreign-tenant user or raise MultipleResultsFound across tenants.
+        result = await session.execute(
+            select(User).where(User.email == email, User.tenant_id == tenant_id)
+        )
         target_user = result.scalar_one_or_none()
 
         if not target_user:
