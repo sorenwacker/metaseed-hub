@@ -31,6 +31,17 @@ Recurring themes:
 - **Soft-delete inconsistency.** Several queries omit the `deleted_at IS NULL` filter that their siblings apply, or hard-delete where the rest of the codebase soft-deletes — surfacing deleted rows in admin stats and a UI delete path that diverges from the API/repository.
 - **Shared-helper divergence.** Inline reimplementations of logic that already exists in a canonical helper (form-value coercion, CSRF token/cookie handling, `render_template`, tenant get-or-create) drift from the original and drop guards the original has.
 
+## Remediation status
+
+The multi-tenant isolation / authorization theme is remediated on branch
+`review-260620-tenant-isolation`: H2, H3, H4, H5, M4, M5, M10, and M12. Each
+scoping query was tightened to the dataset, draft, or tenant named in the
+request, the WebSocket room now authorizes project membership, and the broken
+`can_edit_spec` join was removed. Cross-tenant and cross-scope behavior is
+covered by `tests/test_tenant_isolation.py` (database-backed; run under `make
+up`). The remaining themes (soft-delete consistency, shared-helper divergence,
+and the other medium/low findings) are not yet addressed.
+
 ## Confirmed findings
 
 ### High
