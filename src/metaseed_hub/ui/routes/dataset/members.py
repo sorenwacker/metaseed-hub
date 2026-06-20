@@ -58,10 +58,14 @@ async def add_dataset_member(
 ) -> Response:
     """Add a member to a dataset by email."""
     # Verify user has access
-    await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    # Find user by email
-    result = await session.execute(select(User).where(User.email == email))
+    # Find user by email, scoped to the dataset's tenant. User.email is unique
+    # only per tenant (uq_users_tenant_email), so an unscoped lookup could match
+    # a foreign-tenant user or raise MultipleResultsFound across tenants.
+    result = await session.execute(
+        select(User).where(User.email == email, User.tenant_id == dataset.tenant_id)
+    )
     target_user = result.scalar_one_or_none()
 
     if not target_user:

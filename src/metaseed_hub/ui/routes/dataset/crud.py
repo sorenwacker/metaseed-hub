@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from metaseed_hub.models import (
     ChatMessage,
@@ -381,12 +381,26 @@ async def dataset_create(
     spec_draft_id = None
     if profile.startswith("draft:"):
         spec_draft_id = profile.replace("draft:", "")
-        # Get the draft to use its name as the profile
-        draft_result = await session.execute(select(SpecDraft).where(SpecDraft.id == spec_draft_id))
-        draft = draft_result.scalar_one_or_none()
-        if draft:
-            profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
-            version = draft.version
+        # Resolve the draft only if it is accessible to this user, matching the
+        # scoping in dataset_new: owned by the caller's tenant or shared via
+        # SpecDraftMember. An unscoped lookup would let a user bind their dataset
+        # to another tenant's draft spec.
+        draft_result = await session.execute(
+            select(SpecDraft)
+            .outerjoin(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(
+                SpecDraft.id == spec_draft_id,
+                or_(
+                    SpecDraft.tenant_id == tenant.id,
+                    SpecDraftMember.user_id == db_user.id,
+                ),
+            )
+        )
+        draft = draft_result.scalars().first()
+        if draft is None:
+            return RedirectResponse("/hub/?error=draft_not_found", status_code=302)
+        profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
+        version = draft.version
 
     dataset = Dataset(
         tenant_id=tenant.id,

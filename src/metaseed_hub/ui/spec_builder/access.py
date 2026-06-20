@@ -133,18 +133,19 @@ async def can_edit_spec(
     if spec.created_by_id == user_id:
         return True
 
-    # Check if user is admin/owner in a team within the same tenant
+    # Check if user is admin/owner in a team within the same tenant.
+    # The WHERE clause fully constrains the result to this caller's memberships;
+    # joining User would multiply rows (one per tenant user) and break scalar_one_or_none.
     result = await session.execute(
         select(TeamMembership)
         .join(Team, TeamMembership.team_id == Team.id)
-        .join(User, User.tenant_id == Team.tenant_id)
         .where(
             Team.tenant_id == spec.tenant_id,
             TeamMembership.user_id == user_id,
             TeamMembership.role.in_([TeamRole.ADMIN, TeamRole.OWNER]),
         )
     )
-    return result.scalar_one_or_none() is not None
+    return result.scalars().first() is not None
 
 
 async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:

@@ -108,8 +108,27 @@ def create_app() -> FastAPI:
             project_id: Project identifier.
             token: JWT access token for authentication.
         """
+        from metaseed_hub.ui.dependencies import get_dataset_for_user
+
         try:
             user = await verify_token(token)
+        except Exception:
+            await websocket.close(code=4001)
+            return
+
+        # Authorize the room: the user must have access to the project
+        # (dataset) through their tenant or an explicit DatasetMember grant,
+        # mirroring the HTTP routes. Without this any authenticated user
+        # could join any project's room and read its messages and presence.
+        try:
+            async for session in db.session():
+                await get_dataset_for_user(project_id, session, user)
+                break
+        except Exception:
+            await websocket.close(code=4003)
+            return
+
+        try:
             await manager.handle_connection(
                 websocket=websocket,
                 project_id=project_id,
