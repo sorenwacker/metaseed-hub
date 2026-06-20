@@ -105,9 +105,11 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if draft.user_id != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Check if any datasets are using this spec
+        # Check if any datasets are using this spec. Exclude soft-deleted rows,
+        # matching every other Dataset query; otherwise a draft whose only
+        # referencing datasets were deleted is wrongly reported as in use.
         datasets_result = await session.execute(
-            select(Dataset).where(Dataset.spec_draft_id == draft_id)
+            select(Dataset).where(Dataset.spec_draft_id == draft_id, Dataset.deleted_at.is_(None))
         )
         dependent_datasets = list(datasets_result.scalars().all())
 

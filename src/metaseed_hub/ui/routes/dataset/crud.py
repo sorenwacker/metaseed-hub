@@ -7,16 +7,10 @@ from typing import Annotated, Any
 
 from fastapi import File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy import delete, or_, select
+from sqlalchemy import or_, select
 
 from metaseed_hub.models import (
-    ChatMessage,
-    Comment,
-    CommentReaction,
     Dataset,
-    DatasetMember,
-    DatasetVersion,
-    Note,
     Spec,
     SpecDraft,
     SpecDraftMember,
@@ -479,21 +473,11 @@ async def dataset_delete(
         return response
 
     try:
-        # Manually delete related records (in case CASCADE not set in DB)
-        await session.execute(
-            delete(CommentReaction).where(
-                CommentReaction.comment_id.in_(
-                    select(Comment.id).where(Comment.dataset_id == dataset_id)
-                )
-            )
-        )
-        await session.execute(delete(Comment).where(Comment.dataset_id == dataset_id))
-        await session.execute(delete(ChatMessage).where(ChatMessage.dataset_id == dataset_id))
-        await session.execute(delete(Note).where(Note.dataset_id == dataset_id))
-        await session.execute(delete(DatasetMember).where(DatasetMember.dataset_id == dataset_id))
-        await session.execute(delete(DatasetVersion).where(DatasetVersion.dataset_id == dataset_id))
-
-        await session.delete(dataset)
+        # Soft-delete to match the repository and REST API, which mark
+        # deleted_at and rely on the deleted_at IS NULL filter in every list
+        # query. A hard delete here diverged from those paths and discarded the
+        # related comments, notes, and version history irrecoverably.
+        dataset.soft_delete()
         await session.commit()
     except Exception as e:
         logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)

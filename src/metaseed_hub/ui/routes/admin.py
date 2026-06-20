@@ -4,7 +4,7 @@ Provides GDPR-compliant aggregated statistics and admin-only user management.
 Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -114,7 +114,8 @@ async def admin_dashboard(
     """
     # Aggregated counts
     stats = {
-        "users": await session.scalar(select(func.count(User.id))) or 0,
+        "users": await session.scalar(select(func.count(User.id)).where(User.deleted_at.is_(None)))
+        or 0,
         "datasets": await session.scalar(
             select(func.count(Dataset.id)).where(Dataset.deleted_at.is_(None))
         )
@@ -122,12 +123,12 @@ async def admin_dashboard(
     }
 
     # Activity over time (last 30 days) - aggregated counts only
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = datetime.now(UTC) - timedelta(days=30)
 
     # User registrations per day
     user_activity_result = await session.execute(
         select(func.date(User.created_at).label("date"), func.count(User.id).label("count"))
-        .where(User.created_at > cutoff)
+        .where(User.created_at > cutoff, User.deleted_at.is_(None))
         .group_by(func.date(User.created_at))
         .order_by(func.date(User.created_at))
     )
@@ -143,7 +144,9 @@ async def admin_dashboard(
     dataset_activity = [(row.date, row.count) for row in dataset_activity_result]
 
     # User list for admin
-    users_result = await session.execute(select(User).order_by(User.created_at.desc()))
+    users_result = await session.execute(
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
+    )
     users = list(users_result.scalars().all())
 
     return render_template(
