@@ -39,8 +39,18 @@ scoping query was tightened to the dataset, draft, or tenant named in the
 request, the WebSocket room now authorizes project membership, and the broken
 `can_edit_spec` join was removed. Cross-tenant and cross-scope behavior is
 covered by `tests/test_tenant_isolation.py` (database-backed; run under `make
-up`). The remaining themes (soft-delete consistency, shared-helper divergence,
-and the other medium/low findings) are not yet addressed.
+up`).
+
+The soft-delete consistency theme is remediated on branch
+`review-260620-soft-delete`: H1, M3, and L8, plus the adjacent L7. The dataset
+UI delete now soft-deletes instead of hard-deleting and cascading; the admin
+dashboard count, activity, and directory queries exclude soft-deleted users;
+`delete_draft` ignores soft-deleted datasets when checking dependents; and the
+admin activity cutoff uses a timezone-aware `datetime.now(UTC)`. Behavior is
+covered by `tests/test_soft_delete.py` (database-backed; run under `make up`).
+
+The remaining themes (shared-helper divergence and the other medium/low
+findings) are not yet addressed.
 
 ## Confirmed findings
 
