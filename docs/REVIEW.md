@@ -1,349 +1,269 @@
 # Codebase Review
 
-Date: 2026-06-18. Reviewed source root `src/metaseed_hub` (38 source files, ~12,090 LOC) with a per-module multi-agent pass; every high/medium finding was adversarially verified before inclusion. metaseed dependency was at v0.9.1 during the review.
+Date: 2026-06-20. Reviewed source root `src/metaseed_hub` (53 source files, ~11,200 LOC) with a per-module multi-agent pass across 17 module groups; every high/medium finding was adversarially verified by an independent agent before inclusion. The metaseed dependency was at v0.9.1 during the review.
 
-## Remediation status
-
-All 31 confirmed findings were remediated on 2026-06-18, each with a failing test first where testable, atomic commits, and the full gate suite green throughout. Summary by theme:
-
-- Multi-tenant isolation / authorization (#3, #6, #8, #18, #24): dataset REST API scoped to the caller's tenant; spec-builder membership requires draft ownership; comments require draft access; explore profile loading scoped to tenant.
-- Soft-delete consistency (#1, #2, #15): API uses soft-delete and filters `deleted_at`; `save()` restores a soft-deleted name instead of colliding.
-- HTML injection (#5): inline table cell values are escaped.
-- WebSocket fan-out (#7, #27): delivery routed through the Redis listener; no duplicate local send.
-- Reaction enum (#4): persists lowercase values matching the migration.
-- Data loss (#14, #19, #20, #25): `save()` no longer mutates caller entities; correct label derivation; import honors the selected profile/version; spec-builder state round-trips losslessly via Pydantic.
-- Auth hot path (#9, #10, #11): standalone `verify_token` reuses the singleton; JWKS refreshes on key rotation; the always-None `TokenUser.tenant_id` removed.
-- Duplication / dead code (#16, #22, #23, #28, #29, #30, #31): single `render_template`/`get_version_info`; dead `spec_adapters` module and unused functions removed.
-- Typing / consistency / size (#12, #13, #21, plus the 1000-LOC rule): nullable `created_by` typing; dataset listing ordered by modified; `entityChanged` emitted on primitive-list edits; `dataset.py` split into a package.
-
-The findings below are retained as the original review record. The unverified appendix items remain candidates; those below the project's vulture threshold were intentionally left in place.
+This supersedes the 2026-06-18 review (whose 31 findings were remediated). The findings below are newly surfaced; none are carry-overs from that cycle.
 
 ## Baseline gates
 
-These are the project's own canonical commands (Makefile / pre-commit), run before the review.
+The project's own canonical commands (Makefile / pre-commit), run before the review.
 
 | Gate | Command | Result |
 |------|---------|--------|
 | Lint | `uv run ruff check src tests` | Pass |
-| Types | `uv run mypy src` (strict) | Pass, 48 files |
-| Dead code | `uv run vulture src vulture_whitelist.py --min-confidence=80` | Pass |
-| Tests | `uv run pytest` | 179 passed, 1 skipped (requires Postgres on :7432 via `make up`) |
-| File size | 1000 LOC project rule | Fail: `ui/routes/dataset.py` is 1858 LOC |
+| Types | `uv run mypy src` (strict) | Pass, 53 files |
+| Dead code | `uv run vulture src/ vulture_whitelist.py --min-confidence=80` | Pass, no hits |
+| File size | 1000 LOC project rule | Pass, largest `ui/helpers.py` at 899 LOC |
+| Tests | `uv run pytest` | 157 passed, 1 skipped, 60 errors |
 
-Open marker: `TODO` at `ui/routes/dataset.py:164` (load user's custom specs).
+The 60 test errors are not code defects: every one is the same fixture failure in `tests/conftest.py:24`, which connects to `postgresql+asyncpg://...@localhost:7432/metaseed_hub_test`. No Postgres is running in this environment. Start it with `make up` to get a clean run. No `TODO`/`FIXME` markers remain in the source.
 
 ## Summary
 
-- Total findings: 72 (confirmed 31, refuted 5, unverified low-severity 36).
-- Confirmed by severity: high 7, medium 20, low 4.
-- Confirmed by category: consistency 6, correctness 19, dead-code 4, design 1, typing 1.
+- Total findings: 67 (confirmed 27, refuted 1, unverified low-severity 39).
+- Confirmed by severity: high 5, medium 13, low 9.
+- Confirmed by category: correctness 15, consistency 6, dead-code 3, design 2, docstring 1.
 
-### Recurring themes
+Recurring themes:
 
-1. **Multi-tenant isolation / authorization gaps.** The REST `api/datasets.py` endpoints and several spec-builder routes (`member_routes`, `comment_routes`) and `explore_routes` act on rows by id without scoping to the caller's tenant or checking draft membership, bypassing the tenant-scoped repository layer. (Findings #3, #6, #8, #18, #24.)
-2. **Soft-delete not honored consistently.** The API hard-deletes and omits the `deleted_at IS NULL` filter the repository applies everywhere, and `save()` can collide with a soft-deleted unique name. (Findings #1, #2, #15.)
-3. **Duplicated logic that has already drifted.** Two `get_version_info`, two `render_template`, two client-loading paths, three label-derivation copies, and a dead `spec_adapters.py` module. (Findings #16, #22, #23, #28, #29.)
-4. **Hand-rolled (de)serialization of Pydantic v2 models loses data** on the draft clone/save round-trip. (Findings #25, #14.)
-5. **Redis pub/sub WebSocket fan-out is non-functional** (no listener task) and, once fixed, would double-deliver. (Findings #7, #27.)
+- **Multi-tenant isolation / authorization gaps (the dominant theme).** Five confirmed findings let a user reach data outside their tenant or scope: cross-tenant draft binding on dataset create, unscoped member-email lookups (two routes), a WebSocket room with no membership check, and comment routes that resolve a comment by id without confirming it belongs to the dataset/draft in the URL.
+- **`scalar_one_or_none()` on a per-tenant-unique email.** `User.email` is unique only per tenant, so two routes that look it up globally can raise `MultipleResultsFound` (HTTP 500) and add a foreign-tenant user.
+- **Soft-delete inconsistency.** Several queries omit the `deleted_at IS NULL` filter that their siblings apply, or hard-delete where the rest of the codebase soft-deletes — surfacing deleted rows in admin stats and a UI delete path that diverges from the API/repository.
+- **Shared-helper divergence.** Inline reimplementations of logic that already exists in a canonical helper (form-value coercion, CSRF token/cookie handling, `render_template`, tenant get-or-create) drift from the original and drop guards the original has.
 
-## Confirmed findings — High
+## Confirmed findings
 
-### 1. `api/datasets.py:188` — delete_dataset hard-deletes a soft-delete model, contradicting the established pattern
-*Category: correctness*
+### High
 
-Dataset inherits SoftDeleteMixin (models/mixins.py) and the canonical DatabaseDatasetRepository.delete() performs `dataset.soft_delete()` (repositories/dataset.py:242). The API endpoint instead does `await session.delete(dataset)` followed by `await session.commit()`, permanently removing the row. This is inconsistent with the rest of the codebase and destroys data that the soft-delete design intends to retain (and breaks restore()).
+#### H1 — `dataset_delete` hard-deletes while the rest of the codebase soft-deletes (`ui/routes/dataset/crud.py:482`, consistency)
 
-**Fix:** Replace `await session.delete(dataset)` with `dataset.soft_delete()` then `await session.commit()`, matching the repository pattern.
+`Dataset` extends `SoftDeleteMixin`. Every other deletion path soft-deletes (`repositories/dataset.py:253`, `api/datasets.py:221`) and all list/count queries filter `Dataset.deleted_at.is_(None)`. The UI route instead cascade-deletes related rows (`CommentReaction`, `Comment`, `ChatMessage`, `Note`, `DatasetMember`, `DatasetVersion`) and then `await session.delete(dataset)` — a hard delete.
 
-### 2. `api/datasets.py:63` — API queries do not filter soft-deleted rows (deleted_at IS NULL)
-*Category: correctness*
+Fix: replace with `dataset.soft_delete()` (matching `repositories/dataset.py:232-255` and `api/datasets.py`) and drop the cascade. If hard deletion is genuinely intended for the UI, document why it differs.
 
-Every read query in this module selects datasets without `Dataset.deleted_at.is_(None)`. The repository layer applies this filter on every query (repositories/dataset.py lines 111, 148, 201, 234, 261). As written, list_datasets (line 63), get_dataset (line 115), update_dataset (line 146) and delete_dataset (line 180) will return, mutate, or operate on datasets that were soft-deleted via the repository/UI, exposing deleted data through the API.
+#### H2 — `dataset_create` resolves a `SpecDraft` by id without tenant/membership scoping (`ui/routes/dataset/crud.py:385`, correctness)
 
-**Fix:** Add `Dataset.deleted_at.is_(None)` to the where clause of each select, consistent with DatabaseDatasetRepository.
+When the submitted profile is `draft:<id>`, the draft is fetched with `select(SpecDraft).where(SpecDraft.id == spec_draft_id)` — no scoping — then its name/version are copied onto the new dataset and `spec_draft_id` is persisted. The form route `dataset_new` (crud.py:109-127) scopes by `SpecDraft.tenant_id == tenant.id` plus `SpecDraftMember`; `dataset_create` does not. A user can submit any draft id and bind their dataset to another tenant's draft spec.
 
-### 3. `api/datasets.py:96` — get/update/delete by id are not tenant-scoped (cross-tenant IDOR)
-*Category: correctness*
+Fix: scope the lookup the same way `dataset_new` does, and reject (redirect with error) when the draft is not accessible.
 
-get_dataset (line 115), update_dataset (line 146) and delete_dataset (line 180) select on `Dataset.id == dataset_id` only, with no tenant filter. `_user: TokenUser` (which carries `tenant_id`, see auth/__init__.py:24) is injected but never used for authorization. Any authenticated user, regardless of their tenant, can read, modify, or delete any dataset whose UUID they know. This is a multi-tenant isolation violation; the repository is explicitly tenant-scoped (repositories/dataset.py:88-100) but these endpoints bypass it.
+#### H3 — Member lookup by email is not tenant-scoped and can raise `MultipleResultsFound` (`ui/routes/dataset/members.py:64`, correctness)
 
-**Fix:** Resolve the caller's tenant from the token (or require/validate a tenant_id) and add `Dataset.tenant_id == <user tenant>` to the where clause of get/update/delete, rejecting datasets outside the caller's tenant with 404.
+`add_dataset_member` resolves the invitee with `select(User).where(User.email == email)`. `User` enforces uniqueness only per tenant (`uq_users_tenant_email`), so email is not globally unique: two users in different tenants with the same email make `scalar_one_or_none()` raise `MultipleResultsFound` (HTTP 500). Even a single match may belong to a different tenant, so a foreign-tenant user can be added as a `DatasetMember`.
 
-### 4. `models/__init__.py:423` — reactiontype enum configured inconsistently between CommentReaction and SpecCommentReaction, with value-casing mismatch vs migration
-*Category: consistency*
+Fix: scope the lookup to the dataset's tenant (`User.tenant_id == dataset.tenant_id`) and handle the multi-row case.
 
-CommentReaction.reaction (line 423) uses `Enum(ReactionType)` while SpecCommentReaction.reaction (line 501) uses `Enum(ReactionType, name="reactiontype", create_type=False)`. Both target the same logical PostgreSQL enum but are configured differently. More importantly, by SQLAlchemy default `Enum(ReactionType)` persists the StrEnum member NAME (`LIKE`/`DISLIKE`, uppercase). The migration 03d97af76817 creates the PG type `reactiontype` with the lowercase VALUES `('like','dislike')`. Tests pass only because conftest.py uses `Base.metadata.create_all` (the type is generated from the model, so it accepts LIKE/DISLIKE), but against the migration-built production schema an insert of `ReactionType.LIKE` would send `'LIKE'` and violate the PG enum, raising InvalidTextRepresentation. The two reaction columns must be configured identically and aligned with the migration's lowercase values.
+#### H4 — `can_edit_spec` join multiplies rows and crashes with `MultipleResultsFound` (`ui/spec_builder/access.py:140`, correctness)
 
-**Fix:** Set `values_callable=lambda e: [m.value for m in e]` on both reaction columns so the lowercase `.value`s are persisted (matching the migration), and configure both columns identically (same name= / create_type= handling).
+The admin/owner check joins `User` on `User.tenant_id == Team.tenant_id`, which is not correlated to the membership's user. It produces one output row per user in the tenant for every matching membership (a cartesian product); `User` never appears in the WHERE clause. With more than one user in the tenant, a `scalar_one_or_none()`-style consumption raises `MultipleResultsFound`.
 
-### 5. `ui/routes/table.py:189` — Cell/list values interpolated into HTML without escaping (HTML injection)
-*Category: correctness*
+Fix: drop the `User` join entirely. `select(TeamMembership).join(Team, ...).where(Team.tenant_id == spec.tenant_id, TeamMembership.user_id == user_id, TeamMembership.role.in_([ADMIN, OWNER]))` — the WHERE clause already fully constrains the result.
 
-User-controlled field values from model_dump are spliced directly into raw HTML f-strings without escaping. In _build_entity_row_html: `cell_value = instance_data.get(col, "")` then `display_value = cell_value or "Click to edit"` is inserted as `<span class="cell-display...">{display_value}</span>` and `value="{cell_value}"`. A value containing a double-quote or `<script>` breaks out of the attribute/element. The sibling route src/metaseed_hub/ui/routes/dataset.py (lines 1026-1027) explicitly uses `html_module.escape(...)` for user content, so this file is both incorrect and inconsistent with the established pattern.
+#### H5 — WebSocket rooms enforce no project/tenant membership authorization (`websocket/__init__.py`, correctness)
 
-**Fix:** Escape all interpolated values with html.escape() before building the HTML (cell_value, display_value, and the primitive input value), matching dataset.py.
+`handle_connection()` / `join_room()` add a connection to a room keyed only by `project_id`, with no check that the authenticated user is a member of that project or tenant. The endpoint (`main.py` `websocket_endpoint`) only validates the JWT. Any authenticated user supplying an arbitrary `project_id` in `/ws/{project_id}` joins that room and receives all real-time messages and the full presence roster.
 
-### 6. `ui/spec_builder/routes/member_routes.py:69` — Member routes never verify the caller may access the target draft
-*Category: correctness*
+Fix: before `join_room`/`handle_connection`, verify project membership (scoped by tenant, with the soft-delete filter the HTTP routes use) and `websocket.close()` when absent.
 
-`add_spec_member`, `update_spec_member_role`, and `remove_spec_member` operate on the path `draft_id` using only `UserContextDep`, which verifies authentication but not authorization. None of them check that the authenticated user owns or is a member of `draft_id` (unlike sibling draft routes which use `DraftContextDep` / explicit `draft.user_id == user_id` checks, e.g. draft_routes.py:105 and the `leave_spec` handler in this same file at line 178). Any logged-in user can add/remove members or change roles on an arbitrary draft by guessing/knowing its id. SpecDraftMember rows are also created against `draft_id` without confirming the draft exists.
+### Medium
 
-**Fix:** Load the draft and call `_user_can_access_draft` (or require owner role) before mutating membership, mirroring the ownership guard already used in `leave_spec` and the draft routes.
+#### M1 — `/health` builds a throwaway async engine per request (`api/health.py:31`, design)
 
-### 7. `websocket/__init__.py:60` — Redis pub/sub listener task is never started; cross-instance broadcasting is non-functional
-*Category: correctness*
+Each call does `create_async_engine(...)` then `await engine.dispose()`, creating and tearing down a fresh connection pool and TCP/TLS connection on every probe, defeating pooling. A shared pooled engine already exists (`metaseed_hub.database.db.engine`).
 
-The class docstring claims it 'Manages WebSocket connections with Redis pub/sub for scaling.' connect_redis() creates self._pubsub and join_room() subscribes to per-project channels, and broadcast_to_room() publishes messages to Redis. However nothing ever consumes messages from the pubsub: there is no asyncio.create_task / listen loop anywhere. self._listener_task is declared as None at line 60, never assigned, and only ever read in disconnect_redis() (lines 70-73) where the `if self._listener_task:` guard is always False. As a result, messages published to Redis by one instance are never read or re-delivered to local WebSocket clients on other instances. Multi-instance fan-out (the stated purpose of the Redis integration) silently does nothing; only same-instance local sends in broadcast_to_room work. Grep across src/ and tests/ confirms no create_task/ensure_future and no listener implementation exist.
+Fix: reuse the shared engine — `async with db.engine.connect() as conn: await conn.execute(text("SELECT 1"))`.
 
-**Fix:** Implement a listener coroutine that iterates self._pubsub.listen()/get_message(), parses each payload, and forwards it to local room connections (without re-publishing). Start it via self._listener_task = asyncio.create_task(...) in connect_redis(). To avoid duplicate delivery, the local send in broadcast_to_room should be removed and all delivery routed through the listener (the publishing instance also receives the message back), or the published payload should carry an origin-instance id that the listener filters.
+#### M2 — `get_or_create_tenant` in `app.py` duplicates `ensure_tenant_and_user` with divergent logic (`ui/app.py:201`, consistency)
 
-## Confirmed findings — Medium
+The nested `get_or_create_tenant` in `home()` reimplements `dependencies.ensure_tenant_and_user` but (1) names the tenant `user.name or user.email` vs `user.name or user.email.split("@")[0]`, so the same user's tenant is named differently depending on entry point, and (2) commits immediately and never creates the `User` row.
 
-### 8. `api/datasets.py:49` — list_datasets accepts an arbitrary tenant_id without checking it against the caller
-*Category: correctness*
+Fix: have `home()` call `ensure_tenant_and_user(session, user)` and use the returned `(tenant, db_user)`.
 
-list_datasets takes `tenant_id: str` as a query parameter and filters on it, but never checks it against the authenticated user's tenant (`_user` is unused). Any authenticated user can list datasets of any tenant by passing a different tenant_id. Combined with the multi-tenant rule that tenant scoping must be enforced, this leaks data across tenants.
+#### M3 — Admin `User` queries do not filter soft-deleted rows (`ui/routes/admin.py:117`, consistency)
 
-**Fix:** Derive the tenant from the authenticated TokenUser (or validate that the requested tenant_id matches the user's tenant / membership) before listing.
+`User` inherits `SoftDeleteMixin`. In `admin_dashboard`, the `Dataset` queries filter `deleted_at.is_(None)` (lines 119, 139) but every `User` query ignores it: the total count (line 117), the registration-activity query (128-133), and the user directory (146). Soft-deleted users are counted in stats and shown in the directory.
 
-### 9. `auth/__init__.py:237` — Standalone verify_token refetches OIDC discovery + JWKS on every call
-*Category: correctness*
+Fix: add `.where(User.deleted_at.is_(None))` to all three user queries.
 
-The module-level `verify_token` constructs a fresh `OIDCAuth(settings)` instance per call: `auth = OIDCAuth(settings); return await auth.verify_token(token)`. Because `_oidc_config` and `_jwks` caches live on the instance, every invocation performs two outbound HTTP requests (discovery document + JWKS). This standalone function is the one actually used on the cookie-auth hot path (`ui/dependencies.py:get_current_user_from_cookie` calls it on every request, and `ui/app.py` middleware calls it too), so every authenticated request triggers two network round-trips to the OIDC provider. The dependency-injected `get_oidc_auth` reuses a singleton and caches correctly; the standalone path defeats that.
+#### M4 — `delete_dataset_comment` does not verify the comment belongs to the URL dataset (`ui/routes/dataset/comments.py:162`, correctness)
 
-**Fix:** Reuse the cached singleton (e.g. call get_oidc_auth(settings) / share the module-level _auth_instance) instead of building a new OIDCAuth each call, or cache JWKS/discovery at module/class level with a TTL.
+The comment is fetched with `select(Comment).where(Comment.id == comment_id)` only — no `Comment.dataset_id == dataset_id`. Authorization is granted for the dataset in the URL, but the comment is resolved globally and only checked for owner. The path `dataset_id` is never enforced against the comment's actual dataset.
 
-### 10. `auth/__init__.py:78` — JWKS cache never refreshes on key rotation / unknown kid
-*Category: correctness*
+Fix: add `Comment.dataset_id == dataset_id` to the WHERE clause (and the analogous filter in `react_to_comment`).
 
-`get_jwks` caches `_jwks` permanently (`if self._jwks is not None: return self._jwks`). In `verify_token`, when no key matches the token's `kid`, it raises 401 ("Unable to find appropriate key") without ever re-fetching the JWKS. After the provider rotates signing keys, the singleton instance returned by `get_oidc_auth` keeps a stale key set and rejects all valid tokens signed with the new key until the process restarts.
+#### M5 — `react_to_comment` does not scope the comment to the URL dataset (`ui/routes/dataset/comments.py:197`, correctness)
 
-**Fix:** On a kid miss, invalidate the cache (set self._jwks = None) and re-fetch once before failing, or attach a TTL to the cached JWKS.
+The reaction lookup and creation use `comment_id` without confirming the comment is part of `dataset_id`. A user with access to dataset A can toggle reactions on a comment in dataset B by supplying B's `comment_id`.
 
-### 11. `auth/__init__.py:24` — TokenUser.tenant_id is declared but never populated
-*Category: correctness*
+Fix: resolve the comment with `Comment.id == comment_id AND Comment.dataset_id == dataset_id` (404 if missing) before creating/toggling.
 
-`TokenUser` declares `tenant_id: str | None = None`, but `verify_token` never sets it (the TokenUser(...) construction at lines 155-160 omits tenant_id) and grep across src/ and tests/ finds no `tenant_id=` assignment in the auth module nor any read of `TokenUser.tenant_id`. In a multi-tenant app this field reads as if tenant scoping flows from the token, but it is always None. Tenant resolution actually happens elsewhere via `keycloak_id[:8]` slug logic. The unused, always-None field is misleading dead state.
+#### M6 — Unguarded `int()`/`float()` coercion raises 500 on invalid form input (`ui/routes/table.py:427`, correctness)
 
-**Fix:** Either populate tenant_id from a token claim during verify_token, or remove the field so it does not imply token-derived tenant scoping that does not exist.
+`update_table_cell` (426-429) and `update_single_entity_field` (603-606) call `int(raw_str)`/`float(raw_str)` with no exception handling. A non-numeric value (or partial HTMX value) raises `ValueError` → unhandled 500. The shared `forms.parse_form_field` / `extract_entity_values` catches `ValueError` and falls back to the raw string; table.py reimplements coercion inline and drops that guard.
 
-### 12. `models/__init__.py:548` — Spec.created_by_id annotated non-nullable but column and FK are nullable (SET NULL)
-*Category: typing*
+Fix: reuse `parse_form_field`/`extract_entity_values`, or wrap the coercions in `try/except ValueError`.
 
-created_by_id is declared `Mapped[str]` (non-optional) while the column has `nullable=True` and `ForeignKey("users.id", ondelete="SET NULL")`. The migration d5b1a0f1f999 also creates the column as `nullable=True` with `ondelete="SET NULL"`. The attribute can therefore legitimately be None at runtime (after the owner user is deleted), but the type hint promises `str`. Likewise `created_by: Mapped["User"]` at line 556 should be `Mapped["User | None"]`. This is a mypy --strict type-safety bug. The sibling model DatasetVersion (lines 239 and 247) does this correctly with `Mapped[str | None]` / `Mapped["User | None"]`.
+#### M7 — Empty cell values are silently dropped, making it impossible to clear a field (`ui/routes/table.py:419`, correctness)
 
-**Fix:** Change line 548 to `created_by_id: Mapped[str | None]` and line 556 to `created_by: Mapped["User | None"] = relationship("User")`, matching DatasetVersion.
+`update_table_cell` skips fields whose raw value is `None`/`""` (`if raw_value is None or raw_value == "": continue`). Because `current_values` comes from `model_dump(exclude_none=True)`, a cleared cell keeps its previous value and is re-persisted. `extract_entity_values` instead sets cleared fields to `None`. The same skip appears in `update_single_entity_field` (line 600 `if raw_value:`).
 
-### 13. `repositories/dataset.py:102` — list() does not sort by modified time, violating the parent ABC contract
-*Category: correctness*
+Fix: treat empty string as an explicit clear (set to `None`/remove), matching `extract_entity_values`; preserve inherited `*_id` fields as `forms.py` does.
 
-The parent AsyncDatasetRepository.list() docstring (metaseed/repositories/dataset_repository.py) specifies: 'List of DatasetInfo summaries, sorted by modified time (most recent first).' This implementation issues `select(Dataset).where(...)` with no `order_by` clause and returns rows in arbitrary database order, so callers relying on the documented ordering get unsorted results. The hub docstring also omits the ordering guarantee, diverging from the interface it implements.
+#### M8 — Version provenance always null: no caller passes `user_id` (`ui/services/entity_service.py:511`, correctness)
 
-**Fix:** Add `.order_by(Dataset.updated_at.desc())` to the select, or sort the resulting DatasetInfo list by `modified` descending before returning.
+`EntityService.__init__` accepts `user_id` ("Optional user ID for version tracking") and `_save_state` writes it to `DatasetVersion.created_by_id`. Every production caller constructs `EntityService(session, dataset)` with no `user_id` (`ui/routes/entity.py:41,94,179,223,271`). `created_by_id` is therefore always `None`; version authorship is never recorded.
 
-### 14. `repositories/dataset.py:153` — save() mutates the caller's entity dicts via shallow copy + dict.pop
-*Category: correctness*
+Fix: thread the local `User.id` into `EntityService(...)` in the entity routes, or remove the parameter and the assignment if provenance is intentionally untracked.
 
-save() does `tree = _entities_to_tree(data.entities.copy())`. `list.copy()` is a shallow copy: it creates a new list but the inner dict objects are shared with the caller's `DatasetData.entities`. Inside `_entities_to_tree` each entity is mutated in place: `entity.pop("_type", None)` and `entity.pop("_parent_unique_id", None)` (dataset.py:55-56). As a result, after a save() call the caller's original DatasetData.entities have lost their `_type` and `_parent_unique_id` keys. This is a silent side effect on an input argument and will corrupt any caller that reuses the DatasetData (e.g. saving then re-saving, or logging).
+#### M9 — Stale/unknown `node_id` silently creates a new entity instead of erroring (`ui/services/entity_service.py:299`, correctness)
 
-**Fix:** Deep-copy each entity before mutation, e.g. pass `[dict(e) for e in data.entities]` (and ideally make `_entities_to_tree` not mutate its inputs at all by reading keys instead of popping, building the data dict explicitly).
+`create_or_update_entity` branches on `if node_id and node_id in state.nodes_by_id`. A truthy `node_id` absent from `nodes_by_id` (stale form, deleted/reloaded dataset, foreign node) skips the update branch and falls through to create. A stale edit form results in a silent duplicate. `delete_entity` handles the not-found case correctly.
 
-### 15. `repositories/dataset.py:144` — save() insert path can violate uq_datasets_tenant_name after a soft delete
-*Category: correctness*
+Fix: when `node_id` is provided but not found, return `EntitySaveResult(success=False, error_message="Entity not found.")`, mirroring `delete_entity`.
 
-save() looks up the existing dataset with `Dataset.deleted_at.is_(None)` (dataset.py:144-151). If a dataset with the same (tenant_id, name) was previously soft-deleted, that filter excludes it, so `scalar_one_or_none()` returns None and the code takes the INSERT branch (dataset.py:165-172). However the model defines `UniqueConstraint("tenant_id", "name", name="uq_datasets_tenant_name")` (models/__init__.py:178) which is NOT scoped to deleted_at, so the soft-deleted row still occupies the name and the INSERT raises an IntegrityError at commit. The same is true of exists()/load() correctly hiding soft-deleted rows, making the name appear free while the DB rejects reuse. Net effect: a name cannot be reused after deletion, contradicting the soft-delete intent.
+#### M10 — `delete_spec_comment` omits the `require_draft_access` guard its siblings enforce (`ui/spec_builder/routes/comment_routes.py:99`, correctness)
 
-**Fix:** Either include soft-deleted rows in the save() lookup and restore/overwrite them, or make the uniqueness a partial index scoped to `deleted_at IS NULL`. Add a regression test for save-after-delete with the same name.
+Every other comment route (`get_spec_comments` L71, `add_spec_comment` L86, `react_to_spec_comment` L131) calls `await require_draft_access(session, draft_id, user_id)`. `delete_spec_comment` does not — it loads the comment by id and checks only `comment.user_id == user_id`, and the lookup is not constrained to `draft_id`.
 
-### 16. `ui/app.py:262` — app.py re-defines render_template instead of reusing render.render_template
-*Category: consistency*
+Fix: add `await require_draft_access(...)` at the start and constrain the lookup with `SpecComment.spec_draft_id == draft_id`.
 
-The nested render_template() in create_hub_app (lines 262-292) duplicates the canonical render.py render_template() (lines 102-149) that every route module imports and uses (entity.py, dataset.py, admin.py, auth.py). The logic (CSRF token injection, version_info, cookie set) is the same but maintained twice, and it pulls in the divergent app-local get_version_info. The home/login routes use this private copy while the rest of the app uses render.render_template.
+#### M11 — `reset_draft` is a GET route that mutates and commits (`ui/spec_builder/routes/draft_routes.py:136`, design)
 
-**Fix:** Call render.init_templates(templates) (already done for route modules) and reuse render.render_template in the home and login routes rather than defining a local copy.
+`@router.get("/{draft_id}/reset")` resets the spec, assigns `draft.spec_data`, and `await session.commit()`. Every other state-mutating endpoint uses POST/PUT/DELETE. A destructive GET violates HTTP idempotency, is triggerable by prefetchers/crawlers, and is not CSRF-protected like the POST mutations.
 
-### 17. `ui/dependencies.py:130` — New tenant can be lost when user already exists in ensure_tenant_and_user
-*Category: correctness*
+Fix: change to `@router.post("/{draft_id}/reset")` and update the template trigger.
 
-ensure_tenant_and_user() creates a new Tenant with only `await session.flush()` (line 154) and relies on the subsequent `await session.commit()` inside the db_user-creation branch (line 167) to persist everything. But if the tenant is missing while db_user already exists, the commit branch is skipped and the function returns without committing. get_session() (database.py session()) does NOT auto-commit on context exit, so the newly created tenant is rolled back when the session closes. Code:
+#### M12 — `add_spec_member` email lookup uses `scalar_one_or_none()` on a per-tenant-unique email (`ui/spec_builder/routes/member_routes.py:83`, correctness)
 
-    if not tenant:
-        tenant = Tenant(...)
-        session.add(tenant)
-        await session.flush()
-    ...
-    if not db_user:
-        db_user = User(...)
-        session.add(db_user)
-        await session.commit()
-    return tenant, db_user
+`select(User).where(User.email == email)` then `scalar_one_or_none()`. As in H3, email is unique only per tenant, so duplicates across tenants raise `MultipleResultsFound` (500), and the lookup is not tenant-scoped (isolation gap when sharing).
 
-**Fix:** Commit unconditionally before returning (e.g. always `await session.commit()` at the end), or commit immediately after creating the tenant.
+Fix: `select(User).where(User.email == email, User.tenant_id == tenant_id)` using the `tenant_id` already in `user_ctx`.
 
-### 18. `ui/explore_routes.py:89` — load_profile_spec loads Spec/SpecDraft by id with no tenant or soft-delete filtering
-*Category: correctness*
+#### M13 — Redis listener started before any channel is subscribed spins in an error loop (`websocket/__init__.py:75`, correctness)
 
-In load_profile_spec, the 'draft:' branch (line 91: `select(SpecDraft).where(SpecDraft.id == draft_id)`) and the 'spec:' branch (line 101: `select(Spec).where(Spec.id == spec_id)`) filter only by primary id. There is no tenant_id scoping and, for the published Spec branch, no `Spec.deleted_at.is_(None)` filter. These functions are reached via user-supplied form/path parameters in /compare (line 316 form.getlist) and /graph (line 370 profiles split), so an authenticated user can load specs/drafts belonging to other tenants, or soft-deleted published specs, by supplying their id. IDs are UUIDs (hard to enumerate), which mitigates but does not remove the cross-tenant access path. This contradicts the project's multi-tenant scoping rule.
+`connect_redis()` creates the `_listen()` task at startup, before any `subscribe()` (which happens later in `join_room`). On its first iteration `_pubsub.get_message(...)` raises `RuntimeError('pubsub connection not set: ...')` because the underlying connection is `None`; the caught error makes the loop respin tightly until the first client connects.
 
-**Fix:** Pass the caller's tenant into load_profile_spec / load_profiles_for_comparison and add `.where(Spec.tenant_id == tenant.id)` / `.where(SpecDraft.tenant_id == tenant.id)`, plus `Spec.deleted_at.is_(None)` on the published-spec branch.
+Fix: do not start the listener until a subscription exists, or guard the loop (skip `get_message` while `not self._pubsub.subscribed`), or subscribe to a sentinel channel in `connect_redis`.
 
-### 19. `ui/helpers.py:326` — Operator precedence bug overwrites already-set entity label
-*Category: correctness*
+### Low
 
-In create_nested_nodes the Person special-case label is guarded incorrectly:
+#### L1 — `Database` docstring shows `async with db.session()` but `session()` is a plain async generator (`database.py:24`, docstring)
 
-    if not label_set and item_data.get("first_name") or item_data.get("last_name"):
-        parts = [item_data.get("first_name", ""), item_data.get("last_name", "")]
-        child_node.label = " ".join(p for p in parts if p)
+The class Example shows `async with db.session() as session:`, but `session()` is a bare async-generator method (no `@asynccontextmanager`). The documented snippet raises `AttributeError: __aenter__`. The only correct pattern is `async for session in db.session():` (used by `get_session` at line 102).
 
-Python parses this as `(not label_set and item_data.get("first_name")) or item_data.get("last_name")`. So whenever an item has a truthy `last_name`, the branch runs even if `label_set` is already True (a label was found via LABEL_FIELDS such as title/name/id). This overwrites the correct identifier-based label with a first/last name composite. The intended guard is that the whole first_name/last_name disjunction should only be considered when `label_set` is False.
+Fix: change the example to the `async for` form, or decorate `session()` with `@contextlib.asynccontextmanager` and update `get_session`.
 
-**Fix:** Wrap the name check in parentheses and gate it entirely on not label_set, e.g.:
+#### L2 — `privacy` and `aup` routes bypass `render_template` (`ui/app.py:305`, consistency)
 
-    if not label_set and (item_data.get("first_name") or item_data.get("last_name")):
-        ...
+`privacy_policy` (305-312) and `acceptable_use_policy` (314-321) call `templates.TemplateResponse` directly instead of the shared `render_template`, which injects `version_info` and the CSRF token/cookie. Both pages show the fallback `dev` version footer and emit no CSRF meta tag.
 
-Note the correct form is already used in forms.get_label_from_values (lines 103-105) as a separate `if`.
+Fix: route both through `render_template(request=request, name=..., context={"user": user})`.
 
-### 20. `ui/routes/dataset.py:201` — dataset_import discards user-supplied profile/version form fields
-*Category: correctness*
+#### L3 — `get_or_create_csrf_token` in `dependencies.py` is an unused duplicate (`ui/dependencies.py:31`, dead-code)
 
-dataset_import accepts `profile` and `version` as form parameters (lines 177-178), but lines 201-202 immediately overwrite them:
+A byte-for-byte copy of `helpers.get_or_create_csrf_token` (the live one, imported by `render.py` and `explore_routes.py`). Never imported. Vulture@80 misses it because it looks like public API.
 
-    data = None
-    profile = None
-    version = None
+Fix: delete the `dependencies.py` copy; import from `helpers` if needed.
 
-This unconditionally throws away whatever the user submitted in the form. The subsequent detection logic (lines 264-267) only repopulates them if the parsed file content happens to contain `profile`/`version`/`_profile`/`_version` keys; otherwise it falls back to the hardcoded `miappe` default (lines 270-275). The explicit form selection is never honored, so a user importing an ISA/DwC/etc. file and selecting the matching profile still gets miappe.
+#### L4 — `CSRFValidationError` in `dependencies.py` duplicates and shadows the live one in `security.py` (`ui/dependencies.py:272`, dead-code)
 
-**Fix:** Remove the `profile = None` and `version = None` reassignments on lines 201-202 (keep only `data = None`), so the form-supplied values survive and only the `if not profile`/`if not version` detection fallbacks apply.
+`dependencies.CSRFValidationError` (an `Exception` subclass) is never raised or imported. The real one in `security.py` is an `HTTPException` subclass. Two identically named classes with different bases invite import mistakes.
 
-### 21. `ui/routes/table.py:493` — update_primitive_list_item omits HX-Trigger 'entityChanged' set by all sibling mutations
-*Category: consistency*
+Fix: remove the unused `dependencies.CSRFValidationError`.
 
-Every other mutating handler in this file returns an HX-Trigger 'entityChanged' header (add_table_row L299/L380, update_table_cell L440, delete_primitive_list_item L542, update_single_entity_field L648, delete_single_entity_field L717). update_primitive_list_item returns `HTMLResponse(status_code=200)` with no HX-Trigger, so editing a primitive list item silently fails to notify the client to refresh, unlike adding/deleting one. This is an inconsistency that likely produces a stale UI after edits.
+#### L5 — `explore_routes` local `render()` never sets the CSRF cookie (`ui/explore_routes.py:193`, consistency)
 
-**Fix:** Add `headers={"HX-Trigger": "entityChanged"}` (or set response.headers) to match the other mutation handlers.
+The local `render()` closure embeds `csrf_token = get_or_create_csrf_token(request)` into the context but, unlike `render_template`, never sets the `metaseed_csrf_token` cookie. A user whose first page is `/explore/` gets a token matching no cookie, so subsequent CSRF validation fails.
 
-### 22. `ui/services/entity_service.py:93` — Client-loading logic duplicated between EntityService and helpers.py
-*Category: consistency*
+Fix: render explore pages through the shared `render_template` (which sets the cookie), adding `nav_active`/`base_url` to the context.
 
-ensure_state / _load_client_for_draft_spec / _load_builtin_client (lines 93-199) reimplement the same client construction that already exists in metaseed_hub/ui/helpers.py (around lines 782-819): both branch on dataset.spec_draft_id, both fetch SpecDraft, both unwrap the nested 'spec' key (`if isinstance(raw_data, dict) and "spec" in raw_data: raw_data = raw_data["spec"]`), both call MetaseedClient.from_spec / MetaseedClient(profile, version), both set state.facade = client.facade, and both call client.load(dataset.data). This is duplicated logic that should be shared; the two copies have already drifted (see the state.profile normalization finding), which is exactly the failure mode duplication causes.
+#### L6 — `CSRF_TOKEN_COOKIE` and `get_or_create_csrf_token` duplicated in `dependencies.py` (`ui/helpers.py:106`, consistency)
 
-**Fix:** Extract one shared helper (e.g. a function that builds a configured client+AppState from a Dataset and AsyncSession) and have both EntityService and helpers.py call it.
+Companion to L3/L4: `helpers.py` holds the canonical `CSRF_TOKEN_COOKIE` constant and function; `dependencies.py:20,31` duplicates both. The `helpers` versions are the consumed ones.
 
-### 23. `ui/spec_adapters.py:0` — Entire spec_adapters.py module is unused dead code
-*Category: dead-code*
+Fix: keep the single canonical pair in `helpers.py`; have `dependencies.py` import them.
 
-All four classes (SpecPersistence, SpecProvider, DatabaseSpecPersistence, DatabaseSpecProvider) and the BUILTIN_PROFILES constant are defined here but never imported or referenced anywhere in src/, tests/, or docs/. Verified via grep across the whole tree: the only external mention is a stale docstring in explore_routes.py line 4 ('and DatabaseSpecProvider for unified spec access'), but explore_routes.py actually uses its own HubSpecLoader and never instantiates DatabaseSpecProvider. The module docstring even acknowledges it is a placeholder pending a metaseed export. This is ~436 lines of unreachable code carrying its own copies of tenant-scoping/version-ordering logic that can silently rot.
+#### L7 — Naive `datetime.utcnow()` cutoff compared against `TIMESTAMPTZ` columns (`ui/routes/admin.py:125`, correctness)
 
-**Fix:** Remove the module entirely, or wire DatabaseSpecProvider into explore_routes.py to replace the duplicated inline spec-loading logic there. Also fix the stale reference in explore_routes.py docstring.
+`cutoff = datetime.utcnow() - timedelta(days=30)` is timezone-naive, but `created_at` is `DateTime(timezone=True)` and the rest of the codebase uses `datetime.now(UTC)`. The comparison (`User.created_at > cutoff`, `Dataset.created_at > cutoff`) relies on the session timezone and can shift the 30-day window; `utcnow()` is also deprecated.
 
-### 24. `ui/spec_builder/routes/comment_routes.py:73` — Comment routes never verify caller may access the target draft
-*Category: correctness*
+Fix: `datetime.now(UTC) - timedelta(days=30)`.
 
-`get_spec_comments`, `add_spec_comment`, and `react_to_spec_comment` use only `UserContextDep` and act on the path `draft_id` with no check that the user owns or is a member of that draft. Any authenticated user can read all comments on, and post comments/reactions to, any draft by id. `delete_spec_comment` does guard with `comment.user_id == user_id`, so the gap is specifically in read/create/react. This diverges from the draft routes, which gate access via `DraftContextDep`/`_user_can_access_draft`.
+#### L8 — `delete_draft` dependency check does not filter soft-deleted datasets (`ui/spec_builder/routes/draft_routes.py:110`, correctness)
 
-**Fix:** Verify draft access (e.g. via `_user_can_access_draft`) before listing, creating, or reacting to comments, consistent with the draft route guards.
+`select(Dataset).where(Dataset.spec_draft_id == draft_id)` omits the `deleted_at.is_(None)` filter every other `Dataset` query applies. A draft whose only referencing datasets are soft-deleted is wrongly reported as having dependents and cannot be deleted.
 
-### 25. `ui/spec_builder/state.py:68` — Lossy manual serialization drops several schema fields on round-trip
-*Category: correctness*
+Fix: add `Dataset.deleted_at.is_(None)` to the WHERE clause.
 
-The hand-written spec_to_dict / dict_to_spec round-trip silently drops fields that exist on the Pydantic v2 schema models. _rule_to_dict / _dict_to_rule omit ValidationRuleSpec.type, .message, .lat_field, .lon_field, .start_field, .end_field. spec_to_dict / dict_to_spec omit ProfileSpec.spec_version and ProfileSpec.ontologies, and the entity serialization omits EntityDefSpec.example. Because published specs are cloned into drafts via SpecBuilderState.from_dict(spec.spec_data) (draft_routes.py:296,302 -> create_new_draft) and saved back via to_dict, any spec loaded from a template with coordinate_pair/date_range rules, a spec_version, an ontologies dict, or entity examples loses that data on the first save. This is a data-loss bug for cloned templates.
+#### L9 — `spec_to_dict` in `spec_builder_helpers.py` is never called (`ui/spec_builder_helpers.py:121`, dead-code)
 
-**Fix:** Since these are Pydantic v2 models, replace the manual _field_to_dict/_rule_to_dict/spec_to_dict/dict_to_spec helpers with spec.model_dump(mode="json", exclude_none=True) and ProfileSpec.model_validate(data). This is lossless and removes ~170 lines of error-prone hand-mapping.
+The only `spec_to_dict` call site is `spec_builder/state.py:94`, which uses a separate local `spec_to_dict` (state.py:15-22). Nothing imports the `spec_builder_helpers` version; the two are near-duplicates. Vulture@80 misses it as a public module-level function.
 
-### 26. `ui/spec_builder_helpers.py:153` — Inconsistent 'latest version' index convention between helpers and adapters
-*Category: consistency*
+Fix: remove the unused one from `spec_builder_helpers.py`, or have `state.py` import it.
 
-list_available_templates (line 153) treats `versions[-1]` as the latest version ('Get display info from latest version'), while DatabaseSpecProvider.get_display_name in spec_adapters.py line 416 and the explore_index route (explore_routes.py line 207) treat `versions[0]` as the version to load for the display name. SpecLoader.list_versions is documented in spec_adapters.py:336 as 'newest first', which implies index 0 is newest, contradicting the `versions[-1]` usage in the helper. One of the two conventions selects the wrong (oldest vs newest) version when deriving display metadata. Since spec_adapters.py is dead, the live discrepancy is between list_available_templates ([-1]) and explore_index ([0]); they will pick different versions' display_name for the same profile.
+## Refuted finding
 
-**Fix:** Pin down SpecLoader.list_versions ordering and use a single convention everywhere (e.g. always versions[0] if newest-first). Add a test asserting the ordering so the index choice is verified.
+One finding was refuted by the verification pass and is excluded:
 
-### 27. `websocket/__init__.py:188` — broadcast_to_room both publishes to Redis and sends locally, causing duplicate delivery once a listener exists
-*Category: design*
-
-broadcast_to_room() publishes message_json to the Redis channel (lines 188-190) and then also sends to all local connections (lines 193-200). With the intended pub/sub listener in place, the publishing instance would receive its own message back through the subscription and deliver it to local clients a second time, duplicating every message for users on the originating instance. Currently this is masked only because no listener exists (see the high-severity finding), so it is latent rather than active.
-
-**Fix:** Pick one delivery path: either deliver locally and publish for OTHER instances only (e.g. tag payloads with an origin id and have the listener skip its own), or always route delivery through the Redis listener and drop the direct local send.
-
-## Confirmed findings — Low
-
-### 28. `ui/app.py:78` — Two divergent get_version_info implementations produce different dicts
-*Category: consistency*
-
-app.py defines get_version_info() (lines 78-132) that shells out to git and returns keys {version, commit, branch, short_commit}. render.py defines a separate get_version_info() (lines 56-71) that reads only the package _version and returns {version, short_commit, branch} (no `commit`). render.py's render_template injects the render.py version, while explore_routes.py and spec_builder/routes/_common.py import the app.py version, and app.py's own render_template uses the app.py version. Pages therefore receive different version_info shapes depending on which route rendered them, and a template referencing version_info.commit breaks on render.py-rendered pages.
-
-**Fix:** Keep a single get_version_info() (the package-based one in render.py) and have app.py, explore_routes, and spec_builder import it instead of maintaining a second implementation.
-
-### 29. `ui/forms.py:88` — get_label_from_values is never used in production code
-*Category: dead-code*
-
-get_label_from_values is defined in forms.py and imported only by tests/test_forms.py; grepping the whole source tree (src/ and templates) shows no production caller. Label derivation in production is done via helper.get_label (helpers.add_entity_node line 82) and the inline LABEL_FIELDS loop in create_nested_nodes (helpers.py lines 320-328). The function duplicates that logic and is unreferenced outside its own test.
-
-**Fix:** Remove get_label_from_values (and its test) or replace the duplicated inline label logic in create_nested_nodes with a single shared call to it, so there is one honest implementation of label derivation instead of three copies.
-
-### 30. `ui/routes/dataset.py:597` — _get_entity_info is never called
-*Category: dead-code*
-
-`_get_entity_info(state: AppState)` (lines 597-610) is defined but never referenced anywhere in the source tree or tests (grep for `_get_entity_info` returns only its definition). Its logic (iterating `facade.entities` and collecting `name`/`description`) is duplicated inline inside `_build_dataset_context` (lines 633-637), which is the function actually used. This is dead code.
-
-**Fix:** Delete `_get_entity_info`; the equivalent logic already lives in `_build_dataset_context`.
-
-### 31. `websocket/__init__.py:232` — Public method get_room_presence is never called
-*Category: dead-code*
-
-WebSocketManager.get_room_presence (lines 232-243) is a public method but is never referenced anywhere in src/ or tests/. Grep for 'get_room_presence' returns only its definition. The internal Room.get_presence() is used directly inside join_room/leave_room, so this manager-level wrapper is unused.
-
-**Fix:** Remove get_room_presence, or wire it into an endpoint/handler if exposing room presence over HTTP/WS is intended.
+- `ui/routes/table.py:431` — "Boolean coercion diverges from the shared parser." The verifier found the coercion behavior consistent with the shared parser and not a defect.
 
 ## Appendix — unverified low-severity notes
 
-These were reported by the review pass but not run through adversarial verification (low severity). Treat as candidates, confirm before acting.
+These were reported by reviewers but not run through the adversarial verifier (low severity). Several are below the project's vulture@80 threshold and may be intentional. Treat as candidates; confirm before acting.
 
-- `ui/dependencies.py:31` [consistency] — get_or_create_csrf_token and CSRF_TOKEN_COOKIE duplicated from helpers
-- `ui/routes/table.py:251` [consistency] — Logger created inside handler via local 'import logging' instead of module-level logger
-- `ui/routes/table.py:391` [consistency] — update_table_cell return type annotated as Response while siblings use HTMLResponse
-- `ui/spec_builder/access.py:36` [consistency] — Redundant pass in exception class body with docstring
-- `ui/spec_builder/routes/draft_routes.py:155` [consistency] — reset_draft bypasses the shared save path used by every sibling route
-- `ui/spec_builder/routes/draft_routes.py:325` [consistency] — update_profile_metadata inlines form handling while sibling routes delegate to a form dataclass
-- `ui/spec_builder/routes/field_routes.py:187` [consistency] — ontologies parsing is inlined in the route instead of living on FieldFormData
-- `ui/spec_builder_helpers.py:42` [consistency] — TYPE_CHECKING import block placed after a public function that uses the type
-- `api/datasets.py:24` [correctness] — Mutable default value on Pydantic field data={} 
-- `main.py:111` [correctness] — WebSocket handler conflates connection errors with auth failures and swallows them silently
-- `repositories/dataset.py:40` [correctness] — _entities_to_tree silently drops hierarchy when a child precedes its parent
-- `ui/routes/admin.py:125` [correctness] — datetime.utcnow() is deprecated
-- `ui/routes/auth.py:189` [correctness] — Bare except in refresh_access_token swallows errors without logging
-- `ui/routes/auth.py:46` [correctness] — Generic httpx errors not caught in get_oidc_config
-- `ui/routes/dataset.py:1264` [correctness] — add_dataset_member does not scope the target user to the dataset tenant
-- `ui/spec_builder/access.py:137` [correctness] — Redundant/meaningless User join in can_edit_spec query
-- `ui/spec_builder/routes/comment_routes.py:89` [correctness] — add_spec_comment accepts empty/whitespace-only content
-- `ui/spec_builder_helpers.py:109` [correctness] — spec_to_yaml mutates the global yaml representer registry as a side effect
-- `websocket/__init__.py:22` [correctness] — Naive local-time datetimes used for timestamps in a multi-instance system
-- `auth/__init__.py:170` [dead-code] — Unused backwards-compatibility aliases KeycloakAuth and get_keycloak_auth
-- `auth/__init__.py:216` [dead-code] — get_current_user_optional and get_oidc_auth dependencies are unused
-- `models/mixins.py:61` [dead-code] — SoftDeleteMixin.restore() is never called
-- `ui/dependencies.py:268` [dead-code] — Unused CSRFValidationError and DatasetNotFoundError classes
-- `ui/dependencies.py:87` [dead-code] — Unused unauthorized_response and get_dataset_by_id
-- `ui/routes/table.py:31` [dead-code] — _handle_primitive_list_row has unused parameters dataset_id, nested_type, state
-- `ui/routes/table.py:122` [dead-code] — _get_default_values ignores parent_node beyond entity_type; parent_node param partially redundant
-- `ui/routes/table.py:238` [dead-code] — Unused 'request: Request' parameter in handlers that never read the request
-- `ui/services/entity_service.py:511` [dead-code] — user_id / created_by_id version tracking is never exercised because no caller passes user_id
-- `ui/spec_builder/forms.py:107` [dead-code] — ProfileMetadataFormData is never used
-- `ui/spec_builder/state.py:229` [dead-code] — Unused SpecBuilderState helper methods
-- `ui/services/entity_service.py:355` [design] — _get_validation_warnings validates partial update payloads against the full model, then patches around false positives
-- `ui/spec_builder/state.py:98` [design] — Manual reimplementation of Pydantic v2 (de)serialization
-- `auth/__init__.py:28` [naming] — keycloak_id property docstring claims 'backwards compatibility' but it is the primary accessor
-- `ui/routes/auth.py:24` [typing] — _oidc_config typed dict[str, str] but discovery doc has non-str values
-- `ui/routes/dataset.py:615` [typing] — _build_dataset_context types session as Any instead of AsyncSession
-- `ui/routes/ontology_api.py:131` [typing] — result dict inferred as str|bool then assigned list/str values
+### Dead code (14)
 
-## Appendix — refuted findings
+- `config.py:39` — `Settings.secret_key` defined but never referenced in source or tests.
+- `ui/dependencies.py:278` — `DatasetNotFoundError` defined but never raised or imported.
+- `ui/dependencies.py:98` — `get_dataset_by_id` dependency never used.
+- `ui/dependencies.py:87` — `unauthorized_response` helper never called.
+- `ui/routes/dataset/editor.py:640` — trailing "Member Management Routes" section banner with no following code.
+- `ui/routes/dataset/members.py:94` — `session.refresh(member)` is a no-op round-trip.
+- `ui/routes/dataset/versions.py:28` — `_flatten_tree` `prefix` parameter is vestigial.
+- `ui/routes/table.py:26` — `_handle_primitive_list_row` has three unused parameters.
+- `ui/security.py:49` — `require_csrf` decorator only exercised by tests, never applied to a production route.
+- `ui/spec_builder/access.py:302` — unreachable spec-is-None delete branch in `save_state_to_draft`.
+- `ui/spec_builder/routes/draft_routes.py:378` — `export_yaml` re-imports `load_state_for_draft` already imported at module top.
+- `ui/spec_builder/state.py:76` — `SpecBuilderState.get_entity_names` never called.
+- `ui/spec_builder/state.py:82` — `SpecBuilderState.get_current_entity_field_count` never called.
+- `ui/spec_builder/state.py:72` — `SpecBuilderState.is_active` never called.
 
-Reported by a reviewer but refuted on verification (kept for the record):
+### Correctness (9)
 
-- ui/explore_routes.py:221 User lookup by keycloak_id is not tenant-scoped and can raise/return wrong tenant's user
-- ui/routes/table.py:706 field_name / nested_type interpolated into HTML without escaping
-- ui/routes/auth.py:130 access_token may be None when set on cookie
-- ui/services/entity_service.py:115 ensure_state does not normalize state.profile to facade's profile for custom specs
-- ui/spec_builder/routes/member_routes.py:81 add_spec_member looks up user by email without tenant scoping (cross-tenant leak + crash)
+- `auth/__init__.py:255` — standalone `verify_token` silently ignores its `settings` argument after the singleton is built.
+- `repositories/dataset.py:65` — synthesized `unique_id` not written back into node data, breaking parent linkage for entities without `unique_id`.
+- `ui/helpers.py:95` — `add_entity_node` leaves `node.parent_id` dangling when `parent_id` is not in `nodes_by_id`.
+- `ui/render.py:21` — `get_repo_stars` performs a blocking `httpx.get` inside template rendering on the async event loop.
+- `ui/routes/auth.py:135` — `access_token` cookie set without verifying the token endpoint returned one.
+- `ui/services/entity_service.py:308` — update validation warnings computed from raw values, not the persisted entity.
+- `ui/spec_builder/routes/comment_routes.py:88` — `parent_id`/`comment_id` not validated to belong to the path `draft_id`.
+- `ui/spec_builder/routes/entity_routes.py:191` — entity rename only rewrites `reference`/`parent_ref` with a `name.` prefix, not bare-entity references.
+- `websocket/__init__.py:342` — unexpected exceptions in `handle_connection` swallowed without logging.
+
+### Consistency (9)
+
+- `ui/dependencies.py:19` — `ACCESS_TOKEN_COOKIE`/`CSRF_TOKEN_COOKIE` string literals duplicated across modules.
+- `ui/explore_routes.py:233` — inconsistent representative profile version (`versions[0]` vs `versions[-1]`) across sibling helpers.
+- `ui/routes/dataset/comments.py:228` — misleading leftover section banner at end of file.
+- `ui/routes/entity.py:205` — validation/error messages interpolated into raw HTML f-strings while the sibling chat route escapes its content.
+- `ui/routes/table.py:23` — `PRIMITIVE_TYPES` set duplicated between `table.py` and `helpers.py`.
+- `ui/routes/table.py:253` — per-call `import logging` and re-derived logger instead of a module-level logger.
+- `ui/spec_builder/routes/draft_routes.py:155` — `reset_draft` bypasses the shared `save_state_to_draft` persistence path.
+- `ui/spec_builder/routes/field_routes.py:181` — `update_field` allows renaming a field to collide with an existing field name.
+- `websocket/__init__.py:332` — naive local-time timestamps diverge from the timezone-aware convention.
+
+### Typing (4)
+
+- `auth/__init__.py:42` — OIDC discovery document annotated `dict[str, str]` but contains and is read as nested lists.
+- `ui/routes/auth.py:27` — `get_oidc_config`/`_oidc_config` typed `dict[str, str]` but holds the full OIDC discovery document.
+- `ui/routes/dataset/versions.py:85` — `_calculate_diff` `has_changes` is a list, not a bool, despite the key name.
+- `ui/spec_builder/state.py:110` — `from_dict` reconstructs `template_source` as an arbitrary-length tuple typed `tuple[str, str]`.
+
+### Naming (2)
+
+- `api/datasets.py:90` — auth dependency parameter named `_user` despite being actively used, contradicting the unused-prefix convention.
+- `ui/spec_builder/routes/member_routes.py:169` — `leave_spec` name/docstring describe different behaviors; the success path is misleading.
+
+### Design (1)
+
+- `ui/routes/table.py:622` — verbose request-scoped info logging of mutation payloads left in the handler.
