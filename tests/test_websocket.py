@@ -6,6 +6,7 @@ locally, and that the listener dispatches messages to local connections while
 honoring the per-message exclude.
 """
 
+import asyncio
 import json
 
 import pytest
@@ -19,8 +20,25 @@ class FakeWebSocket:
     def __init__(self) -> None:
         self.sent: list[str] = []
 
+    async def accept(self) -> None:
+        return None
+
     async def send_text(self, text: str) -> None:
         self.sent.append(text)
+
+
+class RecordingPubSub:
+    """Records subscribe/unsubscribe calls on the shared PubSub connection."""
+
+    def __init__(self) -> None:
+        self.subscribed: list[str] = []
+        self.unsubscribed: list[str] = []
+
+    async def subscribe(self, channel: str) -> None:
+        self.subscribed.append(channel)
+
+    async def unsubscribe(self, channel: str) -> None:
+        self.unsubscribed.append(channel)
 
 
 class FakeRedis:
@@ -93,6 +111,33 @@ async def test_dispatch_local_unknown_project_is_noop() -> None:
     envelope = json.dumps({"exclude": None, "message": {"type": "chat"}})
     # Should not raise.
     await manager._dispatch_local("project:absent:messages", envelope)
+
+
+@pytest.mark.asyncio
+async def test_join_room_subscribe_serialized_behind_pubsub_lock() -> None:
+    """Per-room subscribe is gated by the shared PubSub lock the listener holds.
+
+    While the lock is held, ``join_room`` cannot run its ``subscribe`` on the
+    shared connection; once released the subscription is recorded. This pins the
+    serialization that prevents the listener's read from interleaving with
+    subscribe/unsubscribe and corrupting the RESP stream.
+    """
+    manager = WebSocketManager()
+    manager._redis = FakeRedis()  # type: ignore[assignment]
+    manager._pubsub = RecordingPubSub()  # type: ignore[assignment]
+    ws = FakeWebSocket()
+
+    await manager._pubsub_lock.acquire()
+    task = asyncio.create_task(
+        manager.join_room("proj-1", "conn-1", ws, "user-1", "User One")  # type: ignore[arg-type]
+    )
+    # Let join_room run as far as it can; it must block on the held lock.
+    await asyncio.sleep(0.01)
+    assert manager._pubsub.subscribed == []  # type: ignore[attr-defined]
+
+    manager._pubsub_lock.release()
+    await task
+    assert manager._pubsub.subscribed == ["project:proj-1:messages"]  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio

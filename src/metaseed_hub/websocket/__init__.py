@@ -61,6 +61,11 @@ class WebSocketManager:
         self._redis: redis.Redis | None = None
         self._pubsub: redis.client.PubSub | None = None
         self._listener_task: asyncio.Task[None] | None = None
+        # Serializes access to the shared PubSub connection. The listener's
+        # get_message read and the per-room subscribe/unsubscribe writes run on
+        # the same connection; without this lock they interleave and corrupt the
+        # RESP stream (dropped/misrouted messages, parse errors).
+        self._pubsub_lock = asyncio.Lock()
 
     async def connect_redis(self) -> None:
         """Connect to Redis for pub/sub and start the message listener.
@@ -83,9 +88,10 @@ class WebSocketManager:
         assert self._pubsub is not None
         while True:
             try:
-                message = await self._pubsub.get_message(
-                    ignore_subscribe_messages=True, timeout=1.0
-                )
+                async with self._pubsub_lock:
+                    message = await self._pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -187,7 +193,8 @@ class WebSocketManager:
         # Subscribe to Redis channel for this project
         if self._pubsub:
             channel = self._get_channel_name(project_id)
-            await self._pubsub.subscribe(channel)
+            async with self._pubsub_lock:
+                await self._pubsub.subscribe(channel)
 
         # Broadcast presence update
         await self.broadcast_to_room(
@@ -232,7 +239,8 @@ class WebSocketManager:
             del self._rooms[project_id]
             if self._pubsub:
                 channel = self._get_channel_name(project_id)
-                await self._pubsub.unsubscribe(channel)
+                async with self._pubsub_lock:
+                    await self._pubsub.unsubscribe(channel)
 
     async def broadcast_to_room(
         self,
