@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.60] - 2026-06-22
+
+### Fixed
+- Multi-tenant isolation: table mutations, dataset member management, and spec-comment reactions are now scoped to the caller's access
+- Soft-deleted datasets are excluded from the shared access helper, the mutation path, and draft publish
+- Stored XSS in entity validation output from unescaped user-derived labels and messages
+- WebSocket Redis pub/sub: serialized shared-connection access and stopped the listener spinning before the first subscription
+- CSRF validation on dataset member-management and entity-validate routes
+- Field renames are validated like field creation, rejecting invalid and duplicate names
+- Auth callback rejects a missing access token instead of setting a broken session cookie
+
+### Changed
+- Routed tenant/user provisioning, page rendering, and form coercion through their canonical helpers
+- Removed dead auth, config, and form surface
+
 ## [0.4.58] - 2026-06-15
 
 ### Added
