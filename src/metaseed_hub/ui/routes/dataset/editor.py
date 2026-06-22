@@ -433,6 +433,7 @@ async def dataset_chat_page(
 async def dataset_chat(
     request: Request,
     dataset_id: str,
+    session: DbSession,
     user: CurrentUser,
     message: Annotated[str, Form()],
 ) -> HTMLResponse:
@@ -443,6 +444,9 @@ async def dataset_chat(
         validate_csrf_or_error(request)
     except Exception:
         return csrf_error_response()
+
+    # Confirm the user may access this dataset, matching every sibling route.
+    await get_dataset_for_user(dataset_id, session, user)
 
     # Escape user content to prevent XSS
     safe_name = html_module.escape(user.name or "")

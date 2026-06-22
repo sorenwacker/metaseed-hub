@@ -16,7 +16,7 @@ from metaseed_hub.models import (
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
-    get_dataset_for_user,
+    require_dataset_owner,
 )
 from metaseed_hub.ui.render import render_template
 
@@ -57,8 +57,8 @@ async def add_dataset_member(
     email: Annotated[str, Form()],
 ) -> Response:
     """Add a member to a dataset by email."""
-    # Verify user has access
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    # Only an owner may manage membership (not an ordinary VIEWER/member).
+    dataset = await require_dataset_owner(dataset_id, session, user)
 
     # Find user by email, scoped to the dataset's tenant. User.email is unique
     # only per tenant (uq_users_tenant_email), so an unscoped lookup could match
@@ -110,8 +110,8 @@ async def update_dataset_member_role(
     role: Annotated[str, Form()],
 ) -> Response:
     """Update a member's role in a dataset."""
-    # Verify user has access
-    await get_dataset_for_user(dataset_id, session, user)
+    # Only an owner may change member roles.
+    await require_dataset_owner(dataset_id, session, user)
 
     # Find membership
     result = await session.execute(
@@ -138,8 +138,8 @@ async def remove_dataset_member(
     user: CurrentUser,
 ) -> Response:
     """Remove a member from a dataset."""
-    # Verify user has access
-    await get_dataset_for_user(dataset_id, session, user)
+    # Only an owner may remove members.
+    await require_dataset_owner(dataset_id, session, user)
 
     # Find and delete membership
     result = await session.execute(

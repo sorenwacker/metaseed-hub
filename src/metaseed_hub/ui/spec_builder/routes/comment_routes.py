@@ -137,6 +137,17 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         user_id, _ = user_ctx
         await require_draft_access(session, draft_id, user_id)
 
+        # Confirm the comment belongs to the URL draft before reacting, mirroring
+        # delete_spec_comment. Without this a member of one draft could toggle a
+        # reaction on another draft's comment by supplying its comment_id.
+        comment_result = await session.execute(
+            select(SpecComment).where(
+                SpecComment.id == comment_id, SpecComment.spec_draft_id == draft_id
+            )
+        )
+        if comment_result.scalar_one_or_none() is None:
+            return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
+
         # Check for existing reaction
         existing_result = await session.execute(
             select(SpecCommentReaction).where(

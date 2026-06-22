@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, DatasetMember, Tenant, User
+from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, Tenant, User
 from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
 
 if TYPE_CHECKING:
@@ -265,6 +265,53 @@ async def get_dataset_for_user(
     raise HTTPException(status_code=403, detail="Access denied")
 
 
+async def require_dataset_owner(
+    dataset_id: str,
+    session: AsyncSession,
+    user: TokenUser,
+) -> Dataset:
+    """Get dataset only if the user owns it (tenant owner or OWNER member).
+
+    Membership-management mutations must be restricted to owners. An ordinary
+    member (including a VIEWER) can read a dataset via get_dataset_for_user but
+    must not add, remove, or re-role members.
+
+    Args:
+        dataset_id: ID of the dataset to retrieve.
+        session: Database session.
+        user: Authenticated user.
+
+    Returns:
+        Dataset if the user is an owner.
+
+    Raises:
+        HTTPException: 404 if dataset not found, 403 if the user is not an owner.
+    """
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    # Tenant owners are always dataset owners.
+    try:
+        await verify_tenant_access(dataset.tenant_id, session, user)
+        return dataset
+    except HTTPException:
+        pass  # Not tenant owner, require an OWNER-role membership.
+
+    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+    db_user = db_user_result.scalar_one_or_none()
+    if db_user:
+        owner_result = await session.execute(
+            select(DatasetMember).where(
+                DatasetMember.dataset_id == dataset_id,
+                DatasetMember.user_id == db_user.id,
+                DatasetMember.role == DatasetRole.OWNER,
+            )
+        )
+        if owner_result.scalar_one_or_none():
+            return dataset
+
+    raise HTTPException(status_code=403, detail="Owner access required")
+
+
 # Type aliases for cleaner route signatures
 CurrentUser = Annotated[TokenUser, Depends(require_user)]
 OptionalUser = Annotated[TokenUser | None, Depends(get_current_user_from_cookie)]
@@ -318,14 +365,11 @@ async def get_dataset_state_for_mutation(
             detail="CSRF validation failed",
         )
 
-    # Load dataset from database
-    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
-    dataset = result.scalar_one_or_none()
-    if not dataset:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found",
-        )
+    # Load the dataset through the shared access helper so mutations enforce the
+    # same tenant/membership scoping and soft-delete filter as reads. Without
+    # this, any authenticated user could mutate any dataset by id, and a
+    # soft-deleted dataset would remain mutable.
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     # Get or create AppState for the dataset
     # Use ensure_dataset_facade to properly load specs from database for draft specs

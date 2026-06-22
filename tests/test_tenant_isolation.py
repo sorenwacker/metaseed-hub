@@ -10,6 +10,13 @@ named in the URL or to the caller's tenant:
   the comment to the URL draft.
 - M12: ``add_spec_member`` must scope the invitee lookup to the caller's tenant.
 
+The 2026-06-22 follow-ups extend the same theme:
+
+- H4: ``get_dataset_state_for_mutation`` (backing all table mutations) must reject
+  a dataset the caller has no access to, not just a missing one.
+- H6: ``require_dataset_owner`` must deny a VIEWER member owner-only operations.
+- M8: ``react_to_spec_comment`` must scope the comment to the URL draft.
+
 They exercise the real route handlers against a database session, so they need
 Postgres (``make up``); without it they error in the shared session fixture like
 the rest of the database-backed suite.
@@ -28,11 +35,16 @@ from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import (
     Comment,
     CommentReaction,
+    DatasetMember,
+    DatasetRole,
     SpecComment,
+    SpecCommentReaction,
     SpecDraftMember,
     Tenant,
     User,
 )
+from metaseed_hub.ui import dependencies as deps_module
+from metaseed_hub.ui.dependencies import require_dataset_owner
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
 from metaseed_hub.ui.routes.dataset import comments as comments_module
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
@@ -233,6 +245,93 @@ async def test_delete_spec_comment_scoped_to_url_draft(session: AsyncSession) ->
         user_ctx=(owner.id, tenant.id),
     )
     assert await session.get(SpecComment, comment.id) is not None
+
+
+# --- 2026-06-22 follow-ups: H4 / H6 / M8 ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_dataset_state_for_mutation_denies_cross_tenant(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The table-mutation dependency rejects a dataset the caller cannot access."""
+    token, db_user = await _caller_with_tenant(session)
+    other_tenant = make_tenant(slug="othermut")
+    session.add(other_tenant)
+    await session.flush()
+    dataset = make_dataset(tenant=other_tenant, name="foreign")
+    session.add(dataset)
+    await session.commit()
+
+    monkeypatch.setattr(deps_module, "get_current_user_from_cookie", AsyncMock(return_value=token))
+    monkeypatch.setattr(deps_module, "validate_csrf_token", lambda request: True)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await deps_module.get_dataset_state_for_mutation(
+            request=_csrf_request(), dataset_id=dataset.id, session=session
+        )
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_dataset_owner_denies_viewer_member(session: AsyncSession) -> None:
+    """A VIEWER member is denied owner-only operations; the tenant owner is allowed."""
+    owner_tenant = make_tenant(slug="ownerds1")
+    viewer_tenant = make_tenant(slug="viewerd1")
+    session.add_all([owner_tenant, viewer_tenant])
+    await session.flush()
+    owner = make_user(tenant=owner_tenant, keycloak_id="ownerds1-kc")
+    viewer = make_user(tenant=viewer_tenant, keycloak_id="viewerd1-kc")
+    session.add_all([owner, viewer])
+    await session.flush()
+    dataset = make_dataset(tenant=owner_tenant, name="shared")
+    session.add(dataset)
+    await session.flush()
+    session.add(DatasetMember(dataset_id=dataset.id, user_id=viewer.id, role=DatasetRole.VIEWER))
+    await session.commit()
+
+    viewer_token = TokenUser(sub="viewerd1-kc", email=viewer.email, name="V", roles=[])
+    with pytest.raises(HTTPException) as exc_info:
+        await require_dataset_owner(dataset.id, session, viewer_token)
+    assert exc_info.value.status_code == 403
+
+    owner_token = TokenUser(sub="ownerds1-kc", email=owner.email, name="O", roles=[])
+    got = await require_dataset_owner(dataset.id, session, owner_token)
+    assert got.id == dataset.id
+
+
+@pytest.mark.asyncio
+async def test_react_to_spec_comment_scoped_to_url_draft(session: AsyncSession) -> None:
+    """Reacting through a foreign draft is rejected and creates no reaction."""
+    tenant = make_tenant(slug="reactdr1")
+    session.add(tenant)
+    await session.flush()
+    owner = make_user(tenant=tenant)
+    session.add(owner)
+    await session.flush()
+    draft_a = make_spec_draft(tenant=tenant, user=owner, name="A")
+    draft_b = make_spec_draft(tenant=tenant, user=owner, name="B")
+    session.add_all([draft_a, draft_b])
+    await session.flush()
+    comment = SpecComment(spec_draft_id=draft_b.id, user_id=owner.id, content="hi")
+    session.add(comment)
+    await session.commit()
+
+    react = _endpoint(register_comment_routes, "POST", "/react")
+    response = await react(  # type: ignore[operator]
+        request=Mock(),
+        draft_id=draft_a.id,
+        comment_id=comment.id,
+        session=session,
+        user_ctx=(owner.id, tenant.id),
+        reaction="like",
+    )
+
+    assert response.status_code == 404
+    result = await session.execute(
+        select(SpecCommentReaction).where(SpecCommentReaction.comment_id == comment.id)
+    )
+    assert result.first() is None
 
 
 @pytest.mark.asyncio
