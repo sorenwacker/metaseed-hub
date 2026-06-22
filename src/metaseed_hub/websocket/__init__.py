@@ -89,8 +89,15 @@ class WebSocketManager:
         while True:
             try:
                 async with self._pubsub_lock:
-                    message = await self._pubsub.get_message(
-                        ignore_subscribe_messages=True, timeout=1.0
+                    # get_message raises until the PubSub has a connection, which
+                    # only happens once the first room subscribes. Skip the read
+                    # while there are no subscriptions rather than spinning on the
+                    # resulting RuntimeError.
+                    subscribed = self._pubsub.subscribed
+                    message = (
+                        await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                        if subscribed
+                        else None
                     )
             except asyncio.CancelledError:
                 raise
@@ -100,6 +107,9 @@ class WebSocketManager:
                 continue
 
             if not message or message.get("type") != "message":
+                if not subscribed:
+                    # Idle with no subscriptions: yield to avoid a busy loop.
+                    await asyncio.sleep(0.5)
                 continue
 
             try:

@@ -41,6 +41,21 @@ class RecordingPubSub:
         self.unsubscribed.append(channel)
 
 
+class NeverSubscribedPubSub:
+    """A PubSub with no subscriptions whose read would raise if ever called."""
+
+    def __init__(self) -> None:
+        self.subscribed = False
+        self.get_message_calls = 0
+
+    async def get_message(
+        self, ignore_subscribe_messages: bool = False, timeout: float = 0
+    ) -> None:
+        # Mirrors redis-py: reading before any subscribe raises.
+        self.get_message_calls += 1
+        raise RuntimeError("pubsub connection not set")
+
+
 class FakeRedis:
     """Records publishes to Redis channels."""
 
@@ -111,6 +126,27 @@ async def test_dispatch_local_unknown_project_is_noop() -> None:
     envelope = json.dumps({"exclude": None, "message": {"type": "chat"}})
     # Should not raise.
     await manager._dispatch_local("project:absent:messages", envelope)
+
+
+@pytest.mark.asyncio
+async def test_listen_skips_read_until_subscribed() -> None:
+    """The listener does not read the PubSub while there are no subscriptions.
+
+    Reading before the first subscribe raises ``RuntimeError`` in redis-py; the
+    listener must skip the read (not spin on the error) until a room subscribes.
+    """
+    manager = WebSocketManager()
+    manager._pubsub = NeverSubscribedPubSub()  # type: ignore[assignment]
+
+    task = asyncio.create_task(manager._listen())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    assert manager._pubsub.get_message_calls == 0  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
