@@ -14,9 +14,9 @@ The project's own canonical commands (Makefile / pre-commit), run before the rev
 | Types | `uv run mypy src` (strict) | Pass, 53 files |
 | Dead code | `uv run vulture src/ vulture_whitelist.py --min-confidence=80` | Pass, no hits |
 | File size | 1000 LOC project rule | Pass, largest `ui/helpers.py` at 899 LOC |
-| Tests | `uv run python -m pytest` | 157 passed, 1 skipped, 69 errors |
+| Tests | `uv run python -m pytest` | 157 passed, 1 skipped, 69 errors (no DB) / all green under `make up` |
 
-The 69 test errors are not code defects: every one is the same fixture failure in `tests/conftest.py:28`, an `OSError` from the async engine connecting to `postgresql+asyncpg://...@localhost:7432/metaseed_hub_test`. No Postgres is running in this environment. Start it with `make up` to get a clean run. No `TODO`/`FIXME` markers remain in the source.
+At review time the 69 test errors were not code defects: every one was the same fixture failure in `tests/conftest.py:28`, an `OSError` from the async engine connecting to `postgresql+asyncpg://...@localhost:7432/metaseed_hub_test` with no Postgres running. With Postgres up (`docker compose up -d postgres`, plus a one-time `CREATE DATABASE metaseed_hub_test`), the suite runs clean; after remediation it is **236 passed, 1 skipped**. No `TODO`/`FIXME` markers remain in the source.
 
 ## Summary
 
