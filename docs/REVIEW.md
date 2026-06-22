@@ -32,9 +32,23 @@ Recurring themes:
 - **Shared-helper divergence.** Inline reimplementations of canonical helpers that drift from or drop guards the original has: two copies of tenant/user get-or-create (`ensure_tenant_and_user`), a duplicated CSRF token helper and cookie constant, two policy pages bypassing `render_template`, and inline numeric form coercion that drops the `ValueError` guard `forms.py` has.
 - **Inconsistent CSRF posture.** Several mutating routes skip the `validate_csrf_or_error` check their siblings enforce (dataset member routes; spec-builder mutating routes; the entity validate POST).
 
+## Remediation status
+
+All 25 confirmed findings are remediated on branch `review-260620-soft-delete`, in seven atomic commits grouped by theme:
+
+- **Soft-delete (H2, H3, M5, M6).** `get_dataset_for_user` and `get_dataset_state_for_mutation` now filter `deleted_at IS NULL` (the mutation dependency routes through the access helper, so H3/H4/M6 share one fix); `publish_draft` excludes soft-deleted source specs.
+- **Authorization / IDOR (H4, H6, M8, L4).** Table mutations now load the dataset through the access-checked helper; a new `require_dataset_owner` gates the dataset member routes (denying VIEWERs); `react_to_spec_comment` is scoped to the URL draft; `dataset_chat` performs an access check.
+- **Stored XSS (H1).** `dataset_validate` escapes all user-derived values.
+- **WebSocket concurrency (H5, L6).** A `PubSub` lock serializes the listener read against subscribe/unsubscribe; the connection handler logs unexpected errors.
+- **CSRF posture (M3, L2).** The member routes and the entity-validate POST validate CSRF.
+- **Shared-helper divergence (M1, M2, M4, M7, L1).** Privacy/AUP pages render through `render_template`; `app.home` and `get_user_context` use `ensure_tenant_and_user`; `table.py` uses `parse_form_field`; the duplicate CSRF helper/constant is removed.
+- **Dead code and minor (M9, M10, M11, M12, L3, L5, L7).** Removed `get_current_user_optional`/`security_optional`, `secret_key`, `get_dataset_by_id`, `ProfileMetadataFormData`; `update_field` validates names; `auth_callback` guards a missing access token.
+
+Tests were added or extended (`test_soft_delete`, `test_tenant_isolation`, `test_websocket`, `test_csrf`, `test_forms`); the database-backed ones run under `make up`. Two items have no dedicated automated test: the M5 publish path (no route-level harness exists) and the H1 escaping (the validate path needs a full facade harness) — both are one-line, localized changes verified against the code. L5 was resolved by removing the never-wired `user_id` parameter rather than adding authorship tracking; wiring authorship is a separate, deliberate feature.
+
 ## Confirmed findings
 
-Severity is the adversarial verifier's corrected value; the reviewer's original is noted where it changed.
+Severity is the adversarial verifier's corrected value; the reviewer's original is noted where it changed. All findings below are remediated (see Remediation status).
 
 ### High
 
