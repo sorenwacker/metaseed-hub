@@ -19,6 +19,7 @@ from metaseed_hub.ui.dependencies import (
     require_dataset_owner,
 )
 from metaseed_hub.ui.render import render_template
+from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 from ._router import router
 
@@ -57,6 +58,11 @@ async def add_dataset_member(
     email: Annotated[str, Form()],
 ) -> Response:
     """Add a member to a dataset by email."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
     # Only an owner may manage membership (not an ordinary VIEWER/member).
     dataset = await require_dataset_owner(dataset_id, session, user)
 
@@ -110,6 +116,11 @@ async def update_dataset_member_role(
     role: Annotated[str, Form()],
 ) -> Response:
     """Update a member's role in a dataset."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
     # Only an owner may change member roles.
     await require_dataset_owner(dataset_id, session, user)
 
@@ -138,6 +149,11 @@ async def remove_dataset_member(
     user: CurrentUser,
 ) -> Response:
     """Remove a member from a dataset."""
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
     # Only an owner may remove members.
     await require_dataset_owner(dataset_id, session, user)
 

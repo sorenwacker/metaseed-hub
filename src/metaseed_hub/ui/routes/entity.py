@@ -168,6 +168,11 @@ async def dataset_entity_validate(
 
     Returns validation result as HTML for display in the form.
     """
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
     form_data = await request.form()
     entity_type = str(form_data.get("_entity_type", ""))
     node_id = str(form_data.get("_node_id", "")) or None
