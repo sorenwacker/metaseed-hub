@@ -62,13 +62,11 @@ class EntityService:
     Args:
         session: Database session for async operations.
         dataset: Dataset model containing entity data.
-        user_id: Optional user ID for version tracking.
     """
 
-    def __init__(self, session: AsyncSession, dataset: Dataset, user_id: str | None = None):
+    def __init__(self, session: AsyncSession, dataset: Dataset):
         self._session = session
         self._dataset = dataset
-        self._user_id = user_id
         self._client: MetaseedClient | None = None
         self._state: Any | None = None  # AppState, imported lazily
 
@@ -508,7 +506,6 @@ class EntityService:
                 dataset_id=self._dataset.id,
                 version_number=max_version + 1,
                 data=tree_data,
-                created_by_id=self._user_id,  # Database User.id, not keycloak_id
             )
             self._session.add(version)
 

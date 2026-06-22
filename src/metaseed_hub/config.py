@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     debug: bool = False
     cors_origins: list[str] = ["http://localhost:7300"]
     app_url: str = "http://localhost:7001"
-    secret_key: str = "dev-secret-change-in-production"
 
     # Admin access (SRAM entitlement or role name)
     admin_role: str = "admin"

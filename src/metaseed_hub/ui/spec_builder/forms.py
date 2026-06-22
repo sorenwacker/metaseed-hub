@@ -102,15 +102,3 @@ class ValidationRuleFormData:
         if not self.enum_values.strip():
             return None
         return [v.strip() for v in self.enum_values.split("\n") if v.strip()]
-
-
-@dataclass
-class ProfileMetadataFormData:
-    """Form data for updating profile metadata."""
-
-    name: str = ""
-    version: str = "0.1"
-    display_name: str = ""
-    description: str = ""
-    ontology: str = ""
-    root_entity: str = ""

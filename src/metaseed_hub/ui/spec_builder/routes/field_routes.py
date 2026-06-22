@@ -177,8 +177,33 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
             reference=reference,
         )
 
+        # Validate the new name and reject duplicates, mirroring add_field; the
+        # update path previously accepted invalid or colliding names that the
+        # create path rejects.
+        new_name = form_data.name.strip()
+        error = validate_field_name(new_name)
+        if not error:
+            for i, existing in enumerate(entity.fields):
+                if i != idx and existing.name == new_name:
+                    error = f"Field '{new_name}' already exists"
+                    break
+        if error:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/entity_editor.html",
+                {
+                    "draft_id": ctx.draft.id,
+                    "spec": ctx.spec,
+                    "entity_name": entity_name,
+                    "entity": entity,
+                    "editing_field_idx": None,
+                    "field_types": [t.value for t in FieldType],
+                    "error": error,
+                },
+            )
+
         field = entity.fields[idx]
-        field.name = form_data.name.strip()
+        field.name = new_name
         field.type = form_data.get_field_type()
         field.required = form_data.required
         field.description = form_data.description.strip()

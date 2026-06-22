@@ -85,23 +85,6 @@ def unauthorized_response() -> HTMLResponse:
     )
 
 
-async def get_dataset_by_id(
-    dataset_id: str,
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> Dataset:
-    """Get dataset by ID or raise 404.
-
-    Use as a FastAPI dependency to load and validate dataset access.
-    Note: This function does NOT verify ownership. Use get_dataset_for_user()
-    for endpoints that require ownership verification.
-    """
-    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
-    dataset = result.scalar_one_or_none()
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    return dataset
-
-
 async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
     """Get tenant for user based on keycloak_id.
 

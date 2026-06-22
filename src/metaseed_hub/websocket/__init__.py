@@ -348,6 +348,9 @@ class WebSocketManager:
         except WebSocketDisconnect:
             await self.leave_room(project_id, connection_id)
         except Exception:
+            # Log unexpected errors (e.g. a malformed JSON frame) instead of
+            # silently dropping the connection like a normal disconnect.
+            logger.exception("Unexpected error in WebSocket connection handler")
             await self.leave_room(project_id, connection_id)
 
 

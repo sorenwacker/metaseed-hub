@@ -228,30 +228,6 @@ async def get_current_user(
     return await auth.verify_token(credentials.credentials)
 
 
-security_optional = HTTPBearer(auto_error=False)
-
-
-async def get_current_user_optional(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security_optional)],
-    auth: Annotated[OIDCAuth, Depends(get_oidc_auth)],
-) -> TokenUser | None:
-    """FastAPI dependency to get the current user if authenticated.
-
-    Args:
-        credentials: Optional HTTP Bearer credentials.
-        auth: OIDCAuth instance.
-
-    Returns:
-        TokenUser if authenticated, None otherwise.
-    """
-    if credentials is None:
-        return None
-    try:
-        return await auth.verify_token(credentials.credentials)
-    except HTTPException:
-        return None
-
-
 async def verify_token(token: str, settings: Settings | None = None) -> TokenUser:
     """Standalone function to verify a token.
 
@@ -275,7 +251,6 @@ __all__ = [
     "OIDCAuth",
     "TokenUser",
     "get_current_user",
-    "get_current_user_optional",
     "get_keycloak_auth",  # Backwards compatibility alias
     "get_oidc_auth",
     "verify_token",

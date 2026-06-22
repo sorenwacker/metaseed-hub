@@ -128,6 +128,10 @@ async def auth_callback(
 
     tokens = token_response.json()
     access_token = tokens.get("access_token")
+    if not access_token:
+        # A 200 response without an access token (malformed/non-compliant IdP)
+        # would otherwise set a cookie of literal "None" and a broken session.
+        return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
     refresh_token = tokens.get("refresh_token")
 
     response = RedirectResponse(url="/hub/", status_code=302)
