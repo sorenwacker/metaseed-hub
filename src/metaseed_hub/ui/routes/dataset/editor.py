@@ -226,6 +226,8 @@ async def dataset_validate(
     user: CurrentUser,
 ) -> HTMLResponse:
     """Validate all entities in the dataset against their schemas."""
+    import html as html_module
+
     from pydantic import ValidationError
 
     try:
@@ -320,7 +322,7 @@ async def dataset_validate(
         status_class = "valid" if error_count == 0 else "invalid"
         html += f"""
         <div class="breakdown-item {status_class}">
-            <span class="breakdown-type">{entity_type}</span>
+            <span class="breakdown-type">{html_module.escape(entity_type)}</span>
             <span class="breakdown-count">{count - error_count}/{count} valid</span>
         </div>
         """
@@ -333,17 +335,20 @@ async def dataset_validate(
             html += f"""
             <div class="validation-error-item">
                 <div class="validation-entity">
-                    <span class="entity-type-badge">{err["entity_type"]}</span>
+                    <span class="entity-type-badge">{html_module.escape(err["entity_type"])}</span>
                     <a href="#" class="entity-link"
                        hx-get="/hub/datasets/{dataset_id}/entity/{err["node_id"]}"
                        hx-target="#editor"
-                       hx-swap="innerHTML">{err["label"]}</a>
+                       hx-swap="innerHTML">{html_module.escape(err["label"] or "")}</a>
                 </div>
                 <ul class="validation-error-list">
             """
             for field_err in err["errors"]:
                 field = field_err["field"] or "(general)"
-                html += f"<li><code>{field}</code>: {field_err['message']}</li>"
+                html += (
+                    f"<li><code>{html_module.escape(field)}</code>: "
+                    f"{html_module.escape(field_err['message'])}</li>"
+                )
             html += "</ul></div>"
         html += "</div>"
 
