@@ -1,6 +1,5 @@
 """Shared FastAPI dependencies for Hub UI routes."""
 
-import secrets
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
     from metaseed.ui.state import AppState
 
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
-CSRF_TOKEN_COOKIE = "metaseed_csrf_token"
 
 
 class AuthRequiredError(Exception):
@@ -26,14 +24,6 @@ class AuthRequiredError(Exception):
     def __init__(self, is_htmx: bool = False) -> None:
         self.is_htmx = is_htmx
         super().__init__("Authentication required")
-
-
-def get_or_create_csrf_token(request: Request) -> str:
-    """Get existing CSRF token from cookie or create a new one."""
-    token = request.cookies.get(CSRF_TOKEN_COOKIE)
-    if token and len(token) == 43:  # Base64 encoded 32 bytes
-        return token
-    return secrets.token_urlsafe(32)
 
 
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:

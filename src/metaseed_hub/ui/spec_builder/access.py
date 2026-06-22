@@ -23,7 +23,6 @@ from metaseed_hub.models import (
     Team,
     TeamMembership,
     TeamRole,
-    Tenant,
     User,
 )
 
@@ -59,7 +58,7 @@ async def get_user_context(
         HTTPException 401 if user is not authenticated (API routes)
         LoginRequiredRedirectError if redirect_on_unauthorized=True (page routes)
     """
-    from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+    from metaseed_hub.ui.dependencies import ensure_tenant_and_user, get_current_user_from_cookie
 
     token_user = await get_current_user_from_cookie(request)
 
@@ -68,37 +67,9 @@ async def get_user_context(
             raise LoginRequiredRedirectError()
         raise HTTPException(status_code=401, detail="Login required")
 
-    # Get or create tenant for this user
-    slug = token_user.keycloak_id[:8]
-    tenant_result = await session.execute(select(Tenant).where(Tenant.slug == slug))
-    tenant: Tenant | None = tenant_result.scalar_one_or_none()
-    if not tenant:
-        tenant = Tenant(name=token_user.name or token_user.email, slug=slug)
-        session.add(tenant)
-        await session.commit()
-        await session.refresh(tenant)
-    assert tenant is not None
-
-    # Look up or create the User record
-    user_result = await session.execute(
-        select(User).where(
-            User.keycloak_id == token_user.keycloak_id,
-            User.tenant_id == tenant.id,
-        )
-    )
-    user: User | None = user_result.scalar_one_or_none()
-    if not user:
-        user = User(
-            keycloak_id=token_user.keycloak_id,
-            tenant_id=tenant.id,
-            email=token_user.email,
-            display_name=token_user.name or token_user.email,
-        )
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-    assert user is not None
-
+    # Provision the tenant and user through the canonical helper so onboarding
+    # behaves identically here and on the other entry points.
+    tenant, user = await ensure_tenant_and_user(session, token_user)
     return user.id, tenant.id
 
 

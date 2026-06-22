@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock
 
+import pytest
 from starlette.datastructures import FormData
 
 from metaseed_hub.ui.forms import extract_entity_values, get_label_from_values, parse_form_field
@@ -12,6 +13,15 @@ class TestParseFormField:
 
     def test_parse_empty_string_returns_none(self) -> None:
         assert parse_form_field("", "string") is None
+
+    def test_parse_invalid_integer_raises_value_error(self) -> None:
+        # The table mutation routes rely on this contract: a non-numeric value
+        # raises ValueError so the caller can fall back to the raw string instead
+        # of 500-ing the request.
+        with pytest.raises(ValueError):
+            parse_form_field("not-a-number", "integer")
+        with pytest.raises(ValueError):
+            parse_form_field("not-a-number", "float")
 
     def test_parse_integer(self) -> None:
         assert parse_form_field("42", "integer") == 42

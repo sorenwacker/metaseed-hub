@@ -23,12 +23,11 @@ from metaseed_hub.models import (
     DatasetMember,
     SpecDraft,
     SpecDraftMember,
-    Tenant,
-    User,
 )
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     OptionalUser,
+    ensure_tenant_and_user,
     handle_auth_required_error,
 )
 from metaseed_hub.ui.explore_routes import create_explore_router
@@ -198,21 +197,6 @@ def create_hub_app() -> FastAPI:
     explore_router = create_explore_router(templates)
     app.include_router(explore_router)
 
-    async def get_or_create_tenant(session: AsyncSession, user: OptionalUser) -> Tenant:
-        """Get or create tenant for user based on keycloak_id."""
-        if not user:
-            raise ValueError("User required")
-        # Use keycloak_id as tenant slug for single-user tenants
-        slug = user.keycloak_id[:8]
-        result = await session.execute(select(Tenant).where(Tenant.slug == slug))
-        tenant = result.scalar_one_or_none()
-        if not tenant:
-            tenant = Tenant(name=user.name or user.email, slug=slug)
-            session.add(tenant)
-            await session.commit()
-            await session.refresh(tenant)
-        return tenant
-
     @app.get("/", response_class=Response)
     async def home(
         request: Request,
@@ -227,14 +211,9 @@ def create_hub_app() -> FastAPI:
                 context={},
             )
 
-        # Get or create tenant for user
-        tenant = await get_or_create_tenant(session, user)
-
-        # Get the database User record for shared queries
-        db_user_result = await session.execute(
-            select(User).where(User.keycloak_id == user.keycloak_id)
-        )
-        db_user = db_user_result.scalar_one_or_none()
+        # Get or create the tenant and the database User record in one place,
+        # via the canonical helper, so onboarding stays consistent across routes.
+        tenant, db_user = await ensure_tenant_and_user(session, user)
 
         # Get owned datasets from tenant
         ds_result = await session.execute(
@@ -245,15 +224,13 @@ def create_hub_app() -> FastAPI:
         owned_datasets = list(ds_result.scalars().all())
 
         # Get datasets shared with this user via DatasetMember
-        shared_datasets: list[Dataset] = []
-        if db_user:
-            shared_ds_result = await session.execute(
-                select(Dataset)
-                .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
-                .where(DatasetMember.user_id == db_user.id, Dataset.deleted_at.is_(None))
-                .order_by(Dataset.updated_at.desc())
-            )
-            shared_datasets = list(shared_ds_result.scalars().all())
+        shared_ds_result = await session.execute(
+            select(Dataset)
+            .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
+            .where(DatasetMember.user_id == db_user.id, Dataset.deleted_at.is_(None))
+            .order_by(Dataset.updated_at.desc())
+        )
+        shared_datasets = list(shared_ds_result.scalars().all())
 
         # Combine and deduplicate datasets
         seen_ds_ids: set[str] = set()
@@ -272,15 +249,13 @@ def create_hub_app() -> FastAPI:
         owned_specs = list(spec_result.scalars().all())
 
         # Get specs shared with this user via SpecDraftMember
-        shared_specs: list[SpecDraft] = []
-        if db_user:
-            shared_result = await session.execute(
-                select(SpecDraft)
-                .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-                .where(SpecDraftMember.user_id == db_user.id)
-                .order_by(SpecDraft.updated_at.desc())
-            )
-            shared_specs = list(shared_result.scalars().all())
+        shared_result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == db_user.id)
+            .order_by(SpecDraft.updated_at.desc())
+        )
+        shared_specs = list(shared_result.scalars().all())
 
         # Combine and deduplicate specs
         seen_ids: set[str] = set()
@@ -305,19 +280,19 @@ def create_hub_app() -> FastAPI:
     @app.get("/privacy", response_class=Response)
     async def privacy_policy(request: Request, user: OptionalUser) -> Response:
         """Privacy policy page."""
-        return templates.TemplateResponse(
+        return render_template(
             request=request,
             name="privacy.html",
-            context={"request": request, "user": user},
+            context={"user": user},
         )
 
     @app.get("/aup", response_class=Response)
     async def acceptable_use_policy(request: Request, user: OptionalUser) -> Response:
         """Acceptable use policy page."""
-        return templates.TemplateResponse(
+        return render_template(
             request=request,
             name="aup.html",
-            context={"request": request, "user": user},
+            context={"user": user},
         )
 
     return app

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import get_dataset_state_for_mutation
+from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import save_dataset_state
 
 router = APIRouter(tags=["table"])
@@ -423,13 +424,11 @@ async def update_table_cell(
         info = helper.field_info(field_name)
         field_type = info.get("type", "string")
 
-        if field_type == "integer":
-            current_values[field_name] = int(raw_str)
-        elif field_type == "float":
-            current_values[field_name] = float(raw_str)
-        elif field_type == "boolean":
-            current_values[field_name] = raw_str.lower() == "true"
-        else:
+        # Reuse the shared coercion helper, which falls back to the raw string on
+        # a bad numeric value instead of letting ValueError 500 the request.
+        try:
+            current_values[field_name] = parse_form_field(raw_str, field_type)
+        except ValueError:
             current_values[field_name] = raw_str
 
     model_class = helper._model
@@ -600,13 +599,9 @@ async def update_single_entity_field(
                 if raw_value:
                     info = nested_helper.field_info(fname)
                     ftype = info.get("type", "string")
-                    if ftype == "integer":
-                        nested_data[fname] = int(raw_value)
-                    elif ftype == "float":
-                        nested_data[fname] = float(raw_value)
-                    elif ftype == "boolean":
-                        nested_data[fname] = raw_value.lower() == "true"
-                    else:
+                    try:
+                        nested_data[fname] = parse_form_field(raw_value, ftype)
+                    except ValueError:
                         nested_data[fname] = raw_value
     except AttributeError:
         # Nested type not found, just store raw form data
