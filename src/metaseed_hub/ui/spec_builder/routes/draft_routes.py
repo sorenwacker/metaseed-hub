@@ -182,7 +182,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             )
 
         if draft.source_spec_id:
-            result = await session.execute(select(Spec).where(Spec.id == draft.source_spec_id))
+            result = await session.execute(
+                select(Spec).where(Spec.id == draft.source_spec_id, Spec.deleted_at.is_(None))
+            )
             existing_spec = result.scalar_one_or_none()
             if existing_spec and not await can_edit_spec(session, user_id, existing_spec.id):
                 raise HTTPException(status_code=403, detail="Cannot edit this spec")

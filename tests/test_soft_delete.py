@@ -16,13 +16,14 @@ They run the real handlers against a database session, so they need Postgres
 from unittest.mock import Mock
 
 import pytest
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import Comment, Dataset, SpecDraft, Tenant, User
+from metaseed_hub.ui.dependencies import get_dataset_for_user
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
 from metaseed_hub.ui.routes import admin as admin_module
 from metaseed_hub.ui.routes.dataset import crud as crud_module
@@ -86,6 +87,26 @@ async def test_dataset_delete_soft_deletes_and_keeps_related_rows(
     assert persisted.deleted_at is not None
     # The cascade was dropped: related rows survive the soft delete.
     assert await session.get(Comment, comment_id) is not None
+
+
+# --- H2: get_dataset_for_user excludes soft-deleted datasets -----------------
+
+
+@pytest.mark.asyncio
+async def test_get_dataset_for_user_excludes_soft_deleted(session: AsyncSession) -> None:
+    """The shared access helper backing ~40 routes treats a soft-deleted dataset as 404."""
+    token, db_user = await _caller_with_tenant(session)
+    tenant = await session.get(Tenant, db_user.tenant_id)
+    dataset = make_dataset(tenant=tenant, name="ds")
+    session.add(dataset)
+    await session.flush()
+    dataset.soft_delete()
+    await session.commit()
+    dataset_id = dataset.id
+
+    with pytest.raises(HTTPException) as exc:
+        await get_dataset_for_user(dataset_id, session, token)
+    assert exc.value.status_code == 404
 
 
 # --- M3: admin dashboard excludes soft-deleted users -------------------------

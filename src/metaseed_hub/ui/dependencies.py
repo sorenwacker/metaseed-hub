@@ -233,7 +233,9 @@ async def get_dataset_for_user(
     Raises:
         HTTPException: 404 if dataset not found, 403 if access denied.
     """
-    result = await session.execute(select(Dataset).where(Dataset.id == dataset_id))
+    result = await session.execute(
+        select(Dataset).where(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
+    )
     dataset = result.scalar_one_or_none()
 
     if not dataset:
