@@ -3,12 +3,27 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: metaseed
+          POSTGRES_PASSWORD: metaseed_dev
+          POSTGRES_DB: metaseed_hub_test
+        ports:
+          - 7432:5432
+        options: >-
+          --health-cmd "pg_isready -U metaseed -d metaseed_hub_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v6
 
