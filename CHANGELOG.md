@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.61] - 2026-06-23
+
+### Fixed
+- CI runs the test suite against a PostgreSQL service so database-backed tests execute instead of erroring on a missing connection
+- CI runs on version tag pushes so a release tag fails visibly when the suite is broken
+
 ## [0.4.60] - 2026-06-22
 
 ### Fixed
