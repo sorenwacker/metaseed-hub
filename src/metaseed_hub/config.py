@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:7300"]
     app_url: str = "http://localhost:7001"
 
+    # Application secret key. Provided by the deployment environment and used to
+    # sign session state. Declared here so the value is accepted and validated
+    # rather than rejected as an unknown environment variable.
+    secret_key: str = "metaseed-hub-dev-secret-key"
+
     # Admin access (SRAM entitlement or role name)
     admin_role: str = "admin"
 

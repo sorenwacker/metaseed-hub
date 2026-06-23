@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.63] - 2026-06-23
+
+### Fixed
+- Restored the `secret_key` setting so the `SECRET_KEY` provided by the deployment environment is accepted; its earlier removal made settings loading reject the variable, which aborted the auto-deploy at the migration step
+
 ## [0.4.62] - 2026-06-23
 
 ### Changed
