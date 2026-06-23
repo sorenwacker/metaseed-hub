@@ -18,7 +18,7 @@ dependencies = [
     "redis>=5.0.0",
     "celery[redis]>=5.4.0",
     "alembic>=1.14.0",
-    "pydantic-settings>=2.6.0",
+    "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
     "metaseed @ git+https://github.com/sorenwacker/metaseed.git@v0.9.1",
