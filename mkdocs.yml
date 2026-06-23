@@ -14,13 +14,26 @@ theme:
 
 nav:
   - Home: index.md
-  - User Guide:
-    - Getting Started: guide/getting-started.md
-    - Projects: guide/projects.md
-    - Import and Export: guide/import-export.md
-  - Architecture: architecture.md
-  - API Reference: api.md
-  - Code Review: REVIEW.md
+  - Getting Started: getting-started.md
+  - Datasets:
+    - Overview: datasets/index.md
+    - Editing entities: datasets/entities.md
+    - Versions and history: datasets/versions.md
+    - Importing and exporting: datasets/import-export.md
+    - Graph view: datasets/graph.md
+  - Collaboration: collaboration.md
+  - Spec Builder:
+    - Overview: spec-builder/index.md
+    - Validation rules: spec-builder/validation-rules.md
+    - Publishing and sharing: spec-builder/publishing.md
+  - Explorer: explorer.md
+  - Reference:
+    - Supported profiles: reference/profiles.md
+    - Ontology lookup: reference/ontology-lookup.md
+  - Administration: administration.md
+  - Developer:
+    - Architecture: developer/architecture.md
+    - API Reference: developer/api.md
 
 markdown_extensions:
   - tables

@@ -1,26 +1,25 @@
 # Metaseed Hub
 
-Collaborative metadata management platform for scientific research data.
+Metaseed Hub is a collaborative platform for building standardized research metadata. Teams create **datasets** that follow an established metadata **profile** (MIAPPE, ISA, DiSSCo, Darwin Core, or a custom specification), edit them through schema-driven forms, and share them with collaborators. It is built on [metaseed](https://github.com/sorenwacker/metaseed).
 
-## Overview
+## What you can do
 
-Metaseed Hub enables teams to create, edit, and share standardized metadata following MIAPPE, ISA, DiSSCo, and Darwin Core specifications. Built on [metaseed](https://github.com/sorenwacker/metaseed).
+- **Datasets** — create metadata datasets from a profile, edit entities through generated forms, validate against the schema, track versions, and import or export data.
+- **Collaboration** — share a dataset with collaborators as Owner, Curator, or Viewer, and discuss it through threaded comments.
+- **Spec Builder** — design custom metadata specifications: entities, fields, relationships, and validation rules; publish them and fork published specs.
+- **Explorer** — browse a profile's structure and compare two profiles side by side.
+- **Administration** — admin users see aggregated usage statistics.
 
-## Features
+## Using this manual
 
-- Multi-tenant workspaces and projects
-- Dynamic entity forms generated from metaseed specs
-- Support for MIAPPE, ISA, DiSSCo, and Darwin Core profiles
-- Real-time collaboration with presence indicators
-- Import ISA-JSON files
-- Export to Excel
+| Section | Start here if you want to |
+|---------|--------------------------|
+| [Getting Started](getting-started.md) | Log in and create your first dataset |
+| [Datasets](datasets/index.md) | Create, edit, validate, version, and export datasets |
+| [Collaboration](collaboration.md) | Share datasets and use comments |
+| [Spec Builder](spec-builder/index.md) | Design and publish custom specifications |
+| [Explorer](explorer.md) | Browse and compare profiles |
+| [Reference](reference/profiles.md) | Look up supported profiles and ontology search |
+| [Administration](administration.md) | Use the admin dashboard |
 
-## Quick Start
-
-```bash
-make dev
-```
-
-Starts all services and launches the app at http://localhost:7001/hub/
-
-Default login: `demo@example.com` / `demo123`
+For deployment, architecture, and HTTP API details, see the [Developer](developer/architecture.md) section.
