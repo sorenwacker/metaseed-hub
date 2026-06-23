@@ -1,9 +1,9 @@
-"""Dataset editor, tree, overview, validation, graph, chat, and export routes."""
+"""Dataset editor, tree, overview, validation, graph, and export routes."""
 
 import logging
 from typing import Annotated, Any
 
-from fastapi import File, Form, Request, UploadFile
+from fastapi import File, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -411,53 +411,6 @@ async def dataset_graph_api(
     graph_data = build_graph(state)
 
     return JSONResponse(content=graph_data)
-
-
-@router.get("/{dataset_id}/chat", response_class=HTMLResponse)
-async def dataset_chat_page(
-    request: Request,
-    dataset_id: str,
-    session: DbSession,
-    user: CurrentUser,
-) -> Response:
-    """Full-page chat view for a dataset."""
-    dataset = await get_dataset_for_user(dataset_id, session, user)
-
-    return render_template(
-        request=request,
-        name="chat.html",
-        context={
-            "user": user,
-            "dataset": dataset,
-            "nav_active": "home",
-        },
-    )
-
-
-@router.post("/{dataset_id}/chat", response_class=HTMLResponse)
-async def dataset_chat(
-    request: Request,
-    dataset_id: str,
-    session: DbSession,
-    user: CurrentUser,
-    message: Annotated[str, Form()],
-) -> HTMLResponse:
-    """Post a chat message."""
-    import html as html_module
-
-    try:
-        validate_csrf_or_error(request)
-    except Exception:
-        return csrf_error_response()
-
-    # Confirm the user may access this dataset, matching every sibling route.
-    await get_dataset_for_user(dataset_id, session, user)
-
-    # Escape user content to prevent XSS
-    safe_name = html_module.escape(user.name or "")
-    safe_message = html_module.escape(message)
-    html = f"<div class='chat-message'><strong>{safe_name}:</strong> {safe_message}</div>"
-    return HTMLResponse(html)
 
 
 @router.get("/{dataset_id}/export")

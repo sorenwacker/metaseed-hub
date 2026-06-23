@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.64] - 2026-06-23
+
+### Added
+- CSRF tokens are signed with the application `secret_key` (HMAC), so the server only accepts cookies it issued; this hardens the double-submit check against cookie fixation and forgery
+
+### Removed
+- Removed the non-functional team chat: messages were never persisted or broadcast. The route, template, model, and the unused `chat_messages` table are dropped; discussion is served by comments
+
 ## [0.4.63] - 2026-06-23
 
 ### Fixed

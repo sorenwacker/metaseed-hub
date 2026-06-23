@@ -128,7 +128,6 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     )
     spec_memberships: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="user")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
-    chat_messages: Mapped[list["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
     comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="user")
     comment_reactions: Mapped[list["CommentReaction"]] = relationship(
         "CommentReaction", back_populates="user"
@@ -203,9 +202,6 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="datasets")
     spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="dataset")
-    chat_messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="dataset"
-    )
     members: Mapped[list["DatasetMember"]] = relationship("DatasetMember", back_populates="dataset")
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="dataset", order_by="Comment.created_at"
@@ -318,37 +314,6 @@ class Note(TimestampMixin, Base):
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="notes")
     user: Mapped["User"] = relationship("User", back_populates="notes")
-
-
-class ChatMessage(TimestampMixin, Base):
-    """Real-time chat messages within a dataset."""
-
-    __tablename__ = "chat_messages"
-    __table_args__ = (
-        Index("ix_chat_messages_dataset_id", "dataset_id"),
-        Index("ix_chat_messages_created_at", "created_at"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        primary_key=True,
-        default=lambda: str(uuid4()),
-    )
-    dataset_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("datasets.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-
-    # Relationships
-    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="chat_messages")
-    user: Mapped["User"] = relationship("User", back_populates="chat_messages")
 
 
 class Comment(TimestampMixin, Base):
@@ -710,7 +675,6 @@ class SpecDraftMember(Base):
 
 __all__ = [
     "Base",
-    "ChatMessage",
     "Comment",
     "CommentReaction",
     "Dataset",

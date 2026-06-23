@@ -4,7 +4,6 @@ from typing import Any
 from uuid import uuid4
 
 from metaseed_hub.models import (
-    ChatMessage,
     Dataset,
     Note,
     Spec,
@@ -162,29 +161,6 @@ def make_note(
         user_id=user.id,
         entity_type=entity_type,
         entity_id=entity_id or f"entity-{uuid4().hex[:8]}",
-        content=content,
-    )
-
-
-def make_chat_message(
-    *,
-    dataset: Dataset,
-    user: User,
-    content: str = "Test chat message",
-) -> ChatMessage:
-    """Create a ChatMessage instance for testing.
-
-    Args:
-        dataset: Parent dataset for the message.
-        user: User who sent the message.
-        content: Message content.
-
-    Returns:
-        ChatMessage model instance (not yet persisted).
-    """
-    return ChatMessage(
-        dataset_id=dataset.id,
-        user_id=user.id,
         content=content,
     )
 
