@@ -45,14 +45,22 @@ from metaseed_hub.models import (
 )
 from metaseed_hub.ui import dependencies as deps_module
 from metaseed_hub.ui.dependencies import require_dataset_owner
-from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
+from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
 from metaseed_hub.ui.routes.dataset import comments as comments_module
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
 from metaseed_hub.ui.spec_builder.routes.member_routes import register_member_routes
 from tests.factories import make_dataset, make_spec_draft, make_tenant, make_user
 
+
 # A 43-character token (base64 of 32 bytes) that matches in cookie and header.
-_CSRF = "a" * 43
+def _signed_csrf() -> str:
+    """Mint a signed CSRF token as the application issues it."""
+    request = Mock()
+    request.cookies = {}
+    return get_or_create_csrf_token(request)
+
+
+_CSRF = _signed_csrf()
 
 
 def _csrf_request() -> Mock:

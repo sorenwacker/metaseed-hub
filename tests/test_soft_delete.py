@@ -24,13 +24,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import Comment, Dataset, SpecDraft, Tenant, User
 from metaseed_hub.ui.dependencies import get_dataset_for_user
-from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
+from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
 from metaseed_hub.ui.routes import admin as admin_module
 from metaseed_hub.ui.routes.dataset import crud as crud_module
 from metaseed_hub.ui.spec_builder.routes.draft_routes import register_draft_routes
 from tests.factories import make_dataset, make_spec_draft, make_tenant, make_user
 
-_CSRF = "a" * 43
+
+def _signed_csrf() -> str:
+    """Mint a signed CSRF token as the application issues it."""
+    request = Mock()
+    request.cookies = {}
+    return get_or_create_csrf_token(request)
+
+
+_CSRF = _signed_csrf()
 
 
 def _csrf_request() -> Mock:

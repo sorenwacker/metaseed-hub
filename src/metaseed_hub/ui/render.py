@@ -135,8 +135,10 @@ def render_template(
         status_code=status_code,
     )
 
-    # Set CSRF cookie if not already set
-    if not request.cookies.get(CSRF_TOKEN_COOKIE):
+    # Set the CSRF cookie whenever it differs from the embedded token. This
+    # issues a cookie on first visit and re-issues one when the stored value is
+    # missing or no longer carries a valid signature.
+    if request.cookies.get(CSRF_TOKEN_COOKIE) != csrf_token:
         response.set_cookie(
             key=CSRF_TOKEN_COOKIE,
             value=csrf_token,

@@ -6,7 +6,6 @@ Tests for:
 - XSS prevention
 """
 
-import secrets
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -20,12 +19,21 @@ from metaseed_hub.ui.security import (
 )
 
 
+def _signed_csrf_token() -> str:
+    """Mint a signed CSRF token as the application issues it."""
+    from metaseed_hub.ui.helpers import get_or_create_csrf_token
+
+    request = Mock()
+    request.cookies = {}
+    return get_or_create_csrf_token(request)
+
+
 class TestCSRFValidation:
     """Tests for CSRF validation functions."""
 
     def test_validate_csrf_or_error_valid(self) -> None:
         """Does not raise when token is valid."""
-        valid_token = secrets.token_urlsafe(32)
+        valid_token = _signed_csrf_token()
         request = Mock()
         request.cookies = {"metaseed_csrf_token": valid_token}
         request.headers = {"X-CSRF-Token": valid_token}
@@ -76,7 +84,7 @@ class TestRequireCSRFDecorator:
         """Decorated function runs when CSRF is valid."""
         from fastapi import Request as FastAPIRequest
 
-        valid_token = secrets.token_urlsafe(32)
+        valid_token = _signed_csrf_token()
         request = Mock(spec=FastAPIRequest)
         request.cookies = {"metaseed_csrf_token": valid_token}
         request.headers = {"X-CSRF-Token": valid_token}
@@ -109,7 +117,7 @@ class TestRequireCSRFDecorator:
         """Decorated function accepts form token parameter."""
         from fastapi import Request as FastAPIRequest
 
-        valid_token = secrets.token_urlsafe(32)
+        valid_token = _signed_csrf_token()
         request = Mock(spec=FastAPIRequest)
         request.cookies = {"metaseed_csrf_token": valid_token}
         request.headers = {}
@@ -287,16 +295,6 @@ class TestAuthorizationDependencies:
 
 class TestXSSPrevention:
     """Tests for XSS prevention in templates and handlers."""
-
-    def test_chat_message_escapes_html(self) -> None:
-        """Verifies HTML in chat messages is escaped."""
-        import html
-
-        user_input = "<script>alert('xss')</script>"
-        escaped = html.escape(user_input)
-
-        assert "&lt;script&gt;" in escaped
-        assert "<script>" not in escaped
 
     def test_dataset_name_escaped_in_template_context(self) -> None:
         """Dataset names are escaped by Jinja2 autoescaping."""

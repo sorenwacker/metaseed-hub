@@ -1,6 +1,5 @@
 """Tests for helper functions in metaseed_hub.ui.helpers."""
 
-import secrets
 from datetime import date, datetime
 from unittest.mock import Mock
 
@@ -23,19 +22,26 @@ from metaseed_hub.ui.helpers import (
 class TestCSRFToken:
     """Tests for CSRF token functions."""
 
+    @staticmethod
+    def _signed_token() -> str:
+        """Mint a signed CSRF token as the application would issue it."""
+        request = Mock(spec=Request)
+        request.cookies = {}
+        return get_or_create_csrf_token(request)
+
     def test_get_or_create_csrf_token_creates_new(self) -> None:
-        """Creates a new token when none exists in cookie."""
+        """Creates a new signed token when none exists in cookie."""
         request = Mock(spec=Request)
         request.cookies = {}
 
         token = get_or_create_csrf_token(request)
 
         assert token is not None
-        assert len(token) == 43  # URL-safe base64 encoded 32 bytes
+        assert "." in token  # carries an HMAC signature segment
 
     def test_get_or_create_csrf_token_returns_existing(self) -> None:
-        """Returns existing token from cookie."""
-        existing_token = secrets.token_urlsafe(32)
+        """Returns an existing, validly signed token from the cookie."""
+        existing_token = self._signed_token()
         request = Mock(spec=Request)
         request.cookies = {"metaseed_csrf_token": existing_token}
 
@@ -44,18 +50,18 @@ class TestCSRFToken:
         assert token == existing_token
 
     def test_get_or_create_csrf_token_ignores_invalid_token(self) -> None:
-        """Creates new token if cookie token is invalid length."""
+        """Creates a new token if the cookie token is not validly signed."""
         request = Mock(spec=Request)
-        request.cookies = {"metaseed_csrf_token": "too_short"}
+        request.cookies = {"metaseed_csrf_token": "unsigned_value"}
 
         token = get_or_create_csrf_token(request)
 
-        assert token != "too_short"
-        assert len(token) == 43
+        assert token != "unsigned_value"
+        assert "." in token
 
     def test_validate_csrf_token_success_header(self) -> None:
-        """Validates token from X-CSRF-Token header."""
-        valid_token = secrets.token_urlsafe(32)
+        """Validates a signed token from the X-CSRF-Token header."""
+        valid_token = self._signed_token()
         request = Mock(spec=Request)
         request.cookies = {"metaseed_csrf_token": valid_token}
         request.headers = {"X-CSRF-Token": valid_token}
@@ -63,8 +69,8 @@ class TestCSRFToken:
         assert validate_csrf_token(request) is True
 
     def test_validate_csrf_token_success_form(self) -> None:
-        """Validates token from form parameter."""
-        valid_token = secrets.token_urlsafe(32)
+        """Validates a signed token from the form parameter."""
+        valid_token = self._signed_token()
         request = Mock(spec=Request)
         request.cookies = {"metaseed_csrf_token": valid_token}
         request.headers = {}

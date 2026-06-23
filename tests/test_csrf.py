@@ -72,3 +72,76 @@ async def test_entity_validate_rejects_missing_csrf() -> None:
         user=Mock(),
     )
     assert response.status_code == 403
+
+
+class TestCsrfTokenSigning:
+    """The CSRF token is signed with the application secret key.
+
+    Signing lets the server recognise tokens it issued, so a forged or fixated
+    cookie is rejected even when it is also submitted in the header.
+    """
+
+    @staticmethod
+    def _request(
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Mock:
+        request = Mock()
+        request.cookies = cookies or {}
+        request.headers = headers or {}
+        return request
+
+    def test_issued_token_is_signed_and_validates(self) -> None:
+        from metaseed_hub.ui.helpers import (
+            CSRF_TOKEN_COOKIE,
+            get_or_create_csrf_token,
+            validate_csrf_token,
+        )
+
+        issued = get_or_create_csrf_token(self._request())
+        assert "." in issued  # carries a signature segment
+
+        req = self._request(
+            cookies={CSRF_TOKEN_COOKIE: issued},
+            headers={"X-CSRF-Token": issued},
+        )
+        assert validate_csrf_token(req) is True
+
+    def test_existing_signed_token_is_reused(self) -> None:
+        from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+
+        issued = get_or_create_csrf_token(self._request())
+        reused = get_or_create_csrf_token(self._request(cookies={CSRF_TOKEN_COOKIE: issued}))
+        assert reused == issued
+
+    def test_unsigned_cookie_is_rejected(self) -> None:
+        from metaseed_hub.ui.helpers import (
+            CSRF_TOKEN_COOKIE,
+            get_or_create_csrf_token,
+            validate_csrf_token,
+        )
+
+        forged = "forged-token-without-signature"
+        req = self._request(
+            cookies={CSRF_TOKEN_COOKIE: forged},
+            headers={"X-CSRF-Token": forged},
+        )
+        assert validate_csrf_token(req) is False
+        # A fresh signed token is issued rather than trusting the forged value.
+        assert get_or_create_csrf_token(req) != forged
+
+    def test_tampered_signature_is_rejected(self) -> None:
+        from metaseed_hub.ui.helpers import (
+            CSRF_TOKEN_COOKIE,
+            get_or_create_csrf_token,
+            validate_csrf_token,
+        )
+
+        issued = get_or_create_csrf_token(self._request())
+        token, _, _signature = issued.rpartition(".")
+        tampered = f"{token}.deadbeef"
+        req = self._request(
+            cookies={CSRF_TOKEN_COOKIE: tampered},
+            headers={"X-CSRF-Token": tampered},
+        )
+        assert validate_csrf_token(req) is False
