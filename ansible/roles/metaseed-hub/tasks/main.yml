@@ -132,6 +132,26 @@
   when: not venv_dir.stat.exists or git_result.changed
   tags: setup
 
+- name: Generate application secret key if absent
+  become_user: "{{ app_user }}"
+  ansible.builtin.shell: |
+    umask 077
+    openssl rand -base64 48 > "{{ app_dir }}/.secret_key"
+  args:
+    creates: "{{ app_dir }}/.secret_key"
+  tags: config
+
+- name: Read application secret key
+  ansible.builtin.slurp:
+    src: "{{ app_dir }}/.secret_key"
+  register: secret_key_file
+  tags: config
+
+- name: Set secret_key from generated file
+  ansible.builtin.set_fact:
+    secret_key: "{{ secret_key_file.content | b64decode | trim }}"
+  tags: config
+
 - name: Create .env file
   ansible.builtin.template:
     src: env.j2
