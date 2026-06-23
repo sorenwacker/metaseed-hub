@@ -9,6 +9,14 @@
         <p class="admin-subtitle">System monitoring and user management</p>
     </div>
 
+    {% if using_default_secret_key %}
+    <div class="admin-warning" role="alert">
+        <strong>Security warning:</strong> the application is using the default
+        development <code>SECRET_KEY</code>. Set a strong <code>SECRET_KEY</code>
+        in the deployment environment to protect CSRF token signing.
+    </div>
+    {% endif %}
+
     <!-- Summary Statistics -->
     <section class="admin-section">
         <h2>System Overview</h2>

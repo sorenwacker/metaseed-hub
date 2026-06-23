@@ -13,3 +13,7 @@ Open it at `/hub/admin/`.
 | **User Directory** | Registered users with email, display name, and registration date |
 
 The dashboard reports aggregated counts and directory information only; it does not expose the contents of users' datasets.
+
+## Security warnings
+
+If the application is running with the default development `SECRET_KEY`, the dashboard shows a warning banner. Set a strong `SECRET_KEY` in the deployment environment to clear it; the secret is used to sign CSRF tokens.

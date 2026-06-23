@@ -158,6 +158,7 @@ async def admin_dashboard(
             "user_activity": user_activity,
             "dataset_activity": dataset_activity,
             "users": users,
+            "using_default_secret_key": get_settings().using_default_secret_key,
             "nav_active": "admin",
         },
     )

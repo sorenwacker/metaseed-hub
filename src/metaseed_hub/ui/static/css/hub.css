@@ -6663,6 +6663,23 @@ a.start-option-card:hover {
     font-size: 0.95rem;
 }
 
+.admin-warning {
+    background: #fdecea;
+    border: 1px solid #f5c6cb;
+    border-left: 4px solid #c0392b;
+    color: #7b241c;
+    padding: var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-xl);
+    font-size: 0.95rem;
+}
+
+.admin-warning code {
+    background: rgba(192, 57, 43, 0.1);
+    padding: 0 0.25rem;
+    border-radius: 3px;
+}
+
 .admin-section {
     background: var(--clr-surface);
     border-radius: var(--radius-lg);

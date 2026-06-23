@@ -4,6 +4,11 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Insecure development fallback for ``secret_key``. Production must override it
+# via the SECRET_KEY environment variable; the admin dashboard warns when this
+# value is still in use.
+DEFAULT_SECRET_KEY = "metaseed-hub-dev-secret-key"
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -38,12 +43,17 @@ class Settings(BaseSettings):
     app_url: str = "http://localhost:7001"
 
     # Application secret key. Provided by the deployment environment and used to
-    # sign session state. Declared here so the value is accepted and validated
+    # sign the CSRF token. Declared here so the value is accepted and validated
     # rather than rejected as an unknown environment variable.
-    secret_key: str = "metaseed-hub-dev-secret-key"
+    secret_key: str = DEFAULT_SECRET_KEY
 
     # Admin access (SRAM entitlement or role name)
     admin_role: str = "admin"
+
+    @property
+    def using_default_secret_key(self) -> bool:
+        """Return True when the insecure development secret key is still in use."""
+        return self.secret_key == DEFAULT_SECRET_KEY
 
     @property
     def effective_issuer(self) -> str:

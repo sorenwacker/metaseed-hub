@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.65] - 2026-06-23
+
+### Added
+- The admin dashboard shows a security warning when the application is running with the default development `SECRET_KEY`
+
 ## [0.4.64] - 2026-06-23
 
 ### Added
