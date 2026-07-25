@@ -1,5 +1,6 @@
 """Authentication routes for Hub UI."""
 
+import logging
 import secrets
 from typing import Any
 from urllib.parse import urlencode
@@ -9,6 +10,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 
 from metaseed_hub.config import get_settings
+
+logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -190,8 +193,10 @@ async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
         if token_response.status_code == 200:
             tokens: dict[str, Any] = token_response.json()
             return tokens
-    except Exception:
-        pass
+    except Exception as e:
+        # Best-effort refresh: on any failure the caller falls back to re-login.
+        # Log it so a persistently failing refresh is diagnosable.
+        logger.debug(f"Token refresh failed: {e}")
 
     return None
 

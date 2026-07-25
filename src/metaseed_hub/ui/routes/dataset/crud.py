@@ -80,8 +80,10 @@ async def dataset_new(
                 display_name = spec.display_name or profile_name
                 description = spec.description or ""
                 root_entity = spec.root_entity or "Investigation"
-            except Exception:
-                pass
+            except Exception as e:
+                # Fall back to defaults if a profile's metadata won't load, but
+                # log it so the failure is not invisible.
+                logger.debug(f"Could not load metadata for profile {profile_name}: {e}")
 
         # Check if examples exist for this profile (check latest version)
         has_example = False
