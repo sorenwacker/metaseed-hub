@@ -174,6 +174,105 @@ async def load_profiles_for_comparison(
     return db_specs, profile_tuples
 
 
+async def _build_explore_catalog(
+    session: AsyncSession, user: Any
+) -> tuple[list[str], dict[str, list[str]], dict[str, str]]:
+    """Assemble the explorer's profile catalog.
+
+    Combines the built-in profiles with the user's own and shared spec drafts and
+    published specs.
+
+    Returns:
+        A tuple of (profiles, profile_versions, profile_display_names).
+    """
+    from metaseed_hub.models import (
+        Spec,
+        SpecDraft,
+        SpecDraftMember,
+        SpecStatus,
+        Tenant,
+        User,
+    )
+    from metaseed_hub.ui.dependencies import tenant_slug_for
+
+    # Built-in profiles from SpecLoader
+    loader = SpecLoader()
+    profiles = loader.list_profiles()
+
+    profile_versions: dict[str, list[str]] = {}
+    profile_display_names: dict[str, str] = {}
+    for profile in profiles:
+        versions = loader.list_versions(profile)
+        profile_versions[profile] = versions
+        try:
+            spec = loader.load_profile(versions[0], profile)
+            profile_display_names[profile] = spec.display_name or profile
+        except Exception:
+            profile_display_names[profile] = profile
+
+    # User's tenant, drafts, and published specs
+    tenant_slug = tenant_slug_for(user.keycloak_id)
+    result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
+    tenant = result.scalar_one_or_none()
+
+    user_drafts: list[SpecDraft] = []
+    published_specs: list[Spec] = []
+
+    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user = db_user_result.scalar_one_or_none()
+
+    if tenant:
+        drafts_result = await session.execute(
+            select(SpecDraft).where(SpecDraft.tenant_id == tenant.id)
+        )
+        user_drafts = list(drafts_result.scalars().all())
+
+        specs_result = await session.execute(
+            select(Spec).where(
+                Spec.tenant_id == tenant.id,
+                Spec.status == SpecStatus.PUBLISHED,
+                Spec.deleted_at.is_(None),
+            )
+        )
+        published_specs = list(specs_result.scalars().all())
+
+    # Drafts shared with the user via SpecDraftMember
+    if db_user:
+        shared_result = await session.execute(
+            select(SpecDraft)
+            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+            .where(SpecDraftMember.user_id == db_user.id)
+        )
+        shared_drafts = list(shared_result.scalars().all())
+        existing_ids = {d.id for d in user_drafts}
+        for draft in shared_drafts:
+            if draft.id not in existing_ids:
+                user_drafts.append(draft)
+
+    for draft in user_drafts:
+        draft_key = f"draft:{draft.id}"
+        profiles.append(draft_key)
+        profile_versions[draft_key] = [draft.version]
+        display_name = draft.name
+        if draft.spec_data:
+            spec_data = _extract_spec_data(draft.spec_data)
+            display_name = spec_data.get("display_name") or spec_data.get("name") or draft.name
+        profile_display_names[draft_key] = f"{display_name} (Draft)"
+
+    for spec in published_specs:
+        spec_key = f"spec:{spec.id}"
+        if spec_key not in profiles:
+            profiles.append(spec_key)
+            profile_versions[spec_key] = [spec.version]
+            display_name = spec.name
+            if spec.spec_data:
+                spec_data = _extract_spec_data(spec.spec_data)
+                display_name = spec_data.get("display_name") or spec_data.get("name") or spec.name
+            profile_display_names[spec_key] = f"{display_name} (Published)"
+
+    return profiles, profile_versions, profile_display_names
+
+
 def create_explore_router(templates: Jinja2Templates) -> APIRouter:
     """Create the explore router with routes.
 
@@ -204,111 +303,16 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Explorer page - reuses metaseed's merge interface."""
-        from metaseed_hub.models import (
-            Spec,
-            SpecDraft,
-            SpecDraftMember,
-            SpecStatus,
-            Tenant,
-            User,
-        )
-        from metaseed_hub.ui.dependencies import (
-            get_current_user_from_cookie,
-            tenant_slug_for,
-        )
+        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 
         user = await get_current_user_from_cookie(request)
         if not user:
             return RedirectResponse(url="/hub/auth/login", status_code=302)
 
         try:
-            # Get profiles from SpecLoader (built-in specs)
-            loader = SpecLoader()
-            profiles = loader.list_profiles()
-
-            # Build profile versions and display names
-            profile_versions: dict[str, list[str]] = {}
-            profile_display_names: dict[str, str] = {}
-            for profile in profiles:
-                versions = loader.list_versions(profile)
-                profile_versions[profile] = versions
-                try:
-                    spec = loader.load_profile(versions[0], profile)
-                    profile_display_names[profile] = spec.display_name or profile
-                except Exception:
-                    profile_display_names[profile] = profile
-
-            # Get user's tenant
-            tenant_slug = tenant_slug_for(user.keycloak_id)
-            result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
-            tenant = result.scalar_one_or_none()
-
-            user_drafts: list[SpecDraft] = []
-            published_specs: list[Spec] = []
-
-            # Get user's database record for membership check
-            db_user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
-            db_user = db_user_result.scalar_one_or_none()
-
-            if tenant:
-                # Get drafts owned by tenant
-                drafts_result = await session.execute(
-                    select(SpecDraft).where(SpecDraft.tenant_id == tenant.id)
-                )
-                user_drafts = list(drafts_result.scalars().all())
-
-                # Get published specs for tenant
-                specs_result = await session.execute(
-                    select(Spec).where(
-                        Spec.tenant_id == tenant.id,
-                        Spec.status == SpecStatus.PUBLISHED,
-                        Spec.deleted_at.is_(None),
-                    )
-                )
-                published_specs = list(specs_result.scalars().all())
-
-            # Also include drafts shared with user via SpecDraftMember
-            if db_user:
-                shared_result = await session.execute(
-                    select(SpecDraft)
-                    .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-                    .where(SpecDraftMember.user_id == db_user.id)
-                )
-                shared_drafts = list(shared_result.scalars().all())
-                # Add shared drafts that aren't already in user_drafts
-                existing_ids = {d.id for d in user_drafts}
-                for draft in shared_drafts:
-                    if draft.id not in existing_ids:
-                        user_drafts.append(draft)
-
-            # Add user drafts to profiles
-            for draft in user_drafts:
-                draft_key = f"draft:{draft.id}"
-                profiles.append(draft_key)
-                profile_versions[draft_key] = [draft.version]
-                # Use display_name from spec_data if available
-                display_name = draft.name
-                if draft.spec_data:
-                    spec_data = _extract_spec_data(draft.spec_data)
-                    display_name = (
-                        spec_data.get("display_name") or spec_data.get("name") or draft.name
-                    )
-                profile_display_names[draft_key] = f"{display_name} (Draft)"
-
-            # Add published specs to profiles
-            for spec in published_specs:
-                spec_key = f"spec:{spec.id}"
-                if spec_key not in profiles:
-                    profiles.append(spec_key)
-                    profile_versions[spec_key] = [spec.version]
-                    # Use display_name from spec_data if available
-                    display_name = spec.name
-                    if spec.spec_data:
-                        spec_data = _extract_spec_data(spec.spec_data)
-                        display_name = (
-                            spec_data.get("display_name") or spec_data.get("name") or spec.name
-                        )
-                    profile_display_names[spec_key] = f"{display_name} (Published)"
+            profiles, profile_versions, profile_display_names = await _build_explore_catalog(
+                session, user
+            )
 
             return render(
                 request,
