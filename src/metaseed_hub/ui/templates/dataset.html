@@ -56,6 +56,18 @@
                 <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
                 <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
+            {% if export_options %}
+            <div class="sidebar-actions-row">
+                {# Adapter exports the active profile offers, from metaseed's plugin
+                   registry: a new exporter appears by declaring itself upstream. #}
+                {% for opt in export_options %}
+                <a href="/hub/datasets/{{ dataset.id }}/export/adapter/{{ opt.key }}"
+                   class="btn btn-sm"
+                   data-testid="btn-export-{{ opt.key }}"
+                   download title="Download {{ opt.label }}">{{ opt.label }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
             <div class="sidebar-actions-row">
                 <button class="btn btn-sm btn-danger"

@@ -130,6 +130,7 @@ async def dataset_editor(
             "root_types": root_types,
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
+            "export_options": _adapter_export_options(dataset.profile),
             "nav_active": "home",
         },
     )
@@ -442,6 +443,93 @@ async def dataset_export(
         excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _adapter_export_options(profile: str) -> list[dict[str, str]]:
+    """[{key, label}] adapter exports offered for a profile, from the registry."""
+    from metaseed import adapters
+
+    return [
+        {"key": action.key, "label": action.label}
+        for action in adapters.actions_for_profile(profile, kind="export")
+    ]
+
+
+@router.get("/{dataset_id}/export/adapter/{fmt}")
+async def dataset_export_adapter(
+    dataset_id: str,
+    fmt: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Export the dataset via a metaseed integration adapter, as a zip of files.
+
+    Formats are declared in metaseed's adapter registry; a new exporter appears
+    here by declaring itself upstream, not by editing this route.
+    """
+    import zipfile
+    from io import BytesIO
+
+    from fastapi import HTTPException
+    from fastapi.responses import StreamingResponse
+    from metaseed import adapters
+    from metaseed.api.client import MetaseedClient
+
+    action = adapters.find_action(fmt)
+    if action is None or action.kind != "export":
+        raise HTTPException(status_code=404, detail=f"Unknown export format: {fmt}")
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+
+    # Gate on the same predicate that renders the buttons, so a hand-typed format
+    # cannot run an exporter against a profile it was never meant for.
+    if action not in adapters.actions_for_profile(dataset.profile, kind="export"):
+        raise HTTPException(
+            status_code=404,
+            detail=f"{fmt} export is not available for the {dataset.profile} profile.",
+        )
+
+    state = await ensure_dataset_facade(dataset, session)
+    client = MetaseedClient.__new__(MetaseedClient)
+    client._facade = state.get_or_create_facade()
+
+    try:
+        export_fn = action.resolve()
+    except ModuleNotFoundError as exc:  # optional extra not installed
+        raise HTTPException(
+            status_code=400,
+            detail=f"{fmt} export requires the matching metaseed extra.",
+        ) from exc
+    except (ImportError, AttributeError) as exc:
+        raise HTTPException(status_code=500, detail=f"{fmt} export is misconfigured.") from exc
+
+    try:
+        files: dict[str, str] = export_fn(client)
+    except Exception as exc:  # a plugin failure degrades to an error, not a 500 stack
+        raise HTTPException(status_code=500, detail=f"{fmt} export failed: {exc}") from exc
+
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nothing to export for {fmt}: the dataset is empty or does "
+            f"not match this format's expected structure.",
+        )
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, content in files.items():
+            # Never let an exporter-supplied name escape the archive root.
+            from pathlib import PurePosixPath
+
+            archive.writestr(PurePosixPath(name).name, content)
+    buffer.seek(0)
+
+    stem = dataset.name.replace(" ", "_") or "dataset"
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{stem}-{fmt}.zip"'},
     )
 
 
