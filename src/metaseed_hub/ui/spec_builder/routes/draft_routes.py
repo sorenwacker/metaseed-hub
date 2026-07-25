@@ -135,7 +135,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             headers={"HX-Redirect": "/hub/spec-builder"},
         )
 
-    @router.get("/{draft_id}/reset")
+    @router.post("/{draft_id}/reset")
     async def reset_draft(
         request: Request,
         draft_id: str,
