@@ -22,6 +22,7 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     ensure_dataset_facade,
     get_tree_data_from_nodes,
+    parse_workbook_sheets,
     read_upload_capped,
     save_dataset_state,
 )
@@ -547,7 +548,6 @@ async def dataset_import_into_existing(
     Supports JSON, YAML, and Excel files. Adds entities to the existing dataset.
     """
     import json
-    from io import BytesIO
 
     import yaml
 
@@ -606,35 +606,7 @@ async def dataset_import_into_existing(
                 entities_by_type[root_entity] = [data]
 
         elif filename.endswith((".xlsx", ".xls")):
-            import openpyxl
-
-            wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
-
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                rows = list(ws.iter_rows(values_only=True))
-                if len(rows) < 2:
-                    continue
-
-                headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
-
-                for row in rows[1:]:
-                    first_val = str(row[0]) if row[0] else ""
-                    if first_val.startswith("<") and first_val.endswith(">"):
-                        continue
-
-                    entity_data: dict[str, Any] = {}
-                    for i, val in enumerate(row):
-                        if i < len(headers) and val is not None:
-                            str_val = str(val)
-                            if str_val.startswith("<") and str_val.endswith(">"):
-                                continue
-                            entity_data[headers[i]] = val
-
-                    if entity_data:
-                        if sheet_name not in entities_by_type:
-                            entities_by_type[sheet_name] = []
-                        entities_by_type[sheet_name].append(entity_data)
+            entities_by_type = parse_workbook_sheets(content)
         else:
             return HTMLResponse(
                 "<div class='notification error'>Unsupported file format</div>",
