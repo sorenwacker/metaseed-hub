@@ -18,6 +18,13 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # CSP: scripts/styles are self-hosted plus inline handlers the templates use,
+    # and htmx/vis-network are pulled from unpkg. 'unsafe-inline' is required by
+    # the app's inline scripts and event handlers; the remaining directives still
+    # constrain object/base/frame-ancestors and block other external origins.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'" always;
 
     access_log /var/log/nginx/metaseed-access.log;
     error_log /var/log/nginx/metaseed-error.log;

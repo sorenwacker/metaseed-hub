@@ -9,13 +9,35 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from metaseed.services import get_ontology_service
 
+from metaseed_hub.auth import TokenUser
+from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ontology", tags=["ontology"])
+
+async def _require_user_json(request: Request) -> TokenUser:
+    """Require an authenticated user, returning a JSON 401 rather than a redirect.
+
+    These endpoints proxy outbound requests to EMBL-EBI OLS4. Leaving them open
+    lets an unauthenticated caller drive traffic through the hub; gate them behind
+    a valid session cookie. HTTPException keeps the failure a clean 401 under both
+    the root and /hub mounts (the redirect-based auth handler is hub-only).
+    """
+    user = await get_current_user_from_cookie(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+router = APIRouter(
+    prefix="/api/ontology",
+    tags=["ontology"],
+    dependencies=[Depends(_require_user_json)],
+)
 
 __all__ = ["router"]
 

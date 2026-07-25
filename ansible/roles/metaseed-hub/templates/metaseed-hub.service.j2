@@ -9,7 +9,7 @@ Group={{ app_group }}
 WorkingDirectory={{ app_dir }}
 Environment="PATH={{ app_dir }}/.local/bin:{{ app_dir }}/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile={{ app_dir }}/.env
-ExecStart={{ app_dir }}/.venv/bin/uvicorn metaseed_hub.main:app --host 127.0.0.1 --port {{ app_port }} --workers {{ app_workers }}
+ExecStart={{ app_dir }}/.venv/bin/uvicorn metaseed_hub.main:app --host 127.0.0.1 --port {{ app_port }} --workers {{ app_workers }} --proxy-headers --forwarded-allow-ips=127.0.0.1
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5

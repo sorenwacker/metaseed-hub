@@ -5,9 +5,10 @@ import logging
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import File, Form, Request, UploadFile
+from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 
 from metaseed_hub.models import (
     Dataset,
@@ -26,6 +27,7 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
     get_dataset_state,
+    read_upload_capped,
     save_dataset_state,
 )
 from metaseed_hub.ui.render import render_template
@@ -185,8 +187,11 @@ async def dataset_import(
     # Get or create tenant and user
     tenant, db_user = await ensure_tenant_and_user(session, user)
 
-    # Read file content
-    content = await file.read()
+    # Read file content (capped to avoid reading an unbounded upload into memory)
+    try:
+        content = await read_upload_capped(file)
+    except HTTPException:
+        return RedirectResponse("/hub/datasets/new?error=file_too_large", status_code=302)
     filename = file.filename or ""
 
     # Parse based on file type. Keep the form-supplied profile/version; the
@@ -279,7 +284,13 @@ async def dataset_import(
         data={},
     )
     session.add(dataset)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A tenant may not have two datasets with the same name; surface this as a
+        # redirect rather than an unhandled 500.
+        await session.rollback()
+        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
     await session.refresh(dataset)
 
     # Try to import entities from data
@@ -405,7 +416,12 @@ async def dataset_create(
         data={},
     )
     session.add(dataset)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A tenant may not have two datasets with the same name.
+        await session.rollback()
+        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
     await session.refresh(dataset)
 
     # Load example data if requested

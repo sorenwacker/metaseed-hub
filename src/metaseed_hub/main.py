@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -30,6 +31,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
 
     # Startup
+    if settings.using_default_secret_key and not settings.debug:
+        logging.getLogger("metaseed_hub").warning(
+            "SECRET_KEY is the built-in default in a non-debug deployment; CSRF "
+            "tokens are forgeable. Set SECRET_KEY (openssl rand -base64 48)."
+        )
     await db.connect(settings.database_url, echo=settings.debug)
     await manager.connect_redis()
 
