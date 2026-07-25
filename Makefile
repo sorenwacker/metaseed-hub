@@ -30,7 +30,7 @@ dev: up db-migrate
 	uv run uvicorn metaseed_hub.main:app --reload --host 0.0.0.0 --port 7001
 
 test:
-	uv run pytest
+	uv run pytest -m "not selenium"
 
 lint:
 	uv run ruff check src tests
