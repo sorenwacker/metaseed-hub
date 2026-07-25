@@ -40,7 +40,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Run type checking
-        run: uv run mypy src/metaseed_hub --ignore-missing-imports
+        run: uv run mypy src/metaseed_hub --ignore-missing-imports --strict
 
       - name: Run security static analysis
         run: uv run bandit -r src/metaseed_hub --severity-level medium -q
