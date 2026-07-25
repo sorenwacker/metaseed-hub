@@ -212,7 +212,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
             Tenant,
             User,
         )
-        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+        from metaseed_hub.ui.dependencies import (
+            get_current_user_from_cookie,
+            tenant_slug_for,
+        )
 
         user = await get_current_user_from_cookie(request)
         if not user:
@@ -236,7 +239,7 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                     profile_display_names[profile] = profile
 
             # Get user's tenant
-            tenant_slug = user.keycloak_id[:8]
+            tenant_slug = tenant_slug_for(user.keycloak_id)
             result = await session.execute(select(Tenant).where(Tenant.slug == tenant_slug))
             tenant = result.scalar_one_or_none()
 

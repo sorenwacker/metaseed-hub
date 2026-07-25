@@ -1,5 +1,6 @@
 """Shared FastAPI dependencies for Hub UI routes."""
 
+import hashlib
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -16,6 +17,23 @@ if TYPE_CHECKING:
     from metaseed.ui.state import AppState
 
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
+
+
+def tenant_slug_for(keycloak_id: str) -> str:
+    """Return the tenant slug for an OIDC subject.
+
+    The slug is a 32-hex-character (128-bit) SHA-256 prefix of the full subject.
+    It must derive from the *entire* ``keycloak_id``: a shorter truncation of the
+    subject makes the tenant boundary collision-prone, and a collision would map
+    two distinct users into one tenant with full access to each other's data.
+
+    Args:
+        keycloak_id: The OIDC subject (``sub``) of the authenticated user.
+
+    Returns:
+        A deterministic 32-character hex slug.
+    """
+    return hashlib.sha256(keycloak_id.encode()).hexdigest()[:32]
 
 
 class AuthRequiredError(Exception):
@@ -95,7 +113,7 @@ async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant 
     Returns:
         Tenant for the user, or None if not found.
     """
-    slug = user.keycloak_id[:8]
+    slug = tenant_slug_for(user.keycloak_id)
     result = await session.execute(select(Tenant).where(Tenant.slug == slug))
     return result.scalar_one_or_none()
 
@@ -113,7 +131,7 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
     Returns:
         Tuple of (Tenant, User).
     """
-    slug = user.keycloak_id[:8]
+    slug = tenant_slug_for(user.keycloak_id)
 
     # Get or create tenant
     tenant_result = await session.execute(select(Tenant).where(Tenant.slug == slug))

@@ -21,6 +21,7 @@ from metaseed_hub.api import api_router
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, Tenant
+from metaseed_hub.ui.dependencies import tenant_slug_for
 from tests.factories import make_dataset, make_tenant
 
 CALLER_SUB = "caller01-rest-api"
@@ -44,7 +45,7 @@ def _build_client(session: AsyncSession, user: TokenUser) -> AsyncClient:
 
 @pytest_asyncio.fixture
 async def caller(session: AsyncSession) -> TokenUser:
-    """An authenticated user whose tenant slug matches ``CALLER_SUB[:8]``."""
+    """An authenticated user whose tenant slug is derived from ``CALLER_SUB``."""
     return TokenUser(
         sub=CALLER_SUB,
         email="caller@example.com",
@@ -56,7 +57,7 @@ async def caller(session: AsyncSession) -> TokenUser:
 @pytest_asyncio.fixture
 async def own_tenant_id(session: AsyncSession) -> str:
     """Persist the caller's tenant (slug derived from CALLER_SUB) and return its id."""
-    tenant = make_tenant(name="Caller Tenant", slug=CALLER_SUB[:8])
+    tenant = make_tenant(name="Caller Tenant", slug=tenant_slug_for(CALLER_SUB))
     session.add(tenant)
     await session.commit()
     return tenant.id
