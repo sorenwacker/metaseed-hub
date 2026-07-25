@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import Comment, Dataset, SpecDraft, Tenant, User
-from metaseed_hub.ui.dependencies import get_dataset_for_user
+from metaseed_hub.ui.dependencies import get_dataset_for_user, tenant_slug_for
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
 from metaseed_hub.ui.routes import admin as admin_module
 from metaseed_hub.ui.routes.dataset import crud as crud_module
@@ -50,9 +50,9 @@ def _csrf_request() -> Mock:
 
 
 async def _caller_with_tenant(session: AsyncSession) -> tuple[TokenUser, User]:
-    """Persist a tenant whose slug is ``keycloak_id[:8]`` and its user."""
+    """Persist a tenant whose slug is derived from the user's subject."""
     sub = "caller01-softdelete"
-    tenant = make_tenant(slug=sub[:8])
+    tenant = make_tenant(slug=tenant_slug_for(sub))
     session.add(tenant)
     await session.flush()
     db_user = make_user(tenant=tenant, keycloak_id=sub, email="caller@example.com")

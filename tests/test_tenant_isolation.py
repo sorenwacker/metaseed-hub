@@ -44,7 +44,7 @@ from metaseed_hub.models import (
     User,
 )
 from metaseed_hub.ui import dependencies as deps_module
-from metaseed_hub.ui.dependencies import require_dataset_owner
+from metaseed_hub.ui.dependencies import require_dataset_owner, tenant_slug_for
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
 from metaseed_hub.ui.routes.dataset import comments as comments_module
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
@@ -74,10 +74,10 @@ def _csrf_request() -> Mock:
 async def _caller_with_tenant(session: AsyncSession) -> tuple[TokenUser, User]:
     """Persist a tenant and its user, returning the token and the User row.
 
-    The tenant slug is ``keycloak_id[:8]`` so ``get_tenant_for_user`` resolves it.
+    The tenant slug is derived from the subject so ``get_tenant_for_user`` resolves it.
     """
     sub = "caller01-isolation"
-    tenant = make_tenant(slug=sub[:8])
+    tenant = make_tenant(slug=tenant_slug_for(sub))
     session.add(tenant)
     await session.flush()
     db_user = make_user(tenant=tenant, keycloak_id=sub, email="caller@example.com")
@@ -284,8 +284,8 @@ async def test_get_dataset_state_for_mutation_denies_cross_tenant(
 @pytest.mark.asyncio
 async def test_require_dataset_owner_denies_viewer_member(session: AsyncSession) -> None:
     """A VIEWER member is denied owner-only operations; the tenant owner is allowed."""
-    owner_tenant = make_tenant(slug="ownerds1")
-    viewer_tenant = make_tenant(slug="viewerd1")
+    owner_tenant = make_tenant(slug=tenant_slug_for("ownerds1-kc"))
+    viewer_tenant = make_tenant(slug=tenant_slug_for("viewerd1-kc"))
     session.add_all([owner_tenant, viewer_tenant])
     await session.flush()
     owner = make_user(tenant=owner_tenant, keycloak_id="ownerds1-kc")

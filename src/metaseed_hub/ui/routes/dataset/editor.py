@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import File, Request, UploadFile
+from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -22,6 +22,7 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     ensure_dataset_facade,
     get_tree_data_from_nodes,
+    read_upload_capped,
     save_dataset_state,
 )
 from metaseed_hub.ui.render import render_template
@@ -557,8 +558,13 @@ async def dataset_import_into_existing(
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    # Read file content
-    content = await file.read()
+    # Read file content (capped to avoid reading an unbounded upload into memory)
+    try:
+        content = await read_upload_capped(file)
+    except HTTPException as exc:
+        return HTMLResponse(
+            f"<div class='notification error'>{exc.detail}</div>", status_code=exc.status_code
+        )
     filename = file.filename or ""
 
     # Parse based on file type
