@@ -83,7 +83,12 @@ def create_hub_app() -> FastAPI:
     from metaseed_hub.auth import verify_token
     from metaseed_hub.config import get_settings
 
-    app = FastAPI(title="Metaseed Hub")
+    # Apply the Origin-based CSRF guard to every cookie-authenticated hub route,
+    # not just the spec builder. The /api surface is token-authenticated and
+    # mounted separately, so it is unaffected.
+    from metaseed_hub.ui.security import require_same_origin
+
+    app = FastAPI(title="Metaseed Hub", dependencies=[Depends(require_same_origin)])
 
     # Token refresh middleware - auto-refresh expired tokens
     class TokenRefreshMiddleware(BaseHTTPMiddleware):
