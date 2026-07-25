@@ -145,6 +145,15 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         enum_values: str = Form(""),
         unique_within: str = Form(""),
         reference: str = Form(""),
+        # spec_version 0.6 markers (#137/#143/#98).
+        owns: bool = Form(False),
+        is_identifier: bool = Form(False),
+        is_label: bool = Form(False),
+        tier: str = Form(""),
+        label: str = Form(""),
+        unit: str = Form(""),
+        example: str = Form(""),
+        options: str = Form(""),
     ) -> HTMLResponse:
         """Update a field."""
         if entity_name not in ctx.spec.entities:
@@ -222,6 +231,18 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
         field.constraints = form_data.get_constraints()
+
+        # spec_version 0.6 markers. Booleans default to None (not False) so an
+        # unset marker is dropped on serialization rather than written as false.
+        field.owns = owns or None
+        field.is_identifier = is_identifier or None
+        field.is_label = is_label or None
+        tier_value = tier.strip()
+        field.tier = tier_value if tier_value in ("required", "recommended", "optional") else None
+        field.label = label.strip() or None
+        field.unit = unit.strip() or None
+        field.example = example.strip() or None
+        field.options = [o.strip() for o in options.split(",") if o.strip()] or None
 
         ctx.builder.editing_field_idx = None
         ctx.builder.mark_changed()
