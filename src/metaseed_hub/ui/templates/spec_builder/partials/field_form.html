@@ -196,6 +196,60 @@
             </div>
         </details>
 
+        <details class="field-optional">
+            <summary>Markers</summary>
+            <div class="field-optional-content">
+                <div class="form-group form-group-checkbox">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="owns" {% if field.owns %}checked{% endif %}>
+                        Owns (this list/entity field contains the nested entity)
+                    </label>
+                </div>
+                <div class="form-group form-group-checkbox">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="is_identifier" {% if field.is_identifier %}checked{% endif %}>
+                        Identifier
+                    </label>
+                </div>
+                <div class="form-group form-group-checkbox">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="is_label" {% if field.is_label %}checked{% endif %}>
+                        Label field
+                    </label>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Tier</label>
+                        <select name="tier" class="form-input">
+                            <option value="" {% if not field.tier %}selected{% endif %}>&mdash;</option>
+                            <option value="required" {% if field.tier == 'required' %}selected{% endif %}>required</option>
+                            <option value="recommended" {% if field.tier == 'recommended' %}selected{% endif %}>recommended</option>
+                            <option value="optional" {% if field.tier == 'optional' %}selected{% endif %}>optional</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Unit</label>
+                        <input type="text" name="unit" class="form-input" value="{{ field.unit or '' }}">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label">Label</label>
+                        <input type="text" name="label" class="form-input" value="{{ field.label or '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Example</label>
+                        <input type="text" name="example" class="form-input" value="{{ field.example or '' }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Options (comma-separated)</label>
+                    <input type="text" name="options" class="form-input"
+                           value="{% if field.options %}{{ field.options|join(', ') }}{% endif %}">
+                </div>
+            </div>
+        </details>
+
         <div class="field-form-actions">
             <button type="button"
                     class="btn btn-sm"

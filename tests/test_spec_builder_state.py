@@ -8,6 +8,8 @@ coordinate/date-range validation-rule fields.
 
 from metaseed.specs.schema import (
     EntityDefSpec,
+    FieldSpec,
+    FieldType,
     OntologyDefinition,
     ProfileSpec,
     ValidationRuleSpec,
@@ -26,7 +28,25 @@ def _rich_spec() -> ProfileSpec:
         entities={
             "Investigation": EntityDefSpec(
                 description="An investigation",
-                fields=[],
+                fields=[
+                    FieldSpec(
+                        name="studies",
+                        type=FieldType.LIST,
+                        items="Study",
+                        owns=True,
+                        tier="required",
+                        label="Studies",
+                        unit="count",
+                        example="STU-1",
+                        options=["a", "b"],
+                    ),
+                    FieldSpec(
+                        name="unique_id",
+                        type=FieldType.STRING,
+                        is_identifier=True,
+                        is_label=True,
+                    ),
+                ],
                 example={"unique_id": "INV-1"},
             )
         },
@@ -66,6 +86,20 @@ def test_state_roundtrip_preserves_all_spec_fields() -> None:
     assert spec.ontologies["envo"].name == "ENVO"
     # Entity-level field the old serializer dropped.
     assert spec.entities["Investigation"].example == {"unique_id": "INV-1"}
+    # spec_version 0.6 field markers the builder must preserve (the ones the hub
+    # editor now exposes: owns / is_identifier / is_label / tier / label / unit /
+    # example / options).
+    fields = {f.name: f for f in spec.entities["Investigation"].fields}
+    studies = fields["studies"]
+    assert studies.owns is True
+    assert studies.tier == "required"
+    assert studies.label == "Studies"
+    assert studies.unit == "count"
+    assert studies.example == "STU-1"
+    assert studies.options == ["a", "b"]
+    uid = fields["unique_id"]
+    assert uid.is_identifier is True
+    assert uid.is_label is True
     # Validation-rule fields the old serializer dropped.
     coords = next(r for r in spec.validation_rules if r.name == "coords")
     assert coords.type == "coordinate_pair"
