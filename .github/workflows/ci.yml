@@ -43,4 +43,77 @@ jobs:
         run: uv run mypy src/metaseed_hub --ignore-missing-imports
 
       - name: Run tests
-        run: uv run pytest tests/ -v --ignore=tests/test_models.py --ignore=tests/test_multi_spec.py --ignore=tests/test_entity_persistence.py --ignore=tests/test_entity_service.py --ignore=tests/test_routes_integration.py
+        run: uv run pytest tests/ -v -m "not selenium" --ignore=tests/test_models.py --ignore=tests/test_multi_spec.py --ignore=tests/test_entity_persistence.py --ignore=tests/test_entity_service.py --ignore=tests/test_routes_integration.py
+
+  selenium:
+    # Browser end-to-end (login -> create dataset -> export). Advisory: a real
+    # browser + Keycloak round-trip is inherently flaky, so it must never block a
+    # merge. Brings up the full stack via docker compose (postgres/redis/keycloak).
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      # Credentials come from repo secrets (the same throwaway dev fixtures the
+      # compose stack and docker/keycloak-realm.json use), so no secret literal
+      # sits in this file. docker-compose.ci.yml reads POSTGRES_*/KEYCLOAK_ADMIN_*
+      # from this env; the app reads DATABASE_URL/KEYCLOAK_*.
+      POSTGRES_USER: metaseed
+      POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+      POSTGRES_DB: metaseed_hub
+      KEYCLOAK_ADMIN_USER: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${{ secrets.CI_KEYCLOAK_ADMIN_PASSWORD }}
+      DATABASE_URL: postgresql+asyncpg://metaseed:${{ secrets.CI_DB_PASSWORD }}@localhost:7432/metaseed_hub
+      REDIS_URL: redis://localhost:7379/0
+      KEYCLOAK_URL: http://localhost:7080
+      KEYCLOAK_REALM: metaseed
+      KEYCLOAK_CLIENT_ID: metaseed-hub
+      KEYCLOAK_CLIENT_SECRET: ${{ secrets.CI_KC_CLIENT_SECRET }}
+      KC_DEMO_USER: demo
+      KC_DEMO_PASSWORD: ${{ secrets.CI_KC_DEMO_PASSWORD }}
+      APP_URL: http://localhost:7001
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Start the stack (postgres, redis, keycloak)
+        run: |
+          docker compose -f docker-compose.ci.yml up -d postgres redis keycloak
+          # Keycloak is a JVM service: /realms/metaseed answers well before the
+          # token endpoint is actually warm, and a cold first token exchange is
+          # the main source of login-test flakiness. Gate on a real password-grant
+          # token succeeding, which proves discovery + token endpoints are warm.
+          for i in $(seq 1 90); do
+            if curl -sf -X POST \
+                http://localhost:7080/realms/metaseed/protocol/openid-connect/token \
+                -d grant_type=password -d client_id="$KEYCLOAK_CLIENT_ID" \
+                -d client_secret="$KEYCLOAK_CLIENT_SECRET" \
+                -d username="$KC_DEMO_USER" -d password="$KC_DEMO_PASSWORD" \
+                | grep -q access_token; then
+              echo "keycloak token endpoint warm"; break
+            fi
+            sleep 3
+          done
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Migrate
+        run: uv run alembic upgrade head
+
+      - name: Start the app
+        run: |
+          uv run uvicorn metaseed_hub.main:app --host 127.0.0.1 --port 7001 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7001/api/health >/dev/null && break
+            sleep 2
+          done
+          # Warm the app's OIDC discovery cache (get_oidc_config caches on first
+          # hit) so the login under test doesn't pay for the cold fetch.
+          curl -s http://localhost:7001/hub/auth/login >/dev/null || true
+
+      - name: Run browser tests (headless Chrome resolves via Selenium Manager)
+        run: uv run pytest tests/ -m selenium -v
