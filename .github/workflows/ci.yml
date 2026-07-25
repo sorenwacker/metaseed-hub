@@ -6,6 +6,13 @@ on:
     tags: ['v*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# Cancel an in-progress run when a newer commit lands on the same ref, so
+# repeated pushes to a PR don't stack up parallel full runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -52,6 +59,10 @@ jobs:
     # Browser end-to-end (login -> create dataset -> export). Advisory: a real
     # browser + Keycloak round-trip is inherently flaky, so it must never block a
     # merge. Brings up the full stack via docker compose (postgres/redis/keycloak).
+    # Runs on pushes to main, tags, and manual dispatch -- not on every PR push --
+    # to conserve Actions minutes (it never gates a merge). Run it on a branch
+    # via the Actions "Run workflow" button when a UI change needs pre-merge cover.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
