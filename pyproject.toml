@@ -28,6 +28,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "selenium>=4.20",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
@@ -48,6 +49,9 @@ where = ["src"]
 version_file = "src/metaseed_hub/_version.py"
 
 [tool.pytest.ini_options]
+markers = [
+    "selenium: browser end-to-end tests (needs Chrome + the docker stack + app on :7001)",
+]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
