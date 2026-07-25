@@ -69,6 +69,47 @@ class TestOntologyAuth:
         assert resp.status_code == 401
 
 
+class TestOriginGuard:
+    """S3: spec-builder mutations get an Origin-based CSRF defense."""
+
+    @staticmethod
+    def _app() -> FastAPI:
+        from fastapi import Depends
+
+        from metaseed_hub.ui.security import require_same_origin
+
+        app = FastAPI()
+
+        @app.post("/x", dependencies=[Depends(require_same_origin)])
+        def _post() -> dict[str, bool]:
+            return {"ok": True}
+
+        @app.get("/y", dependencies=[Depends(require_same_origin)])
+        def _get() -> dict[str, bool]:
+            return {"ok": True}
+
+        return app
+
+    def test_cross_origin_post_is_blocked(self) -> None:
+        client = TestClient(self._app(), base_url="http://testserver")
+        resp = client.post("/x", headers={"Origin": "http://evil.example"})
+        assert resp.status_code == 403
+
+    def test_same_origin_post_is_allowed(self) -> None:
+        client = TestClient(self._app(), base_url="http://testserver")
+        resp = client.post("/x", headers={"Origin": "http://testserver"})
+        assert resp.status_code == 200
+
+    def test_missing_origin_falls_back_to_samesite(self) -> None:
+        client = TestClient(self._app(), base_url="http://testserver")
+        assert client.post("/x").status_code == 200
+
+    def test_safe_method_is_never_blocked(self) -> None:
+        client = TestClient(self._app(), base_url="http://testserver")
+        resp = client.get("/y", headers={"Origin": "http://evil.example"})
+        assert resp.status_code == 200
+
+
 class TestDuplicateDatasetName:
     """L4: a tenant cannot hold two datasets with the same name."""
 

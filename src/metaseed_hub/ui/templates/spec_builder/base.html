@@ -44,9 +44,11 @@
             <a href="/hub/spec-builder/{{ draft_id }}/export" class="btn btn-sm" download title="Download YAML">Export</a>
         </div>
         <div class="toolbar-right">
-            <a href="/hub/spec-builder/{{ draft_id }}/reset" class="btn btn-sm"
-               onclick="return confirm('Clear all entities and start fresh?')"
-               title="Reset specification">New</a>
+            <form method="post" action="/hub/spec-builder/{{ draft_id }}/reset"
+                  class="inline-form"
+                  onsubmit="return confirm('Clear all entities and start fresh?')">
+                <button type="submit" class="btn btn-sm" title="Reset specification">New</button>
+            </form>
             <button class="btn btn-sm btn-primary"
                     hx-post="/hub/spec-builder/{{ draft_id }}/save"
                     hx-target="#notification-container"
