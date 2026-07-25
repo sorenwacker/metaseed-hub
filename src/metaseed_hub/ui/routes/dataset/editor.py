@@ -229,10 +229,6 @@ async def dataset_validate(
     user: CurrentUser,
 ) -> HTMLResponse:
     """Validate all entities in the dataset against their schemas."""
-    import html as html_module
-
-    from pydantic import ValidationError
-
     try:
         validate_csrf_or_error(request)
     except Exception:
@@ -244,8 +240,15 @@ async def dataset_validate(
     state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
-    errors: list[dict[str, Any]] = []
+    errors = _collect_validation_errors(state, facade)
+    return HTMLResponse(_render_validation_results(dataset_id, state, errors))
 
+
+def _collect_validation_errors(state: Any, facade: Any) -> list[dict[str, Any]]:
+    """Re-validate every entity node and return one error record per failing node."""
+    from pydantic import ValidationError
+
+    errors: list[dict[str, Any]] = []
     for node_id, node in state.nodes_by_id.items():
         try:
             helper = getattr(facade, node.entity_type)
@@ -284,13 +287,18 @@ async def dataset_validate(
                     "errors": [{"field": "", "message": str(e)}],
                 }
             )
+    return errors
+
+
+def _render_validation_results(dataset_id: str, state: Any, errors: list[dict[str, Any]]) -> str:
+    """Render the validation summary, per-type breakdown, and error list as HTML."""
+    import html as html_module
 
     # Count entities by type
     entity_counts: dict[str, int] = {}
     for node in state.nodes_by_id.values():
         entity_counts[node.entity_type] = entity_counts.get(node.entity_type, 0) + 1
 
-    # Build HTML response
     total = len(state.nodes_by_id)
     valid_count = total - len(errors)
 
@@ -356,8 +364,7 @@ async def dataset_validate(
         html += "</div>"
 
     html += "</div>"
-
-    return HTMLResponse(html)
+    return html
 
 
 @router.get("/{dataset_id}/graph", response_class=HTMLResponse)
