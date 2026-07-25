@@ -1197,7 +1197,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.15.0"
+version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1211,9 +1211,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/c1/ea8b0bed0803fbfaf301ee3ed99613333312e8245d0839971725509bb884/metaseed-0.15.0.tar.gz", hash = "sha256:16d069fd177a4782710c5c7f65cb03efd29fa9c5cd416e6d61ad631c729d784c", size = 5099876, upload-time = "2026-07-24T19:55:39.015Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/ce/17fc6cdbc23310670cb76d8787999043d8f0303358b13c484b936a7a44c2/metaseed-0.16.0.tar.gz", hash = "sha256:f3268c1676a8d75f5c95414a5896757919c7f9145fcd9d1f5d90013c2bd49aba", size = 5103154, upload-time = "2026-07-25T00:05:27.107Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/d8/eb03aa3e58cc13439e3fd57c2f2ccafbe9b06e6b0c924412520196f78afe/metaseed-0.15.0-py3-none-any.whl", hash = "sha256:d1c9526f55180c0e6e7e558c00947b4dcb2043af1913fffbaf10852a9fa30c22", size = 696120, upload-time = "2026-07-24T19:55:36.847Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/88/763a58e695c93064e67c6b6ddcdb7f9fcb6b19c178f33993b0588ce3fece/metaseed-0.16.0-py3-none-any.whl", hash = "sha256:565eafd0283ee4d939861ff10160c30d5ebf1133d4fbe3b88a8b9bfeb747b03f", size = 697642, upload-time = "2026-07-25T00:05:25.283Z" },
 ]
 
 [[package]]
@@ -1269,7 +1269,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
-    { name = "metaseed", specifier = ">=0.15.0" },
+    { name = "metaseed", specifier = ">=0.16.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
