@@ -36,6 +36,7 @@ from metaseed_hub.ui.helpers.tree import (
 )
 from metaseed_hub.ui.helpers.uploads import (
     MAX_UPLOAD_BYTES,
+    parse_workbook_sheets,
     read_upload_capped,
 )
 
@@ -56,6 +57,7 @@ __all__ = [
     "get_tree_data_from_nodes",
     "humanize_field_name",
     "make_json_serializable",
+    "parse_workbook_sheets",
     "read_upload_capped",
     "save_dataset_state",
     "serialize_tree",

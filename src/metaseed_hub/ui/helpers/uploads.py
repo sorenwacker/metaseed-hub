@@ -1,4 +1,7 @@
-"""Bounded reading of uploaded files."""
+"""Bounded reading and parsing of uploaded files."""
+
+from io import BytesIO
+from typing import Any
 
 from fastapi import HTTPException, UploadFile
 
@@ -30,3 +33,49 @@ async def read_upload_capped(file: UploadFile, max_bytes: int = MAX_UPLOAD_BYTES
             detail=f"File too large; the limit is {max_bytes // (1024 * 1024)} MiB.",
         )
     return content
+
+
+def parse_workbook_sheets(content: bytes) -> dict[str, list[dict[str, Any]]]:
+    """Parse an ``.xlsx`` workbook into ``{sheet_name: [row_dicts]}``.
+
+    Each sheet is one entity type, the first row is the header, and template
+    placeholder cells/rows (``<field>``) are skipped. Shared by the create-import
+    and add-to-existing import routes so the parsing lives in one place.
+
+    Args:
+        content: The raw workbook bytes.
+
+    Returns:
+        Mapping of sheet name to a list of row dicts (header -> cell value).
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+
+    entities_by_type: dict[str, list[dict[str, Any]]] = {}
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            continue
+
+        headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
+
+        for row in rows[1:]:
+            # Skip placeholder rows (first cell like ``<value>``).
+            first_val = str(row[0]) if row[0] else ""
+            if first_val.startswith("<") and first_val.endswith(">"):
+                continue
+
+            entity_data: dict[str, Any] = {}
+            for i, val in enumerate(row):
+                if i < len(headers) and val is not None:
+                    str_val = str(val)
+                    if str_val.startswith("<") and str_val.endswith(">"):
+                        continue
+                    entity_data[headers[i]] = val
+
+            if entity_data:
+                entities_by_type.setdefault(sheet_name, []).append(entity_data)
+
+    return entities_by_type

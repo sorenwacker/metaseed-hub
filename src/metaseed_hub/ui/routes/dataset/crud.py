@@ -3,7 +3,7 @@
 import copy
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -27,6 +27,7 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
     get_dataset_state,
+    parse_workbook_sheets,
     read_upload_capped,
     save_dataset_state,
 )
@@ -204,44 +205,8 @@ async def dataset_import(
         elif filename.endswith(".json"):
             data = json.loads(content.decode("utf-8"))
         elif filename.endswith((".xlsx", ".xls")):
-            # Excel import - read sheets as entity data
-            # Each sheet name = entity type, headers = field names
-            from io import BytesIO
-
-            import openpyxl
-
-            wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
-
-            # Parse all sheets into entities dict
-            entities_by_type: dict[str, list[dict[str, Any]]] = {}
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-                rows = list(ws.iter_rows(values_only=True))
-                if len(rows) < 2:
-                    continue
-
-                headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
-
-                # Parse data rows (skip header and placeholder row if it has <field> format)
-                for row in rows[1:]:
-                    # Skip placeholder rows
-                    first_val = str(row[0]) if row[0] else ""
-                    if first_val.startswith("<") and first_val.endswith(">"):
-                        continue
-
-                    entity_data = {}
-                    for i, val in enumerate(row):
-                        if i < len(headers) and val is not None:
-                            # Skip placeholder values
-                            str_val = str(val)
-                            if str_val.startswith("<") and str_val.endswith(">"):
-                                continue
-                            entity_data[headers[i]] = val
-
-                    if entity_data:
-                        if sheet_name not in entities_by_type:
-                            entities_by_type[sheet_name] = []
-                        entities_by_type[sheet_name].append(entity_data)
+            # Excel import - each sheet name = entity type, headers = field names.
+            entities_by_type = parse_workbook_sheets(content)
 
             # Store entities for later processing
             data = {"_entities_by_type": entities_by_type}
