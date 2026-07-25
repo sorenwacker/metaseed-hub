@@ -110,6 +110,67 @@ class TestOriginGuard:
         assert resp.status_code == 200
 
 
+class TestOriginGuardIsAppWide:
+    """#1: the Origin guard is wired on the whole hub app, not one router."""
+
+    def test_cross_origin_post_to_a_hub_route_is_blocked(self) -> None:
+        from metaseed_hub.ui.app import create_hub_app
+
+        client = TestClient(create_hub_app(), raise_server_exceptions=False)
+        # A cross-origin POST to the dataset router is rejected by the app-level
+        # guard before auth or the route body runs.
+        resp = client.post("/datasets", headers={"Origin": "http://evil.example"})
+        assert resp.status_code == 403
+        assert "Cross-origin" in resp.text
+
+    def test_same_origin_post_is_not_blocked_by_the_guard(self) -> None:
+        from metaseed_hub.ui.app import create_hub_app
+
+        client = TestClient(create_hub_app(), raise_server_exceptions=False)
+        resp = client.post("/datasets", headers={"Origin": "http://testserver"})
+        # Same-origin passes the guard; it then fails auth/CSRF, so whatever the
+        # status, it must not be the guard's cross-origin rejection.
+        assert "Cross-origin" not in resp.text
+
+
+class TestResetIsPost:
+    """S1: the draft reset must not be a state-changing GET."""
+
+    def test_reset_route_is_post_only(self) -> None:
+        from fastapi.templating import Jinja2Templates
+
+        from metaseed_hub.ui.spec_builder.routes import create_spec_builder_router
+
+        router = create_spec_builder_router(
+            Jinja2Templates(directory="src/metaseed_hub/ui/templates")
+        )
+        reset = [r for r in router.routes if getattr(r, "path", "").endswith("/reset")]
+        assert reset, "reset route not found"
+        methods = set().union(*(r.methods for r in reset))
+        assert "POST" in methods
+        assert "GET" not in methods
+
+
+class TestCsrfCookieSecure:
+    """L1: the CSRF cookie is Secure in a non-debug deployment."""
+
+    def test_csrf_cookie_is_secure_when_not_debug(self, monkeypatch) -> None:
+        import metaseed_hub.ui.render as render_mod
+        from metaseed_hub.config import Settings
+        from metaseed_hub.ui.app import create_hub_app
+
+        monkeypatch.setattr(
+            render_mod, "get_settings", lambda: Settings(debug=False, secret_key="x" * 40)
+        )
+        client = TestClient(create_hub_app(), raise_server_exceptions=False)
+        resp = client.get("/privacy")
+        csrf_cookies = [
+            c for c in resp.headers.get_list("set-cookie") if "metaseed_csrf_token" in c
+        ]
+        assert csrf_cookies, "no CSRF cookie was set"
+        assert all("Secure" in c for c in csrf_cookies)
+
+
 class TestDuplicateDatasetName:
     """L4: a tenant cannot hold two datasets with the same name."""
 
