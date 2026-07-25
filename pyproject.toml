@@ -36,7 +36,15 @@ dev = [
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
     "vulture>=2.13",
+    "bandit>=1.8",
 ]
+
+[tool.bandit]
+# Gate on genuine issues. The remaining low-severity hits are false positives:
+# B105 flags cookie-name and dev-default constants as "passwords"; B101/B110 are
+# intentional asserts and best-effort try/except in known spots. CI runs bandit
+# with --severity-level medium, so these do not fail the build.
+exclude_dirs = ["tests"]
 
 [build-system]
 requires = ["setuptools>=64", "setuptools-scm>=8"]
