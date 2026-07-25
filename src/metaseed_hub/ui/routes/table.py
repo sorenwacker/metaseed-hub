@@ -306,6 +306,29 @@ async def add_table_row(
     except AttributeError:
         return HTMLResponse("<tr><td>Unknown entity type</td></tr>")
 
+    return await _add_entity_list_row(
+        session, dataset, state, dataset_id, parent_node_id, field_name, nested_type, nested_helper
+    )
+
+
+async def _add_entity_list_row(
+    session: AsyncSession,
+    dataset: Dataset,
+    state: AppState,
+    dataset_id: str,
+    parent_node_id: str,
+    field_name: str,
+    nested_type: str,
+    nested_helper: Any,
+) -> HTMLResponse:
+    """Append a default child entity to an entity-list field and return its row HTML.
+
+    The entity-list counterpart to ``_handle_primitive_list_row``: it creates the
+    child TreeNode with default values, persists the dataset, and renders the new
+    table row.
+    """
+    parent_node = state.nodes_by_id[parent_node_id]
+
     # Get parent's identifier for reference fields
     parent_identifier = None
     if hasattr(parent_node.instance, "model_dump"):
