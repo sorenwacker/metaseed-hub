@@ -176,6 +176,72 @@ async def test_join_room_subscribe_serialized_behind_pubsub_lock() -> None:
     assert manager._pubsub.subscribed == ["project:proj-1:messages"]  # type: ignore[attr-defined]
 
 
+class SlowReadPubSub:
+    """A PubSub whose read holds the caller for one full ``timeout`` period.
+
+    Models redis-py: ``get_message`` blocks up to ``timeout`` seconds. The
+    listener runs this read while holding ``_pubsub_lock``, so the read's
+    duration bounds how long a concurrent join/leave waits for the lock.
+    """
+
+    def __init__(self) -> None:
+        self.subscribed = False
+        self.subscribes: list[str] = []
+        self.read_started = asyncio.Event()
+
+    async def subscribe(self, channel: str) -> None:
+        self.subscribes.append(channel)
+        self.subscribed = True
+
+    async def unsubscribe(self, channel: str) -> None:
+        return None
+
+    async def get_message(
+        self, ignore_subscribe_messages: bool = False, timeout: float = 0
+    ) -> None:
+        self.read_started.set()
+        await asyncio.sleep(timeout)
+        return None
+
+
+@pytest.mark.asyncio
+async def test_join_not_stalled_for_a_full_second_behind_listener_read() -> None:
+    """A join contending with an in-progress listener read must not stall ~1s.
+
+    The listener holds ``_pubsub_lock`` for the duration of each ``get_message``
+    read. If that read blocks for a full second, every join/leave that needs the
+    lock stalls that long. The read timeout is bounded so a join arriving mid-read
+    waits only a fraction of a second.
+    """
+    manager = WebSocketManager()
+    manager._redis = FakeRedis()  # type: ignore[assignment]
+    pubsub = SlowReadPubSub()
+    manager._pubsub = pubsub  # type: ignore[assignment]
+
+    # First join before the listener runs: records a subscription so the
+    # listener's next iteration actually performs a (lock-holding) read.
+    await manager.join_room("proj-1", "conn-1", FakeWebSocket(), "u1", "U1")  # type: ignore[arg-type]
+
+    task = asyncio.create_task(manager._listen())
+    # Wait until the listener is inside get_message, holding the lock.
+    await asyncio.wait_for(pubsub.read_started.wait(), timeout=2.0)
+
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    await manager.join_room("proj-2", "conn-2", FakeWebSocket(), "u2", "U2")  # type: ignore[arg-type]
+    elapsed = loop.time() - start
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    assert "project:proj-2:messages" in pubsub.subscribes
+    # A full-second lock hold (the bug) would push this well past 0.5s.
+    assert elapsed < 0.5
+
+
 @pytest.mark.asyncio
 async def test_broadcast_roundtrip_through_dispatch_delivers_once() -> None:
     """A published broadcast, when looped back through dispatch, reaches a peer once."""

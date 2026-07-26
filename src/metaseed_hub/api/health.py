@@ -27,27 +27,35 @@ async def health_check() -> dict[str, Any]:
     }
 
     # Check database
+    engine = None
     try:
         engine = create_async_engine(settings.database_url)
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         status["services"]["database"] = "healthy"
-        await engine.dispose()
     except Exception as e:
         status["services"]["database"] = f"unhealthy: {e}"
         status["status"] = "degraded"
+    finally:
+        # Dispose even on failure, or the engine's connection pool leaks on
+        # every unhealthy poll.
+        if engine is not None:
+            await engine.dispose()
 
     # Check Redis
+    client = None
     try:
         import redis.asyncio as redis
 
         client = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         await client.ping()
         status["services"]["redis"] = "healthy"
-        await client.aclose()
     except Exception as e:
         status["services"]["redis"] = f"unhealthy: {e}"
         status["status"] = "degraded"
+    finally:
+        if client is not None:
+            await client.aclose()
 
     return status
 

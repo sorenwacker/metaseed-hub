@@ -480,7 +480,6 @@ async def dataset_export_adapter(
     import zipfile
     from io import BytesIO
 
-    from fastapi import HTTPException
     from fastapi.responses import StreamingResponse
     from metaseed import adapters
     from metaseed.api.client import MetaseedClient
