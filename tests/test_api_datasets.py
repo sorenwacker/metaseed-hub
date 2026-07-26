@@ -242,3 +242,53 @@ async def test_create_in_own_tenant_succeeds(
 
     assert resp.status_code == 201
     assert resp.json()["name"] == "legit"
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_invalid_name(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """The REST create path enforces the same name rule as the repository save."""
+    async with _build_client(session, caller) as client:
+        resp = await client.post(
+            "/api/datasets",
+            json={
+                "tenant_id": own_tenant_id,
+                "name": "bad/name",
+                "profile": "miappe",
+                "version": "1.2",
+            },
+        )
+    assert resp.status_code == 422
+    assert "alphanumeric" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_accepts_valid_name(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """A valid name creates the dataset."""
+    async with _build_client(session, caller) as client:
+        resp = await client.post(
+            "/api/datasets",
+            json={
+                "tenant_id": own_tenant_id,
+                "name": "good-name",
+                "profile": "miappe",
+                "version": "1.2",
+            },
+        )
+    assert resp.status_code == 201
+    assert resp.json()["name"] == "good-name"
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_invalid_name(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """PATCH enforces the dataset name rule too."""
+    ds = await _add_dataset(session, own_tenant_id, "start-name")
+    async with _build_client(session, caller) as client:
+        resp = await client.patch(f"/api/datasets/{ds.id}", json={"name": "bad/name"})
+    assert resp.status_code == 422
+    assert "alphanumeric" in resp.json()["detail"]
