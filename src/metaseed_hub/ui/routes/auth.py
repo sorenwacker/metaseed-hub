@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 
 from metaseed_hub.config import get_settings
+from metaseed_hub.ui.dependencies import DbSession
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -202,15 +203,23 @@ async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
 
 
 @router.get("/profile")
-async def auth_profile(request: Request) -> Response:
-    """Show user profile page with SRAM/OIDC info."""
+async def auth_profile(request: Request, session: DbSession) -> Response:
+    """Show the profile page with SRAM/OIDC info and account controls."""
 
-    from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+    from metaseed_hub.repositories.account import sole_owned_datasets
+    from metaseed_hub.ui.dependencies import (
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
+    from metaseed_hub.ui.helpers import get_or_create_csrf_token
     from metaseed_hub.ui.render import render_template
 
     user = await get_current_user_from_cookie(request)
     if not user:
         return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+    _, db_user = await ensure_tenant_and_user(session, user)
+    blocking = await sole_owned_datasets(session, db_user)
 
     return render_template(
         request=request,
@@ -218,8 +227,61 @@ async def auth_profile(request: Request) -> Response:
         context={
             "user": user,
             "nav_active": "profile",
+            "csrf_token": get_or_create_csrf_token(request),
+            "sole_owned_datasets": blocking,
+            "delete_error": request.query_params.get("error"),
         },
     )
+
+
+@router.post("/profile/delete")
+async def auth_delete_account(request: Request, session: DbSession) -> Response:
+    """Permanently delete the signed-in user's account (GDPR right to erasure).
+
+    Refuses while the user solely owns a dataset -- those must first be
+    reassigned to a new owner or deleted. Requires the CSRF token and a typed
+    email confirmation to guard against accidental deletion.
+    """
+    from metaseed_hub.repositories.account import (
+        AccountDeletionBlockedError,
+        delete_account,
+    )
+    from metaseed_hub.ui.dependencies import (
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
+    from metaseed_hub.ui.security import (
+        CSRFValidationError,
+        csrf_error_response,
+        validate_csrf_or_error,
+    )
+
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+    form = await request.form()
+    csrf_token = form.get("_csrf_token")
+    try:
+        validate_csrf_or_error(request, csrf_token if isinstance(csrf_token, str) else None)
+    except CSRFValidationError:
+        return csrf_error_response()
+
+    if (str(form.get("confirm_email") or "")).strip() != user.email:
+        return RedirectResponse(url="/hub/auth/profile?error=confirm", status_code=302)
+
+    _, db_user = await ensure_tenant_and_user(session, user)
+    try:
+        await delete_account(session, db_user)
+    except AccountDeletionBlockedError:
+        await session.rollback()
+        return RedirectResponse(url="/hub/auth/profile?error=owned_datasets", status_code=302)
+    await session.commit()
+
+    response = RedirectResponse(url="/hub/", status_code=302)
+    response.delete_cookie(key=ACCESS_TOKEN_COOKIE)
+    response.delete_cookie(key=REFRESH_TOKEN_COOKIE)
+    return response
 
 
 @router.get("/logout")

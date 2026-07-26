@@ -120,21 +120,31 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
+    # passive_deletes: the child FKs are ON DELETE CASCADE, so let the database
+    # remove these rows on user deletion rather than the ORM nulling their FKs
+    # (which fails for membership/reaction tables where user_id is part of the
+    # primary key). This is what makes account deletion possible.
     memberships: Mapped[list["TeamMembership"]] = relationship(
-        "TeamMembership", back_populates="user"
+        "TeamMembership", back_populates="user", passive_deletes=True
     )
     dataset_memberships: Mapped[list["DatasetMember"]] = relationship(
-        "DatasetMember", back_populates="user"
+        "DatasetMember", back_populates="user", passive_deletes=True
     )
-    spec_memberships: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="user")
-    notes: Mapped[list["Note"]] = relationship("Note", back_populates="user")
-    comments: Mapped[list["Comment"]] = relationship("Comment", back_populates="user")
+    spec_memberships: Mapped[list["SpecMember"]] = relationship(
+        "SpecMember", back_populates="user", passive_deletes=True
+    )
+    notes: Mapped[list["Note"]] = relationship("Note", back_populates="user", passive_deletes=True)
+    comments: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="user", passive_deletes=True
+    )
     comment_reactions: Mapped[list["CommentReaction"]] = relationship(
-        "CommentReaction", back_populates="user"
+        "CommentReaction", back_populates="user", passive_deletes=True
     )
-    spec_comments: Mapped[list["SpecComment"]] = relationship("SpecComment", back_populates="user")
+    spec_comments: Mapped[list["SpecComment"]] = relationship(
+        "SpecComment", back_populates="user", passive_deletes=True
+    )
     spec_comment_reactions: Mapped[list["SpecCommentReaction"]] = relationship(
-        "SpecCommentReaction", back_populates="user"
+        "SpecCommentReaction", back_populates="user", passive_deletes=True
     )
 
 
