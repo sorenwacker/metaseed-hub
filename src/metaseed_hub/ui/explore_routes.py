@@ -7,7 +7,7 @@ tenant-scoped loading of database-backed specs.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -20,9 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from metaseed_hub.database import get_session
-
-if TYPE_CHECKING:
-    from metaseed_hub.models import Spec, SpecDraft
 
 logger = logging.getLogger(__name__)
 

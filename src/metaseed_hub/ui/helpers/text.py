@@ -7,7 +7,7 @@ def humanize_field_name(name: str) -> str:
     """Convert camelCase or snake_case field name to human-readable format.
 
     Examples:
-        occurrenceID -> Occurrence ID
+        occurrenceID -> Occurrence Id
         basisOfRecord -> Basis Of Record
         unique_id -> Unique Id
     """

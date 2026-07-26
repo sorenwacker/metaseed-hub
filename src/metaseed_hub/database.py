@@ -21,7 +21,7 @@ class Database:
         db = Database()
         await db.connect("postgresql+asyncpg://...")
 
-        async with db.session() as session:
+        async for session in db.session():
             # use session
 
         await db.disconnect()

@@ -184,9 +184,6 @@ class OIDCAuth:
             ) from e
 
 
-# Backwards compatibility aliases
-KeycloakAuth = OIDCAuth
-
 _auth_instance: OIDCAuth | None = None
 
 
@@ -203,10 +200,6 @@ def get_oidc_auth(settings: Settings = Depends(get_settings)) -> OIDCAuth:
     if _auth_instance is None:
         _auth_instance = OIDCAuth(settings)
     return _auth_instance
-
-
-# Backwards compatibility alias
-get_keycloak_auth = get_oidc_auth
 
 
 async def get_current_user(
@@ -247,11 +240,9 @@ async def verify_token(token: str, settings: Settings | None = None) -> TokenUse
 
 
 __all__ = [
-    "KeycloakAuth",  # Backwards compatibility alias
     "OIDCAuth",
     "TokenUser",
     "get_current_user",
-    "get_keycloak_auth",  # Backwards compatibility alias
     "get_oidc_auth",
     "verify_token",
 ]

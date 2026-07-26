@@ -52,8 +52,6 @@ async def dataset_new(
     tenant, db_user = await ensure_tenant_and_user(session, user)
 
     # Get available profiles and versions from metaseed
-    from pathlib import Path
-
     import metaseed
 
     loader = SpecLoader()
