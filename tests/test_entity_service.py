@@ -561,3 +561,48 @@ class TestEntityServiceVersionHistory:
         versions = result.scalars().all()
         assert len(versions) == 2
         assert versions[1].version_number == 2
+
+    async def test_version_records_acting_user_as_author(self, session: AsyncSession) -> None:
+        """A version created via EntityService records the acting user."""
+        from sqlalchemy import select
+
+        from metaseed_hub.auth import TokenUser
+        from metaseed_hub.models import DatasetVersion
+
+        tenant = Tenant(name="Author Tenant", slug="test-author")
+        session.add(tenant)
+        await session.flush()
+
+        db_user = User(
+            keycloak_id="kc-author-1",
+            email="author@example.org",
+            display_name="Author",
+            tenant_id=tenant.id,
+        )
+        session.add(db_user)
+        dataset = Dataset(
+            name="Authored Dataset",
+            tenant_id=tenant.id,
+            profile="miappe",
+            version="1.2",
+            data={"profile": "miappe", "version": "1.2", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+
+        token_user = TokenUser(
+            sub="kc-author-1", email="author@example.org", name="Author", roles=[]
+        )
+        service = EntityService(session, dataset, token_user)
+
+        await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "First"},
+        )
+
+        version = (
+            await session.execute(
+                select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)
+            )
+        ).scalar_one()
+        assert version.created_by_id == db_user.id

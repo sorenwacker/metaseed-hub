@@ -11,10 +11,13 @@ Uses MetaseedClient public API exclusively - no internal access needed.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from metaseed import MetaseedClient, ProfileNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    from metaseed_hub.auth import TokenUser
 
 from metaseed_hub.models import Dataset, SpecDraft
 from metaseed_hub.ui.helpers import make_json_serializable
@@ -64,9 +67,15 @@ class EntityService:
         dataset: Dataset model containing entity data.
     """
 
-    def __init__(self, session: AsyncSession, dataset: Dataset):
+    def __init__(
+        self,
+        session: AsyncSession,
+        dataset: Dataset,
+        user: "TokenUser | None" = None,
+    ):
         self._session = session
         self._dataset = dataset
+        self._user = user
         self._client: MetaseedClient | None = None
         self._state: Any | None = None  # AppState, imported lazily
 
@@ -477,7 +486,7 @@ class EntityService:
         from sqlalchemy import func, select
         from sqlalchemy.orm.attributes import flag_modified
 
-        from metaseed_hub.models import DatasetVersion
+        from metaseed_hub.models import DatasetVersion, User
 
         if self._client is None:
             raise EntityServiceError(
@@ -501,11 +510,23 @@ class EntityService:
             )
             max_version = result.scalar() or 0
 
+            # Resolve the acting user's database id so the version records its
+            # author, matching save_dataset_state and the restore path.
+            created_by_id: str | None = None
+            if self._user is not None:
+                db_user = (
+                    await self._session.execute(
+                        select(User).where(User.keycloak_id == self._user.keycloak_id)
+                    )
+                ).scalar_one_or_none()
+                created_by_id = db_user.id if db_user else None
+
             # Create version with new data
             version = DatasetVersion(
                 dataset_id=self._dataset.id,
                 version_number=max_version + 1,
                 data=tree_data,
+                created_by_id=created_by_id,
             )
             self._session.add(version)
 
