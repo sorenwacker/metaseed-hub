@@ -85,10 +85,25 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         user_id, _ = user_ctx
         await require_draft_access(session, draft_id, user_id)
 
+        # Only accept parent_id if it names a comment in THIS draft, so a
+        # client-supplied parent cannot link a reply across drafts. Matches the
+        # spec_draft_id scoping the sibling delete/react routes enforce.
+        resolved_parent_id: str | None = None
+        if parent_id:
+            parent = (
+                await session.execute(
+                    select(SpecComment).where(
+                        SpecComment.id == parent_id,
+                        SpecComment.spec_draft_id == draft_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            resolved_parent_id = parent.id if parent else None
+
         comment = SpecComment(
             spec_draft_id=draft_id,
             user_id=user_id,
-            parent_id=parent_id if parent_id else None,
+            parent_id=resolved_parent_id,
             content=content.strip(),
         )
         session.add(comment)
