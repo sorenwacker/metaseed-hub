@@ -60,22 +60,31 @@
             {% if delete_error == 'confirm' %}
             <p class="danger-msg">The email you typed did not match &mdash; your account was not deleted.</p>
             {% elif delete_error == 'owned_datasets' %}
-            <p class="danger-msg">You still solely own one or more datasets. Reassign or delete them first.</p>
+            <p class="danger-msg">You still solely own datasets or specs. Reassign or delete them first.</p>
             {% endif %}
             <p class="help-text">
                 Deleting your account permanently removes your personal data &mdash; team,
                 dataset and spec memberships, comments, notes, and drafts. This cannot be undone.
             </p>
-            {% if datasets_needing_new_owner %}
+            {% if datasets_needing_new_owner or specs_needing_new_owner %}
             <p class="danger-msg">
-                Before your account can be deleted, these datasets you solely own must be
+                Before your account can be deleted, these items you solely own must be
                 reassigned to a new owner or deleted &mdash; you decide what happens to each:
             </p>
+            {% if datasets_needing_new_owner %}
             <ul class="owned-list">
                 {% for ds in datasets_needing_new_owner %}
-                <li><a href="/hub/datasets/{{ ds.id }}">{{ ds.name }}</a></li>
+                <li>Dataset: <a href="/hub/datasets/{{ ds.id }}">{{ ds.name }}</a></li>
                 {% endfor %}
             </ul>
+            {% endif %}
+            {% if specs_needing_new_owner %}
+            <ul class="owned-list">
+                {% for sp in specs_needing_new_owner %}
+                <li>Spec: {{ sp.name }} <code>{{ sp.version }}</code></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
             {% else %}
             <form method="post" action="/hub/auth/profile/delete" class="danger-form"
                   onsubmit="return confirm('Permanently delete your account? This cannot be undone.');">
