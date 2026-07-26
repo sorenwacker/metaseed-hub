@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from metaseed.specs.schema import FieldType, ProfileSpec
+from metaseed.specs.schema import FieldType
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
@@ -146,13 +146,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
-        builder.spec = ProfileSpec(
-            name=draft.name,
-            version=draft.version,
-            root_entity="",
-            entities={},
-            validation_rules=[],
-        )
+        builder.reset_to_empty(draft.name, draft.version)
 
         draft.spec_data = builder.to_dict()
         await session.commit()

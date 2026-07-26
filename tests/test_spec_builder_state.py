@@ -121,3 +121,26 @@ def test_state_roundtrip_preserves_basic_spec() -> None:
     assert restored.spec is not None
     assert restored.spec.name == "Basic"
     assert restored.spec.version == "0.1"
+
+
+def test_reset_to_empty_clears_editing_pointers() -> None:
+    """Resetting a draft must not persist pointers into the now-empty spec."""
+    state = SpecBuilderState(spec=ProfileSpec(name="Old", version="1.0"))
+    state.editing_entity = "Sample"
+    state.editing_field_idx = 3
+    state.editing_rule_idx = 2
+
+    state.reset_to_empty("MyDraft", "2.0")
+
+    assert state.spec is not None
+    assert state.spec.name == "MyDraft"
+    assert state.spec.version == "2.0"
+    assert state.spec.entities == {}
+    assert state.editing_entity is None
+    assert state.editing_field_idx is None
+    assert state.editing_rule_idx is None
+    # And the persisted form carries no stale pointers.
+    dumped = state.to_dict()
+    assert dumped["editing_entity"] is None
+    assert dumped["editing_field_idx"] is None
+    assert dumped["editing_rule_idx"] is None

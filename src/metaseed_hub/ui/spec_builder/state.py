@@ -61,6 +61,25 @@ class SpecBuilderState:
         self.template_source = None
         self.has_unsaved_changes = False
 
+    def reset_to_empty(self: Self, name: str, version: str) -> None:
+        """Reset to an empty spec keyed to a draft, clearing editing pointers.
+
+        Unlike ``reset``, the spec is a fresh empty ``ProfileSpec`` (keeping the
+        draft's name/version) rather than ``None``. The editing pointers MUST be
+        cleared too, or the persisted state keeps referencing an entity/field
+        that no longer exists.
+        """
+        self.spec = ProfileSpec(
+            name=name,
+            version=version,
+            root_entity="",
+            entities={},
+            validation_rules=[],
+        )
+        self.editing_entity = None
+        self.editing_field_idx = None
+        self.editing_rule_idx = None
+
     def mark_changed(self: Self) -> None:
         """Mark that unsaved changes exist."""
         self.has_unsaved_changes = True
