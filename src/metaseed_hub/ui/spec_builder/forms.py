@@ -10,6 +10,28 @@ from dataclasses import dataclass
 from metaseed.specs.schema import Constraints, FieldType
 
 
+def _parse_int(raw: str, label: str) -> int | None:
+    """Parse an optional whole-number constraint, or raise a clear ValueError."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{label} must be a whole number") from None
+
+
+def _parse_float(raw: str, label: str) -> float | None:
+    """Parse an optional numeric constraint, or raise a clear ValueError."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f"{label} must be a number") from None
+
+
 @dataclass
 class FieldFormData:
     """Form data for creating or updating a field."""
@@ -57,12 +79,12 @@ class FieldFormData:
 
         return Constraints(
             pattern=self.pattern.strip() or None,
-            min_length=int(self.min_length) if self.min_length.strip() else None,
-            max_length=int(self.max_length) if self.max_length.strip() else None,
-            minimum=float(self.minimum) if self.minimum.strip() else None,
-            maximum=float(self.maximum) if self.maximum.strip() else None,
-            min_items=int(self.min_items) if self.min_items.strip() else None,
-            max_items=int(self.max_items) if self.max_items.strip() else None,
+            min_length=_parse_int(self.min_length, "Minimum length"),
+            max_length=_parse_int(self.max_length, "Maximum length"),
+            minimum=_parse_float(self.minimum, "Minimum"),
+            maximum=_parse_float(self.maximum, "Maximum"),
+            min_items=_parse_int(self.min_items, "Minimum items"),
+            max_items=_parse_int(self.max_items, "Maximum items"),
             enum=[v.strip() for v in self.enum_values.split("\n") if v.strip()]
             if self.enum_values.strip()
             else None,

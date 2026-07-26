@@ -3,6 +3,7 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from metaseed.repositories import AsyncDatasetRepository
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,6 +134,13 @@ async def create_dataset(
         HTTPException: If the caller may not create datasets in the tenant.
     """
     await verify_tenant_access(dataset_data.tenant_id, session, _user)
+
+    # Enforce the same name rule the repository save() path applies, so the REST
+    # API cannot create datasets with names the UI path would reject.
+    name_error = AsyncDatasetRepository.validate_name(dataset_data.name)
+    if name_error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
+
     dataset = Dataset(
         tenant_id=dataset_data.tenant_id,
         name=dataset_data.name,
@@ -192,6 +200,9 @@ async def update_dataset(
     dataset = await _get_owned_dataset(dataset_id, session, _user)
 
     if dataset_data.name is not None:
+        name_error = AsyncDatasetRepository.validate_name(dataset_data.name)
+        if name_error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
         dataset.name = dataset_data.name
     if dataset_data.data is not None:
         dataset.data = dataset_data.data

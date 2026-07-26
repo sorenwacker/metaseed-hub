@@ -196,6 +196,14 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 if i != idx and existing.name == new_name:
                     error = f"Field '{new_name}' already exists"
                     break
+        # Parse constraints before mutating the field, so malformed numeric input
+        # surfaces as a friendly form error instead of a 500 and leaves the field
+        # unchanged.
+        if not error:
+            try:
+                parsed_constraints = form_data.get_constraints()
+            except ValueError as exc:
+                error = str(exc)
         if error:
             return templates.TemplateResponse(
                 request,
@@ -230,7 +238,7 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.parent_ref = form_data.parent_ref.strip() or None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
-        field.constraints = form_data.get_constraints()
+        field.constraints = parsed_constraints
 
         # spec_version 0.6 markers. Booleans default to None (not False) so an
         # unset marker is dropped on serialization rather than written as false.
