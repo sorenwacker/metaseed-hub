@@ -1,7 +1,7 @@
 """OIDC authentication integration (supports Keycloak, SRAM, and other providers)."""
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends, HTTPException, status
@@ -39,9 +39,9 @@ class OIDCAuth:
         """
         self._settings = settings
         self._jwks: dict[str, list[dict[str, str]]] | None = None
-        self._oidc_config: dict[str, str] | None = None
+        self._oidc_config: dict[str, Any] | None = None
 
-    async def get_oidc_config(self) -> dict[str, str]:
+    async def get_oidc_config(self) -> dict[str, Any]:
         """Fetch OIDC discovery document.
 
         Returns:

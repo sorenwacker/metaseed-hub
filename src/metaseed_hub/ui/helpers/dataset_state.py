@@ -1,9 +1,10 @@
 """Loading and persisting a dataset's AppState (facade + entity tree)."""
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from metaseed.ui.state import AppState
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, DatasetVersion
 from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
@@ -33,7 +34,7 @@ def get_dataset_state(dataset: Dataset) -> AppState:
 
 async def ensure_dataset_facade(
     dataset: Dataset,
-    session: Any,
+    session: AsyncSession,
 ) -> AppState:
     """Get dataset state and ensure facade is properly set for user-defined specs.
 
@@ -108,7 +109,7 @@ async def ensure_dataset_facade(
 
 
 async def save_dataset_state(
-    session: Any,
+    session: AsyncSession,
     dataset: Dataset,
     state: AppState,
     user: "TokenUser | None" = None,

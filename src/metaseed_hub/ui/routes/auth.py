@@ -25,10 +25,10 @@ STATE_COOKIE = "metaseed_oauth_state"
 REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60
 
 # OIDC discovery cache
-_oidc_config: dict[str, str] | None = None
+_oidc_config: dict[str, Any] | None = None
 
 
-async def get_oidc_config() -> dict[str, str]:
+async def get_oidc_config() -> dict[str, Any]:
     """Fetch and cache OIDC discovery configuration.
 
     Raises:
