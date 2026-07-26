@@ -325,6 +325,94 @@ async def dataset_import(
     return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
 
 
+async def create_dataset_from_accession(
+    session: DbSession,
+    tenant_id: str,
+    name: str,
+    profile: str,
+    accession: str,
+) -> Dataset:
+    """Import a public dataset from a source database into a new dataset.
+
+    Reuses metaseed's adapter registry: the importer for ``profile`` (ENA, PRIDE,
+    MetaboLights) is resolved from ``actions_for_profile(kind="import")`` and
+    invoked with ``accession`` -- the same importer the CLI and MCP use, none
+    reimplemented here. The imported entities are loaded into the new dataset by
+    swapping in the importer's facade.
+
+    Raises:
+        LookupError: If no accession importer is registered for ``profile``.
+    """
+    from metaseed import adapters
+
+    action = next(
+        (
+            a
+            for a in adapters.actions_for_profile(profile, kind="import")
+            if a.surface == "import-menu"
+        ),
+        None,
+    )
+    if action is None:
+        raise LookupError(f"No accession importer for profile '{profile}'")
+
+    client = action.resolve()(accession)
+
+    dataset = Dataset(
+        tenant_id=tenant_id,
+        name=name,
+        profile=client.profile,
+        version=client.version,
+        data={},
+    )
+    session.add(dataset)
+    await session.flush()
+
+    state = get_dataset_state(dataset)
+    state.profile = client.profile
+    state.version = client.version
+    # Swap in the importer's facade and rebuild caches; do not reset() (it clears).
+    state.facade = client.facade
+    state.invalidate_cache()
+    await save_dataset_state(session, dataset, state)
+    return dataset
+
+
+@router.post("/import-accession")
+async def dataset_import_accession(
+    request: Request,
+    session: DbSession,
+    user: CurrentUser,
+    profile: Annotated[str, Form()],
+    accession: Annotated[str, Form()],
+    name: Annotated[str, Form()],
+    csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+) -> RedirectResponse:
+    """Import a public dataset from a source database (ENA/PRIDE/MetaboLights)."""
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
+    if not validate_csrf_token(request, csrf_token):
+        return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
+
+    tenant, _ = await ensure_tenant_and_user(session, user)
+    try:
+        dataset = await create_dataset_from_accession(
+            session, tenant.id, name.strip(), profile, accession.strip()
+        )
+    except LookupError:
+        return RedirectResponse("/hub/datasets/new?error=no_importer", status_code=302)
+    except IntegrityError:
+        await session.rollback()
+        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
+    except Exception:
+        # A failed fetch (bad accession, database down) must not 500 the page.
+        logger.exception("Accession import failed for %s:%s", profile, accession)
+        return RedirectResponse("/hub/datasets/new?error=import_failed", status_code=302)
+
+    await session.commit()
+    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
+
+
 @router.post("")
 async def dataset_create(
     request: Request,
