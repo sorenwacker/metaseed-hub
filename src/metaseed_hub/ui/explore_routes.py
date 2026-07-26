@@ -215,7 +215,7 @@ async def _build_explore_catalog(
     user_drafts: list[SpecDraft] = []
     published_specs: list[Spec] = []
 
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
+    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
     db_user = db_user_result.scalar_one_or_none()
 
     if tenant:

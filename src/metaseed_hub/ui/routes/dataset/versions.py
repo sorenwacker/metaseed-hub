@@ -25,7 +25,7 @@ from ._router import router
 logger = logging.getLogger("metaseed_hub")
 
 
-def _flatten_tree(tree: list[dict[str, Any]], prefix: str = "") -> dict[str, dict[str, Any]]:
+def _flatten_tree(tree: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Flatten tree into dict keyed by node ID with full data."""
     result: dict[str, dict[str, Any]] = {}
     for node in tree:
@@ -37,7 +37,7 @@ def _flatten_tree(tree: list[dict[str, Any]], prefix: str = "") -> dict[str, dic
                 "data": node.get("data", {}),
             }
         if "children" in node:
-            result.update(_flatten_tree(node["children"], prefix))
+            result.update(_flatten_tree(node["children"]))
     return result
 
 

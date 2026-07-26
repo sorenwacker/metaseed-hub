@@ -3,6 +3,7 @@
 Handles CRUD operations for inline entity tables and primitive lists.
 """
 
+import logging
 import uuid
 from html import escape
 from typing import Annotated, Any
@@ -20,25 +21,21 @@ from metaseed_hub.ui.helpers import save_dataset_state
 
 router = APIRouter(tags=["table"])
 
+logger = logging.getLogger("metaseed_hub")
+
 # Primitive types that are not entity types
 PRIMITIVE_TYPES = {"string", "integer", "float", "boolean", "date", "datetime", "uri"}
 
 
 def _handle_primitive_list_row(
-    dataset_id: str,
     parent_node: TreeNode,
     field_name: str,
-    nested_type: str,
-    state: AppState,
 ) -> tuple[int, list[Any]]:
     """Handle adding a new row to a primitive list.
 
     Args:
-        dataset_id: ID of the dataset.
         parent_node: Parent TreeNode containing the list.
         field_name: Name of the list field.
-        nested_type: Type of items in the list.
-        state: Application state.
 
     Returns:
         Tuple of (row_idx, updated_list).
@@ -252,9 +249,6 @@ async def add_table_row(
     For primitive lists, adds a new empty value to the list.
     For entity lists, creates a new child entity with default values.
     """
-    import logging
-
-    logger = logging.getLogger("metaseed_hub")
     logger.info(f"add_table_row: parent_node_id={parent_node_id}, field_name={field_name}")
 
     dataset, state = dataset_state
@@ -280,9 +274,7 @@ async def add_table_row(
 
         # Handle primitive list types (list of strings, integers, etc.)
         if nested_type.lower() in PRIMITIVE_TYPES:
-            row_idx, current_list = _handle_primitive_list_row(
-                dataset_id, parent_node, field_name, nested_type, state
-            )
+            row_idx, current_list = _handle_primitive_list_row(parent_node, field_name)
 
             # Update parent instance with new list (use model_construct to skip validation)
             update_data = parent_node.instance.model_dump(exclude_none=True)
@@ -598,9 +590,6 @@ async def update_single_entity_field(
     Single entity fields are nested objects that are not lists - they contain
     a single instance of another entity type embedded in the parent.
     """
-    import logging
-
-    logger = logging.getLogger("metaseed_hub")
     logger.info(f"update_single_entity_field: node_id={node_id}, field_name={field_name}")
 
     dataset, state = dataset_state

@@ -131,7 +131,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         if name.strip():
             spec.name = slugify_spec_name(name)
 
-        draft_name = spec.name if hasattr(spec, "name") and spec.name else "Untitled"
+        draft_name = spec.name or "Untitled"
 
         draft = await create_new_draft(
             session,
