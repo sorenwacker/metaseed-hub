@@ -206,7 +206,7 @@ async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
 async def auth_profile(request: Request, session: DbSession) -> Response:
     """Show the profile page with SRAM/OIDC info and account controls."""
 
-    from metaseed_hub.repositories.account import sole_owned_datasets
+    from metaseed_hub.repositories.account import datasets_needing_new_owner
     from metaseed_hub.ui.dependencies import (
         ensure_tenant_and_user,
         get_current_user_from_cookie,
@@ -219,7 +219,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
         return RedirectResponse(url="/hub/auth/login", status_code=302)
 
     _, db_user = await ensure_tenant_and_user(session, user)
-    blocking = await sole_owned_datasets(session, db_user)
+    blocking = await datasets_needing_new_owner(session, db_user)
 
     return render_template(
         request=request,
@@ -228,7 +228,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "user": user,
             "nav_active": "profile",
             "csrf_token": get_or_create_csrf_token(request),
-            "sole_owned_datasets": blocking,
+            "datasets_needing_new_owner": blocking,
             "delete_error": request.query_params.get("error"),
         },
     )

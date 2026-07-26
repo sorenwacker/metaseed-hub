@@ -66,13 +66,13 @@
                 Deleting your account permanently removes your personal data &mdash; team,
                 dataset and spec memberships, comments, notes, and drafts. This cannot be undone.
             </p>
-            {% if sole_owned_datasets %}
+            {% if datasets_needing_new_owner %}
             <p class="danger-msg">
                 Before your account can be deleted, these datasets you solely own must be
                 reassigned to a new owner or deleted &mdash; you decide what happens to each:
             </p>
             <ul class="owned-list">
-                {% for ds in sole_owned_datasets %}
+                {% for ds in datasets_needing_new_owner %}
                 <li><a href="/hub/datasets/{{ ds.id }}">{{ ds.name }}</a></li>
                 {% endfor %}
             </ul>
