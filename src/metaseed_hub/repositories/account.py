@@ -43,11 +43,13 @@ class AccountDeletionBlockedError(Exception):
         )
 
 
-async def sole_owned_datasets(session: AsyncSession, user: User) -> list[Dataset]:
-    """Return datasets the user owns that have no other owner.
+async def datasets_needing_new_owner(session: AsyncSession, user: User) -> list[Dataset]:
+    """Return datasets that would be left without an owner if the user were removed.
 
-    Deleting the user would leave these datasets without an owner, so they block
-    account deletion until reassigned or deleted.
+    A dataset blocks account deletion whenever removing the user leaves it with no
+    ``OWNER`` member -- whether the user is its sole owner, or its only member at
+    all (any role). Such a dataset must first be reassigned to a new owner or
+    deleted.
 
     Args:
         session: Database session.
@@ -56,22 +58,15 @@ async def sole_owned_datasets(session: AsyncSession, user: User) -> list[Dataset
     Returns:
         The blocking datasets (empty if the account can be deleted).
     """
-    owned_memberships = (
-        (
-            await session.execute(
-                select(DatasetMember).where(
-                    DatasetMember.user_id == user.id,
-                    DatasetMember.role == DatasetRole.OWNER,
-                )
-            )
-        )
+    memberships = (
+        (await session.execute(select(DatasetMember).where(DatasetMember.user_id == user.id)))
         .scalars()
         .all()
     )
 
     blocking: list[Dataset] = []
-    for membership in owned_memberships:
-        other_owner = (
+    for membership in memberships:
+        remaining_owner = (
             (
                 await session.execute(
                     select(DatasetMember).where(
@@ -84,7 +79,7 @@ async def sole_owned_datasets(session: AsyncSession, user: User) -> list[Dataset
             .scalars()
             .first()
         )
-        if other_owner is None:
+        if remaining_owner is None:
             dataset = await session.get(Dataset, membership.dataset_id)
             if dataset is not None:
                 blocking.append(dataset)
@@ -94,10 +89,11 @@ async def sole_owned_datasets(session: AsyncSession, user: User) -> list[Dataset
 async def delete_account(session: AsyncSession, user: User) -> None:
     """Delete a user and all their personal data (GDPR erasure).
 
-    Refuses when the user still solely owns any dataset; the caller must surface
-    :attr:`AccountDeletionBlockedError.datasets` so the owner can reassign or delete
-    them first. On success the user row is deleted, cascading away every personal
-    record; the caller is responsible for committing.
+    Refuses when deleting the user would leave any dataset without an owner; the
+    caller must surface :attr:`AccountDeletionBlockedError.datasets` so the owner
+    can reassign or delete them first. On success the user row is deleted,
+    cascading away every personal record; the caller is responsible for
+    committing.
 
     Args:
         session: Database session.
@@ -106,7 +102,7 @@ async def delete_account(session: AsyncSession, user: User) -> None:
     Raises:
         AccountDeletionBlockedError: If any dataset would be left without an owner.
     """
-    blocking = await sole_owned_datasets(session, user)
+    blocking = await datasets_needing_new_owner(session, user)
     if blocking:
         raise AccountDeletionBlockedError(blocking)
 

@@ -19,8 +19,8 @@ from metaseed_hub.models import (
 )
 from metaseed_hub.repositories.account import (
     AccountDeletionBlockedError,
+    datasets_needing_new_owner,
     delete_account,
-    sole_owned_datasets,
 )
 from tests.factories import make_dataset, make_note, make_tenant, make_user
 
@@ -47,7 +47,7 @@ async def test_sole_owned_dataset_blocks_deletion(session):
     dataset = await _add(session, make_dataset(tenant=tenant))
     await _own(session, user, dataset)
 
-    blocking = await sole_owned_datasets(session, user)
+    blocking = await datasets_needing_new_owner(session, user)
     assert [d.id for d in blocking] == [dataset.id]
 
     with pytest.raises(AccountDeletionBlockedError) as exc:
@@ -66,7 +66,7 @@ async def test_co_owned_dataset_allows_deletion_and_survives(session):
     await _own(session, leaving, dataset)
     await _own(session, staying, dataset)
 
-    assert await sole_owned_datasets(session, leaving) == []
+    assert await datasets_needing_new_owner(session, leaving) == []
     await delete_account(session, leaving)
     await session.commit()
 
@@ -90,7 +90,7 @@ async def test_viewer_membership_does_not_block(session):
     await _own(session, owner, dataset)
     await _own(session, viewer, dataset, role=DatasetRole.VIEWER)
 
-    assert await sole_owned_datasets(session, viewer) == []
+    assert await datasets_needing_new_owner(session, viewer) == []
     await delete_account(session, viewer)
     await session.commit()
 
@@ -108,7 +108,7 @@ async def test_sole_owner_with_only_viewer_coworkers_blocks(session):
     await _own(session, owner, dataset)
     await _own(session, viewer, dataset, role=DatasetRole.VIEWER)
 
-    blocking = await sole_owned_datasets(session, owner)
+    blocking = await datasets_needing_new_owner(session, owner)
     assert [d.id for d in blocking] == [dataset.id]
 
 
@@ -131,3 +131,18 @@ async def test_deletion_cascades_personal_records(session):
     assert remaining_comments == []
     assert await session.get(User, user.id) is None
     assert await session.get(Dataset, dataset.id) is not None  # shared dataset kept
+
+
+async def test_sole_non_owner_member_blocks(session):
+    # A dataset whose only member is the user -- even as a non-owner -- would be
+    # left with no members, and no owner, so it must be resolved first. The
+    # earlier check only looked at OWNER memberships and missed this.
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    dataset = await _add(session, make_dataset(tenant=tenant))
+    await _own(session, user, dataset, role=DatasetRole.CURATOR)
+
+    blocking = await datasets_needing_new_owner(session, user)
+    assert [d.id for d in blocking] == [dataset.id]
+    with pytest.raises(AccountDeletionBlockedError):
+        await delete_account(session, user)
