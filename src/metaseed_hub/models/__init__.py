@@ -29,6 +29,17 @@ class Base(DeclarativeBase):
     }
 
 
+def _enum_values(enum: type[StrEnum]) -> list[str]:
+    """Return an enum's member values, for storing enums by value not name.
+
+    Passed as ``Enum(..., values_callable=_enum_values)`` so every persisted enum
+    column stores the lowercase member value (e.g. ``"owner"``) uniformly, rather
+    than roles/status storing the uppercase member name while reactions store the
+    value. See migration ``260726_enum_store_by_value``.
+    """
+    return [member.value for member in enum]
+
+
 class TeamRole(StrEnum):
     """Role within a team."""
 
@@ -164,7 +175,7 @@ class TeamMembership(Base):
         primary_key=True,
     )
     role: Mapped[TeamRole] = mapped_column(
-        Enum(TeamRole),
+        Enum(TeamRole, values_callable=_enum_values),
         nullable=False,
         default=TeamRole.MEMBER,
     )
@@ -281,7 +292,7 @@ class DatasetMember(Base):
         primary_key=True,
     )
     role: Mapped[DatasetRole] = mapped_column(
-        Enum(DatasetRole),
+        Enum(DatasetRole, values_callable=_enum_values),
         nullable=False,
         default=DatasetRole.VIEWER,
     )
@@ -396,11 +407,7 @@ class CommentReaction(Base):
         primary_key=True,
     )
     reaction: Mapped[ReactionType] = mapped_column(
-        Enum(
-            ReactionType,
-            name="reactiontype",
-            values_callable=lambda enum: [member.value for member in enum],
-        ),
+        Enum(ReactionType, name="reactiontype", values_callable=_enum_values),
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -525,7 +532,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     status: Mapped[SpecStatus] = mapped_column(
-        Enum(SpecStatus),
+        Enum(SpecStatus, values_callable=_enum_values),
         nullable=False,
         default=SpecStatus.PUBLISHED,
     )
@@ -570,7 +577,7 @@ class SpecMember(Base):
         primary_key=True,
     )
     role: Mapped[SpecRole] = mapped_column(
-        Enum(SpecRole),
+        Enum(SpecRole, values_callable=_enum_values),
         nullable=False,
         default=SpecRole.VIEWER,
     )
@@ -668,7 +675,7 @@ class SpecDraftMember(Base):
         primary_key=True,
     )
     role: Mapped[SpecDraftRole] = mapped_column(
-        Enum(SpecDraftRole),
+        Enum(SpecDraftRole, values_callable=_enum_values),
         nullable=False,
         default=SpecDraftRole.VIEWER,
     )
