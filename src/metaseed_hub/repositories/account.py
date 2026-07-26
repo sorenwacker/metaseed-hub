@@ -19,7 +19,14 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from metaseed_hub.models import Dataset, DatasetMember, DatasetRole
+from metaseed_hub.models import (
+    Dataset,
+    DatasetMember,
+    DatasetRole,
+    Spec,
+    SpecMember,
+    SpecRole,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,17 +35,19 @@ if TYPE_CHECKING:
 
 
 class AccountDeletionBlockedError(Exception):
-    """Raised when datasets the user solely owns must be handled first.
+    """Raised when datasets or specs the user owns must be handled first.
 
     Attributes:
-        datasets: The datasets that would be orphaned; each needs a new owner or
-            to be deleted before the account can be removed.
+        datasets: Datasets that would be left without an owner; each needs a new
+            owner or to be deleted before the account can be removed.
+        specs: Specs that would be left without an owner; handled the same way.
     """
 
-    def __init__(self, datasets: list[Dataset]) -> None:
+    def __init__(self, datasets: list[Dataset], specs: list[Spec]) -> None:
         self.datasets = datasets
+        self.specs = specs
         super().__init__(
-            f"{len(datasets)} dataset(s) need a new owner or deletion "
+            f"{len(datasets) + len(specs)} item(s) need a new owner or deletion "
             "before the account can be removed"
         )
 
@@ -86,25 +95,69 @@ async def datasets_needing_new_owner(session: AsyncSession, user: User) -> list[
     return blocking
 
 
+async def specs_needing_new_owner(session: AsyncSession, user: User) -> list[Spec]:
+    """Return specs that would be left without an owner if the user were removed.
+
+    The spec counterpart of :func:`datasets_needing_new_owner`: a spec blocks
+    account deletion when no ``OWNER`` member would remain after the user is
+    removed.
+
+    Args:
+        session: Database session.
+        user: The user whose account is being deleted.
+
+    Returns:
+        The blocking specs (empty if none).
+    """
+    memberships = (
+        (await session.execute(select(SpecMember).where(SpecMember.user_id == user.id)))
+        .scalars()
+        .all()
+    )
+
+    blocking: list[Spec] = []
+    for membership in memberships:
+        remaining_owner = (
+            (
+                await session.execute(
+                    select(SpecMember).where(
+                        SpecMember.spec_id == membership.spec_id,
+                        SpecMember.user_id != user.id,
+                        SpecMember.role == SpecRole.OWNER,
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if remaining_owner is None:
+            spec = await session.get(Spec, membership.spec_id)
+            if spec is not None:
+                blocking.append(spec)
+    return blocking
+
+
 async def delete_account(session: AsyncSession, user: User) -> None:
     """Delete a user and all their personal data (GDPR erasure).
 
-    Refuses when deleting the user would leave any dataset without an owner; the
-    caller must surface :attr:`AccountDeletionBlockedError.datasets` so the owner
-    can reassign or delete them first. On success the user row is deleted,
-    cascading away every personal record; the caller is responsible for
-    committing.
+    Refuses when deleting the user would leave any dataset or spec without an
+    owner; the caller must surface :attr:`AccountDeletionBlockedError.datasets`
+    and :attr:`~AccountDeletionBlockedError.specs` so the owner can reassign or
+    delete them first. On success the user row is deleted, cascading away every
+    personal record; the caller is responsible for committing.
 
     Args:
         session: Database session.
         user: The user to delete.
 
     Raises:
-        AccountDeletionBlockedError: If any dataset would be left without an owner.
+        AccountDeletionBlockedError: If any dataset or spec would be left without
+            an owner.
     """
-    blocking = await datasets_needing_new_owner(session, user)
-    if blocking:
-        raise AccountDeletionBlockedError(blocking)
+    datasets = await datasets_needing_new_owner(session, user)
+    specs = await specs_needing_new_owner(session, user)
+    if datasets or specs:
+        raise AccountDeletionBlockedError(datasets, specs)
 
     await session.delete(user)
     await session.flush()

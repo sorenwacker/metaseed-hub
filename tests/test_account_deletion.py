@@ -15,14 +15,18 @@ from metaseed_hub.models import (
     Dataset,
     DatasetMember,
     DatasetRole,
+    Spec,
+    SpecMember,
+    SpecRole,
     User,
 )
 from metaseed_hub.repositories.account import (
     AccountDeletionBlockedError,
     datasets_needing_new_owner,
     delete_account,
+    specs_needing_new_owner,
 )
-from tests.factories import make_dataset, make_note, make_tenant, make_user
+from tests.factories import make_dataset, make_note, make_spec, make_tenant, make_user
 
 pytestmark = pytest.mark.asyncio
 
@@ -146,3 +150,37 @@ async def test_sole_non_owner_member_blocks(session):
     assert [d.id for d in blocking] == [dataset.id]
     with pytest.raises(AccountDeletionBlockedError):
         await delete_account(session, user)
+
+
+async def _own_spec(session, user, spec, role=SpecRole.OWNER):
+    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=role))
+    await session.flush()
+
+
+async def test_sole_owned_spec_blocks_deletion(session):
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    spec = await _add(session, make_spec(tenant=tenant, created_by=user))
+    await _own_spec(session, user, spec)
+
+    blocking = await specs_needing_new_owner(session, user)
+    assert [s.id for s in blocking] == [spec.id]
+    with pytest.raises(AccountDeletionBlockedError) as exc:
+        await delete_account(session, user)
+    assert [s.id for s in exc.value.specs] == [spec.id]
+
+
+async def test_co_owned_spec_allows_deletion_and_survives(session):
+    tenant = await _add(session, make_tenant())
+    leaving = await _add(session, make_user(tenant=tenant, display_name="Leaving"))
+    staying = await _add(session, make_user(tenant=tenant, display_name="Staying"))
+    spec = await _add(session, make_spec(tenant=tenant, created_by=leaving))
+    await _own_spec(session, leaving, spec)
+    await _own_spec(session, staying, spec)
+
+    assert await specs_needing_new_owner(session, leaving) == []
+    await delete_account(session, leaving)
+    await session.commit()
+
+    assert await session.get(User, leaving.id) is None
+    assert await session.get(Spec, spec.id) is not None  # survives under co-owner
