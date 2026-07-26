@@ -55,6 +55,13 @@ class Room:
 class WebSocketManager:
     """Manages WebSocket connections with Redis pub/sub for scaling."""
 
+    # Blocking read timeout for the listener's get_message call. The listener
+    # holds _pubsub_lock for the duration of each read, so every join/leave
+    # (which needs the lock to subscribe/unsubscribe) stalls up to this long.
+    # Keep it short so room churn stays responsive; the cost is a slightly
+    # busier idle loop.
+    _LISTEN_READ_TIMEOUT = 0.1
+
     def __init__(self) -> None:
         """Initialize the WebSocket manager."""
         self._rooms: dict[str, Room] = {}
@@ -95,7 +102,10 @@ class WebSocketManager:
                     # resulting RuntimeError.
                     subscribed = self._pubsub.subscribed
                     message = (
-                        await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                        await self._pubsub.get_message(
+                            ignore_subscribe_messages=True,
+                            timeout=self._LISTEN_READ_TIMEOUT,
+                        )
                         if subscribed
                         else None
                     )
