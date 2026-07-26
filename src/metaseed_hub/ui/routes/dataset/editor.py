@@ -661,7 +661,7 @@ async def dataset_import_into_existing(
                 errors.append(f"{entity_type}: {e}")
 
     # Save to database with version history
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     if errors:
         msg = f"Imported {imported_count} entities with {len(errors)} errors"

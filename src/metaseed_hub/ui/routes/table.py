@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
-from metaseed_hub.ui.dependencies import get_dataset_state_for_mutation
+from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import save_dataset_state
 
@@ -243,6 +243,7 @@ async def add_table_row(
     parent_node_id: str,
     field_name: str,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Add a new row to an inline table.
@@ -291,7 +292,7 @@ async def add_table_row(
             state.update_node(parent_node_id, updated_instance)
 
             # Save to database
-            await save_dataset_state(session, dataset, state)
+            await save_dataset_state(session, dataset, state, user)
 
             # Return row HTML for primitive value
             html = _build_primitive_row_html(
@@ -307,7 +308,15 @@ async def add_table_row(
         return HTMLResponse("<tr><td>Unknown entity type</td></tr>")
 
     return await _add_entity_list_row(
-        session, dataset, state, dataset_id, parent_node_id, field_name, nested_type, nested_helper
+        session,
+        dataset,
+        state,
+        dataset_id,
+        parent_node_id,
+        field_name,
+        nested_type,
+        nested_helper,
+        user,
     )
 
 
@@ -320,6 +329,7 @@ async def _add_entity_list_row(
     field_name: str,
     nested_type: str,
     nested_helper: Any,
+    user: OptionalUser,
 ) -> HTMLResponse:
     """Append a default child entity to an entity-list field and return its row HTML.
 
@@ -360,7 +370,7 @@ async def _add_entity_list_row(
     state.nodes_by_id[node_id] = child_node
 
     # Save to database
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     # Get columns for display
     columns = []
@@ -413,6 +423,7 @@ async def update_table_cell(
     dataset_id: str,
     node_id: str,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
     """Update a single cell value in an inline table."""
@@ -457,7 +468,7 @@ async def update_table_cell(
     model_class = helper._model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     return Response(
         status_code=200,
@@ -476,6 +487,7 @@ async def update_primitive_list_item(
     field_name: str,
     idx: int,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a primitive list item value."""
@@ -512,7 +524,7 @@ async def update_primitive_list_item(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     return HTMLResponse(status_code=200, headers={"HX-Trigger": "entityChanged"})
 
@@ -528,6 +540,7 @@ async def delete_primitive_list_item(
     field_name: str,
     idx: int,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Delete a primitive list item."""
@@ -560,7 +573,7 @@ async def delete_primitive_list_item(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     response = HTMLResponse(status_code=200)
     response.headers["HX-Trigger"] = "entityChanged"
@@ -577,6 +590,7 @@ async def update_single_entity_field(
     node_id: str,
     field_name: str,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Update a single entity field (e.g., measurement_type, technology_type).
@@ -660,7 +674,7 @@ async def update_single_entity_field(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
     logger.info("update_single_entity_field: saved successfully")
 
     return HTMLResponse(
@@ -679,6 +693,7 @@ async def delete_single_entity_field(
     node_id: str,
     field_name: str,
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> HTMLResponse:
     """Clear/delete a single entity field.
@@ -713,7 +728,7 @@ async def delete_single_entity_field(
     state.update_node(node_id, instance)
 
     # Save to database
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
 
     # Return empty inline table HTML for the cleared field
     field_info = helper.field_info(field_name)
@@ -723,7 +738,7 @@ async def delete_single_entity_field(
     <div class="inline-table-header">
         <div class="inline-table-title">
             <span class="inline-table-icon">&#9660;</span>
-            <h4>{field_name.replace('_', ' ').title()}</h4>
+            <h4>{field_name.replace("_", " ").title()}</h4>
         </div>
     </div>
     <div class="inline-table-content">

@@ -317,7 +317,7 @@ async def dataset_import(
                     )
 
         # Save to database with version history
-        await save_dataset_state(session, dataset, state)
+        await save_dataset_state(session, dataset, state, user)
 
     except Exception as e:
         logger.warning(f"Could not import entities, dataset created empty: {e}")
@@ -512,7 +512,7 @@ async def dataset_create(
                 create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
                 # Save to database with version history
-                await save_dataset_state(session, dataset, state)
+                await save_dataset_state(session, dataset, state, user)
             except Exception as e:
                 logger.exception(f"Failed to load example data: {e}")
 
@@ -639,7 +639,7 @@ async def dataset_load_example(
                     cdata = c.instance.model_dump(exclude_none=True)
                     logger.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
 
-        await save_dataset_state(session, dataset, state)
+        await save_dataset_state(session, dataset, state, user)
 
     except Exception as e:
         import traceback

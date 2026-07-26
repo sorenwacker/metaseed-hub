@@ -1,12 +1,15 @@
 """Loading and persisting a dataset's AppState (facade + entity tree)."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from metaseed.ui.state import AppState
 
 from metaseed_hub.models import Dataset, DatasetVersion
 from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
+
+if TYPE_CHECKING:
+    from metaseed_hub.auth import TokenUser
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -108,7 +111,7 @@ async def save_dataset_state(
     session: Any,
     dataset: Dataset,
     state: AppState,
-    user_id: str | None = None,
+    user: "TokenUser | None" = None,
 ) -> None:
     """Save AppState entity tree to database and create a version.
 
@@ -116,12 +119,24 @@ async def save_dataset_state(
         session: Database session.
         dataset: Dataset model to update.
         state: AppState with entity tree to save.
-        user_id: Optional user ID for version tracking.
+        user: The acting user; when given, the created version records them as
+            author (``created_by_id``). Optional so background/non-request
+            callers can still persist without authorship.
     """
     from sqlalchemy import func, select
     from sqlalchemy.orm.attributes import flag_modified
 
+    from metaseed_hub.models import User
+
     new_data = serialize_tree(state)
+
+    # Resolve the acting user's database id for version authorship.
+    created_by_id: str | None = None
+    if user is not None:
+        db_user = (
+            await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+        ).scalar_one_or_none()
+        created_by_id = db_user.id if db_user else None
 
     # Only create version if data changed
     if new_data != dataset.data:
@@ -138,7 +153,7 @@ async def save_dataset_state(
             dataset_id=dataset.id,
             version_number=max_version + 1,
             data=new_data,
-            created_by_id=user_id,
+            created_by_id=created_by_id,
         )
         session.add(version)
 
