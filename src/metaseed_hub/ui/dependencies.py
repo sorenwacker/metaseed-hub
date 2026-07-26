@@ -4,7 +4,7 @@ import hashlib
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,17 +90,6 @@ def handle_auth_required_error(request: Request, exc: Exception) -> Response:
             headers={"HX-Redirect": "/hub/auth/login"},
         )
     return RedirectResponse(url="/hub/auth/login", status_code=302)
-
-
-def unauthorized_response() -> HTMLResponse:
-    """Return a user-friendly unauthorized response for HTMX requests."""
-    return HTMLResponse(
-        """<div class="error-message" style="padding: 1rem;">
-            <strong>Session expired.</strong>
-            Please <a href="/hub/auth/login" target="_top">log in again</a> to continue.
-        </div>""",
-        status_code=401,
-    )
 
 
 async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
@@ -307,18 +296,6 @@ async def require_dataset_owner(
 CurrentUser = Annotated[TokenUser, Depends(require_user)]
 OptionalUser = Annotated[TokenUser | None, Depends(get_current_user_from_cookie)]
 DbSession = Annotated[AsyncSession, Depends(get_session)]
-
-
-class CSRFValidationError(Exception):
-    """Raised when CSRF token validation fails."""
-
-    pass
-
-
-class DatasetNotFoundError(Exception):
-    """Raised when dataset is not found."""
-
-    pass
 
 
 async def get_dataset_state_for_mutation(
