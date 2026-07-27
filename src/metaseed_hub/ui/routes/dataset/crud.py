@@ -379,6 +379,10 @@ async def create_dataset_from_accession(
         LookupError: If no accession importer is registered for ``profile``.
     """
     client = run_source_import(profile, accession)
+    if not client.serialize().get("entities"):
+        # Creating an empty dataset named after an accession that resolved to
+        # nothing leaves the user to discover the failure themselves.
+        raise LookupError(f"Nothing was found for '{accession}'")
 
     dataset = Dataset(
         tenant_id=tenant_id,
@@ -444,6 +448,16 @@ async def dataset_import_source(
             "<div class='notification error'>Import failed. Check the identifier "
             "and try again.</div>",
             status_code=502,
+        )
+
+    # An archive that resolves nothing returns an empty client rather than
+    # raising — a mistyped accession looks exactly like a successful import
+    # unless this is checked, which is how it was reported.
+    if not client.serialize().get("entities"):
+        return HTMLResponse(
+            f"<div class='notification error'>Nothing was found for "
+            f"'{value.strip()}'. Check the identifier and try again.</div>",
+            status_code=404,
         )
 
     state.facade = client.facade
