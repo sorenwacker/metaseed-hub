@@ -19,8 +19,9 @@ from metaseed_hub.ui.routes.dataset.editor import (
 
 
 def test_export_options_come_from_the_metaseed_registry() -> None:
-    keys = {o["key"] for o in _adapter_export_options("pride")}
-    assert {"pride", "pride-sdrf"} <= keys
+    # One PRIDE export: submission.px and its SDRF are parts of one submission,
+    # so they arrive in a single archive rather than as rival buttons.
+    assert {o["key"] for o in _adapter_export_options("pride")} == {"pride"}
     # A profile with no adapter exporters offers none.
     assert _adapter_export_options("darwin-core") == []
 

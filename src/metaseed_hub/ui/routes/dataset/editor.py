@@ -133,6 +133,11 @@ async def dataset_editor(
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
             "export_options": _adapter_export_options(dataset.profile),
+            # Offered only while the dataset is empty: the importer replaces the
+            # whole tree, so it is a way to start, not a way to merge.
+            "import_option": (
+                _source_import_option(dataset.profile) if not ctx["tree_data"] else None
+            ),
             "nav_active": "home",
         },
     )
@@ -453,6 +458,25 @@ async def dataset_export(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _source_import_option(profile: str) -> dict[str, str] | None:
+    """The import control a profile offers, from metaseed's registry, or None.
+
+    Carries the action's own wording for the single value it takes, since an
+    accession and a BrAPI server URL are not interchangeable and the hub should
+    not hold a per-repository phrasebook.
+    """
+    from metaseed_hub.ui.routes.dataset.crud import source_import_action
+
+    action = source_import_action(profile)
+    if action is None:
+        return None
+    return {
+        "label": action.label,
+        "input_label": action.input_label,
+        "placeholder": action.input_placeholder,
+    }
 
 
 def _adapter_export_options(profile: str) -> list[dict[str, str]]:

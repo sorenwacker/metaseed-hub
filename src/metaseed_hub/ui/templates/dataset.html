@@ -56,6 +56,25 @@
                 <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
                 <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
+            {% if import_option %}
+            {# Only while the dataset is empty: the importer replaces the whole
+               tree, so this is a way to start rather than a way to merge. #}
+            <form class="sidebar-import-form"
+                  hx-post="/hub/datasets/{{ dataset.id }}/import-source"
+                  hx-swap="innerHTML"
+                  hx-target="#import-source-result"
+                  data-testid="form-import-source">
+                <label class="sidebar-import-label" for="import-source-value">{{ import_option.input_label }}</label>
+                <input type="text"
+                       id="import-source-value"
+                       name="value"
+                       class="form-input"
+                       placeholder="{{ import_option.placeholder }}"
+                       required>
+                <button type="submit" class="btn btn-sm" data-testid="btn-import-source">{{ import_option.label }}</button>
+            </form>
+            <div id="import-source-result"></div>
+            {% endif %}
             {% if export_options %}
             <div class="sidebar-actions-row">
                 {# Adapter exports the active profile offers, from metaseed's plugin
