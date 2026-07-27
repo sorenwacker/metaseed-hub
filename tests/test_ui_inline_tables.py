@@ -1,7 +1,7 @@
 """Tests for UI inline table functionality."""
 
 import pytest
-from metaseed.ui.state import AppState
+from metaseed.ui.state import AppState, TreeNode
 
 
 class TestParentIdInheritance:
@@ -141,32 +141,41 @@ class TestTreeSerialization:
         assert result["tree"] == []
 
     def test_serialize_node_with_children(self) -> None:
-        """Nodes with children serialize recursively (via the real facade)."""
-        from metaseed import MetaseedClient
+        """Nodes with children serialize recursively."""
+        state = AppState()
+        state.profile = "isa"
+        state.version = "1.0"
+
+        # Create a mock tree structure
+        parent = TreeNode(
+            id="parent-1",
+            entity_type="Investigation",
+            instance=None,
+            label="Test Investigation",
+            parent_id=None,
+        )
+        child = TreeNode(
+            id="child-1",
+            entity_type="Study",
+            instance=None,
+            label="Test Study",
+            parent_id="parent-1",
+        )
+        parent.children.append(child)
+        state.entity_tree.append(parent)
+        state.nodes_by_id["parent-1"] = parent
+        state.nodes_by_id["child-1"] = child
 
         from metaseed_hub.ui.helpers import serialize_tree
-
-        client = MetaseedClient("miappe", "1.2")
-        inv = client.create_entity("Investigation", {"unique_id": "inv-001", "title": "Test"})
-        client.create_entity(
-            "Study",
-            {"unique_id": "stu-001", "title": "S", "investigation_id": "inv-001"},
-            parent_id=inv.id,
-        )
-
-        state = AppState()
-        state.profile = client.profile
-        state.version = "1.2"
-        state.facade = client._facade
-        state.invalidate_cache()
 
         result = serialize_tree(state)
 
         assert len(result["tree"]) == 1
         parent_data = result["tree"][0]
+        assert parent_data["id"] == "parent-1"
         assert parent_data["entity_type"] == "Investigation"
         assert len(parent_data["children"]) == 1
-        assert parent_data["children"][0]["entity_type"] == "Study"
+        assert parent_data["children"][0]["id"] == "child-1"
 
     def test_deserialize_empty_data(self) -> None:
         """Empty data leaves tree empty."""
