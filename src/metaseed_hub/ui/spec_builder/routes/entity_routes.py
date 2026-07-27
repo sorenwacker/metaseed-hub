@@ -189,9 +189,9 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
                     if field.items == name:
                         field.items = new_name
                     if field.reference and field.reference.startswith(f"{name}."):
-                        field.reference = f"{new_name}.{field.reference[len(name) + 1:]}"
+                        field.reference = f"{new_name}.{field.reference[len(name) + 1 :]}"
                     if field.parent_ref and field.parent_ref.startswith(f"{name}."):
-                        field.parent_ref = f"{new_name}.{field.parent_ref[len(name) + 1:]}"
+                        field.parent_ref = f"{new_name}.{field.parent_ref[len(name) + 1 :]}"
 
             # Update validation rules
             for rule in ctx.spec.validation_rules:
