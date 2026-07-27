@@ -96,6 +96,8 @@
                     <th>Email</th>
                     <th>Display Name</th>
                     <th>Registered</th>
+                    <th title="Datasets in this user's own workspace">Datasets</th>
+                    <th title="When the user last completed sign-in, not their last request">Last sign-in</th>
                 </tr>
             </thead>
             <tbody>
@@ -104,6 +106,10 @@
                     <td>{{ u.email }}</td>
                     <td>{{ u.display_name }}</td>
                     <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
+                    <td>{{ dataset_counts.get(u.id, 0) }}</td>
+                    {# Null for accounts that predate this column; say so rather
+                       than showing a dash that reads as "no data available". #}
+                    <td>{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else 'Never' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

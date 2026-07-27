@@ -128,6 +128,13 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Written when the sign-in flow completes, not on every request, so this is
+    # a last sign-in and not a last-seen. Null for users who registered before
+    # the column existed and have not signed in since.
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
