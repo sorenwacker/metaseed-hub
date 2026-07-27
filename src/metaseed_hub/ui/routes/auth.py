@@ -2,14 +2,16 @@
 
 import logging
 import secrets
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 
 from metaseed_hub.config import get_settings
+from metaseed_hub.models import ApiToken
+from metaseed_hub.tokens import active_tokens
 from metaseed_hub.ui.dependencies import DbSession
 
 logger = logging.getLogger("metaseed_hub")
@@ -249,8 +251,70 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "datasets_needing_new_owner": blocking_datasets,
             "specs_needing_new_owner": blocking_specs,
             "delete_error": request.query_params.get("error"),
+            "api_tokens": await active_tokens(session, db_user),
+            # Shown once, immediately after minting, and never retrievable again.
+            "new_token": request.query_params.get("token"),
         },
     )
+
+
+@router.post("/profile/tokens")
+async def auth_create_token(
+    request: Request,
+    session: DbSession,
+    name: Annotated[str, Form()] = "",
+) -> Response:
+    """Mint a personal access token for the signed-in user."""
+    from metaseed_hub.tokens import issue_token
+    from metaseed_hub.ui.dependencies import (
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return RedirectResponse(url="/hub/auth/login", status_code=302)
+    submitted = (await request.form()).get("_csrf_token")
+    if not validate_csrf_token(request, submitted if isinstance(submitted, str) else None):
+        return RedirectResponse(url="/hub/auth/profile?error=csrf", status_code=302)
+
+    _, db_user = await ensure_tenant_and_user(session, user)
+    secret, _token = await issue_token(session, db_user, name=name.strip() or "token")
+
+    # Carried back once so the page can show it; it is not stored anywhere.
+    return RedirectResponse(url=f"/hub/auth/profile?token={secret}", status_code=303)
+
+
+@router.post("/profile/tokens/{token_id}/revoke")
+async def auth_revoke_token(
+    request: Request,
+    token_id: str,
+    session: DbSession,
+) -> Response:
+    """Withdraw one of the signed-in user's tokens."""
+    from metaseed_hub.tokens import revoke_token
+    from metaseed_hub.ui.dependencies import (
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        return RedirectResponse(url="/hub/auth/login", status_code=302)
+    submitted = (await request.form()).get("_csrf_token")
+    if not validate_csrf_token(request, submitted if isinstance(submitted, str) else None):
+        return RedirectResponse(url="/hub/auth/profile?error=csrf", status_code=302)
+
+    _, db_user = await ensure_tenant_and_user(session, user)
+    token = await session.get(ApiToken, token_id)
+    # Scoped to the caller: a token id is guessable, and revoking someone else's
+    # would be a denial of service against them.
+    if token is not None and token.user_id == db_user.id:
+        await revoke_token(session, token)
+
+    return RedirectResponse(url="/hub/auth/profile", status_code=303)
 
 
 @router.post("/profile/delete")

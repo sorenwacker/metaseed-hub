@@ -164,6 +164,9 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     spec_comment_reactions: Mapped[list["SpecCommentReaction"]] = relationship(
         "SpecCommentReaction", back_populates="user", passive_deletes=True
     )
+    api_tokens: Mapped[list["ApiToken"]] = relationship(
+        "ApiToken", back_populates="user", passive_deletes=True
+    )
 
 
 class TeamMembership(Base):
@@ -352,6 +355,57 @@ class ErrorEvent(Base):
     )
 
     user: Mapped["User | None"] = relationship("User")
+
+
+class ApiToken(Base):
+    """A personal access token, for clients that cannot hold a browser session.
+
+    Issued to a user so an MCP client can act as them. Only the SHA-256 hash is
+    stored: the token itself is shown once at creation and is unrecoverable
+    afterwards, so a database copy cannot be replayed against the API.
+
+    Revocation is a timestamp rather than a delete, so an admin can still see
+    that a token existed and when it was withdrawn.
+    """
+
+    __tablename__ = "api_tokens"
+    __table_args__ = (Index("ix_api_tokens_user_id", "user_id"),)
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    """What the user called it, so they can tell two tokens apart."""
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    """SHA-256 of the token. Unique so a lookup is one indexed read."""
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    """Updated on use, so a token nobody uses is visible as such."""
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="api_tokens")
+
+    @property
+    def is_active(self) -> bool:
+        """Whether this token may still authenticate."""
+        return self.revoked_at is None
 
 
 class Note(TimestampMixin, Base):

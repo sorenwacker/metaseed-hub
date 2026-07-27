@@ -55,6 +55,57 @@
             </p>
         </div>
 
+        <div class="profile-section">
+            <h2>Access tokens</h2>
+            <p class="help-text">
+                A token lets a tool act as you where a browser login is not possible —
+                for example connecting Claude to your datasets over MCP. It carries your
+                identity, so treat it like a password.
+            </p>
+
+            {% if new_token %}
+            <div class="notification notification-success">
+                <p><strong>Copy this now — it is not shown again.</strong></p>
+                <p><code class="token-secret">{{ new_token }}</code></p>
+                <p class="help-text">Connect a client with:</p>
+                <p><code>claude mcp add --transport http metaseed {{ request.base_url }}hub/mcp --header "Authorization: Bearer {{ new_token }}"</code></p>
+            </div>
+            {% endif %}
+
+            {% if api_tokens %}
+            <table class="admin-table">
+                <thead>
+                    <tr><th>Name</th><th>Created</th><th>Last used</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for token in api_tokens %}
+                    <tr>
+                        <td>{{ token.name }}</td>
+                        <td>{{ token.created_at.strftime('%Y-%m-%d') }}</td>
+                        {# Never used reads as an unused token, not as missing data. #}
+                        <td>{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'Never' }}</td>
+                        <td>
+                            <form method="post" action="/hub/auth/profile/tokens/{{ token.id }}/revoke">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Revoke {{ token.name }}? Any client using it stops working.')">Revoke</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-state">No tokens yet.</p>
+            {% endif %}
+
+            <form method="post" action="/hub/auth/profile/tokens" class="token-create-form">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                <input type="text" name="name" class="form-input" placeholder="What is it for? e.g. laptop" maxlength="100">
+                <button type="submit" class="btn btn-primary">Create token</button>
+            </form>
+        </div>
+
         <div class="profile-section danger-zone">
             <h2>Delete account</h2>
             {% if delete_error == 'confirm' %}
