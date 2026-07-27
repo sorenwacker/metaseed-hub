@@ -25,6 +25,16 @@ A dump is deleted only when it falls outside *every* tier, so the tiers overlap 
 
 Adjust the tiers with flags on the backup command (`--keep-last`, `--keep-daily`, `--keep-weekly`, `--keep-monthly`).
 
+## Installing the schedule
+
+The units are installed by the Ansible role. The `backup` tag applies only the backup tasks, so the schedule can be installed or adjusted without the full setup run's package installs, git pull, and migrations:
+
+```bash
+ansible-playbook -i ansible/inventory/production.yml ansible/deploy.yml --tags backup
+```
+
+This needs the host to already run a build that contains `metaseed_hub.backup`. The host deploys **release tags**, not `main` (see `deploy.sh`), so the module arrives with the next `v*` tag rather than when the change merges. Installing the timer before that leaves it failing nightly on a missing module.
+
 ## Schedule
 
 `metaseed-backup.timer` runs `metaseed-backup.service` daily at 02:30 UTC with `Persistent=true`, so a host that was down at 02:30 takes its backup once it comes back rather than skipping the day.
