@@ -1,7 +1,6 @@
 """Entity-tree construction and JSON (de)serialization for AppState."""
 
 import logging
-import uuid
 from datetime import date, datetime
 from typing import Any
 
@@ -51,10 +50,12 @@ def add_entity_node(
     parent_id: str | None = None,
     helper: Any = None,
 ) -> TreeNode:
-    """Add an entity node without validation.
+    """Add an entity node through the facade without validation.
 
-    Creates a TreeNode directly using model_construct to skip Pydantic validation.
-    This allows saving entities with missing required fields.
+    Writes the (possibly incomplete) draft to the facade via ``state.add_node``
+    with ``skip_validation`` -- so the entity lands in the source of truth rather
+    than only the TreeNode cache -- and ``add_node`` keeps the cache consistent.
+    ``skip_validation`` allows saving entities with missing required fields.
 
     Args:
         state: AppState to add the node to.
@@ -71,32 +72,9 @@ def add_entity_node(
         helper = getattr(facade, entity_type)
 
     # Create instance using model_construct (skips validation)
-    model_class = helper._model
-    instance = model_class.model_construct(**data)
+    instance = helper._model.model_construct(**data)
 
-    # Generate node ID and label
-    node_id = str(uuid.uuid4())
-    label = helper.get_label(instance) or f"New {entity_type}"
-
-    # Create TreeNode directly
-    node = TreeNode(
-        id=node_id,
-        entity_type=entity_type,
-        instance=instance,
-        label=label,
-        parent_id=parent_id,
-    )
-
-    # Add to state's tree structure
-    if parent_id and parent_id in state.nodes_by_id:
-        parent_node = state.nodes_by_id[parent_id]
-        parent_node.children.append(node)
-    else:
-        state.entity_tree.append(node)
-
-    state.nodes_by_id[node_id] = node
-
-    return node
+    return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
 
 
 def serialize_tree(state: AppState) -> dict[str, Any]:
