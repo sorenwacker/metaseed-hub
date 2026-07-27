@@ -21,6 +21,23 @@ Open a dataset and use **Import** in the sidebar to load entities from a file in
 !!! note
     Imported data is validated against the dataset's profile. Run **Validate** after importing to review any errors or warnings.
 
+### From a public repository
+
+A dataset whose profile has a matching public repository can be filled from that repository directly. While the dataset is still empty, the sidebar shows a field asking for the identifier the repository uses:
+
+| Profile | Control | What to enter |
+|---------|---------|---------------|
+| `ena` | Import ENA accession | An ENA accession, e.g. `PRJEB1234` |
+| `pride` | Import PRIDE project | A ProteomeXchange accession, e.g. `PXD000001` |
+| `metabolights` | Import MetaboLights study | A study accession, e.g. `MTBLS1` |
+| `miappe` | Import BrAPI server | A BrAPI v2 server URL |
+
+The hub fetches the public metadata and builds the dataset's entities from it. Metadata only: data files are referenced by name, never downloaded.
+
+The control appears only while the dataset has no entities, and the import is refused if any exist, because it replaces the whole entity tree rather than merging into it. To pull a repository record into a dataset you have already started, create a new dataset for it instead.
+
+Which repositories are on offer comes from metaseed's adapter registry, so the list above grows when metaseed adds an importer, without a hub change.
+
 ## Exporting
 
 Open a dataset and click **Export** in the sidebar to download it.
@@ -33,3 +50,7 @@ The Excel export produces one worksheet per entity type (for example *Investigat
 |-----------|--------|-----------|
 | Export | Excel | `.xlsx` |
 | Export | JSON | `.json` |
+
+### Repository submission formats
+
+A dataset whose profile has a repository exporter shows an extra download button per format, again from metaseed's registry. A PRIDE dataset offers one **PRIDE submission** download: a zip holding both `submission.px` and the SDRF sample table, since a ProteomeXchange submission consists of the two together. The SDRF is omitted when the dataset has no samples rather than shipping an empty table.

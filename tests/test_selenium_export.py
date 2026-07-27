@@ -10,10 +10,12 @@ Marked ``selenium`` and skipped by the default suite. Needs the docker stack
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import urllib.request
 import uuid
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -98,9 +100,9 @@ def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
     WebDriverWait(driver, 45).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="btn-export-pride"]'))
     )
-    assert driver.find_elements(
+    assert not driver.find_elements(
         By.CSS_SELECTOR, '[data-testid="btn-export-pride-sdrf"]'
-    ), "PRIDE SDRF export button missing"
+    ), "the SDRF ships inside the single PRIDE submission download, not as its own button"
 
     # Clicking must produce a real zip. Use the authenticated session cookies to
     # fetch the export URL directly -- robust against headless download handling.
@@ -114,3 +116,7 @@ def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
         assert resp.headers.get("Content-Type") == "application/zip"
         body = resp.read()
     assert body[:2] == b"PK", "response is not a zip archive"
+    # Assert on what the archive holds: the one button must deliver the
+    # submission document, not merely a well-formed empty zip.
+    names = zipfile.ZipFile(io.BytesIO(body)).namelist()
+    assert "submission.px" in names, f"archive holds {names}"

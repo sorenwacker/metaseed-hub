@@ -3,10 +3,11 @@
 import copy
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from metaseed.adapters import Action  # lightweight by design: no plugin imports
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -26,6 +27,7 @@ from metaseed_hub.ui.dependencies import (
 from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
+    ensure_dataset_facade,
     get_dataset_state,
     parse_workbook_sheets,
     read_upload_capped,
@@ -35,6 +37,9 @@ from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 from ._router import router
+
+if TYPE_CHECKING:
+    from metaseed import MetaseedClient
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -323,6 +328,38 @@ async def dataset_import(
     return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
 
 
+def source_import_action(profile: str) -> Action | None:
+    """The registry's import-menu action for ``profile``, or None.
+
+    metaseed declares one per repository it can pull from (ENA, PRIDE,
+    MetaboLights, BrAPI). Resolving through the registry rather than naming the
+    importers here means a new one reaches the hub by being declared upstream.
+    """
+    from metaseed import adapters
+
+    return next(
+        iter(adapters.actions_for_profile(profile, kind="import", surface="import-menu")),
+        None,
+    )
+
+
+def run_source_import(profile: str, value: str) -> "MetaseedClient":
+    """Import ``value`` through the importer registered for ``profile``.
+
+    Every import action takes a single string, though its meaning varies by
+    repository: an accession for the archives, a server URL for BrAPI. The
+    action's ``input_label`` is what tells the user which to supply.
+
+    Raises:
+        LookupError: If no importer is registered for ``profile``.
+    """
+    action = source_import_action(profile)
+    if action is None:
+        raise LookupError(f"No source importer for profile '{profile}'")
+    client: MetaseedClient = action.resolve()(value)
+    return client
+
+
 async def create_dataset_from_accession(
     session: DbSession,
     tenant_id: str,
@@ -341,20 +378,7 @@ async def create_dataset_from_accession(
     Raises:
         LookupError: If no accession importer is registered for ``profile``.
     """
-    from metaseed import adapters
-
-    action = next(
-        (
-            a
-            for a in adapters.actions_for_profile(profile, kind="import")
-            if a.surface == "import-menu"
-        ),
-        None,
-    )
-    if action is None:
-        raise LookupError(f"No accession importer for profile '{profile}'")
-
-    client = action.resolve()(accession)
+    client = run_source_import(profile, accession)
 
     dataset = Dataset(
         tenant_id=tenant_id,
@@ -374,6 +398,61 @@ async def create_dataset_from_accession(
     state.invalidate_cache()
     await save_dataset_state(session, dataset, state)
     return dataset
+
+
+@router.post("/{dataset_id}/import-source", response_class=HTMLResponse)
+async def dataset_import_source(
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    value: Annotated[str, Form()],
+) -> Response:
+    """Fill an empty dataset from the source database its profile can import.
+
+    Offered only while the dataset has no entities, and refused server-side in
+    the same case: the importer replaces the whole entity tree, so running it
+    over authored content would discard that content with no undo.
+    """
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
+    if state.nodes_by_id:
+        return HTMLResponse(
+            "<div class='notification error'>This dataset already has entities. "
+            "Importing would replace them, so it is only offered while the dataset "
+            "is empty.</div>",
+            status_code=400,
+        )
+
+    try:
+        client = run_source_import(dataset.profile, value.strip())
+    except LookupError:
+        return HTMLResponse(
+            f"<div class='notification error'>No importer is registered for the "
+            f"{dataset.profile} profile.</div>",
+            status_code=404,
+        )
+    except Exception:
+        # A bad accession or an archive outage must not 500 the page.
+        logger.exception("Source import failed for %s:%s", dataset.profile, value)
+        return HTMLResponse(
+            "<div class='notification error'>Import failed. Check the identifier "
+            "and try again.</div>",
+            status_code=502,
+        )
+
+    state.facade = client.facade
+    state.invalidate_cache()
+    await save_dataset_state(session, dataset, state, user)
+
+    response = HTMLResponse(status_code=200)
+    response.headers["HX-Redirect"] = f"/hub/datasets/{dataset_id}"
+    return response
 
 
 @router.post("/import-accession")
