@@ -5734,6 +5734,15 @@ a.start-option-card:hover {
     flex-shrink: 0;
 }
 
+.version-current {
+    font-size: 0.6875rem;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--clr-parchment);
+    color: var(--clr-ink-light);
+    align-self: center;
+}
+
 .version-diff-container:empty {
     display: none;
 }

@@ -33,12 +33,16 @@
                         title="Show changes">
                     Diff
                 </button>
+                {% if item.is_current %}
+                <span class="version-current" title="The dataset already holds this state">Current</span>
+                {% else %}
                 <button class="btn btn-sm btn-ghost"
                         hx-post="/hub/datasets/{{ dataset_id }}/versions/{{ version.id }}/restore"
                         hx-confirm="Restore to version {{ version.version_number }}? This will create a new version."
                         title="Restore this version">
                     Restore
                 </button>
+                {% endif %}
             </div>
         </div>
         <div id="diff-{{ version.id }}" class="version-diff-container"></div>
