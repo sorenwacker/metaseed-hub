@@ -1212,7 +1212,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.18.0"
+version = "0.19.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1227,9 +1227,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/88/5a/4f3b76e244cd9a298845101b4ebf16e4d95babf2d1d0ddd0ccabc5bf4cbb/metaseed-0.18.0.tar.gz", hash = "sha256:f91a5d5a59e11cd550de9f766756a9622611fc98a0604f3810f0768ecad39213", size = 582587, upload-time = "2026-07-27T15:51:43.506Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/c4/4a268ee2db394b8a43c8904e8111e453206b74ac40950a76495281eeac4a/metaseed-0.19.0.tar.gz", hash = "sha256:522c8f9ae14ad80091dcfe52742fc822d1923a0a2cb4ad927bc0134d29aef8ee", size = 582864, upload-time = "2026-07-27T17:40:06.851Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/c3/963ef34ebbfb71b01200a50960033e0c23f64312d2687d26fc5c3ba89000/metaseed-0.18.0-py3-none-any.whl", hash = "sha256:f77375c621312a8f0d0d6d6494d30874780afb9cc5da08abe453da86bea45205", size = 715703, upload-time = "2026-07-27T15:51:41.901Z" },
+    { url = "https://files.pythonhosted.org/packages/52/f0/662cb83832eb207221a82c59cedb79259c4cc2b0c32177591fbed463e686/metaseed-0.19.0-py3-none-any.whl", hash = "sha256:e878620f5daa11b0194b08651ff9ae57571f362c0f73f650789737b1a06201ec", size = 716056, upload-time = "2026-07-27T17:40:05.29Z" },
 ]
 
 [package.optional-dependencies]
