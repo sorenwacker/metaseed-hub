@@ -68,6 +68,30 @@ _HUB_TEMPLATES = (
 )
 
 
+_ROLE = Path(__file__).resolve().parent.parent / "ansible" / "roles" / "metaseed-hub"
+
+
+def test_backup_timer_is_enabled_by_the_playbook() -> None:
+    """Installing the units without enabling the timer yields no backups at all,
+    which is invisible until a restore is needed."""
+    tasks = (_ROLE / "tasks" / "main.yml").read_text()
+    assert "metaseed-backup.service.j2" in tasks
+    assert "metaseed-backup.timer.j2" in tasks
+    assert "- metaseed-backup.timer" in tasks, "the backup timer is never enabled"
+
+
+def test_backup_timer_catches_up_after_downtime() -> None:
+    timer = (_ROLE / "templates" / "metaseed-backup.timer.j2").read_text()
+    assert "Persistent=true" in timer, "a host down at the scheduled time skips the backup"
+
+
+def test_backup_directory_is_not_world_readable() -> None:
+    """Dumps contain every dataset in the hub."""
+    tasks = (_ROLE / "tasks" / "main.yml").read_text()
+    backup_task = tasks.split("Create backup directory", 1)[1].split("- name:", 1)[0]
+    assert 'mode: "0700"' in backup_task
+
+
 def test_no_hub_template_loads_a_cdn_script() -> None:
     """Hub templates must self-host JS, not reintroduce a supply-chain CDN origin."""
     offenders = [

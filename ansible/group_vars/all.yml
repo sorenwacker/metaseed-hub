@@ -25,6 +25,15 @@ db_port: 5432
 redis_host: localhost
 redis_port: 6379
 
+# Database backups (see docs/backups.md). Tiers overlap: a dump is deleted only
+# when it falls outside all of them.
+backup_dir: /var/backups/metaseed-hub
+backup_schedule: "*-*-* 02:30:00"
+backup_keep_last: 3
+backup_keep_daily: 7
+backup_keep_weekly: 4
+backup_keep_monthly: 6
+
 # OIDC (SURF SRAM)
 oidc_url: https://proxy.sram.surf.nl
 oidc_realm: ""

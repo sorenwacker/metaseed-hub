@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Metaseed Hub database backup
+
+[Timer]
+OnCalendar={{ backup_schedule }}
+# Take the missed backup after downtime rather than skipping the day.
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
