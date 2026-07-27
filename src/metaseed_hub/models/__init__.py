@@ -307,6 +307,46 @@ class DatasetMember(Base):
     user: Mapped["User"] = relationship("User", back_populates="dataset_memberships")
 
 
+class ErrorEvent(Base):
+    """An unhandled server error, recorded so admins can see it in the hub.
+
+    Stored in the database rather than read from the journal: the app runs
+    several uvicorn workers, each logging separately, and the admin dashboard
+    has no privilege to read the host's journal. A row per error also survives
+    restarts and is queryable.
+
+    Only the exception type and its message are kept — never the request body or
+    headers — so a stack of these does not become a copy of users' data.
+    """
+
+    __tablename__ = "error_events"
+    __table_args__ = (Index("ix_error_events_occurred_at", "occurred_at"),)
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    method: Mapped[str] = mapped_column(String(10), nullable=False)
+    path: Mapped[str] = mapped_column(String(500), nullable=False)
+    exception_type: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Null when the error happened before the caller was identified, or after
+    # the account was deleted.
+    user_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    user: Mapped["User | None"] = relationship("User")
+
+
 class Note(TimestampMixin, Base):
     """Notes attached to entities within a dataset."""
 

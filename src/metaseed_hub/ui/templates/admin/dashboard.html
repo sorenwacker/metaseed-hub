@@ -85,6 +85,57 @@
         </div>
     </section>
 
+    <!-- Errors -->
+    <section class="admin-section">
+        <h2>Errors</h2>
+        <p class="section-description">
+            Unhandled server errors, newest first. Kept for 30 days, then removed.
+        </p>
+        {% if recent_errors %}
+        {% if error_counts %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Errors</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for date, count in error_counts %}
+                <tr>
+                    <td>{{ date }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <table class="admin-table admin-table-full">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Request</th>
+                    <th>Error</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in recent_errors %}
+                <tr>
+                    <td>{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td><code>{{ e.method }} {{ e.path }}</code></td>
+                    <td><strong>{{ e.exception_type }}</strong>: {{ e.message }}</td>
+                    {# Null when the caller was not identified, or the account was deleted. #}
+                    <td>{{ e.user.email if e.user else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No errors recorded.</p>
+        {% endif %}
+    </section>
+
     <!-- User Directory -->
     <section class="admin-section">
         <h2>User Directory</h2>
