@@ -102,6 +102,12 @@ def add_entity_node(
 def serialize_tree(state: AppState) -> dict[str, Any]:
     """Serialize AppState entity tree to JSON-compatible dict.
 
+    Writes the same ``dataset.data`` column as metaseed's
+    ``MetaseedClient.serialize(format="tree")`` (used by EntityService), so the
+    two MUST stay format-compatible: a ``{profile, version, tree: [...]}``
+    envelope with ``id``/``entity_type``/``label``/``data``/``children`` nodes.
+    ``tests/test_serialization_roundtrip.py`` enforces that equivalence.
+
     Args:
         state: AppState with entity tree to serialize.
 
