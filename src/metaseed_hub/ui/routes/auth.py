@@ -138,6 +138,20 @@ async def auth_callback(
         return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
     refresh_token = tokens.get("refresh_token")
 
+    # Record the sign-in for the admin dashboard. Here rather than on each
+    # request, so the column means "last signed in" and not "last seen"; it
+    # never blocks the redirect, so a bookkeeping failure cannot lock a user out.
+    try:
+        from metaseed_hub.auth import verify_token
+        from metaseed_hub.database import db
+        from metaseed_hub.ui.routes.admin import record_login
+
+        token_user = await verify_token(access_token)
+        async with db.session_factory() as db_session:
+            await record_login(db_session, token_user)
+    except Exception:
+        logger.exception("Could not record the sign-in")
+
     response = RedirectResponse(url="/hub/", status_code=302)
     response.delete_cookie(key=STATE_COOKIE)
     response.set_cookie(

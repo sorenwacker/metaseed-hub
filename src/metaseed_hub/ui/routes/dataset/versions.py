@@ -173,7 +173,7 @@ async def get_dataset_versions(
     user: CurrentUser,
 ) -> Response:
     """Get version history for a dataset with diffs."""
-    await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_user(dataset_id, session, user)
 
     result = await session.execute(
         select(DatasetVersion)
@@ -189,6 +189,10 @@ async def get_dataset_versions(
         version_data: dict[str, Any] = {
             "version": version,
             "diff": None,
+            # A version records the state *after* a save, so the most recent one
+            # holds what the dataset already contains. Restoring it can only be a
+            # no-op, so the list marks it instead of offering the control.
+            "is_current": version.data == dataset.data,
         }
         # Compare with previous version (next in list since sorted desc)
         if i < len(versions) - 1:
@@ -287,6 +291,16 @@ async def restore_dataset_version(
         return HTMLResponse(
             "<div class='notification error'>Version not found</div>",
             status_code=404,
+        )
+
+    # Restoring the state the dataset already holds would add a version whose
+    # diff is empty and change nothing, which reads as a broken button. Say so
+    # instead.
+    if version.data == dataset.data:
+        return HTMLResponse(
+            "<div class='notification'>This version matches the current state — "
+            "nothing to restore.</div>",
+            status_code=200,
         )
 
     # Get user from database

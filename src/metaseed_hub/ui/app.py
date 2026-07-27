@@ -156,6 +156,16 @@ def create_hub_app() -> FastAPI:
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
 
+    # A spec-builder save that would overwrite someone else's edit is refused
+    # rather than reported as a success. Handled centrally so every editing
+    # route reports it the same way instead of each remembering to catch it.
+    from metaseed_hub.ui.spec_builder.access import (
+        DraftConflictError,
+        handle_draft_conflict,
+    )
+
+    app.add_exception_handler(DraftConflictError, handle_draft_conflict)
+
     # Get metaseed's template directory for reusing Explorer templates
     import metaseed.ui
 

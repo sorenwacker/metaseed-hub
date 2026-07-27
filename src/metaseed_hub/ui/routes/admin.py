@@ -4,6 +4,7 @@ Provides GDPR-compliant aggregated statistics and admin-only user management.
 Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -23,6 +24,8 @@ from metaseed_hub.models import Dataset, ErrorEvent, User
 from metaseed_hub.ui.dependencies import require_user
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
+
+logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -97,6 +100,43 @@ def is_admin(user: TokenUser | None) -> bool:
     if not user:
         return False
     return _has_admin_role(user)
+
+
+async def _dataset_counts_by_user(session: AsyncSession) -> dict[str, int]:
+    """Return ``{user_id: dataset count}`` for every user who owns datasets.
+
+    A dataset belongs to a tenant, and the hub gives each user a tenant of their
+    own on first sign-in, so a user's datasets are their tenant's datasets. Users
+    who own none are absent; callers render 0 for a missing key rather than the
+    query inventing a row.
+    """
+    result = await session.execute(
+        select(User.id, func.count(Dataset.id))
+        .join(Dataset, Dataset.tenant_id == User.tenant_id)
+        .where(User.deleted_at.is_(None), Dataset.deleted_at.is_(None))
+        .group_by(User.id)
+    )
+    return {user_id: count for user_id, count in result.all()}
+
+
+async def record_login(session: AsyncSession, user: TokenUser) -> None:
+    """Stamp ``last_login_at`` for the user who just completed sign-in.
+
+    Called from the OIDC callback, so it records a sign-in rather than a request.
+    The user row is created lazily on the first page, so an unknown subject is a
+    no-op; and because this is bookkeeping, any failure is swallowed — a user
+    must not be locked out because a write to this column failed.
+    """
+    try:
+        db_user = (
+            await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+        ).scalar_one_or_none()
+        if db_user is None:
+            return
+        db_user.last_login_at = datetime.now(UTC)
+        await session.commit()
+    except Exception:
+        logger.exception("Could not record the sign-in for %s", user.keycloak_id)
 
 
 RECENT_ERROR_LIMIT = 50
@@ -187,6 +227,7 @@ async def admin_dashboard(
             "user_activity": user_activity,
             "dataset_activity": dataset_activity,
             "users": users,
+            "dataset_counts": await _dataset_counts_by_user(session),
             "recent_errors": await _recent_errors(session),
             "error_counts": await _error_counts_by_day(session),
             "using_default_secret_key": get_settings().using_default_secret_key,
