@@ -147,6 +147,12 @@ def create_hub_app() -> FastAPI:
 
     app.add_middleware(TokenRefreshMiddleware)
 
+    # Outermost of the two, so it sees anything the request raises. It records
+    # and re-raises, leaving the 500 response and the log line unchanged.
+    from metaseed_hub.errors import ErrorRecordingMiddleware
+
+    app.add_middleware(ErrorRecordingMiddleware)
+
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
 

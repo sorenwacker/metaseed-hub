@@ -6,7 +6,7 @@ Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -15,11 +15,12 @@ if TYPE_CHECKING:
 from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, User
+from metaseed_hub.models import Dataset, ErrorEvent, User
 from metaseed_hub.ui.dependencies import require_user
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
@@ -138,6 +139,34 @@ async def record_login(session: AsyncSession, user: TokenUser) -> None:
         logger.exception("Could not record the sign-in for %s", user.keycloak_id)
 
 
+RECENT_ERROR_LIMIT = 50
+
+
+async def _recent_errors(
+    session: AsyncSession, limit: int = RECENT_ERROR_LIMIT
+) -> list[ErrorEvent]:
+    """The most recent unhandled errors, newest first, with their caller."""
+    result = await session.execute(
+        select(ErrorEvent)
+        .options(selectinload(ErrorEvent.user))
+        .order_by(ErrorEvent.occurred_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def _error_counts_by_day(session: AsyncSession, days: int = 7) -> list[tuple[Any, int]]:
+    """Errors per day over the recent window, so a spike is visible at a glance."""
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    result = await session.execute(
+        select(func.date(ErrorEvent.occurred_at), func.count(ErrorEvent.id))
+        .where(ErrorEvent.occurred_at > cutoff)
+        .group_by(func.date(ErrorEvent.occurred_at))
+        .order_by(func.date(ErrorEvent.occurred_at).desc())
+    )
+    return [(day, count) for day, count in result.all()]
+
+
 @router.get("/")
 async def admin_dashboard(
     request: Request,
@@ -199,6 +228,8 @@ async def admin_dashboard(
             "dataset_activity": dataset_activity,
             "users": users,
             "dataset_counts": await _dataset_counts_by_user(session),
+            "recent_errors": await _recent_errors(session),
+            "error_counts": await _error_counts_by_day(session),
             "using_default_secret_key": get_settings().using_default_secret_key,
             "nav_active": "admin",
         },
