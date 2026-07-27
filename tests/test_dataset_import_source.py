@@ -166,3 +166,42 @@ async def test_import_without_csrf_is_rejected(session: AsyncSession) -> None:
     response = await dataset_import_source(request, dataset.id, session, token, value="PXD000001")
 
     assert response.status_code == 403
+
+
+def _empty_importer(_accession: str, **_kw: object) -> MetaseedClient:
+    """An archive that resolves nothing — an accession that does not exist.
+
+    The ENA importer returns an empty client rather than raising for an
+    unresolvable accession, so this is what a typo actually produces.
+    """
+    return MetaseedClient("pride", "1.0")
+
+
+async def test_an_import_that_found_nothing_says_so(session: AsyncSession) -> None:
+    """Reported as a bug: a mistyped accession left an empty dataset and a
+    success message, so the user had no idea the import had failed."""
+    dataset, token = await _dataset(session)
+
+    with patch("metaseed.pride.import_accession", _empty_importer):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="PXD99999999"
+        )
+
+    assert response.status_code == 404
+    body = response.body.decode().lower()
+    assert "nothing" in body or "no data" in body or "not found" in body
+
+
+async def test_an_import_that_found_nothing_leaves_the_dataset_alone(
+    session: AsyncSession,
+) -> None:
+    """It must not overwrite the dataset with the empty result it just got."""
+    dataset, token = await _dataset(session)
+
+    with patch("metaseed.pride.import_accession", _empty_importer):
+        await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="PXD99999999"
+        )
+
+    await session.refresh(dataset)
+    assert not dataset.data.get("tree"), "an empty import was saved over the dataset"
