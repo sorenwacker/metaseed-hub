@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, Response
 from metaseed.specs.schema import ProfileSpec
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,11 +33,42 @@ from .state import SpecBuilderState
 
 logger = logging.getLogger(__name__)
 
+# Distinguishes "caller did not say" from an explicit None, which means "I hold
+# a copy of unknown age" and must be treated as a conflict.
+_UNSET_REVISION: Any = object()
+
 
 class LoginRequiredRedirectError(Exception):
     """Raised when user needs to login and should be redirected."""
 
     pass
+
+
+class DraftConflictError(Exception):
+    """Raised when a save would overwrite an edit made since the state loaded.
+
+    Saving rewrites the draft's whole ``spec_data``, so a writer holding an
+    older copy would silently destroy whatever landed in between. Callers turn
+    this into a message telling the user to reload, rather than reporting a
+    success that discards someone's work.
+    """
+
+
+def handle_draft_conflict(request: Request, exc: Exception) -> Response:
+    """Report a refused save to the user instead of a false success.
+
+    Rendered as the same notification partial the editing routes swap in, so the
+    message lands where the user is looking whichever control they used.
+    """
+    logger.warning("Refused a spec-draft save that would overwrite a newer edit: %s", exc)
+    return HTMLResponse(
+        "<div class='notification notification-error'>"
+        "This spec changed somewhere else since you opened it, so saving would "
+        "have discarded that change. Reload the page to pick up the current "
+        "version, then reapply your edit."
+        "</div>",
+        status_code=409,
+    )
 
 
 async def get_user_context(
@@ -232,17 +265,6 @@ async def load_state_for_draft(
     Raises:
         HTTPException 404 if draft not found or not accessible
     """
-    cached_state = state_cache.get(draft_id)
-    if cached_state is not None:
-        result = await session.execute(
-            select(SpecDraft)
-            .options(selectinload(SpecDraft.tenant))
-            .where(SpecDraft.id == draft_id)
-        )
-        draft = result.scalar_one_or_none()
-        if draft and await _user_can_access_draft(session, draft, user_id):
-            return cached_state, draft
-
     result = await session.execute(
         select(SpecDraft).options(selectinload(SpecDraft.tenant)).where(SpecDraft.id == draft_id)
     )
@@ -254,12 +276,20 @@ async def load_state_for_draft(
     if not await _user_can_access_draft(session, draft, user_id):
         raise HTTPException(status_code=403, detail="Access denied to this draft")
 
+    # The cache is only trusted while the stored row has not moved on. Another
+    # worker (production runs two) has its own cache and writes straight to the
+    # row, so serving a cached copy unchecked meant the next save rewrote the
+    # whole spec_data from a stale copy and silently dropped that worker's edit.
+    cached_state = state_cache.get(draft_id)
+    if cached_state is not None and state_cache.revision(draft_id) == draft.updated_at:
+        return cached_state, draft
+
     if draft.spec_data:
         state = SpecBuilderState.from_dict(draft.spec_data)
     else:
         state = SpecBuilderState()
 
-    state_cache.set(draft_id, state)
+    state_cache.set(draft_id, state, revision=draft.updated_at)
     return state, draft
 
 
@@ -267,8 +297,25 @@ async def save_state_to_draft(
     session: AsyncSession,
     state: SpecBuilderState,
     draft: SpecDraft,
+    expected_revision: datetime | None = _UNSET_REVISION,
 ) -> None:
-    """Save state to an existing draft."""
+    """Save state to an existing draft.
+
+    Args:
+        session: Database session.
+        state: The state to persist; its spec replaces the draft's whole
+            ``spec_data``.
+        draft: The draft row to write.
+        expected_revision: The ``updated_at`` the caller's state was read at.
+            Defaults to the revision recorded when the state was cached, which
+            is what the request handlers want. Pass ``None`` to say "I do not
+            know", which is treated as a conflict whenever the row has moved.
+
+    Raises:
+        DraftConflictError: If the row changed since the state was read. Saving
+            anyway would rewrite ``spec_data`` from an older copy and destroy
+            the intervening edit while reporting success.
+    """
     from sqlalchemy.orm.attributes import flag_modified
 
     if state.spec is None:
@@ -276,6 +323,15 @@ async def save_state_to_draft(
         await session.commit()
         state_cache.pop(draft.id, None)
         return
+
+    if expected_revision is _UNSET_REVISION:
+        expected_revision = state_cache.revision(draft.id)
+    stored_revision = await _stored_revision(session, draft.id)
+    if stored_revision is not None and expected_revision != stored_revision:
+        # Drop the stale copy so the next read rebuilds from the row rather than
+        # handing the same doomed state back.
+        state_cache.pop(draft.id, None)
+        raise DraftConflictError(draft.id)
 
     spec_data = state.to_dict()
 
@@ -287,7 +343,14 @@ async def save_state_to_draft(
         draft.template_source = f"{state.template_source[0]}:{state.template_source[1]}"
 
     await session.commit()
-    state_cache.set(draft.id, state)
+    await session.refresh(draft)
+    state_cache.set(draft.id, state, revision=draft.updated_at)
+
+
+async def _stored_revision(session: AsyncSession, draft_id: str) -> datetime | None:
+    """Read the draft row's current ``updated_at``, or None if it is gone."""
+    result = await session.execute(select(SpecDraft.updated_at).where(SpecDraft.id == draft_id))
+    return result.scalar_one_or_none()
 
 
 async def create_new_draft(

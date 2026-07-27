@@ -30,7 +30,9 @@ nav:
   - Reference:
     - Supported profiles: reference/profiles.md
     - Ontology lookup: reference/ontology-lookup.md
-  - Administration: administration.md
+  - Administration:
+    - Overview: administration.md
+    - Backups and restore: backups.md
   - Developer:
     - Architecture: developer/architecture.md
     - API Reference: developer/api.md

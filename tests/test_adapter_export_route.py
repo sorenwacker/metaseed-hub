@@ -19,11 +19,14 @@ from metaseed_hub.ui.routes.dataset.editor import (
 
 
 def test_export_options_come_from_the_metaseed_registry() -> None:
+    """What the sidebar offers is whatever the registry declares, so these track
+    metaseed rather than being restated here."""
     # One PRIDE export: submission.px and its SDRF are parts of one submission,
-    # so they arrive in a single archive rather than as rival buttons.
-    assert {o["key"] for o in _adapter_export_options("pride")} == {"pride"}
-    # A profile with no adapter exporters offers none.
-    assert _adapter_export_options("darwin-core") == []
+    # so they arrive together in a single archive.
+    assert {o["key"] for o in _adapter_export_options("pride")} == {"pride", "dcat"}
+    # A profile with no repository adapter still gets the DCAT catalogue record,
+    # which describes a dataset under any profile — but no other profile's exporter.
+    assert {o["key"] for o in _adapter_export_options("darwin-core")} == {"dcat"}
 
 
 @pytest.mark.asyncio
