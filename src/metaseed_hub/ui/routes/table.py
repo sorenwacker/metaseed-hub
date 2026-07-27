@@ -348,18 +348,13 @@ async def _add_entity_list_row(
     model_class = nested_helper._model
     instance = model_class.model_construct(**default_values)
 
-    # Add as child of parent (create TreeNode directly to skip facade validation)
-    node_id = str(uuid.uuid4())
-    label = nested_helper.get_label(instance) or f"New {nested_type}"
-    child_node = TreeNode(
-        id=node_id,
-        entity_type=nested_type,
-        instance=instance,
-        label=label,
-        parent_id=parent_node_id,
+    # Add the child through the facade (skip_validation lets an incomplete draft
+    # row persist). This writes to the facade -- the source of truth -- rather
+    # than only the TreeNode cache, so the row is not lost on save. add_node also
+    # keeps the cache consistent and returns the wrapper for rendering.
+    child_node = state.add_node(
+        nested_type, instance, parent_id=parent_node_id, skip_validation=True
     )
-    parent_node.children.append(child_node)
-    state.nodes_by_id[node_id] = child_node
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)
