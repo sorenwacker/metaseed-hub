@@ -1,26 +1,24 @@
-"""Cross-compatibility of the two dataset serializers (issue #51).
+"""serialize_tree reuses metaseed's client serializer (issue #51 / epic #53).
 
-metaseed's ``MetaseedClient.serialize(format="tree")`` (used by EntityService)
-and the hub's ``serialize_tree`` (used by ``save_dataset_state``) both write the
-same ``dataset.data`` column. This pins that they produce the same tree shape and
-that either serializer's output round-trips through the hub reader, so the two
-cannot silently diverge into incompatible formats.
+The hub's save path (``save_dataset_state`` -> ``serialize_tree``) now delegates
+to ``MetaseedClient.serialize(format="tree")`` via the state's facade, so there
+is one serializer. These tests mirror the real save flow (facade populated, as
+``ensure_dataset_facade`` does) and confirm the output matches the client and
+round-trips.
 """
 
 from metaseed import MetaseedClient
 from metaseed.ui.state import AppState
 
-from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
+from metaseed_hub.ui.helpers.tree import serialize_tree
 
 
 def _flatten(tree: list[dict]) -> set[tuple[str, str]]:
-    """Reduce a serialized tree to a set of (entity_type, sorted data) pairs."""
     out: set[tuple[str, str]] = set()
 
     def walk(nodes: list[dict]) -> None:
         for n in nodes:
-            data = {k: v for k, v in n.get("data", {}).items()}
-            out.add((n["entity_type"], repr(sorted(data.items()))))
+            out.add((n["entity_type"], repr(sorted(n.get("data", {}).items()))))
             walk(n.get("children", []))
 
     walk(tree)
@@ -38,39 +36,44 @@ def _client_with_tree() -> MetaseedClient:
     return client
 
 
-def test_client_tree_output_reloads_and_reserializes_equivalently() -> None:
-    """Path A output (client.serialize tree) round-trips through the hub path."""
-    client = _client_with_tree()
-    data_a = client.serialize(format="tree")
+def _state_from_client(client: MetaseedClient) -> AppState:
+    """Bridge a populated client facade onto an AppState, as the hub save flow does."""
+    state = AppState()
+    state.profile = client.profile
+    state.version = "1.2"
+    state.facade = client._facade
+    state.invalidate_cache()
+    return state
 
-    # Hub reader consumes Path A output...
+
+def test_serialize_tree_matches_client_serializer() -> None:
+    """serialize_tree produces the same tree the client serializer does."""
+    client = _client_with_tree()
+    state = _state_from_client(client)
+
+    data = serialize_tree(state)
+
+    assert _flatten(data["tree"]) == _flatten(client.serialize(format="tree")["tree"])
+    node = data["tree"][0]
+    assert {"id", "entity_type", "label", "data", "children"} <= set(node)
+
+
+def test_saved_tree_reloads_with_all_entities() -> None:
+    """The serialized tree loads back into a fresh client with entities intact."""
+    client = _client_with_tree()
+    state = _state_from_client(client)
+
+    data = serialize_tree(state)
+
+    reloaded = MetaseedClient("miappe", "1.2")
+    reloaded.load(data)
+    assert _flatten(reloaded.serialize(format="tree")["tree"]) == _flatten(data["tree"])
+
+
+def test_no_facade_serializes_to_empty_tree() -> None:
+    """A degenerate state with no facade yields an empty tree, not an error."""
     state = AppState()
     state.profile = "miappe"
     state.version = "1.2"
-    deserialize_tree(state, data_a)
 
-    # ...and the hub serializer (Path B) reproduces the same entities.
-    data_b = serialize_tree(state)
-
-    assert _flatten(data_a["tree"]) == _flatten(data_b["tree"])
-    assert data_a["profile"] == data_b["profile"]
-
-
-def test_both_serializers_use_the_same_tree_envelope() -> None:
-    """Both serializers wrap the tree in the same {profile, version, tree} keys."""
-    client = _client_with_tree()
-    data_a = client.serialize(format="tree")
-
-    state = AppState()
-    state.profile = "miappe"
-    state.version = "1.2"
-    deserialize_tree(state, data_a)
-    data_b = serialize_tree(state)
-
-    assert set(data_a) >= {"profile", "version", "tree"}
-    assert set(data_b) >= {"profile", "version", "tree"}
-    # Node shape agrees on the core keys (hub adds parent_id).
-    node_a = data_a["tree"][0]
-    node_b = data_b["tree"][0]
-    assert {"id", "entity_type", "label", "data", "children"} <= set(node_a)
-    assert {"id", "entity_type", "label", "data", "children"} <= set(node_b)
+    assert serialize_tree(state) == {"profile": "miappe", "version": "1.2", "tree": []}

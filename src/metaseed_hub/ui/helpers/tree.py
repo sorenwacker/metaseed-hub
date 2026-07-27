@@ -100,43 +100,31 @@ def add_entity_node(
 
 
 def serialize_tree(state: AppState) -> dict[str, Any]:
-    """Serialize AppState entity tree to JSON-compatible dict.
+    """Serialize the dataset to a JSON-compatible ``{profile, version, tree}`` dict.
 
-    Writes the same ``dataset.data`` column as metaseed's
-    ``MetaseedClient.serialize(format="tree")`` (used by EntityService), so the
-    two MUST stay format-compatible: a ``{profile, version, tree: [...]}``
-    envelope with ``id``/``entity_type``/``label``/``data``/``children`` nodes.
-    ``tests/test_serialization_roundtrip.py`` enforces that equivalence.
+    Delegates to metaseed's ``MetaseedClient.serialize(format="tree")`` via the
+    state's facade (the source of truth for entities), reusing the single library
+    serializer rather than a hand-rolled walk. This is the same output
+    EntityService writes, so both paths produce one format. When no facade is
+    loaded (empty/degenerate state), an empty tree is returned.
 
     Args:
-        state: AppState with entity tree to serialize.
+        state: AppState whose facade holds the entities to serialize.
 
     Returns:
-        Dictionary that can be stored as JSONB in database.
+        Dictionary that can be stored as JSONB in the database.
     """
+    from metaseed import MetaseedClient
 
-    def serialize_node(node: TreeNode) -> dict[str, Any]:
-        node_data: dict[str, Any] = {
-            "id": node.id,
-            "entity_type": node.entity_type,
-            "label": node.label,
-            "parent_id": node.parent_id,
-            "data": {},
-        }
-        if node.instance and hasattr(node.instance, "model_dump"):
-            # Use mode="json" to ensure datetime objects are serialized to strings
-            node_data["data"] = node.instance.model_dump(exclude_none=True, mode="json")
-        if node.children:
-            node_data["children"] = [serialize_node(c) for c in node.children]
-        return node_data
+    facade = state.facade
+    if facade is None:
+        empty: dict[str, Any] = make_json_serializable(
+            {"profile": state.profile, "version": state.version, "tree": []}
+        )
+        return empty
 
-    result = {
-        "profile": state.profile,
-        "version": state.version,
-        "tree": [serialize_node(n) for n in state.entity_tree],
-    }
-    # Ensure all date/datetime objects are converted to strings for JSON storage
-    serialized: dict[str, Any] = make_json_serializable(result)
+    data = MetaseedClient.from_facade(facade).serialize(format="tree")
+    serialized: dict[str, Any] = make_json_serializable(data)
     return serialized
 
 
