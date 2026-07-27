@@ -206,6 +206,43 @@
   notify: Reload systemd
   tags: setup
 
+# Tagged `backup` as well as `setup` so the backup schedule can be installed or
+# adjusted on its own, without the full setup run's apt, git, and migration
+# steps restarting a healthy deployment.
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ backup_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    # Dumps contain every dataset in the hub, so they are not world-readable.
+    mode: "0700"
+  tags: [setup, backup]
+
+- name: Install backup service
+  ansible.builtin.template:
+    src: metaseed-backup.service.j2
+    dest: /etc/systemd/system/metaseed-backup.service
+    mode: "0644"
+  notify: Reload systemd
+  tags: [setup, backup]
+
+- name: Install backup timer
+  ansible.builtin.template:
+    src: metaseed-backup.timer.j2
+    dest: /etc/systemd/system/metaseed-backup.timer
+    mode: "0644"
+  notify: Reload systemd
+  tags: [setup, backup]
+
+- name: Enable and start the backup timer
+  ansible.builtin.systemd:
+    name: metaseed-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [setup, backup]
+
 - name: Configure sudoers for deploy
   ansible.builtin.copy:
     content: |
@@ -228,6 +265,7 @@
   loop:
     - metaseed-hub
     - metaseed-deploy.timer
+    - metaseed-backup.timer
   tags: setup
 
 - name: Install nginx configuration

@@ -1,0 +1,24 @@
+[Unit]
+Description=Metaseed Hub database backup
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User={{ app_user }}
+Group={{ app_group }}
+WorkingDirectory={{ app_dir }}
+ExecStart={{ app_dir }}/.venv/bin/python -m metaseed_hub.backup \
+    --directory {{ backup_dir }} \
+    --container metaseed-postgres \
+    --database {{ db_name }} \
+    --user {{ db_user }} \
+    --keep-last {{ backup_keep_last }} \
+    --keep-daily {{ backup_keep_daily }} \
+    --keep-weekly {{ backup_keep_weekly }} \
+    --keep-monthly {{ backup_keep_monthly }}
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+
+Environment="PATH={{ app_dir }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
