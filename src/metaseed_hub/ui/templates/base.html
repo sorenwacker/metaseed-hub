@@ -14,13 +14,18 @@
 <body hx-headers='{"X-Requested-With": "XMLHttpRequest"{% if csrf_token %}, "X-CSRF-Token": "{{ csrf_token }}"{% endif %}}'>
     <div class="hub-layout">
         <header class="hub-header">
-            <a href="/hub/" class="hub-logo">
+            <a href="/hub/home" class="hub-logo">
                 <img src="/hub/hub-static/images/metaseed-logo-light.svg" alt="Metaseed Hub" class="hub-logo-img">
             </a>
             <nav class="hub-nav-global">
+                {# Signed out these lead nowhere useful: Datasets is the landing page
+                   itself, so clicking it appears to do nothing, and the rest bounce
+                   to sign-in. A visitor gets the sign-in call to action instead. #}
+                {% if user %}
                 <a href="/hub/" class="nav-btn {% if nav_active == 'home' %}active{% endif %}">Datasets</a>
                 <a href="/hub/spec-builder" class="nav-btn {% if nav_active == 'spec-builder' %}active{% endif %}">Specs</a>
                 <a href="/hub/explore/" class="nav-btn {% if nav_active == 'explore' %}active{% endif %}">Explorer</a>
+                {% endif %}
                 <a href="https://sorenwacker.github.io/metaseed-hub/" class="nav-btn" target="_blank" rel="noopener">Docs</a>
                 {# Admin hidden until SRAM configured #}
             </nav>
@@ -57,6 +62,10 @@
             <a href="https://github.com/sorenwacker/metaseed-hub" target="_blank" rel="noopener" class="footer-link" title="Star metaseed-hub on GitHub">&#9733; {{ repo_stars }}</a>
             {% endif %}
             <a href="https://github.com/sorenwacker/metaseed-hub/issues" target="_blank" rel="noopener" class="footer-link">Report issue</a>
+            {# These pages existed but nothing linked to them, so a privacy
+               policy nobody can reach was the same as not having one. #}
+            <a href="/hub/privacy" class="footer-link">Privacy</a>
+            <a href="/hub/aup" class="footer-link">Acceptable use</a>
         </footer>
     </div>
 

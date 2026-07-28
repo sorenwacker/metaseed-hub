@@ -298,6 +298,24 @@ def create_hub_app() -> FastAPI:
             },
         )
 
+    @app.get("/home", response_class=Response)
+    async def overview_home(request: Request, user: OptionalUser) -> Response:
+        """What the hub is for.
+
+        Its own page rather than a banner on the dataset list: that list is what
+        a returning user comes for, and an explanation above it pushes their own
+        work down the page every visit.
+        """
+        if not user:
+            from fastapi.responses import RedirectResponse
+
+            return RedirectResponse("/hub/", status_code=302)
+        return render_template(
+            request=request,
+            name="overview_home.html",
+            context={"user": user, "nav_active": "overview"},
+        )
+
     @app.get("/privacy", response_class=Response)
     async def privacy_policy(request: Request, user: OptionalUser) -> Response:
         """Privacy policy page."""
