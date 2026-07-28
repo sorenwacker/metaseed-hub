@@ -100,9 +100,9 @@ def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
     WebDriverWait(driver, 45).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="btn-export-pride"]'))
     )
-    assert not driver.find_elements(
-        By.CSS_SELECTOR, '[data-testid="btn-export-pride-sdrf"]'
-    ), "the SDRF ships inside the single PRIDE submission download, not as its own button"
+    assert not driver.find_elements(By.CSS_SELECTOR, '[data-testid="btn-export-pride-sdrf"]'), (
+        "the SDRF ships inside the single PRIDE submission download, not as its own button"
+    )
 
     # Clicking must produce a real zip. Use the authenticated session cookies to
     # fetch the export URL directly -- robust against headless download handling.

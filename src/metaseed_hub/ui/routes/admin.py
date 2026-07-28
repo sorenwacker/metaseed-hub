@@ -4,15 +4,16 @@ Provides GDPR-compliant aggregated statistics and admin-only user management.
 Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
 """
 
+import html
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 if TYPE_CHECKING:
     from fastapi.templating import Jinja2Templates
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -20,8 +21,9 @@ from sqlalchemy.orm import selectinload
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, ErrorEvent, User
+from metaseed_hub.models import Dataset, ErrorEvent, Spec, User
 from metaseed_hub.ui.dependencies import require_user
+from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.render import init_templates as _init_render_templates
 from metaseed_hub.ui.render import render_template
 
@@ -167,6 +169,82 @@ async def _error_counts_by_day(session: AsyncSession, days: int = 7) -> list[tup
     return [(day, count) for day, count in result.all()]
 
 
+# What an admin may act on by identifier. Both are soft-deletable and both are
+# things a user can create by mistake; nothing else on the dashboard is.
+REMOVABLE: dict[str, type[Dataset] | type[Spec]] = {"dataset": Dataset, "spec": Spec}
+
+
+class RemovalError(Exception):
+    """An admin removal could not be carried out as asked."""
+
+
+async def _describe_owner(session: AsyncSession, tenant_id: str) -> str:
+    """The email of the workspace that owns an item, for the confirmation.
+
+    A workspace belongs to one person, so naming them is how an administrator
+    sees at a glance that the identifier was the intended one.
+    """
+    email = await session.scalar(
+        select(User.email).where(User.tenant_id == tenant_id, User.deleted_at.is_(None)).limit(1)
+    )
+    return email or "unknown"
+
+
+async def set_removed(
+    session: AsyncSession,
+    kind: str,
+    item_id: str,
+    *,
+    removed: bool,
+) -> str:
+    """Soft-delete or restore a dataset or spec in any workspace.
+
+    Removal is by identifier rather than by browsing: the dashboard reports
+    aggregated counts and does not list other people's content, and a tool that
+    enumerated every dataset in the deployment to find one would undo that.
+
+    Soft rather than hard, because an identifier is easy to mistype and an
+    irreversible admin action on someone else's data is not acceptable. The row
+    stays, carrying the time it was removed.
+
+    Args:
+        session: Database session.
+        kind: Either ``"dataset"`` or ``"spec"``.
+        item_id: The item's UUID.
+        removed: True to remove, False to restore.
+
+    Returns:
+        A description of what was acted on, naming the item and its owner, so a
+        mistyped identifier is visible immediately.
+
+    Raises:
+        RemovalError: If the kind is unknown, or no such item exists.
+    """
+    model = REMOVABLE.get(kind)
+    if model is None:
+        raise RemovalError(f"Unknown kind {kind!r}; expected one of {sorted(REMOVABLE)}")
+
+    item = cast("Dataset | Spec | None", await session.get(model, item_id))
+    if item is None:
+        raise RemovalError(f"No {kind} with id {item_id}")
+
+    already = item.deleted_at is not None
+    if removed and already:
+        raise RemovalError(f"That {kind} is already removed")
+    if not removed and not already:
+        raise RemovalError(f"That {kind} is not removed")
+
+    if removed:
+        item.soft_delete()
+    else:
+        item.restore()
+    await session.commit()
+
+    owner = await _describe_owner(session, item.tenant_id)
+    verb = "Removed" if removed else "Restored"
+    return f"{verb} {kind} '{item.name}' owned by {owner}"
+
+
 @router.get("/")
 async def admin_dashboard(
     request: Request,
@@ -234,3 +312,45 @@ async def admin_dashboard(
             "nav_active": "admin",
         },
     )
+
+
+@router.post("/content/{action}", response_class=HTMLResponse)
+async def admin_change_content(
+    request: Request,
+    action: str,
+    session: DbSession,
+    user: AdminUser,
+    kind: Annotated[str, Form()],
+    item_id: Annotated[str, Form()],
+    csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
+) -> HTMLResponse:
+    """Remove or restore a dataset or specification in any workspace.
+
+    Args:
+        request: The request, for CSRF validation.
+        action: Either ``remove`` or ``restore``.
+        session: Database session.
+        user: The administrator, enforced by the dependency.
+        kind: ``dataset`` or ``spec``.
+        item_id: The item's UUID.
+        csrf_token: The double-submit token from the form.
+    """
+    if not validate_csrf_token(request, csrf_token):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+    if action not in ("remove", "restore"):
+        raise HTTPException(status_code=404, detail="Unknown action")
+
+    try:
+        message = await set_removed(
+            session, kind.strip(), item_id.strip(), removed=action == "remove"
+        )
+    except RemovalError as exc:
+        return HTMLResponse(
+            f"<div class='notification error'>{html.escape(str(exc))}</div>",
+            status_code=400,
+        )
+
+    # Logged because this is one person acting on another's data: the dashboard
+    # shows aggregates, so without this there would be no record of who did it.
+    logger.warning("admin %s: %s", user.email, message)
+    return HTMLResponse(f"<div class='notification success'>{html.escape(message)}</div>")
