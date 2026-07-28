@@ -31,7 +31,7 @@
                 <button type="button" class="source-tab active" data-tab="standards">Standards</button>
                 <button type="button" class="source-tab" data-tab="import">Import File</button>
                 {% if user_specs %}
-                <button type="button" class="source-tab" data-tab="specs">My Specs</button>
+                <button type="button" class="source-tab" data-tab="specs">Published Specs</button>
                 {% endif %}
             </div>
 
@@ -120,9 +120,15 @@
                             <h3>{{ spec.name }}</h3>
                             <span class="version-badge">v{{ spec.version }}</span>
                         </div>
+                        <p class="standard-description">
+                            {% if spec.description %}{{ spec.description }}{% endif %}
+                            <span class="spec-author">
+                                published by {{ spec.created_by.display_name if spec.created_by else 'Unknown' }}
+                            </span>
+                        </p>
                         <div class="standard-actions">
                             <button type="button" class="btn btn-primary"
-                                    onclick="createDatasetFromSpec('{{ spec.id }}', '{{ spec.version }}')">
+                                    onclick="createDatasetFromSpec('{{ spec.id }}', '{{ spec.version }}', 'spec')">
                                 Use Spec
                             </button>
                         </div>
@@ -300,7 +306,8 @@ async function createDatasetWithExample(profile, version) {
     }
 }
 
-async function createDatasetFromSpec(specId, version) {
+async function createDatasetFromSpec(specId, version, kind) {
+    kind = kind || 'spec';
     const name = document.getElementById('dataset-name').value;
     if (!name) {
         document.getElementById('dataset-name').focus();
@@ -312,7 +319,7 @@ async function createDatasetFromSpec(specId, version) {
 
     const formData = new FormData();
     formData.append('name', name);
-    formData.append('profile', 'draft:' + specId);
+    formData.append('profile', kind + ':' + specId);
     formData.append('version', version);
     formData.append('_csrf_token', csrfToken);
 

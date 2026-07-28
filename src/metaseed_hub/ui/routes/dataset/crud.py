@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from metaseed.adapters import Action  # lightweight by design: no plugin imports
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
     Dataset,
@@ -148,6 +149,7 @@ async def dataset_new(
     # publishing is what makes a specification available to other people.
     specs_result = await session.execute(
         select(Spec)
+        .options(selectinload(Spec.created_by))
         .where(
             Spec.deleted_at.is_(None),
             Spec.status == SpecStatus.PUBLISHED,
@@ -590,12 +592,32 @@ async def dataset_create(
         profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
         version = draft.version
 
+    # A published specification, chosen from any workspace: publishing is what
+    # makes one available to other people, so this is not scoped to the caller.
+    # Only PUBLISHED and not withdrawn, so a draft stays unreachable by id.
+    spec_id = None
+    if profile.startswith("spec:"):
+        spec_id = profile.replace("spec:", "")
+        spec_result = await session.execute(
+            select(Spec).where(
+                Spec.id == spec_id,
+                Spec.status == SpecStatus.PUBLISHED,
+                Spec.deleted_at.is_(None),
+            )
+        )
+        published = spec_result.scalar_one_or_none()
+        if published is None:
+            return RedirectResponse("/hub/?error=spec_not_found", status_code=302)
+        profile = published.name.lower()  # Lowercase to match ProfileFacade
+        version = published.version
+
     dataset = Dataset(
         tenant_id=tenant.id,
         name=name,
         profile=profile,
         version=version,
         spec_draft_id=spec_draft_id,
+        spec_id=spec_id,
         data={},
     )
     session.add(dataset)

@@ -54,7 +54,7 @@ async def ensure_dataset_facade(
     """
     from metaseed import MetaseedClient
 
-    from metaseed_hub.models import SpecDraft
+    from metaseed_hub.models import Spec, SpecDraft
 
     # Always load fresh from database - no caching
     state = AppState()
@@ -86,6 +86,24 @@ async def ensure_dataset_facade(
         except Exception as e:
             logger.error(f"Failed to load spec for dataset {dataset.id}: {e}")
             # Don't re-raise - let downstream code handle missing facade
+    elif dataset.spec_id:
+        # Created from a published specification. Loaded even if the spec has
+        # since been withdrawn: the dataset was built against it and must keep
+        # opening and validating, which is why the foreign key is SET NULL
+        # rather than CASCADE.
+        try:
+            published = await session.get(Spec, dataset.spec_id)
+            if published and published.spec_data:
+                raw_data = published.spec_data
+                if isinstance(raw_data, dict) and "spec" in raw_data:
+                    raw_data = raw_data["spec"]
+                client = MetaseedClient.from_spec(raw_data)
+                state.facade = client.facade
+                state.profile = state.facade.profile
+            else:
+                logger.warning(f"No spec data for dataset {dataset.id} spec_id={dataset.spec_id}")
+        except Exception as e:
+            logger.error(f"Failed to load published spec for dataset {dataset.id}: {e}")
     else:
         # Built-in profile: create standard client
         try:
