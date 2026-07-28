@@ -1,16 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Login - Metaseed Hub{% endblock %}
+{% block title %}Metaseed Hub{% endblock %}
 
 {% block content %}
-<div class="login-container">
-    <div class="login-card">
-        <img src="/hub/hub-static/images/metaseed-logo.svg" alt="Metaseed" class="login-logo">
-        <p>Collaborative metadata management for scientific research.</p>
-        <a href="/hub/auth/login" class="btn btn-primary btn-lg">
-            Sign in
-        </a>
-        <p class="version-info">v{{ version_info.version }}</p>
-    </div>
+<div class="landing">
+    <section class="landing-hero">
+        <img src="/hub/hub-static/images/metaseed-logo.svg" alt="Metaseed" class="landing-logo">
+        <h1 class="landing-headline">Metadata that meets the standard</h1>
+        <p class="landing-subhead">
+            Describe research data against MIAPPE, ISA, Darwin Core, ENA and more &mdash;
+            validated as you work, and exported in the form a repository expects.
+        </p>
+        <a href="/hub/auth/login" class="btn btn-primary btn-lg landing-cta">Sign in</a>
+        <p class="landing-note">Sign in with your institutional account.</p>
+    </section>
+
+    <section class="overview overview-public">
+        {% include "partials/overview.html" %}
+    </section>
+
+    <p class="version-info landing-version">v{{ version_info.version }}</p>
 </div>
 {% endblock %}

@@ -1,0 +1,68 @@
+{# What the hub is for. Shared by the landing page and the signed-in home page
+   so the two cannot drift: a visitor deciding whether to sign in and a new user
+   deciding what to do first need the same explanation. #}
+<div class="overview-body">
+    <p class="overview-lede">
+        Research metadata is judged against standards &mdash; MIAPPE, ISA, Darwin Core,
+        ENA &mdash; and meeting them by hand is slow and easy to get wrong.
+        Metaseed turns a standard into a form that knows its own rules, tells you what
+        is missing while you work, and exports what a repository expects.
+    </p>
+
+    <div class="overview-grid">
+        <div class="overview-card">
+            <svg class="overview-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>
+            </svg>
+            <h3>Datasets</h3>
+            <p>
+                Choose a standard and fill in the entities it defines. Every change is
+                checked against the specification, so you always know what is still
+                missing rather than finding out at submission.
+            </p>
+            <ul>
+                <li>Import an existing record from ENA, PRIDE, MetaboLights or a BrAPI server</li>
+                <li>Export to the format a repository expects</li>
+                <li>Full version history &mdash; nothing is lost, anything can be restored</li>
+            </ul>
+        </div>
+
+        <div class="overview-card">
+            <svg class="overview-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/>
+            </svg>
+            <h3>Specs</h3>
+            <p>
+                A specification defines a standard: its entity types, their fields, and
+                the rules a dataset has to satisfy. Use a built-in one, or build your
+                own when your work does not fit an existing standard.
+            </p>
+            <ul>
+                <li>Start from a built-in standard or from scratch</li>
+                <li>Validate as you design, before anyone fills it in</li>
+                <li>Publish to share it with everyone here &mdash; reversible</li>
+            </ul>
+        </div>
+
+        <div class="overview-card">
+            <svg class="overview-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M11 8v6"/><path d="M8 11h6"/>
+            </svg>
+            <h3>Explorer</h3>
+            <p>
+                Read any specification before committing to it: which entities exist,
+                how they nest, and what each field means.
+            </p>
+            <ul>
+                <li>Compare two standards side by side</li>
+                <li>Understand a specification somebody else published</li>
+                <li>See the ontology terms behind each field</li>
+            </ul>
+        </div>
+    </div>
+
+    <p class="overview-footnote">
+        Your work is private to you until you share it. You can also connect an AI
+        assistant such as Claude to build and check datasets with you.
+    </p>
+</div>
