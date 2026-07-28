@@ -33,6 +33,32 @@ claude mcp add --transport http metaseed-hub https://metaseed.ewi.tudelft.nl/hub
 | `list_profiles` | Built-in standards, plus every published specification |
 | `get_profile_schema` | A profile's entity types and their fields |
 
+### Editing entities
+
+| Tool | |
+| --- | --- |
+| `create_entity` | Add one entity, without rewriting the dataset |
+| `update_entity` | Change named fields; unnamed fields keep their values |
+| `delete_entity` | Remove one entity |
+| `list_entities` | The dataset's entities, with ids and values |
+| `get_entity` | One entity's stored values |
+
+Each of these reports what is still missing after the change, using the profile's own rules, so an agent can fill a dataset step by step instead of resending all of it.
+
+### Building a specification
+
+| Tool | |
+| --- | --- |
+| `spec_create` | Start a new specification as a private draft |
+| `spec_add_entity` | Add an entity type |
+| `spec_add_field` | Add a field to an entity |
+| `spec_set_root_entity` | Set the entity a dataset starts from |
+| `spec_validate` | What is wrong with the draft |
+| `spec_preview_yaml` | The draft as YAML |
+| `list_spec_drafts` | Your drafts |
+
+Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, so it stays something you do yourself in the web interface.
+
 Published specifications are included in `list_profiles`, because publishing shares a specification with every user of the hub — an agent can build a dataset against one it did not write.
 
 ## What an agent cannot do to your work

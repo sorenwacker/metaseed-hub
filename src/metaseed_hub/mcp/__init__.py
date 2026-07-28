@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -30,7 +31,14 @@ from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import select
 
 from metaseed_hub.database import db
-from metaseed_hub.models import Dataset, DatasetVersion, Spec, SpecStatus, User
+from metaseed_hub.models import (
+    Dataset,
+    DatasetVersion,
+    Spec,
+    SpecDraft,
+    SpecStatus,
+    User,
+)
 from metaseed_hub.tokens import authenticate_token, token_from_header
 
 if TYPE_CHECKING:
@@ -188,6 +196,80 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
         "empty required field is a smaller problem than a wrong one."
     )
     return {"valid": False, "issues": reported, "next_step": next_step}
+
+
+@asynccontextmanager
+async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> AsyncIterator[Any]:
+    """Yield a client over ``dataset``, then persist what the block changed.
+
+    The envelope every editing tool needs, and the only async part: metaseed's
+    entity operations are pure and in-memory, so the hub loads, hands them the
+    client, and writes back. Wrapping it once means no tool can forget the
+    snapshot or the size check.
+    """
+    from metaseed import MetaseedClient
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+    state = await ensure_dataset_facade(dataset, session)
+    if state.facade is None:
+        raise ValueError(
+            f"The profile {dataset.profile!r} could not be loaded, so this "
+            "dataset cannot be edited. Check it with list_profiles."
+        )
+
+    client = MetaseedClient.from_facade(state.facade)
+    yield client
+
+    data = client.serialize()
+    size = len(json.dumps(data).encode())
+    if size > MAX_DATASET_BYTES:
+        raise ValueError(
+            f"That edit takes the dataset to {size} bytes; the limit is {MAX_DATASET_BYTES}."
+        )
+    if data != dataset.data:
+        await _snapshot(session, dataset, user)
+    dataset.data = data
+    flag_modified(dataset, "data")
+    await session.commit()
+
+
+async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraft:
+    """A spec draft in the caller's own workspace, by name."""
+    result = await session.execute(
+        select(SpecDraft).where(SpecDraft.tenant_id == user.tenant_id, SpecDraft.name == name)
+    )
+    draft = result.scalar_one_or_none()
+    if draft is None:
+        raise ValueError(f"No specification draft named {name!r} in your workspace")
+    return draft
+
+
+@asynccontextmanager
+async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> AsyncIterator[Any]:
+    """Yield a SpecBuilder over ``draft``, then persist what the block changed.
+
+    ``SpecBuilder`` is metaseed's, pure, and already shared by the web UI: the
+    hub adds only loading and saving. Drafts are written, never published specs
+    -- publishing shares a specification with every user, so it stays a human
+    action.
+    """
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+    state = SpecBuilderState.from_dict(draft.spec_data) if draft.spec_data else SpecBuilderState()
+    if state.spec is None:
+        raise ValueError(f"Draft {draft.name!r} holds no specification to edit")
+
+    from metaseed.specs.builder import SpecBuilder
+
+    builder = SpecBuilder.from_spec(state.spec)
+    yield builder
+
+    state.spec = builder.spec
+    draft.spec_data = state.to_dict()
+    draft.version = builder.spec.version
+    await session.commit()
 
 
 def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
@@ -432,6 +514,294 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                         for entity_name, entity in spec.entities.items()
                     },
                 }
+            )
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def create_entity(
+        dataset: str,
+        entity_type: str,
+        data: dict[str, Any],
+        parent_id: str | None = None,
+    ) -> str:
+        """Add one entity to a dataset, without rewriting the rest.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entity_type: A type from get_profile_schema. Any other is rejected.
+            data: Field values, keyed by the field's codename.
+            parent_id: The entity this one belongs under, where the profile
+                nests them. Omit for a root entity.
+        """
+        async for session, user in _caller():
+            row = await _owned_dataset(session, user, dataset)
+            async with _editing(session, row, user) as client:
+                # skip_validation, because a partially filled entity is a normal
+                # intermediate state; what is missing is reported below rather
+                # than refused, so an agent can build a dataset in steps.
+                entity = client.create_entity(
+                    entity_type, data, parent_id=parent_id, skip_validation=True
+                )
+                created = {"id": entity.id, "entity_type": entity.entity_type}
+            report = await _validation_report(session, row)
+            logger.info("mcp: %s created %s in %r", user.email, entity_type, dataset)
+            return json.dumps({**created, **report})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def update_entity(dataset: str, entity_id: str, data: dict[str, Any]) -> str:
+        """Change field values on one entity, leaving the rest of it alone.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entity_id: The entity to change, from list_entities.
+            data: The fields to set. Fields not named keep their values.
+        """
+        async for session, user in _caller():
+            row = await _owned_dataset(session, user, dataset)
+            async with _editing(session, row, user) as client:
+                # Merged, not replaced. metaseed's update_entity overwrites the
+                # entity's data wholesale, so passing one field would silently
+                # drop every other value -- and an agent setting one field at a
+                # time would destroy its own earlier work.
+                merged = {**client.get_entity(entity_id).data, **data}
+                entity = client.update_entity(entity_id, merged, skip_validation=True)
+                updated = {"id": entity.id, "entity_type": entity.entity_type}
+            report = await _validation_report(session, row)
+            logger.info("mcp: %s updated %s in %r", user.email, entity_id, dataset)
+            return json.dumps({**updated, **report})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def delete_entity(dataset: str, entity_id: str) -> str:
+        """Remove one entity from a dataset.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entity_id: The entity to remove.
+        """
+        async for session, user in _caller():
+            row = await _owned_dataset(session, user, dataset)
+            async with _editing(session, row, user) as client:
+                client.delete_entity(entity_id)
+            report = await _validation_report(session, row)
+            logger.info("mcp: %s deleted entity %s in %r", user.email, entity_id, dataset)
+            return json.dumps({"deleted": entity_id, **report})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def list_entities(dataset: str, entity_type: str | None = None) -> str:
+        """List a dataset's entities, with their ids and labels.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entity_type: Restrict to one type. Omit for all of them.
+        """
+        async for session, user in _caller():
+            row = await _owned_dataset(session, user, dataset)
+            entities = [
+                {
+                    "id": e.get("_node_id"),
+                    "entity_type": e.get("_type"),
+                    "data": {k: v for k, v in e.items() if not k.startswith("_")},
+                }
+                for e in (row.data or {}).get("entities", [])
+                if isinstance(e, dict)
+            ]
+            if entity_type:
+                entities = [e for e in entities if e["entity_type"] == entity_type]
+            return json.dumps({"dataset": dataset, "entities": entities})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def get_entity(dataset: str, entity_id: str) -> str:
+        """Return one entity's stored field values.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entity_id: The entity to read.
+        """
+        async for session, user in _caller():
+            row = await _owned_dataset(session, user, dataset)
+            for entity in (row.data or {}).get("entities", []):
+                if isinstance(entity, dict) and entity.get("_node_id") == entity_id:
+                    return json.dumps(
+                        {
+                            "id": entity_id,
+                            "entity_type": entity.get("_type"),
+                            "data": {k: v for k, v in entity.items() if not k.startswith("_")},
+                        }
+                    )
+            raise ValueError(f"No entity {entity_id!r} in {dataset!r}")
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_create(name: str, version: str, description: str = "") -> str:
+        """Start a new specification as a private draft.
+
+        A draft is visible only to you. Publishing it — which shares it with
+        every user of the hub — is done from the web interface, deliberately:
+        it is not something an agent should do on your behalf.
+
+        Args:
+            name: The profile name.
+            version: The profile version, e.g. "1.0".
+            description: What the specification is for.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        from metaseed_hub.ui.spec_builder.access import create_new_draft
+
+        async for session, user in _caller():
+            existing = await session.execute(
+                select(SpecDraft).where(
+                    SpecDraft.tenant_id == user.tenant_id, SpecDraft.name == name
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                raise ValueError(f"A draft named {name!r} already exists")
+
+            builder = SpecBuilder.empty(name, version, description=description)
+            draft = await create_new_draft(
+                session,
+                user_id=user.id,
+                tenant_id=user.tenant_id,
+                name=name,
+                spec=builder.spec,
+            )
+            logger.info("mcp: %s created spec draft %r", user.email, name)
+            return json.dumps({"name": draft.name, "version": draft.version})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_add_entity(
+        draft: str, entity: str, description: str = "", ontology_term: str | None = None
+    ) -> str:
+        """Add an entity type to a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type's name, e.g. "Study".
+            description: What the entity represents.
+            ontology_term: An ontology term identifying it, where one applies.
+        """
+        async for session, user in _caller():
+            row = await _owned_draft(session, user, draft)
+            async with _building(session, row, user) as builder:
+                builder.add_entity(entity, description=description, ontology_term=ontology_term)
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "problems": problems})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_add_field(
+        draft: str,
+        entity: str,
+        field: str,
+        field_type: str,
+        required: bool = False,
+        description: str = "",
+        ontology_term: str | None = None,
+    ) -> str:
+        """Add a field to an entity in a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to add the field to.
+            field: The field's name.
+            field_type: One of string, integer, float, boolean, date, datetime,
+                uri, ontology_term, list, entity.
+            required: Whether a dataset must supply it.
+            description: What the field records.
+            ontology_term: An ontology term identifying it, where one applies.
+        """
+        async for session, user in _caller():
+            row = await _owned_draft(session, user, draft)
+            async with _building(session, row, user) as builder:
+                builder.add_field(
+                    entity,
+                    field,
+                    field_type,
+                    required=required,
+                    description=description,
+                    ontology_term=ontology_term,
+                )
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "field": field, "problems": problems})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_set_root_entity(draft: str, entity: str) -> str:
+        """Set which entity a dataset of this profile starts from.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to use as the root.
+        """
+        async for session, user in _caller():
+            row = await _owned_draft(session, user, draft)
+            async with _building(session, row, user) as builder:
+                builder.set_root_entity(entity)
+                problems = builder.validate()
+            return json.dumps({"root_entity": entity, "problems": problems})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_validate(draft: str) -> str:
+        """Report what is wrong or missing in a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+        async for session, user in _caller():
+            row = await _owned_draft(session, user, draft)
+            state = (
+                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
+            )
+            if state.spec is None:
+                return json.dumps(
+                    {"draft": draft, "problems": ["The draft holds no specification"]}
+                )
+            problems = SpecBuilder.from_spec(state.spec).validate()
+            return json.dumps({"draft": draft, "valid": not problems, "problems": problems})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def spec_preview_yaml(draft: str) -> str:
+        """Return a draft specification as YAML, without saving anything.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+        async for session, user in _caller():
+            row = await _owned_draft(session, user, draft)
+            state = (
+                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
+            )
+            if state.spec is None:
+                raise ValueError(f"Draft {draft!r} holds no specification")
+            return json.dumps({"draft": draft, "yaml": SpecBuilder.from_spec(state.spec).to_yaml()})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def list_spec_drafts() -> str:
+        """List the caller's draft specifications."""
+        async for session, user in _caller():
+            result = await session.execute(
+                select(SpecDraft)
+                .where(SpecDraft.tenant_id == user.tenant_id)
+                .order_by(SpecDraft.updated_at.desc())
+            )
+            return json.dumps(
+                [{"name": d.name, "version": d.version} for d in result.scalars().all()]
             )
         raise NotAuthenticatedError("unreachable")
 
