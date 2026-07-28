@@ -54,3 +54,34 @@ def test_the_overview_icons_cannot_stretch() -> None:
     block = block[: block.index("}")]
     assert "flex: 0 0 auto" in block
     assert "align-self: start" in block
+
+
+def test_the_icon_svgs_have_explicit_dimensions() -> None:
+    """An inline SVG with a viewBox but no width/height attributes fills its
+    container on mobile browsers (notably iOS Safari), ignoring the CSS width.
+    That is what rendered the overview icons full-width on a phone. Every
+    decorative icon must carry width and height attributes."""
+    import re
+
+    overview = (TEMPLATES_DIR / "partials" / "overview.html").read_text()
+    home = (TEMPLATES_DIR / "overview_home.html").read_text()
+
+    for name, html, cls in [
+        ("overview", overview, "overview-card-icon"),
+        ("home", home, "setup-step-icon"),
+    ]:
+        tags = re.findall(rf'<svg class="{cls}"[^>]*>', html)
+        assert tags, f"no {cls} svgs found in {name}"
+        for tag in tags:
+            assert "width=" in tag and "height=" in tag, (
+                f"{name}: an icon svg lacks width/height and will fill the "
+                f"container on mobile: {tag[:80]}"
+            )
+
+
+def test_the_page_does_not_scroll_sideways() -> None:
+    """A single element wider than the viewport shifts everything and makes
+    centred content — like the sign-in button — look off-centre."""
+    css = CSS.read_text()
+
+    assert "overflow-x: hidden" in css

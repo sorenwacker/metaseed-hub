@@ -6977,6 +6977,7 @@ a.start-option-card:hover {
 
 .landing-cta {
     min-width: 11rem;
+    align-self: center;
 }
 
 .landing-note {
@@ -7173,6 +7174,11 @@ a.start-option-card:hover {
 .setup-step-icon {
     flex: 0 0 auto;
     align-self: start;
+    /* An inline SVG with a viewBox but no width/height attributes fills its
+       container on mobile browsers; the max rules cap it even if the width
+       attributes are ever lost. */
+    max-width: 2.5rem;
+    max-height: 2.5rem;
 }
 
 /* The hamburger is desktop-hidden; the mobile query below reveals it. */
@@ -7307,4 +7313,11 @@ a.start-option-card:hover {
         margin-bottom: var(--space-sm);
         word-break: break-all;
     }
+}
+
+
+/* Never scroll the page sideways: a single element wider than the viewport
+   shifts everything and makes centred content look off-centre. */
+html, body {
+    overflow-x: hidden;
 }
