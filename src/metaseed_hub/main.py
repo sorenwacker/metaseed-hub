@@ -85,6 +85,16 @@ def create_app() -> FastAPI:
     from metaseed_hub.ui.app import create_hub_app
 
     hub_app = create_hub_app()
+
+    # Mounted before /hub, and outside create_hub_app, deliberately. The hub app
+    # applies a same-origin guard to every route, which an MCP client cannot
+    # satisfy: it is not a browser and sends no Origin. Its own authentication
+    # is the bearer token each tool checks. Starlette matches mounts in order,
+    # so this must come first or /hub would swallow the path.
+    from metaseed_hub.mcp import create_mcp_server
+
+    app.mount("/hub/mcp", create_mcp_server().streamable_http_app())
+
     app.mount("/hub", hub_app)
 
     # Redirect root to hub
