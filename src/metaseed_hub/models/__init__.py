@@ -225,6 +225,13 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("spec_drafts.id", ondelete="SET NULL"),
         nullable=True,
     )
+    spec_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        # SET NULL, not CASCADE: withdrawing a specification must not delete the
+        # datasets built on it.
+        ForeignKey("specs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     profile: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -233,6 +240,7 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="datasets")
     spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
+    spec: Mapped["Spec | None"] = relationship("Spec")
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="dataset")
     members: Mapped[list["DatasetMember"]] = relationship("DatasetMember", back_populates="dataset")
     comments: Mapped[list["Comment"]] = relationship(
