@@ -5,7 +5,7 @@ Metaseed Hub uses a self-hosted [Matomo](https://matomo.org/) for privacy-friend
 ## Design
 
 - Served **same-origin** at `https://metaseed.ewi.tudelft.nl/matomo/`, so the hub's strict CSP (`script-src 'self'`, `connect-src 'self'`) allows the tracker without any third-party exception.
-- The Matomo container is bound to **loopback only** (`127.0.0.1:8081`). nginx exposes just the tracker under `/matomo/` (the prefix is stripped, so the container serves `matomo.php` / `matomo.js` at its root). The **admin UI is never public** — reach it through an SSH tunnel.
+- The Matomo container is bound to **loopback only** (`127.0.0.1:8081`). nginx exposes **only** the two tracker endpoints (`/matomo/matomo.php`, `/matomo/matomo.js`) publicly. The installer and admin UI are not routed publicly (they 404), so the PHP admin surface is never on the internet. The **admin UI is never public** — reach it through an SSH tunnel.
 - The tracker renders only when `MATOMO_SITE_ID` is set, so dev and CI stay clean.
 
 ## First-run setup (once, after the containers are up)
