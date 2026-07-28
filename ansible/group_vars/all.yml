@@ -22,6 +22,12 @@ db_host: localhost
 db_port: 5432
 
 # Redis
+# Matomo analytics (self-hosted, same-origin at matomo_url). matomo_site_id is
+# empty until the first-run install creates a site; set it then to render the
+# tracker. matomo_db_password lives in the vaulted secrets file.
+matomo_port: 8081
+matomo_url: "/matomo/"
+matomo_site_id: ""
 redis_host: localhost
 redis_port: 6379
 
