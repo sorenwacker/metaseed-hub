@@ -11,6 +11,7 @@ from metaseed_hub.ui.helpers.csrf import (
     _csrf_signature_valid,
     _sign_csrf,
     get_or_create_csrf_token,
+    set_csrf_cookie,
     validate_csrf_token,
 )
 from metaseed_hub.ui.helpers.dataset_state import (
@@ -54,6 +55,7 @@ __all__ = [
     "escape_pattern_hyphen",
     "get_dataset_state",
     "get_or_create_csrf_token",
+    "set_csrf_cookie",
     "get_tree_data_from_nodes",
     "humanize_field_name",
     "make_json_serializable",

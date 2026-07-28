@@ -155,12 +155,14 @@ class TestCsrfCookieSecure:
     """L1: the CSRF cookie is Secure in a non-debug deployment."""
 
     def test_csrf_cookie_is_secure_when_not_debug(self, monkeypatch) -> None:
-        import metaseed_hub.ui.render as render_mod
+        import metaseed_hub.ui.helpers.csrf as csrf_mod
         from metaseed_hub.config import Settings
         from metaseed_hub.ui.app import create_hub_app
 
+        # Patched where the cookie is actually issued: set_csrf_cookie is the
+        # single place that decides the Secure flag, shared by every renderer.
         monkeypatch.setattr(
-            render_mod, "get_settings", lambda: Settings(debug=False, secret_key="x" * 40)
+            csrf_mod, "get_settings", lambda: Settings(debug=False, secret_key="x" * 40)
         )
         client = TestClient(create_hub_app(), raise_server_exceptions=False)
         resp = client.get("/privacy")
