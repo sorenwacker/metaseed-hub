@@ -396,3 +396,78 @@ class TestHardening:
         delete = await _tool(server, "delete_dataset")
         with _calling_with(secret_a), pytest.raises(ValueError, match="No dataset named"):
             await delete("not-yours")
+
+
+def _one_empty_investigation() -> dict:
+    """A dataset in the shape the hub stores, holding one incomplete entity.
+
+    Built through metaseed rather than hand-written, so the test cannot drift
+    from the serialization the facade actually loads.
+    """
+    from metaseed import MetaseedClient
+
+    client = MetaseedClient(profile="miappe", version="1.1")
+    client.create_entity("Investigation", {}, skip_validation=True)
+    return client.serialize()
+
+
+class TestFeedback:
+    """Saving reports what is still wrong, using metaseed's own validation.
+
+    The issues come from the spec definition — which field is required, which
+    relationship needs a minimum — so they are passed through rather than
+    re-derived here; re-deriving would only let the two disagree.
+    """
+
+    async def test_saving_reports_what_is_still_missing(
+        self, server, session: AsyncSession
+    ) -> None:
+        """A bare "saved: true" lets an agent believe it has finished."""
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="fb000001", email="fb1@example.org"
+        )
+        session.add(make_dataset(tenant=tenant, name="incomplete", profile="miappe"))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            result = json.loads(await save("incomplete", _one_empty_investigation()))
+
+        assert result["saved"] is True
+        assert result["valid"] is False, "an empty Investigation is not complete"
+        assert result["issues"], "the agent must be told what is missing"
+        assert "next_step" in result
+
+    async def test_the_issues_carry_the_spec_rule_that_failed(
+        self, server, session: AsyncSession
+    ) -> None:
+        """`rule` names which spec rule failed and is the actionable part;
+        dropping it leaves only prose to parse."""
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="fb000002", email="fb2@example.org"
+        )
+        session.add(make_dataset(tenant=tenant, name="ruled", profile="miappe"))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            result = json.loads(await save("ruled", _one_empty_investigation()))
+
+        assert all("rule" in i and i["rule"] for i in result["issues"])
+        assert all("field" in i for i in result["issues"])
+        assert "required_fields" in {i["rule"] for i in result["issues"]}
+
+    async def test_the_schema_marks_required_fields(self, server, session: AsyncSession) -> None:
+        """An agent cannot fill required fields it was never shown."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="fb000003", email="fb3@example.org"
+        )
+
+        schema = await _tool(server, "get_profile_schema")
+        with _calling_with(secret):
+            result = json.loads(await schema("miappe", "1.1"))
+
+        fields = result["entities"]["Investigation"]["fields"]
+        assert any(f["required"] for f in fields), "required fields must be flagged"
+        assert fields[0]["required"], "required fields come first"
+        assert "guidance" in result
