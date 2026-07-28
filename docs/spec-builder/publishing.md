@@ -13,7 +13,9 @@ When a draft is ready, click **Publish** in the editor. Publishing creates an im
 
 A published specification cannot be edited in place — this keeps datasets that reference it stable.
 
-Publishing consumes the draft: the draft is removed and the published specification takes its place. Until now that was one-way — there was no way to get the draft back.
+Publishing shares the specification with **every user of the hub**. A draft is the private form, visible only to you and anyone you shared it with; publishing is what makes a specification available to other people, who can then view it, fork it, and select it as the profile for their own datasets.
+
+Publishing consumes the draft: the draft is removed and the published specification takes its place. Use **Unpublish** to withdraw it and get the draft back.
 
 ## Viewing and forking published specifications
 
@@ -31,7 +33,7 @@ A published specification records two people, and they are not always the same:
 
 They differ when a draft shared with you is published: the specification stays in the workspace it was shared from, and you are recorded as its author. Both names appear on the specification, each linking to an email address, so anyone can reach the author to report a problem or the owner about the workspace.
 
-Your Specs page lists published specifications in your own workspace **and** any you authored elsewhere. Without that, publishing a shared draft made the specification vanish from the author's view entirely, with nothing to indicate where it had gone.
+The Specs page lists every published specification, whoever published it. Forking one creates the copy in **your** workspace, not the original author's.
 
 ## Unpublishing
 
