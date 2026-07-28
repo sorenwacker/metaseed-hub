@@ -228,3 +228,59 @@ async def test_profiles_include_published_specs(server, session: AsyncSession) -
 
     assert "SharedSpec" in [p["name"] for p in result["published"]]
     assert result["built_in"], "the packaged standards are still offered"
+
+
+class TestOverHTTP:
+    """Driving the endpoint the way a client does.
+
+    The tool-level tests above call the functions directly, so they passed while
+    the endpoint itself was unreachable: it was mounted at /hub/mcp but FastMCP
+    serves at its own ``streamable_http_path``, putting the real path at
+    /hub/mcp/mcp, and a mounted sub-app's lifespan never ran so the session
+    manager was uninitialised. Both produced a broken endpoint under a green
+    suite.
+    """
+
+    @staticmethod
+    def _initialize() -> dict:
+        return {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        }
+
+    def test_the_endpoint_answers_at_hub_mcp(self) -> None:
+        """Not /hub/mcp/mcp, and not a 500 from an unstarted session manager."""
+        from fastapi.testclient import TestClient
+
+        from metaseed_hub.main import create_app
+
+        with TestClient(create_app()) as client:
+            response = client.post(
+                "/hub/mcp",
+                json=self._initialize(),
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+
+        assert response.status_code != 404, "the endpoint is not where it is mounted"
+        assert response.status_code < 500, f"server error: {response.text[:300]}"
+
+    def test_the_doubled_path_is_not_the_endpoint(self) -> None:
+        """Guards the regression directly: /hub/mcp/mcp must not be where it lives."""
+        from fastapi.testclient import TestClient
+
+        from metaseed_hub.main import create_app
+
+        with TestClient(create_app()) as client:
+            response = client.post(
+                "/hub/mcp/mcp",
+                json=self._initialize(),
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+
+        assert response.status_code == 404
