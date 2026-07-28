@@ -7004,8 +7004,9 @@ a.start-option-card:hover {
 /* Card action, pushed to the bottom so buttons line up across cards of
    different heights. */
 .overview-card-cta {
-    margin-top: auto;
-    padding-top: var(--space-md);
+    /* margin, not internal padding, which had pushed the label low inside the
+       button. margin-top still separates it from the card content. */
+    margin-top: var(--space-md);
     align-self: flex-start;
 }
 
@@ -7301,6 +7302,11 @@ a.start-option-card:hover {
 
     .overview-code {
         font-size: 0.75rem;
+        /* The command overflowed off the right edge, clipped and unreadable.
+           Wrap it so the whole thing is visible; the backslash continuations
+           and newlines are preserved, so it still copies correctly. */
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
     }
 
     .connection-details th,
@@ -7312,6 +7318,16 @@ a.start-option-card:hover {
     .connection-details td {
         margin-bottom: var(--space-sm);
         word-break: break-all;
+    }
+
+    /* The policy pages stacked container padding on top of card padding, which
+       on a phone left a cramped, short-wrapping text column. */
+    .policy-container {
+        padding: var(--space-md);
+    }
+
+    .policy-content {
+        padding: var(--space-lg);
     }
 }
 

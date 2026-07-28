@@ -2,12 +2,17 @@
 
 import logging
 import secrets
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from metaseed_hub.auth import TokenUser
 
 from metaseed_hub.config import get_settings
 from metaseed_hub.models import ApiToken
@@ -93,6 +98,35 @@ async def auth_login(request: Request) -> RedirectResponse:
     return response
 
 
+async def _post_login_landing(session: "AsyncSession", token_user: "TokenUser") -> str:
+    """Where to send a user after sign-in.
+
+    A user with no datasets or specifications lands on the Home guide, which
+    explains what to do; a returning user with work lands on their datasets. The
+    guide is otherwise reached only from the logo, so the person who most needs
+    it -- someone signing in for the first time -- would never see it.
+    """
+    from sqlalchemy import func, select
+
+    from metaseed_hub.models import Dataset, Spec, Tenant
+    from metaseed_hub.ui.dependencies import tenant_slug_for
+
+    slug = tenant_slug_for(token_user.sub)
+    tenant = (await session.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+    if tenant is None:
+        return "/hub/home"  # brand new: no workspace yet, so no content
+
+    datasets = await session.scalar(
+        select(func.count(Dataset.id)).where(
+            Dataset.tenant_id == tenant.id, Dataset.deleted_at.is_(None)
+        )
+    )
+    specs = await session.scalar(
+        select(func.count(Spec.id)).where(Spec.tenant_id == tenant.id, Spec.deleted_at.is_(None))
+    )
+    return "/hub/" if (datasets or specs) else "/hub/home"
+
+
 @router.get("/callback")
 async def auth_callback(
     request: Request,
@@ -140,6 +174,10 @@ async def auth_callback(
         return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
     refresh_token = tokens.get("refresh_token")
 
+    # A returning user with work lands on it; a user with nothing lands on the
+    # Home guide. Defaulted here so a failure below still redirects.
+    landing = "/hub/"
+
     # Record the sign-in for the admin dashboard. Here rather than on each
     # request, so the column means "last signed in" and not "last seen"; it
     # never blocks the redirect, so a bookkeeping failure cannot lock a user out.
@@ -151,10 +189,11 @@ async def auth_callback(
         token_user = await verify_token(access_token)
         async with db.session_factory() as db_session:
             await record_login(db_session, token_user)
+            landing = await _post_login_landing(db_session, token_user)
     except Exception:
         logger.exception("Could not record the sign-in")
 
-    response = RedirectResponse(url="/hub/", status_code=302)
+    response = RedirectResponse(url=landing, status_code=302)
     response.delete_cookie(key=STATE_COOKIE)
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,

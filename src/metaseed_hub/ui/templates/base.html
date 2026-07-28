@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Metaseed Hub{% endblock %}</title>
     <link rel="icon" href="/hub/hub-static/images/metaseed-icon.svg" type="image/svg+xml">
-    <script src="/hub/hub-static/js/htmx.min.js"></script>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/hub/hub-static/css/hub.css">
+    <script src="/hub/hub-static/js/htmx.min.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ version_info.version if version_info else 'dev' }}">
+    <link rel="stylesheet" href="/hub/hub-static/css/hub.css?v={{ version_info.version if version_info else 'dev' }}">
     {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     {% block head %}{% endblock %}
 </head>
