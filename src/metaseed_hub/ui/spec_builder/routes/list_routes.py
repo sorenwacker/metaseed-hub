@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
 from metaseed_hub.ui.spec_builder.access import (
     create_new_draft,
+    workspace_owner,
 )
 from metaseed_hub.ui.spec_builder_helpers import (
     clone_spec,
@@ -70,11 +71,16 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
                 seen_ids.add(draft.id)
                 drafts.append(draft)
 
+        # Specs in this workspace, plus any this user authored elsewhere.
+        # Publishing a draft shared with you puts the specification in the
+        # workspace it was shared from, so an author who only ever saw their own
+        # workspace watched their work disappear on publish. Authorship is not a
+        # privilege escalation: it is their own writing.
         result = await session.execute(
             select(Spec)
             .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
             .where(
-                Spec.tenant_id == tenant_id,
+                or_(Spec.tenant_id == tenant_id, Spec.created_by_id == user_id),
                 Spec.deleted_at.is_(None),
                 Spec.status == SpecStatus.PUBLISHED,
             )
@@ -82,10 +88,23 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         )
         specs = list(result.scalars().all())
 
+        # Who owns the workspace each spec lives in. Usually the author, but not
+        # when a shared draft was published: then the author cannot find their
+        # own specification unless the page says whose workspace it is in.
+        owners = {}
+        for spec in specs:
+            if spec.tenant_id not in owners:
+                owners[spec.tenant_id] = await workspace_owner(session, spec.tenant_id)
+
         return await render(
             request,
             "spec_builder/list.html",
-            {"drafts": drafts, "specs": specs, "tenant_id": tenant_id},
+            {
+                "drafts": drafts,
+                "specs": specs,
+                "tenant_id": tenant_id,
+                "owners": owners,
+            },
         )
 
     @router.get("/new", response_model=None)

@@ -475,3 +475,29 @@ async def unpublish_spec(
         spec=builder.spec,
         source_spec_id=spec.id,
     )
+
+
+async def workspace_owner(session: AsyncSession, tenant_id: str) -> User | None:
+    """The person whose workspace holds an item.
+
+    A workspace belongs to exactly one person, so this is who to approach about
+    a specification that lives there. It is not always the author: publishing a
+    draft someone shared with you puts the specification in *their* workspace
+    while recording you as its author, and without both names on the page that
+    is invisible — a spec published this way appears to vanish for its author
+    and to appear from nowhere for the owner.
+
+    Args:
+        session: Database session.
+        tenant_id: The workspace.
+
+    Returns:
+        The owning user, or None if the workspace has no live user.
+    """
+    result = await session.execute(
+        select(User)
+        .where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+        .order_by(User.created_at)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
