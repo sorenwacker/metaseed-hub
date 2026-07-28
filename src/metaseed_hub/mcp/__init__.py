@@ -281,11 +281,24 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
     mcp: FastMCP = FastMCP(
         name=name,
         instructions=(
-            "Datasets belonging to one hub user, authenticated by a personal "
-            "access token. Call list_profiles and get_profile_schema before "
-            "creating entities: each profile defines its own entity types and "
-            "fields, and any other type is rejected. Record only what the "
-            "source states; leave unknown fields empty."
+            "Datasets and specifications belonging to one hub user, "
+            "authenticated by a personal access token.\n\n"
+            "Populating a dataset: call list_profiles, then get_profile_schema "
+            "for the profile you are using. Only the entity types it names "
+            "exist, and any other is rejected. Build the dataset with "
+            "create_entity and update_entity one entity at a time rather than "
+            "save_dataset, which replaces the whole dataset and overwrites "
+            "anything changed meanwhile. Every edit reports what is still "
+            "missing; work through that until validate_dataset is clean.\n\n"
+            "Record only what the source states. Leave a field empty rather "
+            "than inventing a value: an empty required field is a smaller "
+            "problem than a wrong one, and it is reported so it can be filled "
+            "later.\n\n"
+            "Building a specification: spec_create makes a private draft, then "
+            "spec_add_entity and spec_add_field build it up and spec_validate "
+            "reports problems. Publishing is deliberately not available here — "
+            "it shares a specification with every user of the hub, so the "
+            "person must do it themselves in the web interface."
         ),
         stateless_http=True,
         # Served at the mount root: the app is mounted at /hub/mcp, and the

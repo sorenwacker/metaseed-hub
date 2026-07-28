@@ -721,3 +721,15 @@ class TestSpecTools:
         add_entity = await _tool(server, "spec_add_entity")
         with _calling_with(secret_a), pytest.raises(ValueError, match="No specification draft"):
             await add_entity("Theirs", "Sneaky")
+
+
+async def test_the_instructions_cover_the_tools_that_exist(server) -> None:
+    """The instructions described only the original nine tools after entity and
+    spec tools were added, so an agent had no reason to think it could edit
+    incrementally — and would keep replacing whole datasets."""
+    instructions = server.instructions or ""
+
+    for expected in ("create_entity", "update_entity", "spec_create", "spec_validate"):
+        assert expected in instructions, f"{expected} is not mentioned"
+    assert "save_dataset, which replaces the whole dataset" in instructions
+    assert "Publishing is deliberately not available" in instructions
