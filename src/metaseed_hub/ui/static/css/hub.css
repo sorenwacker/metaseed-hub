@@ -7122,8 +7122,41 @@ a.start-option-card:hover {
     color: var(--clr-ink-light);
 }
 
-/* The setup guide is a reading column; a full-width panel leaves the text
-   stranded against a wide empty margin. */
+/* The setup guide is a reading column, centred: a full-width panel left the
+   text stranded against a wide empty right margin. */
 .overview-page {
     max-width: 56rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Each step gets an icon, so the page scans as steps rather than as a wall of
+   prose. Inline SVG: no extra requests, and it takes the theme colour. */
+.setup-steps > li {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    column-gap: var(--space-md);
+    align-items: start;
+}
+
+.setup-step-icon {
+    grid-row: 1 / span 4;
+    width: 2rem;
+    height: 2rem;
+    margin-top: 0.15rem;
+    color: var(--clr-moss);
+}
+
+.setup-steps h3,
+.setup-steps p,
+.setup-steps .btn,
+.setup-steps .overview-code,
+.setup-steps .connection-details {
+    grid-column: 2;
+}
+
+/* A grid item stretches to the column by default, which turned each button
+   into a full-width bar. */
+.setup-steps .btn {
+    justify-self: start;
 }
