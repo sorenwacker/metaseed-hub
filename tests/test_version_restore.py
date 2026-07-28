@@ -130,9 +130,9 @@ async def test_restoring_an_earlier_version_brings_back_its_content(
 
     assert response.status_code == 200
     await session.refresh(dataset)
-    assert _titles(dataset.data) == [
-        "first"
-    ], "the dataset must hold the restored version's content"
+    assert _titles(dataset.data) == ["first"], (
+        "the dataset must hold the restored version's content"
+    )
 
 
 async def test_restore_is_visible_to_the_editor(session: AsyncSession) -> None:
@@ -199,9 +199,9 @@ async def test_the_version_matching_the_current_state_is_marked_current(
     )
     html = response.body.decode()
 
-    assert (
-        f"{versions[1].id}/restore" not in html
-    ), "the current version must not offer a restore that does nothing"
+    assert f"{versions[1].id}/restore" not in html, (
+        "the current version must not offer a restore that does nothing"
+    )
     assert f"{versions[0].id}/restore" in html, "older versions stay restorable"
 
 

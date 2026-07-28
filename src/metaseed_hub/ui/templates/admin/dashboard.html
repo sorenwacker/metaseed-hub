@@ -169,5 +169,45 @@
         <p class="empty-state">No users registered yet.</p>
         {% endif %}
     </section>
+
+    <section class="admin-section">
+        <h2>Remove content</h2>
+        <p>
+            Remove a dataset or published specification from any workspace, for content
+            created or published by mistake. Removal is by identifier &mdash; the UUID in the
+            item's URL &mdash; because this dashboard reports aggregated counts and does not
+            list other people's content.
+        </p>
+        <p>
+            The result names the item and the workspace that owns it, so a mistyped
+            identifier is visible immediately. Nothing is erased, and <strong>Restore</strong>
+            undoes a removal using the same identifier.
+        </p>
+        <form hx-post="/hub/admin/content/remove"
+              hx-target="#admin-content-result"
+              hx-swap="innerHTML"
+              onsubmit="return confirm('Remove this item from its owner\'s workspace?')">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <label>
+                Type
+                <select name="kind">
+                    <option value="dataset">Dataset</option>
+                    <option value="spec">Published specification</option>
+                </select>
+            </label>
+            <label>
+                Identifier
+                <input type="text" name="item_id" required
+                       placeholder="00000000-0000-0000-0000-000000000000"
+                       pattern="[0-9a-fA-F-]{36}" size="40">
+            </label>
+            <button type="submit" class="btn btn-danger">Remove</button>
+            <button type="submit" class="btn"
+                    hx-post="/hub/admin/content/restore"
+                    hx-target="#admin-content-result"
+                    hx-swap="innerHTML">Restore</button>
+        </form>
+        <div id="admin-content-result"></div>
+    </section>
 </div>
 {% endblock %}

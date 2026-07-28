@@ -140,9 +140,9 @@ def test_the_user_is_told_rather_than_shown_a_success() -> None:
     )
 
     app = create_hub_app()
-    assert (
-        DraftConflictError in app.exception_handlers
-    ), "a refused save would surface as an unhandled 500"
+    assert DraftConflictError in app.exception_handlers, (
+        "a refused save would surface as an unhandled 500"
+    )
 
     response = handle_draft_conflict(None, DraftConflictError("draft-1"))
     body = response.body.decode()

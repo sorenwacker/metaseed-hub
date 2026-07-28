@@ -34,6 +34,24 @@ Only the exception type and message are kept — never request bodies or headers
 
 Records are removed automatically 30 days after they occur. Recording never interferes with the error itself: the exception propagates unchanged, so the usual 500 response and the log line are exactly as before, and a failure to record is logged rather than raised.
 
+## Removing a dataset or specification
+
+An administrator can remove a dataset or a published specification belonging to any user, for content published or created by mistake, or on request from the person who owns it.
+
+Removal is **by identifier**, not by browsing. The dashboard reports aggregated counts and does not list other people's content, and a removal tool that showed every dataset in the deployment would undo that. An administrator acting on a report is given the identifier; paste it into the **Remove content** form on the dashboard and choose whether it names a dataset or a specification.
+
+The identifier is the UUID in the URL of the item. For a dataset that is `/hub/datasets/<id>`; for a published specification, `/hub/spec-builder/spec/<id>`.
+
+What removal does:
+
+- The item is soft-deleted. It disappears from its owner's workspace, from the Explorer, and from the profile choices offered for new datasets, exactly as if the owner had deleted it.
+- Nothing is erased. The row stays in the database with the time of removal, so an administrator can still account for what existed.
+- The response names what was removed — the item's name and the email of the workspace that owned it — so a mistyped identifier is visible immediately rather than silently removing the wrong thing.
+
+A removal can be undone with **Restore**, using the same identifier. This is the reason removal is a soft delete: an identifier is easy to get wrong, and an irreversible admin action on someone else's data is not.
+
+Removing a specification does not affect datasets already created against it. Those carry their own copy and continue to open and validate; the specification simply can no longer be chosen for new datasets.
+
 ## Security warnings
 
 If the application is running with the default development `SECRET_KEY`, the dashboard shows a warning banner. Set a strong `SECRET_KEY` in the deployment environment to clear it; the secret is used to sign CSRF tokens.
