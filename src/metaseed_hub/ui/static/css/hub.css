@@ -6807,3 +6807,356 @@ a.start-option-card:hover {
     text-align: center;
     padding: var(--space-lg);
 }
+
+/* ---------------------------------------------------------------------------
+   Overview — what the hub is for. Shown to a visitor deciding whether to sign
+   in, and to a new user deciding what to do first. Uses the existing tokens and
+   panel treatment so it reads as part of the app, not an inserted banner.
+   --------------------------------------------------------------------------- */
+
+.overview {
+    margin-bottom: var(--space-2xl);
+    padding: var(--space-xl);
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-lg, 12px);
+}
+
+.overview > summary {
+    cursor: pointer;
+    list-style: none;
+    font-family: var(--font-display, inherit);
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--clr-forest);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.overview > summary::-webkit-details-marker {
+    display: none;
+}
+
+.overview > summary::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid var(--clr-moss);
+    border-bottom: 2px solid var(--clr-moss);
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+}
+
+.overview[open] > summary::before {
+    transform: rotate(45deg);
+}
+
+.overview-lede {
+    max-width: 44rem;
+    margin: var(--space-lg) 0 var(--space-xl);
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--clr-ink-light);
+}
+
+.overview-grid {
+    display: grid;
+    /* Three across when there is room, stacking on narrow screens without a
+       media query. */
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: var(--space-lg);
+    align-items: stretch;
+}
+
+.overview-card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-lg);
+    background: var(--clr-ivory);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md, 8px);
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.overview-card:hover {
+    border-color: var(--clr-sage);
+    transform: translateY(-2px);
+}
+
+.overview-card-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-bottom: var(--space-md);
+    color: var(--clr-moss);
+}
+
+.overview-card h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.1rem;
+    color: var(--clr-forest);
+}
+
+.overview-card p {
+    margin: 0 0 var(--space-md);
+    line-height: 1.6;
+    color: var(--clr-ink-light);
+}
+
+.overview-card ul {
+    margin: 0;
+    padding-left: var(--space-md);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--clr-ink-light);
+}
+
+.overview-card li {
+    margin-bottom: var(--space-xs);
+}
+
+.overview-footnote {
+    margin: var(--space-xl) 0 0;
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--clr-parchment);
+    font-size: 0.9rem;
+    color: var(--clr-ink-light);
+}
+
+/* The landing page shows the same block, always open, under the sign-in card. */
+.overview-public {
+    max-width: 68rem;
+    margin: var(--space-2xl) auto 0;
+}
+
+.overview-public .overview-lede {
+    max-width: 44rem;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Landing page — the first thing a visitor sees, and the only chance to say
+   what this is before they decide whether to sign in.
+   --------------------------------------------------------------------------- */
+
+.landing {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: 0 var(--space-lg) var(--space-2xl);
+}
+
+.landing-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: var(--space-2xl) var(--space-lg);
+}
+
+.landing-logo {
+    height: 3.5rem;
+    margin-bottom: var(--space-xl);
+}
+
+.landing-headline {
+    margin: 0 0 var(--space-md);
+    font-size: clamp(1.9rem, 4vw, 2.75rem);
+    line-height: 1.15;
+    color: var(--clr-forest);
+}
+
+.landing-subhead {
+    max-width: 38rem;
+    margin: 0 0 var(--space-xl);
+    font-size: 1.1rem;
+    line-height: 1.65;
+    color: var(--clr-ink-light);
+}
+
+.landing-cta {
+    min-width: 11rem;
+}
+
+.landing-note {
+    margin: var(--space-md) 0 0;
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+}
+
+.landing-version {
+    margin-top: var(--space-xl);
+    text-align: center;
+}
+
+/* The landing hero already states this; repeating it directly below reads as a
+   mistake. The signed-in page has no hero, so it keeps the lede. */
+.overview-public .overview-lede {
+    display: none;
+}
+
+.overview-public {
+    padding-top: var(--space-xl);
+}
+
+/* Card action, pushed to the bottom so buttons line up across cards of
+   different heights. */
+.overview-card-cta {
+    margin-top: auto;
+    padding-top: var(--space-md);
+    align-self: flex-start;
+}
+
+/* Connecting an AI assistant — a distinct block, because it is a setup task
+   rather than a description of a feature. */
+.overview-agent {
+    margin-top: var(--space-xl);
+    padding: var(--space-lg);
+    background: var(--clr-ivory);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md, 8px);
+}
+
+.overview-agent h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.1rem;
+    color: var(--clr-forest);
+}
+
+.overview-agent p {
+    margin: 0 0 var(--space-md);
+    line-height: 1.6;
+    color: var(--clr-ink-light);
+}
+
+.overview-steps {
+    margin: 0 0 var(--space-md);
+    padding-left: var(--space-lg);
+    line-height: 1.7;
+    color: var(--clr-ink-light);
+}
+
+.overview-code {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-md);
+    background: var(--clr-forest);
+    color: var(--clr-ivory);
+    border-radius: var(--radius-sm, 6px);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    overflow-x: auto;
+}
+
+.overview-agent-note {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.overview-collab {
+    margin-top: var(--space-xl);
+}
+
+.overview-collab h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.1rem;
+    color: var(--clr-forest);
+}
+
+.overview-collab p {
+    margin: 0;
+    max-width: 46rem;
+    line-height: 1.65;
+    color: var(--clr-ink-light);
+}
+
+/* The signed-in home page: setup steps, numbered, each ending in the control
+   that does the thing. */
+.overview-title {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.75rem;
+    color: var(--clr-forest);
+}
+
+.setup-steps {
+    margin: var(--space-xl) 0 0;
+    padding-left: var(--space-lg);
+    counter-reset: step;
+}
+
+.setup-steps > li {
+    margin-bottom: var(--space-xl);
+    padding-left: var(--space-sm);
+}
+
+.setup-steps h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.05rem;
+    color: var(--clr-forest);
+}
+
+.setup-steps p {
+    margin: 0 0 var(--space-md);
+    max-width: 46rem;
+    line-height: 1.65;
+    color: var(--clr-ink-light);
+}
+
+/* The connection details any MCP client needs, whichever one it is. */
+.connection-details {
+    margin: 0 0 var(--space-md);
+    border-collapse: collapse;
+}
+
+.connection-details th {
+    padding: var(--space-xs) var(--space-md) var(--space-xs) 0;
+    text-align: left;
+    font-weight: 600;
+    color: var(--clr-ink);
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.connection-details td {
+    padding: var(--space-xs) 0;
+    color: var(--clr-ink-light);
+}
+
+/* The setup guide is a reading column, centred: a full-width panel left the
+   text stranded against a wide empty right margin. */
+.overview-page {
+    max-width: 56rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Each step gets an icon, so the page scans as steps rather than as a wall of
+   prose. Inline SVG: no extra requests, and it takes the theme colour. */
+.setup-steps > li {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    column-gap: var(--space-md);
+    align-items: start;
+}
+
+.setup-step-icon {
+    grid-row: 1 / span 4;
+    width: 2rem;
+    height: 2rem;
+    margin-top: 0.15rem;
+    color: var(--clr-moss);
+}
+
+.setup-steps h3,
+.setup-steps p,
+.setup-steps .btn,
+.setup-steps .overview-code,
+.setup-steps .connection-details {
+    grid-column: 2;
+}
+
+/* A grid item stretches to the column by default, which turned each button
+   into a full-width bar. */
+.setup-steps .btn {
+    justify-self: start;
+}
