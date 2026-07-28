@@ -8,14 +8,6 @@
 
 {% block content %}
 <div class="home-container">
-    <!-- The same explanation the landing page shows, so the two cannot drift.
-         Open for someone with no work yet, collapsed once they have some — never
-         removed, so it stays available as a reference. -->
-    <details class="home-section overview" {% if not datasets and not specs %}open{% endif %}>
-        <summary class="section-title">What you can do here</summary>
-        {% include "partials/overview.html" %}
-    </details>
-
     <!-- Datasets Section -->
     <section class="home-section">
         <div class="section-header">

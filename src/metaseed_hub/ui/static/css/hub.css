@@ -6999,3 +6999,131 @@ a.start-option-card:hover {
 .overview-public {
     padding-top: var(--space-xl);
 }
+
+/* Card action, pushed to the bottom so buttons line up across cards of
+   different heights. */
+.overview-card-cta {
+    margin-top: auto;
+    padding-top: var(--space-md);
+    align-self: flex-start;
+}
+
+/* Connecting an AI assistant — a distinct block, because it is a setup task
+   rather than a description of a feature. */
+.overview-agent {
+    margin-top: var(--space-xl);
+    padding: var(--space-lg);
+    background: var(--clr-ivory);
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md, 8px);
+}
+
+.overview-agent h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.1rem;
+    color: var(--clr-forest);
+}
+
+.overview-agent p {
+    margin: 0 0 var(--space-md);
+    line-height: 1.6;
+    color: var(--clr-ink-light);
+}
+
+.overview-steps {
+    margin: 0 0 var(--space-md);
+    padding-left: var(--space-lg);
+    line-height: 1.7;
+    color: var(--clr-ink-light);
+}
+
+.overview-code {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-md);
+    background: var(--clr-forest);
+    color: var(--clr-ivory);
+    border-radius: var(--radius-sm, 6px);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    overflow-x: auto;
+}
+
+.overview-agent-note {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.overview-collab {
+    margin-top: var(--space-xl);
+}
+
+.overview-collab h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.1rem;
+    color: var(--clr-forest);
+}
+
+.overview-collab p {
+    margin: 0;
+    max-width: 46rem;
+    line-height: 1.65;
+    color: var(--clr-ink-light);
+}
+
+/* The signed-in home page: setup steps, numbered, each ending in the control
+   that does the thing. */
+.overview-title {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.75rem;
+    color: var(--clr-forest);
+}
+
+.setup-steps {
+    margin: var(--space-xl) 0 0;
+    padding-left: var(--space-lg);
+    counter-reset: step;
+}
+
+.setup-steps > li {
+    margin-bottom: var(--space-xl);
+    padding-left: var(--space-sm);
+}
+
+.setup-steps h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.05rem;
+    color: var(--clr-forest);
+}
+
+.setup-steps p {
+    margin: 0 0 var(--space-md);
+    max-width: 46rem;
+    line-height: 1.65;
+    color: var(--clr-ink-light);
+}
+
+/* The connection details any MCP client needs, whichever one it is. */
+.connection-details {
+    margin: 0 0 var(--space-md);
+    border-collapse: collapse;
+}
+
+.connection-details th {
+    padding: var(--space-xs) var(--space-md) var(--space-xs) 0;
+    text-align: left;
+    font-weight: 600;
+    color: var(--clr-ink);
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.connection-details td {
+    padding: var(--space-xs) 0;
+    color: var(--clr-ink-light);
+}
+
+/* The setup guide is a reading column; a full-width panel leaves the text
+   stranded against a wide empty margin. */
+.overview-page {
+    max-width: 56rem;
+}

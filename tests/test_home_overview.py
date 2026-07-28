@@ -1,111 +1,89 @@
-"""The page a user lands on explains what the hub is for.
+"""What each audience is shown, and where.
 
-Someone signing in for the first time saw an empty "My Datasets" heading and
-nothing telling them what a dataset, a specification or the explorer is. The
-overview lives on that page rather than in a separate tour, because a separate
-tour is the thing people skip.
+Three pages, three jobs, and they had been conflated:
+
+- **Landing (signed out)** — what the hub is for, so a visitor can decide
+  whether to sign in. No setup instructions: none of it is actionable yet.
+- **Home (signed in)** — how to set up, naming the controls to click. Reached
+  from the logo.
+- **Datasets** — the dataset list, and nothing else. The overview started as a
+  banner here, which pushed a returning user's own work down the page on every
+  visit.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
-from fastapi.templating import Jinja2Templates
 
 TEMPLATES_DIR = Path("src/metaseed_hub/ui/templates")
-TEMPLATES = Jinja2Templates(directory=str(TEMPLATES_DIR))
-# The app registers this global on its own templates instance; the page cannot
-# render without it, and stubbing it keeps the test to the page's own content.
-TEMPLATES.env.globals["get_repo_stars"] = lambda: 0
 
 
-def _render(**context) -> str:
-    template = TEMPLATES.get_template("home.html")
-    return template.render(
-        {
-            "datasets": [],
-            "specs": [],
-            "user": None,
-            "tenant": None,
-            "csrf_token": "t",
-            "version_info": {"version": "test"},
-            **context,
-        }
-    )
+def _read(name: str) -> str:
+    return (TEMPLATES_DIR / name).read_text()
 
 
-def test_the_three_parts_are_explained() -> None:
-    """Datasets, Specs and Explorer are the hub's whole surface; a newcomer
-    needs to know what each is before choosing one."""
-    html = _render()
+def test_the_landing_page_says_what_the_hub_is_for() -> None:
+    """A visitor cannot act on anything yet, so this is capability, not setup."""
+    landing = _read("login.html") + _read("partials/overview.html")
 
-    for part in ("Datasets", "Specs", "Explorer"):
-        assert f"<h3>{part}</h3>" in html, f"{part} is not explained"
-
-
-def test_each_part_links_somewhere_useful() -> None:
-    """An explanation with no way to act on it just moves the question along."""
-    html = _render()
-
-    assert "/hub/datasets/new" in html
-    assert "/hub/spec-builder" in html
-    assert "/hub/explore/" in html
+    for capability in (
+        "Manage datasets",
+        "Build specifications",
+        "Explore and compare",
+        "Collaborate",
+    ):
+        assert capability in landing, f"{capability} is not mentioned"
 
 
-def test_it_is_open_for_someone_with_no_work_yet() -> None:
-    html = _render(datasets=[], specs=[])
+def test_the_landing_page_does_not_give_setup_instructions() -> None:
+    """Telling a signed-out visitor to click their profile is useless: they do
+    not have one until they sign in."""
+    landing = _read("login.html") + _read("partials/overview.html")
 
-    assert "<details" in html
-    assert "open>" in html or " open " in html
-
-
-def _card(name: str = "Something") -> SimpleNamespace:
-    """The attributes the home page reads off a dataset or spec card."""
-    return SimpleNamespace(
-        id="00000000-0000-0000-0000-000000000000",
-        name=name,
-        description=None,
-        profile="miappe",
-        version="1.1",
-        updated_at=datetime(2026, 7, 28, tzinfo=UTC),
-        created_at=datetime(2026, 7, 28, tzinfo=UTC),
-        created_by=None,
-        tenant=None,
-    )
+    assert "Access tokens" not in landing
+    assert "/hub/auth/profile" not in landing
 
 
-@pytest.mark.parametrize(
-    ("datasets", "specs"),
-    [([_card()], []), ([], [_card()]), ([_card()], [_card()])],
-)
-def test_it_collapses_once_there_is_work_to_show(datasets, specs) -> None:
-    """Collapsed, not removed: it stays available as a reference without
-    competing with the user's own datasets."""
-    html = _render(datasets=datasets, specs=specs)
+def test_the_signed_in_home_says_where_to_click() -> None:
+    """Someone signed in needs the controls named, not the pitch repeated."""
+    home = _read("overview_home.html")
 
-    assert "<details" in html, "the overview is still on the page"
-    overview = html.split("<details")[1].split(">")[0]
-    assert "open" not in overview
+    assert "Access tokens" in home, "the API key lives on the profile page"
+    assert "/hub/auth/profile" in home
+    assert "Sharing" in home
+    assert "claude mcp add" in home
 
 
-def test_the_landing_page_explains_the_hub_too() -> None:
-    """A visitor deciding whether to sign in needs the same explanation as a
-    user deciding what to do first."""
-    login = (TEMPLATES_DIR / "login.html").read_text()
+def test_the_signed_in_home_links_to_each_area() -> None:
+    home = _read("overview_home.html")
 
-    assert 'include "partials/overview.html"' in login
+    for href in ("/hub/datasets/new", "/hub/spec-builder", "/hub/explore/"):
+        assert href in home, f"{href} is not reachable from the setup guide"
 
 
-def test_both_pages_share_one_partial() -> None:
-    """Two copies of this would drift, and the landing page is the one nobody
-    would remember to update."""
-    home = (TEMPLATES_DIR / "home.html").read_text()
-    login = (TEMPLATES_DIR / "login.html").read_text()
+def test_the_dataset_list_is_left_alone() -> None:
+    """The overview has its own page now, reached from the logo."""
+    datasets_page = _read("home.html")
 
-    assert 'include "partials/overview.html"' in home
-    # The explanation lives in the partial, not inlined in either page.
-    for page in (home, login):
-        assert "<h3>Datasets</h3>" not in page
+    assert "partials/overview.html" not in datasets_page
+    assert "overview" not in datasets_page
+
+
+def test_the_logo_is_the_home_button() -> None:
+    """There is no separate Home nav item; the logo goes there."""
+    base = _read("base.html")
+
+    assert 'href="/hub/home" class="hub-logo"' in base
+    assert ">Home</a>" not in base, "the logo is the home button, not a nav item"
+
+
+def test_signed_out_navigation_does_not_lead_nowhere() -> None:
+    """Signed out, the Datasets link pointed at ``/hub/`` — which is the landing
+    page itself, so clicking it appeared to do nothing. The others bounced to
+    sign-in. A visitor gets the sign-in call to action instead."""
+    base = _read("base.html")
+
+    nav = base[base.index("hub-nav-global") : base.index("header-breadcrumb")]
+    assert "{% if user %}" in nav, "the app nav is only for signed-in users"
+    # Docs is public and stays.
+    assert "Docs" in nav
