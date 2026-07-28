@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:7300"]
     app_url: str = "http://localhost:7001"
 
+    # Matomo analytics. Cookieless and first-party, served same-origin at
+    # matomo_url so the strict CSP (script-src/connect-src 'self') allows it.
+    # Rendered only when matomo_site_id is set, so dev and CI stay clean.
+    matomo_url: str = "/matomo/"
+    matomo_site_id: str = ""
+
     # Application secret key. Provided by the deployment environment and used to
     # sign the CSRF token. Declared here so the value is accepted and validated
     # rather than rejected as an unknown environment variable.

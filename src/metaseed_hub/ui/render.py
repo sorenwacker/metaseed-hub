@@ -9,6 +9,7 @@ from fastapi import Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
+from metaseed_hub.config import get_settings
 from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
 
 HUB_REPO = "sorenwacker/metaseed-hub"
@@ -127,6 +128,9 @@ def render_template(
     context["csrf_token"] = csrf_token
     context["request"] = request
     context["version_info"] = get_version_info()
+    settings = get_settings()
+    context["matomo_url"] = settings.matomo_url
+    context["matomo_site_id"] = settings.matomo_site_id
 
     response = templates.TemplateResponse(
         request=request,
