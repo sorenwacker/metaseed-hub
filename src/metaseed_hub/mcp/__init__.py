@@ -272,6 +272,27 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     await session.commit()
 
 
+def _allowed_hosts() -> list[str]:
+    """The Host header values the MCP endpoint accepts, from ``app_url``.
+
+    A client dials the deployment's own host, which the reverse proxy forwards
+    unchanged, so the check must allow exactly that. Derived from the setting so
+    it is right in every environment rather than hardcoded to production, and
+    with the bare hostname included as well, since a default port is dropped
+    from the Host header.
+    """
+    from urllib.parse import urlparse
+
+    from metaseed_hub.config import get_settings
+
+    netloc = urlparse(get_settings().app_url).netloc
+    hosts = [netloc]
+    hostname = netloc.split(":", 1)[0]
+    if hostname and hostname != netloc:
+        hosts.append(hostname)
+    return hosts
+
+
 def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
     """Build the hub's MCP server.
 
@@ -304,12 +325,17 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         # Served at the mount root: the app is mounted at /hub/mcp, and the
         # default of "/mcp" would put the endpoint at /hub/mcp/mcp.
         streamable_http_path="/",
-        # The deployment sits behind a reverse proxy, so the Host the app sees
-        # is not the one the client dialled and the DNS-rebinding check rejects
-        # every request with 421. That check defends a *locally bound* server
-        # from a browser; this endpoint is authenticated by bearer token on
-        # every call, which is what actually protects it.
-        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        # DNS-rebinding protection restricts which Host header the endpoint
+        # accepts. The default allowlist is empty, which behind the reverse
+        # proxy rejected every request with 421 — the proxy forwards the public
+        # Host, not one the check knew about. Rather than disable the check, pin
+        # it to the deployment's own host (derived from app_url so dev and prod
+        # each get the right value). Bearer tokens are the real protection here;
+        # this is defence in depth on the Host header.
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=_allowed_hosts(),
+        ),
     )
 
     @mcp.tool()

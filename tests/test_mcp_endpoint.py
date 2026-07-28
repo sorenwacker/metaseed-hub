@@ -260,7 +260,9 @@ class TestOverHTTP:
 
         from metaseed_hub.main import create_app
 
-        with TestClient(create_app()) as client:
+        # The Host header is now checked against the deployment's host, so the
+        # client must dial it (TestClient otherwise sends Host: testserver).
+        with TestClient(create_app(), base_url="http://localhost:7001") as client:
             response = client.post(
                 "/hub/mcp",
                 json=self._initialize(),
@@ -270,13 +272,35 @@ class TestOverHTTP:
         assert response.status_code != 404, "the endpoint is not where it is mounted"
         assert response.status_code < 500, f"server error: {response.text[:300]}"
 
+    def test_a_request_with_a_foreign_host_is_rejected(self) -> None:
+        """DNS-rebinding defence: only the deployment\'s own Host is accepted.
+
+        A page on evil.example that rebinds DNS to the server would send its own
+        Host header; the check refuses it. Bearer tokens are the real barrier —
+        this is defence in depth on the Host.
+        """
+        from fastapi.testclient import TestClient
+
+        from metaseed_hub.main import create_app
+
+        with TestClient(create_app(), base_url="http://evil.example") as client:
+            response = client.post(
+                "/hub/mcp",
+                json=self._initialize(),
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+
+        assert response.status_code == 421, (
+            f"a foreign Host must be refused, got {response.status_code}"
+        )
+
     def test_the_doubled_path_is_not_the_endpoint(self) -> None:
         """Guards the regression directly: /hub/mcp/mcp must not be where it lives."""
         from fastapi.testclient import TestClient
 
         from metaseed_hub.main import create_app
 
-        with TestClient(create_app()) as client:
+        with TestClient(create_app(), base_url="http://localhost:7001") as client:
             response = client.post(
                 "/hub/mcp/mcp",
                 json=self._initialize(),
