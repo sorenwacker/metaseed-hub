@@ -69,35 +69,11 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location = /matomo {
-        return 301 /matomo/;
-    }
-
-    # The Matomo admin / reporting UI, restricted to TU Delft networks. The two
-    # tracker endpoints above are exact-match and stay public; everything else
-    # under /matomo/ is the UI and is reachable only from campus or eduVPN.
-    # Matomo emits relative asset URLs, so it works correctly under this subpath.
-    location /matomo/ {
-{% for cidr in matomo_ui_allow %}
-        allow {{ cidr }};
-{% endfor %}
-        deny all;
-
-        # Matomo ships its own CSP (which allows the 'unsafe-eval' its UI needs).
-        # Re-declaring headers here stops the server-level strict CSP from being
-        # inherited -- otherwise the browser enforces the intersection of both,
-        # strips 'unsafe-eval', and Matomo's login JavaScript silently fails.
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "SAMEORIGIN" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-        proxy_pass http://127.0.0.1:{{ matomo_port }}/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    # The admin / reporting UI is NOT served under this subpath: Matomo does not
+    # run cleanly behind a stripped-prefix reverse proxy (it generates
+    # root-relative URLs for its dynamic assets, so the logo and login break).
+    # View the dashboard through an SSH tunnel to 127.0.0.1:{{ matomo_port }},
+    # where Matomo is served at its own root.
 
 }
 

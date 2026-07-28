@@ -29,6 +29,10 @@ Metaseed Hub uses a self-hosted [Matomo](https://matomo.org/) for privacy-friend
 4. Set the site id and redeploy the hub config:
    - Set `matomo_site_id` in `ansible/group_vars/all.yml` (or the env) to the id from step 1, and re-run the playbook (or edit `/app/.env` `MATOMO_SITE_ID` and restart the service).
 
+## Why the dashboard is tunnel-only
+
+Matomo does not run cleanly behind a stripped-prefix reverse proxy: served under a subpath it generates root-relative URLs for its dynamic assets, so the logo and the login break. Only the two tracker endpoints (`matomo.php`, `matomo.js`) are exposed publicly, same-origin. The dashboard is reached through an SSH tunnel, where Matomo runs at its own root exactly as it expects.
+
 ## Viewing statistics
 
 Tunnel as in step 1 and open `http://localhost:8081/`. The dashboard is not exposed publicly by design.

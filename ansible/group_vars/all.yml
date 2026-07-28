@@ -28,19 +28,6 @@ db_port: 5432
 matomo_port: 8081
 matomo_url: "/matomo/"
 matomo_site_id: "1"
-# TU Delft ranges allowed to reach the Matomo admin/reporting UI (the public
-# tracker endpoints stay open to everyone). Source: workspace/reit/wiki
-# tud-ip-address-ranges.md, plus 131.180.0.0/16 (this server's own block).
-matomo_ui_allow:
-  - 131.180.0.0/16   # TU campus (this server's range)
-  - 145.94.0.0/16    # TU intern
-  - 130.161.0.0/16   # TU intern
-  - 130.180.0.0/16   # TU intern
-  - 145.90.32.0/20   # eduVPN employees
-  - 145.90.48.0/21   # eduVPN students
-  - 2001:610:2200::/40      # TU intern (v6)
-  - 2001:610:450:a0::/64    # eduVPN employees (v6)
-  - 2001:610:450:a1::/64    # eduVPN students (v6)
 redis_host: localhost
 redis_port: 6379
 
