@@ -32,9 +32,17 @@ def test_both_pages_are_served_without_signing_in() -> None:
             assert response.status_code == 200, path
 
 
-def test_the_privacy_policy_names_a_controller_and_a_contact() -> None:
-    """The two things a reader needs in order to exercise any right."""
+def test_the_privacy_policy_names_a_controller_and_the_real_contacts() -> None:
+    """The contacts must be TU Delft's real ones, verified against the official
+    privacy statement (tudelft.nl/en/privacy-statement). Two fabricated
+    addresses shipped originally — a made-up contact in a live privacy policy is
+    worse than none."""
     privacy = (TEMPLATES_DIR / "privacy.html").read_text()
 
     assert "Data Controller" in privacy
-    assert "@tudelft.nl" in privacy, "there must be a way to get in touch"
+    # The verified official addresses.
+    assert "privacy-tud@tudelft.nl" in privacy, "GDPR-request contact"
+    assert "fg@tudelft.nl" in privacy, "the Data Protection Officer"
+    # The fabricated ones must not come back.
+    assert "functionarisgegevensbescherming@tudelft.nl" not in privacy
+    assert 'mailto:privacy@tudelft.nl"' not in privacy
