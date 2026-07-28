@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +55,13 @@ def token_from_header(header: str | None) -> str | None:
     return parts[1]
 
 
-async def issue_token(session: AsyncSession, user: User, *, name: str) -> tuple[str, ApiToken]:
+async def issue_token(
+    session: AsyncSession,
+    user: User,
+    *,
+    name: str,
+    expires_in_days: int | None = None,
+) -> tuple[str, ApiToken]:
     """Create a token for ``user`` and return ``(secret, record)``.
 
     The secret is the only time the caller sees it; it is not stored and cannot
@@ -65,9 +71,15 @@ async def issue_token(session: AsyncSession, user: User, *, name: str) -> tuple[
         session: Database session.
         user: The user the token acts as.
         name: What the user calls it, so two tokens are distinguishable.
+        expires_in_days: Lifetime in days. Omitted, the token lasts until
+            revoked -- which is what a token pasted into a config file and
+            forgotten then does forever.
     """
     secret = TOKEN_PREFIX + secrets.token_urlsafe(_TOKEN_BYTES)
-    token = ApiToken(user_id=user.id, name=name, token_hash=_hash(secret))
+    expires_at = (
+        datetime.now(UTC) + timedelta(days=expires_in_days) if expires_in_days is not None else None
+    )
+    token = ApiToken(user_id=user.id, name=name, token_hash=_hash(secret), expires_at=expires_at)
     session.add(token)
     await session.commit()
     await session.refresh(token)

@@ -135,3 +135,36 @@ async def test_deleting_a_user_takes_their_tokens_with_them(
     await session.commit()
 
     assert (await session.execute(select(ApiToken))).scalars().all() == []
+
+
+async def test_an_expired_token_stops_working(session: AsyncSession) -> None:
+    """A token pasted into a config file and forgotten was a working credential
+    forever. An expiry bounds that without anyone having to remember."""
+    from datetime import timedelta
+
+    user = await _user(session, "expiry@example.org")
+    secret, token = await issue_token(session, user, name="short-lived", expires_in_days=1)
+    assert await authenticate_token(session, secret) is not None, "valid before expiry"
+
+    token.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await session.commit()
+
+    assert await authenticate_token(session, secret) is None
+
+
+async def test_a_token_without_an_expiry_still_works(session: AsyncSession) -> None:
+    """Tokens issued before expiry existed must not silently die."""
+    user = await _user(session, "noexpiry@example.org")
+    secret, token = await issue_token(session, user, name="open-ended")
+
+    assert token.expires_at is None
+    assert await authenticate_token(session, secret) is not None
+
+
+async def test_an_expiry_is_recorded_when_asked_for(session: AsyncSession) -> None:
+    user = await _user(session, "dated@example.org")
+
+    _secret, token = await issue_token(session, user, name="30d", expires_in_days=30)
+
+    assert token.expires_at is not None
+    assert token.expires_at > datetime.now(UTC)
