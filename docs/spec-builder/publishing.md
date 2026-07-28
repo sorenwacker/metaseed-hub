@@ -13,7 +13,7 @@ When a draft is ready, click **Publish** in the editor. Publishing creates an im
 
 A published specification cannot be edited in place — this keeps datasets that reference it stable.
 
-Publishing changes who can see the specification. A draft is visible only to you and to anyone you have shared it with; a published specification is visible to **everyone in your tenant**. Publishing also consumes the draft: the draft is removed, and the published specification takes its place.
+Publishing consumes the draft: the draft is removed and the published specification takes its place. Until now that was one-way — there was no way to get the draft back.
 
 ## Viewing and forking published specifications
 
@@ -28,7 +28,8 @@ On a published specification you can:
 
 Unpublishing:
 
-- Removes the specification from **Published Specifications**, from the profile choices offered when creating a dataset, and from the Explorer. Nobody in the tenant can view it afterwards.
+- Removes the specification from **Published Specifications**, from the profile choices offered when creating a dataset, and from the Explorer.
+- Removes it for anyone you shared it with.
 - Creates a new draft owned by you, carrying the full specification, so no work is lost. You are taken straight to it.
 - Is available to the person who published the specification and to tenant admins and owners — the same people who may edit it.
 

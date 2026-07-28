@@ -1,12 +1,12 @@
 """Withdrawing a published spec back to a private draft.
 
-Publishing is the only irreversible visibility change in the hub: a draft only
-its author can see becomes a specification the whole tenant can see, and the
-draft is consumed. A user published something that should have stayed private
-and there was no way back short of hand-editing the database.
+Publishing is one-way: it replaces an editable draft with an immutable published
+specification and deletes the draft. A user published something by mistake and
+there was no way back short of hand-editing the database.
 
-The assertions here are about *who can see the spec afterwards*, not merely that
-a flag was set: a withdrawal that leaves the spec listed has not withdrawn it.
+The assertions here are about *whether the spec is still listed and offered*
+afterwards, not merely that a flag was set: a withdrawal that leaves the spec in
+the tenant listing has not withdrawn it.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _spec_data(name: str = "Secret", version: str = "1.0") -> dict:
 
 
 async def _published(session: AsyncSession, *, slug: str = "acme1234"):
-    """A tenant with a published spec and the colleague who can see it."""
+    """A tenant with a published spec, plus a second user as a non-owner."""
     tenant = make_tenant(slug=slug)
     session.add(tenant)
     await session.flush()
@@ -54,7 +54,7 @@ async def _visible_to_tenant(session: AsyncSession, tenant_id: str) -> list[Spec
 
 
 async def test_a_withdrawn_spec_leaves_the_tenant_listing(session: AsyncSession) -> None:
-    """The whole point: a colleague must stop seeing it."""
+    """The whole point: it must stop being listed and offered."""
     tenant, author, _colleague, spec = await _published(session)
     assert await _visible_to_tenant(session, tenant.id) != [], "precondition"
 

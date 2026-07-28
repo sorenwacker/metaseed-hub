@@ -434,16 +434,16 @@ async def unpublish_spec(
 ) -> SpecDraft:
     """Withdraw a published spec and hand it back as a private draft.
 
-    Publishing is the only irreversible visibility change in the hub: it turns a
-    draft that only its author could see into a specification every member of
-    the tenant can see, and consumes the draft doing it. This is the way back,
-    for a specification published by mistake or one that should have stayed
-    private.
+    Publishing is one-way: it replaces an editable draft with an immutable
+    published specification and deletes the draft, leaving no way back short of
+    editing the database by hand. This is the way back.
 
     The spec is soft-deleted rather than erased, so it leaves every tenant-scoped
-    query at once while an administrator can still account for what existed. The
-    specification itself is not lost: it returns as a draft owned by the caller,
-    who can fix whatever was wrong and publish again.
+    query at once — the Specs page, the profile choices for a new dataset, the
+    Explorer, and anyone it was shared with — while an administrator can still
+    account for what existed. The specification itself is not lost: it returns as
+    a draft owned by the caller, who can fix whatever was wrong and publish
+    again.
 
     Args:
         session: Database session.

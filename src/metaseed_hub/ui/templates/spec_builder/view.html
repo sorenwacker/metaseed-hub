@@ -35,7 +35,7 @@
             <a href="/hub/spec-builder" class="btn">Back to List</a>
             <form method="post" action="/hub/spec-builder/spec/{{ spec_record.id }}/unpublish"
                   style="display:inline"
-                  onsubmit="return confirm('Unpublish this specification?\n\nIt will no longer be visible to anyone else in your organisation, and can no longer be chosen for new datasets.\n\nIt comes back to you as a private draft, so nothing is lost.')">
+                  onsubmit="return confirm('Unpublish this specification?\n\nIt can no longer be chosen for new datasets, and anyone you shared it with loses access.\n\nIt comes back to you as a private draft, so nothing is lost.')">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-warning" title="Withdraw from the organisation, back to a private draft">Unpublish</button>
             </form>
