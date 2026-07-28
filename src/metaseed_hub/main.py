@@ -3,7 +3,7 @@
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import FastAPI, Query, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,11 +39,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await db.connect(settings.database_url, echo=settings.debug)
     await manager.connect_redis()
 
-    yield
+    # The MCP app is mounted, and a mounted sub-app's lifespan is not run by the
+    # parent. Its session manager therefore has to be started here, or every
+    # request to /hub/mcp fails with an uninitialised task group.
+    mcp_server = getattr(app.state, "mcp_server", None)
+    if mcp_server is None:
+        yield
+    else:
+        async with mcp_server.session_manager.run():
+            yield
 
     # Shutdown
     await manager.disconnect_redis()
     await db.disconnect()
+
+
+MCP_PATH = "/hub/mcp"
+
+
+class _AcceptMcpWithoutTrailingSlash:
+    """Let ``/hub/mcp`` reach the MCP app, not just ``/hub/mcp/``.
+
+    Starlette's ``Mount`` only matches when the remainder of the path begins
+    with a slash, so a request to the mount point exactly falls through to a
+    404. Clients are configured with the bare URL, and a 404 on the documented
+    address is not a failure anyone can diagnose.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") == "http" and scope.get("path") == MCP_PATH:
+            scope = {**scope, "path": MCP_PATH + "/"}
+        await self.app(scope, receive, send)
 
 
 def create_app() -> FastAPI:
@@ -93,7 +122,11 @@ def create_app() -> FastAPI:
     # so this must come first or /hub would swallow the path.
     from metaseed_hub.mcp import create_mcp_server
 
-    app.mount("/hub/mcp", create_mcp_server().streamable_http_app())
+    mcp_server = create_mcp_server()
+    # Kept on app.state so the lifespan above can start its session manager.
+    app.state.mcp_server = mcp_server
+    app.mount(MCP_PATH, mcp_server.streamable_http_app())
+    app.add_middleware(_AcceptMcpWithoutTrailingSlash)
 
     app.mount("/hub", hub_app)
 

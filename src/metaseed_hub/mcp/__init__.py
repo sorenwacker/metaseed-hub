@@ -25,6 +25,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import select
 
 from metaseed_hub.database import db
@@ -112,6 +113,15 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             "source states; leave unknown fields empty."
         ),
         stateless_http=True,
+        # Served at the mount root: the app is mounted at /hub/mcp, and the
+        # default of "/mcp" would put the endpoint at /hub/mcp/mcp.
+        streamable_http_path="/",
+        # The deployment sits behind a reverse proxy, so the Host the app sees
+        # is not the one the client dialled and the DNS-rebinding check rejects
+        # every request with 421. That check defends a *locally bound* server
+        # from a browser; this endpoint is authenticated by bearer token on
+        # every call, which is what actually protects it.
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
 
     @mcp.tool()
