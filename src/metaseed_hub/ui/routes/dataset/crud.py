@@ -2,6 +2,7 @@
 
 import copy
 import logging
+from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -404,6 +405,40 @@ async def create_dataset_from_accession(
     return dataset
 
 
+def _import_failure_message(exc: Exception, value: str) -> str:
+    """Explain an import failure in terms the user can act on.
+
+    The archives fail in a handful of distinguishable ways, and each points at a
+    different mistake: a 404 usually means the address is wrong rather than the
+    record missing, and HTML where JSON was expected means the URL is not an API
+    endpoint at all.
+    """
+    import html
+
+    detail = html.escape(str(exc)[:200])
+    safe_value = html.escape(value)
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+
+    if isinstance(exc, JSONDecodeError) or "JSONDecode" in type(exc).__name__:
+        return (
+            f"'{safe_value}' did not return JSON, so it is probably not an API "
+            "endpoint. For a BrAPI server the address must end in the API path, "
+            "for example <code>https://server.example.org/brapi/v2</code>."
+        )
+    if status == 404:
+        return (
+            f"Nothing at '{safe_value}' (404). For a BrAPI server, check the "
+            "address ends in <code>/brapi/v2</code>; for an accession, check it "
+            "exists in the archive."
+        )
+    if status in (401, 403):
+        return (
+            f"'{safe_value}' refused access ({status}). It may be a private "
+            "record or a server that requires a token."
+        )
+    return f"Import failed: {detail}"
+
+
 @router.post("/{dataset_id}/import-source", response_class=HTMLResponse)
 async def dataset_import_source(
     request: Request,
@@ -441,12 +476,14 @@ async def dataset_import_source(
             f"{dataset.profile} profile.</div>",
             status_code=404,
         )
-    except Exception:
-        # A bad accession or an archive outage must not 500 the page.
+    except Exception as exc:
+        # A bad accession or an archive outage must not 500 the page — but the
+        # message has to say what went wrong. "Check the identifier" sent people
+        # hunting for a bad accession when the real answer was a URL missing its
+        # /brapi/v2 suffix.
         logger.exception("Source import failed for %s:%s", dataset.profile, value)
         return HTMLResponse(
-            "<div class='notification error'>Import failed. Check the identifier "
-            "and try again.</div>",
+            f"<div class='notification error'>{_import_failure_message(exc, value)}</div>",
             status_code=502,
         )
 

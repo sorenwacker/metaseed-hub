@@ -205,3 +205,70 @@ async def test_an_import_that_found_nothing_leaves_the_dataset_alone(
 
     await session.refresh(dataset)
     assert not dataset.data.get("tree"), "an empty import was saved over the dataset"
+
+
+class _Response:
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+def _http_error(status: int) -> Exception:
+    exc = RuntimeError(f"Client error '{status}' for url")
+    exc.response = _Response(status)  # type: ignore[attr-defined]
+    return exc
+
+
+async def test_a_wrong_brapi_address_says_so_rather_than_blaming_the_identifier(
+    session: AsyncSession,
+) -> None:
+    """Reported: no BrAPI endpoint would work. A server URL missing its
+    ``/brapi/v2`` suffix 404s, and "check the identifier" sent the user hunting
+    for a bad accession instead of a bad address."""
+    dataset, token = await _dataset(session, profile="miappe")
+
+    def _not_found(_url: str, **_kw: object) -> MetaseedClient:
+        raise _http_error(404)
+
+    with patch("metaseed.brapi.import_brapi", _not_found):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="https://server.example.org"
+        )
+
+    body = response.body.decode()
+    assert "brapi/v2" in body, "the message must name the likely fix"
+    assert "404" in body
+
+
+async def test_an_address_that_is_not_an_api_says_so(session: AsyncSession) -> None:
+    """A server returning HTML gives a JSON decode error, which as a raw string
+    means nothing to a user."""
+    from json import JSONDecodeError
+
+    dataset, token = await _dataset(session, profile="miappe")
+
+    def _html(_url: str, **_kw: object) -> MetaseedClient:
+        raise JSONDecodeError("Expecting value", "<html>", 0)
+
+    with patch("metaseed.brapi.import_brapi", _html):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="https://example.org/germinate"
+        )
+
+    body = response.body.decode()
+    assert "not an API endpoint" in body or "not return JSON" in body
+
+
+async def test_a_private_record_is_distinguished_from_a_missing_one(
+    session: AsyncSession,
+) -> None:
+    dataset, token = await _dataset(session, profile="miappe")
+
+    def _forbidden(_url: str, **_kw: object) -> MetaseedClient:
+        raise _http_error(403)
+
+    with patch("metaseed.brapi.import_brapi", _forbidden):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="https://server.example.org/brapi/v2"
+        )
+
+    assert "refused access" in response.body.decode()
