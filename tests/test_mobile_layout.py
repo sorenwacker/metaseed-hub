@@ -85,3 +85,24 @@ def test_the_page_does_not_scroll_sideways() -> None:
     css = CSS.read_text()
 
     assert "overflow-x: hidden" in css
+
+
+def test_static_assets_are_cache_busted() -> None:
+    """The CSS is served `immutable` for a week on a URL with no version, so a
+    deploy's CSS never reached a returning browser until the cache expired —
+    the reason the mobile fixes appeared not to work. A version query string on
+    each asset URL forces a refetch when the release changes."""
+    base = (TEMPLATES_DIR / "base.html").read_text()
+
+    assert "hub.css?v=" in base, "the hub stylesheet must be cache-busted"
+    assert "style.css?v=" in base, "the core stylesheet must be cache-busted"
+
+
+def test_the_card_buttons_do_not_lower_their_text() -> None:
+    """padding-top on the CTA pushed the label to the bottom of the button;
+    spacing from the card must come from margin, not internal padding."""
+    css = CSS.read_text()
+
+    rule = css[css.index(".overview-card-cta {") :]
+    rule = rule[: rule.index("}")]
+    assert "padding-top" not in rule, "padding-top lowers the button text"
