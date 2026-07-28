@@ -20,10 +20,10 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from sqlalchemy.ext.asyncio import create_async_engine
+
 from metaseed_hub.models import Base
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -87,9 +87,9 @@ async def test_upgrade_head_succeeds_on_an_empty_database() -> None:
 
     result = _run_migrations()
 
-    assert (
-        result.returncode == 0
-    ), f"alembic upgrade head failed on a fresh database:\n{result.stdout}\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"alembic upgrade head failed on a fresh database:\n{result.stdout}\n{result.stderr}"
+    )
 
 
 @pytest.mark.asyncio
