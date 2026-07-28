@@ -7,8 +7,11 @@ import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.config import Settings, get_settings
+from metaseed_hub.database import get_session
+from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token
 
 security = HTTPBearer()
 
@@ -205,20 +208,49 @@ def get_oidc_auth(settings: Settings = Depends(get_settings)) -> OIDCAuth:
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     auth: Annotated[OIDCAuth, Depends(get_oidc_auth)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> TokenUser:
     """FastAPI dependency to get the current authenticated user.
+
+    Accepts either an OIDC access token or a personal access token. A browser
+    presents the first; a script or an agent cannot obtain one, because getting
+    it requires the interactive sign-in flow. Without the second the REST API is
+    reachable only from a browser session, which is why pushing a dataset from
+    the ``metaseed`` library had no usable credential.
 
     Args:
         credentials: HTTP Bearer credentials from request.
         auth: OIDCAuth instance.
+        session: Database session, for personal access tokens.
 
     Returns:
-        TokenUser extracted from the JWT token.
+        The authenticated user, whichever credential was presented.
 
     Raises:
-        HTTPException: If authentication fails.
+        HTTPException: If neither form authenticates.
     """
-    return await auth.verify_token(credentials.credentials)
+    presented = credentials.credentials
+
+    # Checked first and by prefix, so an OIDC failure is never reported for what
+    # is plainly a hub token, and a hub token is never sent to the IdP.
+    if presented.startswith(TOKEN_PREFIX):
+        user = await authenticate_token(session, presented)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="That access token is not valid, has expired, or was revoked.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return TokenUser(
+            sub=user.keycloak_id,
+            email=user.email,
+            name=user.display_name or user.email,
+            # Personal access tokens carry no roles: they act for the user's own
+            # data, and must not confer the admin role an OIDC token can.
+            roles=[],
+        )
+
+    return await auth.verify_token(presented)
 
 
 async def verify_token(token: str, settings: Settings | None = None) -> TokenUser:
