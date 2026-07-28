@@ -9,8 +9,7 @@ from fastapi import Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
-from metaseed_hub.config import get_settings
-from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
 
 HUB_REPO = "sorenwacker/metaseed-hub"
 _STARS_OK_TTL_SECONDS = 3600
@@ -136,20 +135,8 @@ def render_template(
         status_code=status_code,
     )
 
-    # Set the CSRF cookie whenever it differs from the embedded token. This
-    # issues a cookie on first visit and re-issues one when the stored value is
+    # Issues a cookie on first visit and re-issues one when the stored value is
     # missing or no longer carries a valid signature.
-    if request.cookies.get(CSRF_TOKEN_COOKIE) != csrf_token:
-        response.set_cookie(
-            key=CSRF_TOKEN_COOKIE,
-            value=csrf_token,
-            httponly=True,
-            # Match the access-token cookie: mark Secure in every non-debug
-            # deployment. Keying off request.url.scheme instead drops the flag
-            # behind a TLS-terminating proxy, where the app sees http.
-            secure=not get_settings().debug,
-            samesite="lax",
-            max_age=3600 * 24,  # 24 hours
-        )
+    set_csrf_cookie(request, response, csrf_token)
 
     return response

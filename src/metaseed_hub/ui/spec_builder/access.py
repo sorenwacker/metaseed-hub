@@ -425,3 +425,53 @@ async def get_draft_context(
         user_id=user_id,
         tenant_id=tenant_id,
     )
+
+
+async def unpublish_spec(
+    session: AsyncSession,
+    spec: Spec,
+    user_id: str,
+) -> SpecDraft:
+    """Withdraw a published spec and hand it back as a private draft.
+
+    Publishing is the only irreversible visibility change in the hub: it turns a
+    draft that only its author could see into a specification every member of
+    the tenant can see, and consumes the draft doing it. This is the way back,
+    for a specification published by mistake or one that should have stayed
+    private.
+
+    The spec is soft-deleted rather than erased, so it leaves every tenant-scoped
+    query at once while an administrator can still account for what existed. The
+    specification itself is not lost: it returns as a draft owned by the caller,
+    who can fix whatever was wrong and publish again.
+
+    Args:
+        session: Database session.
+        spec: The published spec to withdraw. Caller must already have checked
+            that this user may edit it.
+        user_id: Who is unpublishing, and who owns the resulting draft.
+
+    Returns:
+        The new private draft carrying the specification.
+
+    Raises:
+        ValueError: If the spec holds no usable specification, in which case
+            there is nothing to hand back and the withdrawal is not performed.
+    """
+    builder = SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
+    if builder.spec is None:
+        raise ValueError(f"Spec {spec.id} holds no specification to restore")
+
+    # Marked before create_new_draft commits, so the withdrawal and the draft
+    # land in one transaction: a failure must not leave the spec visible with a
+    # duplicate draft beside it, nor withdraw it with the work gone.
+    spec.soft_delete()
+
+    return await create_new_draft(
+        session,
+        user_id=user_id,
+        tenant_id=spec.tenant_id,
+        name=spec.name,
+        spec=builder.spec,
+        source_spec_id=spec.id,
+    )

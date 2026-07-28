@@ -11,12 +11,14 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
+from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
     can_access_tenant,
     can_edit_spec,
     create_new_draft,
     load_state_for_draft,
     save_state_to_draft,
+    unpublish_spec,
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
@@ -305,6 +307,43 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             spec=builder.spec,
             source_spec_id=spec.id,
         )
+
+        return RedirectResponse(url=f"/hub/spec-builder/{draft.id}", status_code=302)
+
+    @router.post("/spec/{spec_id}/unpublish", response_model=None)
+    async def unpublish_spec_endpoint(
+        request: Request,
+        spec_id: str,
+        session: SessionDep,
+        user_ctx: UserContextDep,
+    ) -> Response:
+        """Withdraw a published spec from the tenant, back to a private draft."""
+        user_id, _tenant_id = user_ctx
+
+        # A state change driven by a form post, so it needs the double-submit
+        # check: without it another site could withdraw a colleague's spec by
+        # pointing a form at this URL.
+        if not validate_csrf_token(request):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+        result = await session.execute(
+            select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
+        )
+        spec = result.scalar_one_or_none()
+
+        if not spec:
+            raise HTTPException(status_code=404, detail="Spec not found")
+
+        # The same people who may edit a spec may withdraw it: its publisher, and
+        # tenant admins and owners. Mere tenant membership is not enough, or any
+        # colleague could retract someone else's release.
+        if not await can_edit_spec(session, user_id, spec.id):
+            raise HTTPException(status_code=403, detail="Cannot unpublish this spec")
+
+        try:
+            draft = await unpublish_spec(session, spec, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         return RedirectResponse(url=f"/hub/spec-builder/{draft.id}", status_code=302)
 
