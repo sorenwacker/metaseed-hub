@@ -83,6 +83,15 @@ server {
 {% endfor %}
         deny all;
 
+        # Matomo ships its own CSP (which allows the 'unsafe-eval' its UI needs).
+        # Re-declaring headers here stops the server-level strict CSP from being
+        # inherited -- otherwise the browser enforces the intersection of both,
+        # strips 'unsafe-eval', and Matomo's login JavaScript silently fails.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
         proxy_pass http://127.0.0.1:{{ matomo_port }}/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
