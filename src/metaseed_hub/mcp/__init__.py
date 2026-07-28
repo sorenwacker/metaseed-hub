@@ -132,6 +132,64 @@ async def _snapshot(session: AsyncSession, dataset: Dataset, user: User) -> None
     )
 
 
+async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[str, Any]:
+    """What is wrong or missing in a dataset, in terms an agent can act on.
+
+    Structured issues plus one instruction, because a bare ``valid: false``
+    tells an agent nothing about what to do next -- and an agent that believes
+    it has finished stops, leaving a half-filled dataset that was reported as
+    saved.
+    """
+    from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+    state = await ensure_dataset_facade(dataset, session)
+    if state.facade is None:
+        return {
+            "valid": False,
+            "issues": [],
+            "next_step": (
+                f"The profile {dataset.profile!r} could not be loaded, so nothing "
+                "was checked. Confirm it exists with list_profiles."
+            ),
+        }
+
+    from metaseed import MetaseedClient
+
+    # ValidationResult, not a list: .issues is the sequence, and the object is
+    # truthy even when invalid, so iterating or testing it directly is wrong.
+    result = MetaseedClient.from_facade(state.facade).validate()
+    issues = list(result.issues)
+    # Passed through as metaseed reports them. The issues are already derived
+    # from the spec -- which field is required, which relationship needs a
+    # minimum -- so re-deriving any of it here would only let the two disagree.
+    # `rule` names the spec rule that failed and is the most actionable part.
+    reported = [
+        {
+            "entity_id": i.entity_id,
+            "field": i.field,
+            "rule": i.rule,
+            "message": i.message,
+        }
+        for i in issues
+    ]
+
+    if not reported:
+        return {"valid": True, "issues": [], "next_step": "Nothing is missing."}
+
+    # Grouped by the spec rule that failed, so an agent sees "3 required fields
+    # missing" rather than a flat list it has to re-read.
+    by_rule: dict[str, int] = {}
+    for issue in reported:
+        by_rule[issue["rule"]] = by_rule.get(issue["rule"], 0) + 1
+    summary = ", ".join(f"{count} x {rule}" for rule, count in sorted(by_rule.items()))
+    next_step = (
+        f"{len(reported)} item(s) still need attention ({summary}). Fill these "
+        "from the source. Leave a field empty rather than inventing a value; an "
+        "empty required field is a smaller problem than a wrong one."
+    )
+    return {"valid": False, "issues": reported, "next_step": next_step}
+
+
 def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
     """Build the hub's MCP server.
 
@@ -261,7 +319,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             flag_modified(dataset, "data")
             await session.commit()
             logger.info("mcp: %s saved dataset %r (%d bytes)", user.email, name, size)
-            return json.dumps({"name": name, "saved": True, "bytes": size})
+
+            # Validated after the write, not before: a partially complete
+            # dataset is a normal intermediate state and refusing it would stop
+            # an agent working incrementally. Reporting what is still missing is
+            # what lets it finish the job instead of believing it is done.
+            report = await _validation_report(session, dataset)
+            return json.dumps({"name": name, "saved": True, "bytes": size, **report})
         raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
@@ -289,33 +353,10 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         Args:
             name: The dataset to validate, in the caller's workspace.
         """
-        from metaseed_hub.ui.helpers import ensure_dataset_facade
-
         async for session, user in _caller():
             dataset = await _owned_dataset(session, user, name)
-            state = await ensure_dataset_facade(dataset, session)
-            if state.facade is None:
-                raise ValueError(f"Could not load the profile {dataset.profile!r} for {name!r}")
-
-            from metaseed import MetaseedClient
-
-            client = MetaseedClient.from_facade(state.facade)
-            issues = client.validate()
-            return json.dumps(
-                {
-                    "name": name,
-                    "valid": not issues,
-                    "issues": [
-                        {
-                            "entity_type": getattr(i, "entity_type", None),
-                            "entity_id": getattr(i, "entity_id", None),
-                            "field": getattr(i, "field", None),
-                            "message": getattr(i, "message", str(i)),
-                        }
-                        for i in (issues or [])
-                    ],
-                }
-            )
+            report = await _validation_report(session, dataset)
+            return json.dumps({"name": name, **report})
         raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
@@ -361,8 +402,33 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                     "name": spec.name,
                     "version": spec.version,
                     "root_entity": spec.root_entity,
+                    "guidance": (
+                        f"Start from the root entity {spec.root_entity!r}. Only "
+                        "the entity types listed here exist; any other is "
+                        "rejected. Fill the fields marked required, and leave "
+                        "anything the source does not state empty rather than "
+                        "inventing a value."
+                    ),
                     "entities": {
-                        entity_name: [f.codename for f in entity.fields]
+                        entity_name: {
+                            "description": entity.description,
+                            # Required first: it is the order the fields should
+                            # be filled in, and the ones an agent must not skip.
+                            "fields": sorted(
+                                (
+                                    {
+                                        "codename": f.codename,
+                                        "name": f.name,
+                                        "type": f.type,
+                                        "required": bool(f.required),
+                                        "description": f.description,
+                                        "ontology_term": f.ontology_term,
+                                    }
+                                    for f in entity.fields
+                                ),
+                                key=lambda f: (not f["required"], f["codename"]),
+                            ),
+                        }
                         for entity_name, entity in spec.entities.items()
                     },
                 }
