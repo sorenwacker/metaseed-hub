@@ -46,6 +46,17 @@ An agent replaces a whole dataset in one call, and can do it in a loop, so the w
 
 A token reaches only its own user's datasets. Another person's dataset is not readable, writable, or deletable, and a name that exists in someone else's workspace reads as absent.
 
+## Using a token with the REST API
+
+The same token authenticates the REST API at `/api`, so a script can do anything the web interface can:
+
+```bash
+curl -H "Authorization: Bearer msh_your_token" \
+  https://metaseed.ewi.tudelft.nl/api/datasets
+```
+
+The hub accepts exactly two credentials: a SRAM access token, which a browser obtains through the sign-in flow, and a token from this page. A token acts for your own data only and never carries administrator rights, whatever your account holds.
+
 ## Revoking access
 
 Revoke a token from your profile. It stops working immediately; the record is kept so an administrator can see that it existed and when it was withdrawn.
