@@ -144,11 +144,11 @@ async def dataset_new(
                 }
             )
 
-    # Published specs owned by this tenant, offered as starting points.
+    # Every published spec, from any workspace, offered as a starting point:
+    # publishing is what makes a specification available to other people.
     specs_result = await session.execute(
         select(Spec)
         .where(
-            Spec.tenant_id == tenant.id,
             Spec.deleted_at.is_(None),
             Spec.status == SpecStatus.PUBLISHED,
         )

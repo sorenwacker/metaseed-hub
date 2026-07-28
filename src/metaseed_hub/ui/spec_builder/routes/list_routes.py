@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
@@ -71,16 +71,14 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
                 seen_ids.add(draft.id)
                 drafts.append(draft)
 
-        # Specs in this workspace, plus any this user authored elsewhere.
-        # Publishing a draft shared with you puts the specification in the
-        # workspace it was shared from, so an author who only ever saw their own
-        # workspace watched their work disappear on publish. Authorship is not a
-        # privilege escalation: it is their own writing.
+        # Every published specification, from every workspace. Publishing is
+        # how a specification is shared with the other people on the platform;
+        # a draft is the private form. Scoping this to the caller's own
+        # workspace made publishing a no-op that only its author could observe.
         result = await session.execute(
             select(Spec)
             .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
             .where(
-                or_(Spec.tenant_id == tenant_id, Spec.created_by_id == user_id),
                 Spec.deleted_at.is_(None),
                 Spec.status == SpecStatus.PUBLISHED,
             )

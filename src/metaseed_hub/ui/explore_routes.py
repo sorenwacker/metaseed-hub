@@ -88,7 +88,7 @@ async def load_profile_spec(
         Tuple of (display_name, ProfileSpec) or None if not found or not
         accessible to the caller's tenant.
     """
-    from metaseed_hub.models import Spec, SpecDraft
+    from metaseed_hub.models import Spec, SpecDraft, SpecStatus
 
     if profile_key.startswith("draft:"):
         if tenant_id is None:
@@ -108,13 +108,14 @@ async def load_profile_spec(
         return None
 
     elif profile_key.startswith("spec:"):
-        if tenant_id is None:
-            return None
+        # A published specification is readable by anyone, which is what
+        # publishing means. Drafts above stay scoped to the caller's workspace:
+        # those are the private form and must not be reachable by id.
         spec_id = profile_key[5:]
         result = await session.execute(
             select(Spec).where(
                 Spec.id == spec_id,
-                Spec.tenant_id == tenant_id,
+                Spec.status == SpecStatus.PUBLISHED,
                 Spec.deleted_at.is_(None),
             )
         )
@@ -226,7 +227,6 @@ async def _build_explore_catalog(
 
         specs_result = await session.execute(
             select(Spec).where(
-                Spec.tenant_id == tenant.id,
                 Spec.status == SpecStatus.PUBLISHED,
                 Spec.deleted_at.is_(None),
             )

@@ -13,7 +13,6 @@ from starlette.responses import Response
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
-    can_access_tenant,
     can_edit_spec,
     create_new_draft,
     load_state_for_draft,
@@ -254,9 +253,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if not spec:
             raise HTTPException(status_code=404, detail="Spec not found")
 
-        if not await can_access_tenant(session, user_id, spec.tenant_id):
-            raise HTTPException(status_code=403, detail="Access denied")
-
+        # No tenant check: a published specification is readable by every
+        # signed-in user, which is what publishing it means. Editing and
+        # unpublishing still go through can_edit_spec, so only its author or a
+        # tenant admin can change it.
         builder = (
             SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
         )
@@ -281,7 +281,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         user_ctx: UserContextDep,
     ) -> Response:
         """Create a draft from a published spec for editing."""
-        user_id, _tenant_id = user_ctx
+        user_id, tenant_id = user_ctx
 
         result = await session.execute(
             select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
@@ -291,9 +291,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if not spec:
             raise HTTPException(status_code=404, detail="Spec not found")
 
-        if not await can_access_tenant(session, user_id, spec.tenant_id):
-            raise HTTPException(status_code=403, detail="Access denied")
-
+        # Anyone may fork a published specification; that is the point of
+        # publishing one. No tenant check, and the copy is created below in the
+        # forker's own workspace rather than the original author's.
         builder = (
             SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
         )
@@ -301,10 +301,13 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if builder.spec is None:
             raise HTTPException(status_code=400, detail="Invalid spec data")
 
+        # The forker's own workspace, not the source spec's: a fork is the
+        # forker's copy. Taking the source's tenant would put their work in
+        # someone else's workspace, where they could not find it.
         draft = await create_new_draft(
             session,
             user_id=user_id,
-            tenant_id=spec.tenant_id,
+            tenant_id=tenant_id,
             name=spec.name,
             spec=builder.spec,
             source_spec_id=spec.id,

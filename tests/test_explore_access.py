@@ -58,8 +58,15 @@ async def test_draft_not_loaded_for_other_tenant(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_spec_not_loaded_for_other_tenant(session: AsyncSession) -> None:
-    """A published spec owned by another tenant is not returned."""
+async def test_a_published_spec_loads_for_any_tenant(session: AsyncSession) -> None:
+    """Publishing shares a specification with everyone on the platform.
+
+    This assertion was previously the opposite: a published spec was not
+    returned outside its own workspace. That made publishing unobservable to
+    anyone but its author, which was never the intent — a draft is the private
+    form, and publishing is what makes a specification available to others.
+    Drafts remain scoped, which the tests above cover.
+    """
     owner_tenant = make_tenant(slug="owner456")
     other_tenant = make_tenant(slug="other456")
     session.add_all([owner_tenant, other_tenant])
@@ -73,7 +80,33 @@ async def test_spec_not_loaded_for_other_tenant(session: AsyncSession) -> None:
 
     loaded = await load_profile_spec(session, f"spec:{spec.id}", "1.0", other_tenant.id)
 
-    assert loaded is None
+    assert loaded is not None
+    assert "Published" in loaded[0]
+
+
+@pytest.mark.asyncio
+async def test_an_unpublished_spec_is_not_loadable_by_id(session: AsyncSession) -> None:
+    """Only PUBLISHED status is shared. A spec in any other state stays private
+    even though the lookup is no longer scoped by workspace."""
+    from metaseed_hub.models import SpecStatus
+
+    owner_tenant = make_tenant(slug="owner457")
+    other_tenant = make_tenant(slug="other457")
+    session.add_all([owner_tenant, other_tenant])
+    await session.flush()
+    owner = make_user(tenant=owner_tenant)
+    session.add(owner)
+    await session.flush()
+    spec = make_spec(
+        tenant=owner_tenant,
+        created_by=owner,
+        spec_data=_spec_data(),
+        status=SpecStatus.DRAFT,
+    )
+    session.add(spec)
+    await session.commit()
+
+    assert await load_profile_spec(session, f"spec:{spec.id}", "1.0", other_tenant.id) is None
 
 
 @pytest.mark.asyncio

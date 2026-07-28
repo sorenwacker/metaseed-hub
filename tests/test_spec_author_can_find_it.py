@@ -14,7 +14,7 @@ and name the workspace it lives in so the split is visible rather than inferred.
 from __future__ import annotations
 
 from metaseed.specs.schema import ProfileSpec
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Spec, SpecStatus
@@ -27,10 +27,14 @@ def _spec_data() -> dict:
 
 
 async def _listed_for(session: AsyncSession, user_id: str, tenant_id: str) -> list[Spec]:
-    """Exactly what ``spec_builder_list`` selects."""
+    """Exactly what ``spec_builder_list`` selects: every published spec.
+
+    The arguments are kept so each test still states whose page is rendered,
+    even though the query no longer narrows by them - publishing shares a
+    specification with everyone on the platform.
+    """
     result = await session.execute(
         select(Spec).where(
-            or_(Spec.tenant_id == tenant_id, Spec.created_by_id == user_id),
             Spec.deleted_at.is_(None),
             Spec.status == SpecStatus.PUBLISHED,
         )
@@ -78,8 +82,11 @@ async def test_the_owner_still_sees_it(session: AsyncSession) -> None:
     assert [s.name for s in listed] == ["acdc"]
 
 
-async def test_an_unrelated_person_sees_neither(session: AsyncSession) -> None:
-    """Authorship widens the query, so it must not widen it to everyone."""
+async def test_everyone_sees_a_published_spec(session: AsyncSession) -> None:
+    """Publishing shares a specification with the whole platform, so someone
+    unconnected to it sees it too. This assertion was previously the opposite:
+    publishing used to be observable only to its author, which was never what
+    it was meant to do."""
     owner_tenant, _owner, _author_tenant, author = await _two_workspaces(session)
     spec = make_spec(tenant=owner_tenant, created_by=author, name="acdc", spec_data=_spec_data())
     session.add(spec)
@@ -92,7 +99,7 @@ async def test_an_unrelated_person_sees_neither(session: AsyncSession) -> None:
 
     listed = await _listed_for(session, stranger.id, stranger_tenant.id)
 
-    assert listed == []
+    assert [s.name for s in listed] == ["acdc"]
 
 
 async def test_the_workspace_owner_is_identifiable(session: AsyncSession) -> None:
