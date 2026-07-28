@@ -78,13 +78,20 @@ async def render_with_context(
 ) -> Response:
     """Render template with version info, nav_active, and user included."""
     from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+    from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
     from metaseed_hub.ui.render import get_version_info
 
     context["version_info"] = get_version_info()
     context["nav_active"] = "spec-builder"
     if "user" not in context:
         context["user"] = await get_current_user_from_cookie(request)
-    return templates.TemplateResponse(request, template, context)
+    # Spec-builder templates render state-changing forms (Unpublish), so they
+    # need the token the double-submit check compares against. Without it the
+    # hidden field renders empty and every such form is rejected.
+    context["csrf_token"] = get_or_create_csrf_token(request)
+    response = templates.TemplateResponse(request, template, context)
+    set_csrf_cookie(request, response, context["csrf_token"])
+    return response
 
 
 RenderFunc = Callable[[Request, str, dict[str, Any]], Coroutine[Any, Any, Response]]

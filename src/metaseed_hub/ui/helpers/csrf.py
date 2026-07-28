@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import secrets
 
-from fastapi import Request
+from fastapi import Request, Response
 
 from metaseed_hub.config import get_settings
 
@@ -85,3 +85,31 @@ def validate_csrf_token(request: Request, form_token: str | None = None) -> bool
 
     # Constant-time comparison to prevent timing attacks
     return secrets.compare_digest(cookie_token, token)
+
+
+def set_csrf_cookie(request: Request, response: Response, token: str) -> None:
+    """Issue the CSRF cookie when it differs from the token embedded in the page.
+
+    The double-submit check compares the form field against this cookie, so any
+    renderer that embeds a token must also make sure the cookie carries it. One
+    helper rather than a copy per renderer, because the two must agree: a page
+    rendered with a token the cookie does not match has every form rejected.
+
+    Args:
+        request: The incoming request, for the cookie already presented.
+        response: The response to set the cookie on.
+        token: The signed token embedded in the rendered page.
+    """
+    if request.cookies.get(CSRF_TOKEN_COOKIE) == token:
+        return
+    response.set_cookie(
+        key=CSRF_TOKEN_COOKIE,
+        value=token,
+        httponly=True,
+        # Match the access-token cookie: mark Secure in every non-debug
+        # deployment. Keying off request.url.scheme instead drops the flag
+        # behind a TLS-terminating proxy, where the app sees http.
+        secure=not get_settings().debug,
+        samesite="lax",
+        max_age=3600 * 24,  # 24 hours
+    )

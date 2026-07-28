@@ -58,7 +58,7 @@
                     hx-post="/hub/spec-builder/{{ draft_id }}/publish"
                     hx-target="#notification-container"
                     hx-swap="beforeend"
-                    onclick="return confirm('Publish this specification?')"
+                    onclick="return confirm('Publish this specification?\n\nThis draft is replaced by an immutable published specification, which can then be chosen as the profile for new datasets and is visible to anyone you have shared it with.\n\nYou can undo this with Unpublish, which brings it back as a draft.')"
                     title="Publish specification">Publish</button>
         </div>
     </div>

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -613,7 +614,17 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
 
     __tablename__ = "specs"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "name", "version", name="uq_specs_tenant_name_version"),
+        # Partial, so a withdrawn spec stops reserving its name: unpublishing
+        # sets deleted_at, and republishing the same specification afterwards
+        # must not collide with a row nobody can see.
+        Index(
+            "uq_specs_tenant_name_version",
+            "tenant_id",
+            "name",
+            "version",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_specs_tenant_id", "tenant_id"),
         Index("ix_specs_created_by_id", "created_by_id"),
     )
