@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -321,6 +323,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         spec_id: str,
         session: SessionDep,
         user_ctx: UserContextDep,
+        csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
     ) -> Response:
         """Withdraw a published spec from the tenant, back to a private draft."""
         user_id, _tenant_id = user_ctx
@@ -328,7 +331,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         # A state change driven by a form post, so it needs the double-submit
         # check: without it another site could withdraw a colleague's spec by
         # pointing a form at this URL.
-        if not validate_csrf_token(request):
+        # The token must be read from the form field. validate_csrf_token only
+        # looks at an X-CSRF-Token header otherwise, and this is an ordinary form
+        # post, so passing request alone rejected every legitimate attempt.
+        if not validate_csrf_token(request, csrf_token):
             raise HTTPException(status_code=403, detail="CSRF validation failed")
 
         result = await session.execute(
