@@ -27,7 +27,7 @@ db_port: 5432
 # tracker. matomo_db_password lives in the vaulted secrets file.
 matomo_port: 8081
 matomo_url: "/matomo/"
-matomo_site_id: ""
+matomo_site_id: "1"
 redis_host: localhost
 redis_port: 6379
 
