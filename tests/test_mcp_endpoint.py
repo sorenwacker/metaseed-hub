@@ -471,3 +471,253 @@ class TestFeedback:
         assert any(f["required"] for f in fields), "required fields must be flagged"
         assert fields[0]["required"], "required fields come first"
         assert "guidance" in result
+
+
+class TestEntityTools:
+    """Editing one entity without rewriting the dataset.
+
+    With only save_dataset an agent had to resend everything to change a field,
+    which overwrites whatever else changed meanwhile. These assert the entity
+    actually lands in the stored dataset, not merely that the call returned.
+    """
+
+    async def _dataset(self, session: AsyncSession, *, slug: str, name: str):
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug=slug, email=f"{slug}@example.org"
+        )
+        session.add(make_dataset(tenant=tenant, name=name, profile="miappe", version="1.1"))
+        await session.commit()
+        return tenant, secret
+
+    async def _stored(self, name: str) -> dict:
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+
+        async with db.session_factory() as check:
+            row = (await check.execute(select(Dataset).where(Dataset.name == name))).scalar_one()
+            return row.data or {}
+
+    async def test_creating_an_entity_persists_it(self, server, session: AsyncSession) -> None:
+        _t, secret = await self._dataset(session, slug="ent00001", name="ds1")
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret):
+            result = json.loads(await create("ds1", "Investigation", {"title": "My study"}))
+
+        assert result["entity_type"] == "Investigation"
+        entities = (await self._stored("ds1"))["entities"]
+        assert [e["_type"] for e in entities] == ["Investigation"]
+        assert entities[0]["title"] == "My study"
+
+    async def test_creating_an_entity_reports_what_is_still_missing(
+        self, server, session: AsyncSession
+    ) -> None:
+        """An incomplete entity is accepted, but the agent is told."""
+        _t, secret = await self._dataset(session, slug="ent00002", name="ds2")
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret):
+            result = json.loads(await create("ds2", "Investigation", {}))
+
+        assert result["valid"] is False
+        assert any(i["rule"] == "required_fields" for i in result["issues"])
+
+    async def test_updating_leaves_other_fields_alone(self, server, session: AsyncSession) -> None:
+        """The whole point of entity-level editing."""
+        _t, secret = await self._dataset(session, slug="ent00003", name="ds3")
+
+        create = await _tool(server, "create_entity")
+        update = await _tool(server, "update_entity")
+        with _calling_with(secret):
+            created = json.loads(
+                await create("ds3", "Investigation", {"title": "Keep", "unique_id": "U1"})
+            )
+            await update("ds3", created["id"], {"unique_id": "U2"})
+
+        entity = (await self._stored("ds3"))["entities"][0]
+        assert entity["unique_id"] == "U2", "the named field changed"
+        assert entity["title"] == "Keep", "the unnamed field survived"
+
+    async def test_deleting_removes_only_that_entity(self, server, session: AsyncSession) -> None:
+        _t, secret = await self._dataset(session, slug="ent00004", name="ds4")
+
+        create = await _tool(server, "create_entity")
+        delete = await _tool(server, "delete_entity")
+        with _calling_with(secret):
+            a = json.loads(await create("ds4", "Investigation", {"title": "A"}))
+            await create("ds4", "Investigation", {"title": "B"})
+            await delete("ds4", a["id"])
+
+        titles = [e["title"] for e in (await self._stored("ds4"))["entities"]]
+        assert titles == ["B"]
+
+    async def test_an_edit_snapshots_the_previous_state(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Entity edits are many small writes; each must stay recoverable."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import DatasetVersion
+
+        _t, secret = await self._dataset(session, slug="ent00005", name="ds5")
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret):
+            await create("ds5", "Investigation", {"title": "One"})
+            await create("ds5", "Investigation", {"title": "Two"})
+
+        async with db.session_factory() as check:
+            versions = (await check.execute(select(DatasetVersion))).scalars().all()
+        assert len(versions) == 2, "each edit leaves a way back"
+
+    async def test_entities_can_be_listed_and_read(self, server, session: AsyncSession) -> None:
+        _t, secret = await self._dataset(session, slug="ent00006", name="ds6")
+
+        create = await _tool(server, "create_entity")
+        listing = await _tool(server, "list_entities")
+        get = await _tool(server, "get_entity")
+        with _calling_with(secret):
+            made = json.loads(await create("ds6", "Investigation", {"title": "Findable"}))
+            listed = json.loads(await listing("ds6"))
+            one = json.loads(await get("ds6", made["id"]))
+
+        assert [e["entity_type"] for e in listed["entities"]] == ["Investigation"]
+        assert one["data"]["title"] == "Findable"
+
+    async def test_another_users_dataset_cannot_be_edited(
+        self, server, session: AsyncSession
+    ) -> None:
+        _ta, secret_a = await self._dataset(session, slug="ent00007", name="mine")
+        tenant_b, _ub, _sb, _b = await _user_with_token(
+            session, slug="ent00008", email="other@example.org"
+        )
+        session.add(make_dataset(tenant=tenant_b, name="theirs", profile="miappe"))
+        await session.commit()
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret_a), pytest.raises(ValueError, match="No dataset named"):
+            await create("theirs", "Investigation", {"title": "nope"})
+
+
+class TestSpecTools:
+    """Building a specification through the agent.
+
+    The logic is metaseed's ``SpecBuilder``, already shared with the web UI; the
+    hub adds loading and saving. So these assert the draft in the database
+    actually changed, which is the only part the hub is responsible for.
+    """
+
+    async def _drafting(self, server, session: AsyncSession, *, slug: str, name: str):
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug=slug, email=f"{slug}@example.org"
+        )
+        create = await _tool(server, "spec_create")
+        with _calling_with(secret):
+            await create(name, "1.0", "a test specification")
+        return secret
+
+    async def _spec_of(self, name: str) -> dict:
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import SpecDraft
+
+        async with db.session_factory() as check:
+            draft = (
+                await check.execute(select(SpecDraft).where(SpecDraft.name == name))
+            ).scalar_one()
+            return draft.spec_data["spec"]
+
+    async def test_a_draft_is_created(self, server, session: AsyncSession) -> None:
+        await self._drafting(server, session, slug="spec0001", name="MyProfile")
+
+        spec = await self._spec_of("MyProfile")
+        assert spec["name"] == "MyProfile"
+        assert spec["version"] == "1.0"
+
+    async def test_entities_and_fields_are_added(self, server, session: AsyncSession) -> None:
+        secret = await self._drafting(server, session, slug="spec0002", name="Built")
+
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Built", "Study", "One study")
+            await add_field("Built", "Study", "title", "string", required=True)
+
+        spec = await self._spec_of("Built")
+        assert "Study" in spec["entities"]
+        fields = spec["entities"]["Study"]["fields"]
+        assert [f["name"] for f in fields] == ["title"]
+        assert fields[0]["required"] is True
+
+    async def test_the_root_entity_can_be_set(self, server, session: AsyncSession) -> None:
+        secret = await self._drafting(server, session, slug="spec0003", name="Rooted")
+
+        add_entity = await _tool(server, "spec_add_entity")
+        set_root = await _tool(server, "spec_set_root_entity")
+        with _calling_with(secret):
+            await add_entity("Rooted", "Investigation")
+            await set_root("Rooted", "Investigation")
+
+        assert (await self._spec_of("Rooted"))["root_entity"] == "Investigation"
+
+    async def test_validation_reports_metaseeds_answer_unchanged(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Whatever ``SpecBuilder.validate`` says, verbatim.
+
+        A spec with no entities validates clean — metaseed does not treat that
+        as a problem. The hub must not invent a rule of its own here: a second
+        source of truth about what makes a spec valid would drift from the one
+        that actually builds the models.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        secret = await self._drafting(server, session, slug="spec0004", name="Empty")
+
+        validate = await _tool(server, "spec_validate")
+        with _calling_with(secret):
+            result = json.loads(await validate("Empty"))
+
+        assert result["problems"] == SpecBuilder.empty("Empty", "1.0").validate()
+        assert result["valid"] is True
+
+    async def test_a_bad_edit_is_refused_by_metaseed(self, server, session: AsyncSession) -> None:
+        """Rejections come from SpecBuilder too, and reach the agent as errors
+        rather than being silently swallowed."""
+        secret = await self._drafting(server, session, slug="spec0008", name="Strict")
+
+        set_root = await _tool(server, "spec_set_root_entity")
+        with _calling_with(secret), pytest.raises(ValueError, match="not found"):
+            await set_root("Strict", "NoSuchEntity")
+
+    async def test_yaml_can_be_previewed(self, server, session: AsyncSession) -> None:
+        secret = await self._drafting(server, session, slug="spec0005", name="Yamly")
+
+        add_entity = await _tool(server, "spec_add_entity")
+        preview = await _tool(server, "spec_preview_yaml")
+        with _calling_with(secret):
+            await add_entity("Yamly", "Study")
+            result = json.loads(await preview("Yamly"))
+
+        assert "Study" in result["yaml"]
+        assert "name: Yamly" in result["yaml"]
+
+    async def test_an_agent_cannot_publish(self, server) -> None:
+        """Publishing shares a specification with every user of the hub, so it
+        stays a human action taken in the web interface."""
+        names = {t.name for t in await server.list_tools()}
+
+        assert not any("publish" in n for n in names), (
+            f"no tool may publish: {[n for n in names if 'publish' in n]}"
+        )
+
+    async def test_another_users_draft_is_not_editable(self, server, session: AsyncSession) -> None:
+        secret_a = await self._drafting(server, session, slug="spec0006", name="Mine")
+        await self._drafting(server, session, slug="spec0007", name="Theirs")
+
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret_a), pytest.raises(ValueError, match="No specification draft"):
+            await add_entity("Theirs", "Sneaky")
