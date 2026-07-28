@@ -7302,6 +7302,11 @@ a.start-option-card:hover {
 
     .overview-code {
         font-size: 0.75rem;
+        /* The command overflowed off the right edge, clipped and unreadable.
+           Wrap it so the whole thing is visible; the backslash continuations
+           and newlines are preserved, so it still copies correctly. */
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
     }
 
     .connection-details th,
