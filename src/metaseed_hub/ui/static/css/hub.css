@@ -7160,3 +7160,151 @@ a.start-option-card:hover {
 .setup-steps .btn {
     justify-self: start;
 }
+
+/* ---------------------------------------------------------------------------
+   Mobile — the header nav had no small-screen handling, and the overview icons
+   stretched to their grid area's full height. This section fixes both.
+   --------------------------------------------------------------------------- */
+
+/* An SVG icon in a flex column or a multi-row grid cell stretches to the cross
+   axis / row height unless told not to. These are decorative marks at a fixed
+   size, so pin them in both axes everywhere, not only on mobile. */
+.overview-card-icon,
+.setup-step-icon {
+    flex: 0 0 auto;
+    align-self: start;
+}
+
+/* The hamburger is desktop-hidden; the mobile query below reveals it. */
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0.6rem;
+    cursor: pointer;
+    border-radius: var(--radius-sm, 6px);
+}
+
+.nav-toggle span {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--clr-ivory);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+@media (max-width: 768px) {
+    /* The fixed-height, no-wrap header would clip the dropdown; let it wrap and
+       grow so the nav can sit below the top row. */
+    .hub-header {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 56px;
+        gap: var(--space-md);
+    }
+
+    /* Header collapses to logo · hamburger · user; the breadcrumb chip is
+       redundant on a small screen. */
+    .nav-toggle {
+        display: flex;
+        margin-left: auto;
+        order: 2;
+    }
+
+    .header-breadcrumb {
+        display: none;
+    }
+
+    .hub-user {
+        order: 3;
+    }
+
+    /* The nav becomes a dropdown under the header, shown only when toggled. */
+    .hub-nav-global {
+        display: none;
+        order: 4;
+        flex-basis: 100%;
+        flex-direction: column;
+        gap: var(--space-xs);
+        padding: var(--space-sm) 0;
+    }
+
+    .nav-toggle-checkbox:checked ~ .hub-nav-global {
+        display: flex;
+    }
+
+    .nav-toggle-checkbox:checked ~ .nav-toggle span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+    }
+
+    .nav-toggle-checkbox:checked ~ .nav-toggle span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .nav-toggle-checkbox:checked ~ .nav-toggle span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+    }
+
+    .hub-nav-global .nav-btn {
+        width: 100%;
+    }
+
+    /* Landing hero and cards need room and smaller type on a phone. */
+    .landing {
+        padding: 0 var(--space-md) var(--space-xl);
+    }
+
+    .landing-hero {
+        padding: var(--space-xl) var(--space-sm);
+    }
+
+    .overview,
+    .overview-page {
+        padding: var(--space-md);
+    }
+
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Setup steps: a narrower icon rail, and buttons that fill the width so
+       they are easy to tap. */
+    .setup-steps {
+        padding-left: var(--space-md);
+    }
+
+    .setup-steps > li {
+        grid-template-columns: 1.75rem 1fr;
+        column-gap: var(--space-sm);
+    }
+
+    .setup-step-icon {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    .setup-steps .btn,
+    .overview-card-cta {
+        width: 100%;
+        justify-self: stretch;
+        text-align: center;
+    }
+
+    .overview-code {
+        font-size: 0.75rem;
+    }
+
+    .connection-details th,
+    .connection-details td {
+        display: block;
+        padding: 0;
+    }
+
+    .connection-details td {
+        margin-bottom: var(--space-sm);
+        word-break: break-all;
+    }
+}
