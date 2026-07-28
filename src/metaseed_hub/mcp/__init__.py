@@ -155,8 +155,8 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
 
     from metaseed import MetaseedClient
 
-    # ValidationResult, not a list: .issues is the sequence, and the object is
-    # truthy even when invalid, so iterating or testing it directly is wrong.
+    # ValidationResult, not a sequence: iterating it raises TypeError, so the
+    # issues are read from .issues. (bool(result) is valid/invalid correctly.)
     result = MetaseedClient.from_facade(state.facade).validate()
     issues = list(result.issues)
     # Passed through as metaseed reports them. The issues are already derived
