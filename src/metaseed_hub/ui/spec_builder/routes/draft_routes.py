@@ -19,6 +19,7 @@ from metaseed_hub.ui.spec_builder.access import (
     load_state_for_draft,
     save_state_to_draft,
     unpublish_spec,
+    workspace_owner,
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
@@ -267,6 +268,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "spec_record": spec,
                 "spec": builder.spec,
                 "tenant": spec.tenant,
+                "owner": await workspace_owner(session, spec.tenant_id),
                 "can_edit": await can_edit_spec(session, user_id, spec_id),
             },
         )

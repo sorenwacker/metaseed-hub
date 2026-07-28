@@ -22,6 +22,17 @@ On a published specification you can:
 - **View** — open it read-only to inspect its entities, fields, and rules.
 - **Fork** — create a new editable draft from it. Forking is how you make a new version of a published specification: edit the fork, then publish it as a new release. The published specification stays in place.
 
+## Who a published specification belongs to
+
+A published specification records two people, and they are not always the same:
+
+- The **author** — whoever published it.
+- The **workspace owner** — whose workspace it lives in.
+
+They differ when a draft shared with you is published: the specification stays in the workspace it was shared from, and you are recorded as its author. Both names appear on the specification, each linking to an email address, so anyone can reach the author to report a problem or the owner about the workspace.
+
+Your Specs page lists published specifications in your own workspace **and** any you authored elsewhere. Without that, publishing a shared draft made the specification vanish from the author's view entirely, with nothing to indicate where it had gone.
+
 ## Unpublishing
 
 **Unpublish** withdraws a published specification from the tenant and returns it to you as a private draft. Use it when something was published that should have stayed private, or when a release was made by mistake.

@@ -26,10 +26,23 @@
             {% endif %}
             <div class="spec-author">
                 {% if spec_record.created_at %}
-                Created by {{ spec_record.created_by.display_name if spec_record.created_by else 'Unknown' }}
+                Published by
+                {% if spec_record.created_by %}
+                <a href="mailto:{{ spec_record.created_by.email }}?subject=Specification%20{{ spec_record.name|urlencode }}%20v{{ spec_record.version|urlencode }}">{{ spec_record.created_by.display_name }}</a>
+                {% else %}Unknown{% endif %}
                 on {{ spec_record.created_at.strftime('%Y-%m-%d') }}
                 {% endif %}
             </div>
+            {% if owner %}
+            <div class="spec-owner">
+                In the workspace of
+                <a href="mailto:{{ owner.email }}?subject=Specification%20{{ spec_record.name|urlencode }}%20v{{ spec_record.version|urlencode }}">{{ owner.display_name }}</a>
+                {% if spec_record.created_by and owner.id != spec_record.created_by.id %}
+                &mdash; a specification published from a shared draft lives in the workspace it was
+                shared from, not the author's.
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
         <div class="header-right">
             <a href="/hub/spec-builder" class="btn">Back to List</a>
