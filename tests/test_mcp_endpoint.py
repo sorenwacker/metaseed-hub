@@ -284,3 +284,115 @@ class TestOverHTTP:
             )
 
         assert response.status_code == 404
+
+
+class TestHardening:
+    """What stops an agent doing irreversible damage to someone's work.
+
+    A tool call is not a person clicking a button: an agent can replace a whole
+    dataset in one step, and can do it in a loop. These verify the write path
+    leaves a way back and refuses obvious runaways.
+    """
+
+    async def test_an_overwrite_keeps_the_previous_contents(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The most dangerous thing here: save_dataset replaces everything."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import DatasetVersion
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="hard0001", email="h1@example.org"
+        )
+        original = {"entities": [{"type": "Investigation", "title": "keep me"}]}
+        session.add(make_dataset(tenant=tenant, name="overwritten", data=original))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            await save("overwritten", {"entities": []})
+
+        async with db.session_factory() as check:
+            versions = (await check.execute(select(DatasetVersion))).scalars().all()
+        assert len(versions) == 1, "the previous contents must be recoverable"
+        assert versions[0].data == original
+
+    async def test_an_unchanged_save_does_not_pile_up_versions(
+        self, server, session: AsyncSession
+    ) -> None:
+        """An agent that writes the same thing repeatedly must not bury the
+        history it exists to protect."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import DatasetVersion
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="hard0002", email="h2@example.org"
+        )
+        data = {"entities": [{"type": "Investigation"}]}
+        session.add(make_dataset(tenant=tenant, name="idempotent", data=data))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            await save("idempotent", data)
+            await save("idempotent", data)
+
+        async with db.session_factory() as check:
+            versions = (await check.execute(select(DatasetVersion))).scalars().all()
+        assert versions == []
+
+    async def test_an_oversized_dataset_is_refused(self, server, session: AsyncSession) -> None:
+        """A runaway loop should be stopped, not stored."""
+        from metaseed_hub.mcp import MAX_DATASET_BYTES
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="hard0003", email="h3@example.org"
+        )
+        session.add(make_dataset(tenant=tenant, name="big", data={}))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        huge = {"blob": "x" * (MAX_DATASET_BYTES + 1000)}
+        with _calling_with(secret), pytest.raises(ValueError, match="the limit is"):
+            await save("big", huge)
+
+    async def test_deleting_is_soft(self, server, session: AsyncSession) -> None:
+        """An agent must not be able to destroy work irrecoverably."""
+        from metaseed_hub.database import db
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="hard0004", email="h4@example.org"
+        )
+        dataset = make_dataset(tenant=tenant, name="removable")
+        session.add(dataset)
+        await session.commit()
+        dataset_id = dataset.id
+
+        delete = await _tool(server, "delete_dataset")
+        with _calling_with(secret):
+            await delete("removable")
+
+        async with db.session_factory() as check:
+            stored = await check.get(Dataset, dataset_id)
+            assert stored is not None, "soft, not erased"
+            assert stored.deleted_at is not None
+
+    async def test_another_users_dataset_cannot_be_deleted(
+        self, server, session: AsyncSession
+    ) -> None:
+        _ta, _ua, secret_a, _a = await _user_with_token(
+            session, slug="hard0005", email="h5@example.org"
+        )
+        tenant_b, _ub, _sb, _b = await _user_with_token(
+            session, slug="hard0006", email="h6@example.org"
+        )
+        session.add(make_dataset(tenant=tenant_b, name="not-yours"))
+        await session.commit()
+
+        delete = await _tool(server, "delete_dataset")
+        with _calling_with(secret_a), pytest.raises(ValueError, match="No dataset named"):
+            await delete("not-yours")

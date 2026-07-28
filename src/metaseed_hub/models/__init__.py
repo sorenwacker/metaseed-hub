@@ -1,6 +1,6 @@
 """SQLAlchemy models for metaseed-hub."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -408,13 +408,30 @@ class ApiToken(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    """When the token stops working on its own.
+
+    Nullable: tokens issued before expiry existed stay valid, because silently
+    killing someone's working credential is worse than the unbounded lifetime.
+    """
 
     user: Mapped["User"] = relationship("User", back_populates="api_tokens")
 
     @property
     def is_active(self) -> bool:
-        """Whether this token may still authenticate."""
-        return self.revoked_at is None
+        """Whether this token may still authenticate.
+
+        Expiry is checked here rather than in the query, so every caller gets
+        the same answer and none can forget it.
+        """
+        if self.revoked_at is not None:
+            return False
+        if self.expires_at is not None and self.expires_at <= datetime.now(UTC):
+            return False
+        return True
 
 
 class Note(TimestampMixin, Base):

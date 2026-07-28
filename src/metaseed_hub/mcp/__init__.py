@@ -22,6 +22,7 @@ left to fall back on would be somebody else's data.
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -29,7 +30,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from sqlalchemy import select
 
 from metaseed_hub.database import db
-from metaseed_hub.models import Dataset, Spec, SpecStatus, User
+from metaseed_hub.models import Dataset, DatasetVersion, Spec, SpecStatus, User
 from metaseed_hub.tokens import authenticate_token, token_from_header
 
 if TYPE_CHECKING:
@@ -95,6 +96,40 @@ async def _owned_dataset(session: AsyncSession, user: User, name: str) -> Datase
     if dataset is None:
         raise ValueError(f"No dataset named {name!r} in your workspace")
     return dataset
+
+
+logger = logging.getLogger("metaseed_hub")
+
+# An agent can generate a lot of text. A dataset far past this is a mistake or a
+# runaway loop, and refusing is kinder than letting it bloat the row.
+MAX_DATASET_BYTES = 5 * 1024 * 1024
+
+
+async def _snapshot(session: AsyncSession, dataset: Dataset, user: User) -> None:
+    """Record the dataset's current contents as a version, before overwriting.
+
+    An agent replaces a whole dataset in one call. Without a snapshot that is
+    unrecoverable, and the person whose data it is has no way back -- so every
+    write through this endpoint leaves the previous state in the same version
+    history the web UI shows.
+    """
+    from sqlalchemy import func
+
+    max_version = (
+        await session.execute(
+            select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
+                DatasetVersion.dataset_id == dataset.id
+            )
+        )
+    ).scalar() or 0
+    session.add(
+        DatasetVersion(
+            dataset_id=dataset.id,
+            version_number=max_version + 1,
+            data=dataset.data,
+            created_by_id=user.id,
+        )
+    )
 
 
 def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
@@ -203,15 +238,84 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
     async def save_dataset(name: str, data: dict[str, Any]) -> str:
         """Replace a dataset's contents.
 
+        The previous contents are kept as a version, so a mistaken overwrite can
+        be restored from the dataset's history in the web interface.
+
         Args:
             name: The dataset to write to, in the caller's workspace.
             data: The full dataset contents, replacing what is stored.
         """
+        from sqlalchemy.orm.attributes import flag_modified
+
+        size = len(json.dumps(data).encode())
+        if size > MAX_DATASET_BYTES:
+            raise ValueError(f"That dataset is {size} bytes; the limit is {MAX_DATASET_BYTES}.")
+
         async for session, user in _caller():
             dataset = await _owned_dataset(session, user, name)
+            if data != dataset.data:
+                await _snapshot(session, dataset, user)
             dataset.data = data
+            # JSONB is mutable in place; without this the assignment can be
+            # missed and the write silently does nothing.
+            flag_modified(dataset, "data")
             await session.commit()
-            return json.dumps({"name": name, "saved": True})
+            logger.info("mcp: %s saved dataset %r (%d bytes)", user.email, name, size)
+            return json.dumps({"name": name, "saved": True, "bytes": size})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def delete_dataset(name: str) -> str:
+        """Remove a dataset from the caller's workspace.
+
+        Soft: the dataset stops being listed but is not erased, so an agent
+        cannot destroy someone's work irrecoverably.
+
+        Args:
+            name: The dataset to remove.
+        """
+        async for session, user in _caller():
+            dataset = await _owned_dataset(session, user, name)
+            dataset.soft_delete()
+            await session.commit()
+            logger.info("mcp: %s deleted dataset %r", user.email, name)
+            return json.dumps({"name": name, "deleted": True})
+        raise NotAuthenticatedError("unreachable")
+
+    @mcp.tool()
+    async def validate_dataset(name: str) -> str:
+        """Check a dataset against its profile and report what is missing.
+
+        Args:
+            name: The dataset to validate, in the caller's workspace.
+        """
+        from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+        async for session, user in _caller():
+            dataset = await _owned_dataset(session, user, name)
+            state = await ensure_dataset_facade(dataset, session)
+            if state.facade is None:
+                raise ValueError(f"Could not load the profile {dataset.profile!r} for {name!r}")
+
+            from metaseed import MetaseedClient
+
+            client = MetaseedClient.from_facade(state.facade)
+            issues = client.validate()
+            return json.dumps(
+                {
+                    "name": name,
+                    "valid": not issues,
+                    "issues": [
+                        {
+                            "entity_type": getattr(i, "entity_type", None),
+                            "entity_id": getattr(i, "entity_id", None),
+                            "field": getattr(i, "field", None),
+                            "message": getattr(i, "message", str(i)),
+                        }
+                        for i in (issues or [])
+                    ],
+                }
+            )
         raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
