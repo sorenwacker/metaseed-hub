@@ -80,5 +80,29 @@
     <script src="/hub/hub-static/js/hub.js"></script>
     <script src="/static/js/lookup.js"></script>
     {% block scripts %}{% endblock %}
+
+    {# Matomo, only when a site id is configured. Cookieless (disableCookies),
+       so under GDPR/ePrivacy no consent banner is required, and served
+       same-origin so the strict CSP (script-src/connect-src 'self') allows it
+       without a third-party exception. #}
+    {% if matomo_site_id is defined and matomo_site_id %}
+    <script>
+      var _paq = window._paq = window._paq || [];
+      _paq.push(['disableCookies']);
+      _paq.push(['trackPageView']);
+      _paq.push(['enableLinkTracking']);
+      (function () {
+        var u = "{{ matomo_url }}";
+        _paq.push(['setTrackerUrl', u + 'matomo.php']);
+        _paq.push(['setSiteId', '{{ matomo_site_id }}']);
+        var d = document,
+          g = d.createElement('script'),
+          s = d.getElementsByTagName('script')[0];
+        g.async = true;
+        g.src = u + 'matomo.js';
+        s.parentNode.insertBefore(g, s);
+      })();
+    </script>
+    {% endif %}
 </body>
 </html>

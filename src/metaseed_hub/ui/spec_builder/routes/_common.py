@@ -89,6 +89,11 @@ async def render_with_context(
     # need the token the double-submit check compares against. Without it the
     # hidden field renders empty and every such form is rejected.
     context["csrf_token"] = get_or_create_csrf_token(request)
+    from metaseed_hub.config import get_settings
+
+    _settings = get_settings()
+    context.setdefault("matomo_url", _settings.matomo_url)
+    context.setdefault("matomo_site_id", _settings.matomo_site_id)
     response = templates.TemplateResponse(request, template, context)
     set_csrf_cookie(request, response, context["csrf_token"])
     return response
