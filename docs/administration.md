@@ -18,6 +18,12 @@ The dashboard reports aggregated counts and directory information only; it does 
 
 The **Datasets** column counts the datasets in that user's own workspace, excluding deleted ones. Every user gets a workspace of their own on first sign-in, and that workspace is what owns a dataset, so this is the count of datasets the user created rather than of datasets they can see. A dataset shared with them belongs to the workspace of whoever created it and is counted there.
 
+### Specifications per user
+
+The **Specs** column counts the published specifications that user **authored**, wherever they live. Authorship rather than workspace, because the two can differ: publishing a draft shared from another workspace puts the specification in that workspace while recording the publisher as its author.
+
+Withdrawn and unpublished specifications are excluded, so the column reports what is actually published.
+
 ### Last sign-in
 
 The **Last sign-in** column records when the user last completed the sign-in flow, not their last request. It is written once per sign-in, so an active session that has run for days still shows the sign-in that started it, and a user who stays signed in shows an older date than their real activity.

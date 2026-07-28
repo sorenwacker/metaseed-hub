@@ -21,7 +21,7 @@ from sqlalchemy.orm import selectinload
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, ErrorEvent, Spec, User
+from metaseed_hub.models import Dataset, ErrorEvent, Spec, SpecStatus, User
 from metaseed_hub.ui.dependencies import require_user
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -116,6 +116,30 @@ async def _dataset_counts_by_user(session: AsyncSession) -> dict[str, int]:
         select(User.id, func.count(Dataset.id))
         .join(Dataset, Dataset.tenant_id == User.tenant_id)
         .where(User.deleted_at.is_(None), Dataset.deleted_at.is_(None))
+        .group_by(User.id)
+    )
+    return {user_id: count for user_id, count in result.all()}
+
+
+async def _spec_counts_by_user(session: AsyncSession) -> dict[str, int]:
+    """Return ``{user_id: published spec count}`` for every user who wrote one.
+
+    Counted by ``created_by_id``, the author, rather than by tenant as datasets
+    are. The two differ: publishing a draft shared from another workspace puts
+    the specification in *that* workspace while recording the publisher as its
+    author, so counting by tenant would credit it to the wrong person.
+
+    Withdrawn specifications are excluded, so the column matches what is
+    actually published.
+    """
+    result = await session.execute(
+        select(User.id, func.count(Spec.id))
+        .join(Spec, Spec.created_by_id == User.id)
+        .where(
+            User.deleted_at.is_(None),
+            Spec.deleted_at.is_(None),
+            Spec.status == SpecStatus.PUBLISHED,
+        )
         .group_by(User.id)
     )
     return {user_id: count for user_id, count in result.all()}
@@ -306,6 +330,7 @@ async def admin_dashboard(
             "dataset_activity": dataset_activity,
             "users": users,
             "dataset_counts": await _dataset_counts_by_user(session),
+            "spec_counts": await _spec_counts_by_user(session),
             "recent_errors": await _recent_errors(session),
             "error_counts": await _error_counts_by_day(session),
             "using_default_secret_key": get_settings().using_default_secret_key,
