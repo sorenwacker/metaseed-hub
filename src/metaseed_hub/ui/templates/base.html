@@ -17,6 +17,12 @@
             <a href="/hub/home" class="hub-logo">
                 <img src="/hub/hub-static/images/metaseed-logo-light.svg" alt="Metaseed Hub" class="hub-logo-img">
             </a>
+            {# No-JS hamburger: a checkbox the label toggles, shown only on mobile.
+               The nav drops down when it is checked. #}
+            <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox" hidden>
+            <label for="nav-toggle" class="nav-toggle" aria-label="Toggle navigation">
+                <span></span><span></span><span></span>
+            </label>
             <nav class="hub-nav-global">
                 {# Signed out these lead nowhere useful: Datasets is the landing page
                    itself, so clicking it appears to do nothing, and the rest bounce
