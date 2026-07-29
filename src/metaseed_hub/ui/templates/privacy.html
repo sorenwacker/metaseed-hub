@@ -6,7 +6,7 @@
 <div class="policy-container">
     <article class="policy-content">
         <h1>Privacy Policy</h1>
-        <p class="policy-meta">Last updated: April 2026</p>
+        <p class="policy-meta">Last updated: July 2026</p>
 
         <section>
             <h2>1. Introduction</h2>
@@ -42,8 +42,17 @@
             <h3>3.3 Technical Data</h3>
             <p>For security and operational purposes:</p>
             <ul>
-                <li>Access logs (IP address, timestamp, actions)</li>
-                <li>Session information</li>
+                <li>Standard web-server logs (IP address, timestamp, and the request made), kept briefly under normal server log rotation</li>
+                <li>Records of unhandled server errors &mdash; the request path, the error type and message, and the signed-in user &mdash; never request bodies or personal content</li>
+                <li>The date of your most recent sign-in</li>
+            </ul>
+
+            <h3>3.4 Usage Analytics</h3>
+            <p>We collect anonymous usage statistics with a self-hosted <a href="https://matomo.org/" target="_blank" rel="noopener">Matomo</a> instance running on the same server. It is configured for privacy:</p>
+            <ul>
+                <li>No cookies are set and no cross-site tracking is performed, so no consent banner is required</li>
+                <li>Visitor IP addresses are anonymized</li>
+                <li>The data stays on our own server and is never sent to or shared with any third party</li>
             </ul>
         </section>
 
@@ -72,7 +81,8 @@
             <ul>
                 <li>Account data: Retained while your account is active. You can permanently delete your account and personal data yourself from your profile page.</li>
                 <li>Project data: Retained until you delete it. When you delete your account, datasets you solely own must first be reassigned to a new owner or deleted; datasets shared with colleagues remain with their other owners.</li>
-                <li>Access logs: Retained for 12 months for security purposes</li>
+                <li>Server logs: standard web-server access logs are kept briefly under normal log rotation; recorded application errors are removed automatically after 30 days</li>
+                <li>Analytics: anonymous, aggregated usage statistics, kept for reporting</li>
             </ul>
         </section>
 
