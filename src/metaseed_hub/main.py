@@ -131,7 +131,15 @@ def create_app() -> FastAPI:
     app.mount("/hub", hub_app)
 
     # Redirect root to hub
-    from fastapi.responses import RedirectResponse
+    from fastapi.responses import PlainTextResponse, RedirectResponse
+
+    @app.get("/robots.txt", include_in_schema=False)
+    async def robots() -> PlainTextResponse:
+        # The app is behind login, so crawlers only ever reach the landing page.
+        # Keep the analytics tracker and API out of any index.
+        return PlainTextResponse(
+            "User-agent: *\nDisallow: /api/\nDisallow: /hub/matomo/\nAllow: /\n"
+        )
 
     @app.get("/")
     async def root() -> RedirectResponse:

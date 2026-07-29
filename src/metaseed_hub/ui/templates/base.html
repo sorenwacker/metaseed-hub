@@ -3,7 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Metaseed Hub{% endblock %}</title>
+    <title>{% block title %}Metaseed Hub — Scientific Metadata Management{% endblock %}</title>
+    {# SEO: the landing page is the only crawlable surface (the app is behind
+       login), so it carries a clear description and share preview that
+       distinguish this Metaseed from the unrelated projects of the same name. #}
+    <meta name="description" content="{% block meta_description %}Metaseed Hub is a platform for authoring and validating research metadata against established standards — MIAPPE, ISA, DiSSCo, Darwin Core and ENA — hosted at TU Delft.{% endblock %}">
+    {% set _base = base_url if base_url is defined else 'https://metaseed.ewi.tudelft.nl' %}
+    <link rel="canonical" href="{{ _base }}/hub/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Metaseed Hub">
+    <meta property="og:title" content="{% block og_title %}Metaseed Hub — Scientific Metadata Management{% endblock %}">
+    <meta property="og:description" content="Author and validate research metadata against standards like MIAPPE, ISA, DiSSCo, Darwin Core and ENA.">
+    <meta property="og:url" content="{{ _base }}/hub/">
+    <meta property="og:image" content="{{ _base }}/hub/hub-static/images/metaseed-logo-800.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Metaseed Hub — Scientific Metadata Management">
+    <meta name="twitter:description" content="Author and validate research metadata against MIAPPE, ISA, DiSSCo, Darwin Core and ENA.">
+    <meta name="twitter:image" content="{{ _base }}/hub/hub-static/images/metaseed-logo-800.png">
     <link rel="icon" href="/hub/hub-static/images/metaseed-icon.svg" type="image/svg+xml">
     <script src="/hub/hub-static/js/htmx.min.js?v={{ version_info.version if version_info else 'dev' }}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version_info.version if version_info else 'dev' }}">
