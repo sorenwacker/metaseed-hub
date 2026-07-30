@@ -295,6 +295,8 @@
     window.rootEntity = {{ spec.root_entity | tojson }};
     window.fieldTypes = {{ field_types | tojson | safe }};
 </script>
-<script src="/hub/hub-static/js/graph-config.js"></script>
+<script src="/hub/static/js/erd-common.js"></script>
+<script src="/hub/static/js/spec-builder-core.js"></script>
+<script src="/hub/static/js/ontology-autocomplete.js"></script>
 <script src="/hub/hub-static/js/spec-builder.js"></script>
 {% endblock %}

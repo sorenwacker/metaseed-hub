@@ -1212,7 +1212,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.20.0"
+version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1227,9 +1227,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/73/e10167bc0501fbf17625ff3057d0b3076c6d5ef90313e48bfc504c305c36/metaseed-0.20.0.tar.gz", hash = "sha256:bb7440033b3ed7f410122d2d6e396a2ef969b1fb86aa9b7f5c94a6428f46277e", size = 583833, upload-time = "2026-07-30T14:20:48.705Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/55/e7b2d687963eb3dbf2e8f6e2cb5d8061cad5eb3ee1c725744a0d81e41d69/metaseed-0.21.0.tar.gz", hash = "sha256:0571dc981f3dc7bcc82af4c9f6357d0be1c7fad2287cd1dd2f1d4f94702b7965", size = 587875, upload-time = "2026-07-30T18:49:20.862Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/bb/ceae76440167316a2f841d7e519ad4ae49cc30ed821a4b8af88b8d14267b/metaseed-0.20.0-py3-none-any.whl", hash = "sha256:8ba3023eb854686641579e14424e798c81a3aa345a8a2a25c187585038cdb21d", size = 717188, upload-time = "2026-07-30T14:20:47.071Z" },
+    { url = "https://files.pythonhosted.org/packages/87/79/8538cf32fa38565ddbd95283768e97a2ba95d34b9bae700b328bed7e5850/metaseed-0.21.0-py3-none-any.whl", hash = "sha256:c05922c93c6691b105a07d088eb6cf96f9d0ed2aa1aa0698b3ad95bc5f93aa3c", size = 722689, upload-time = "2026-07-30T18:49:19.229Z" },
 ]
 
 [package.optional-dependencies]
@@ -1293,7 +1293,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
-    { name = "metaseed", extras = ["dcat"], specifier = ">=0.20.0" },
+    { name = "metaseed", extras = ["dcat"], specifier = ">=0.21.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
