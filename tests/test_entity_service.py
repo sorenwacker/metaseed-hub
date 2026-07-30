@@ -14,15 +14,46 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import (
     Dataset,
+    Spec,
     SpecDraft,
     Tenant,
     User,
 )
 from metaseed_hub.ui.services import (
+    DatasetDataLoadError,
     EntityService,
     FacadeLoadError,
     SpecNotFoundError,
 )
+
+INVESTIGATION_SPEC_DATA = {
+    "spec": {
+        "name": "test_spec",
+        "display_name": "Test Spec",
+        "version": "1.0",
+        "description": "Spec for testing",
+        "root_entity": "Investigation",
+        "entities": {
+            "Investigation": {
+                "description": "An investigation",
+                "fields": [
+                    {
+                        "name": "unique_id",
+                        "type": "string",
+                        "required": True,
+                        "description": "Unique identifier",
+                    },
+                    {
+                        "name": "title",
+                        "type": "string",
+                        "required": True,
+                        "description": "Investigation title",
+                    },
+                ],
+            },
+        },
+    }
+}
 
 
 class TestEntityServiceWithDraftSpec:
@@ -606,3 +637,259 @@ class TestEntityServiceVersionHistory:
             )
         ).scalar_one()
         assert version.created_by_id == db_user.id
+
+
+class TestEntityServiceWithPublishedSpec:
+    """Tests for EntityService with datasets built from published specs."""
+
+    async def _make_published_spec_dataset(self, session: AsyncSession, spec_data: dict) -> Dataset:
+        """Create a tenant, published spec, and dataset referencing it via spec_id."""
+        tenant = Tenant(name="Test Tenant", slug=f"test-pub-{uuid4().hex[:8]}")
+        session.add(tenant)
+        await session.flush()
+
+        spec = Spec(
+            tenant_id=tenant.id,
+            name="test_spec",
+            version="1.0",
+            spec_data=spec_data,
+        )
+        session.add(spec)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Published Spec Dataset",
+            tenant_id=tenant.id,
+            profile="test_spec",
+            version="1.0",
+            spec_id=spec.id,
+            data={"profile": "test_spec", "version": "1.0", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+        return dataset
+
+    @pytest.mark.asyncio
+    async def test_create_and_update_entity_on_published_spec_dataset(
+        self, session: AsyncSession
+    ) -> None:
+        """Entity CRUD works for a dataset created from a published spec."""
+        dataset = await self._make_published_spec_dataset(session, INVESTIGATION_SPEC_DATA)
+
+        service = EntityService(session, dataset)
+
+        create_result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "Original Title"},
+        )
+        assert create_result.success is True
+        node_id = create_result.node_id
+        assert node_id is not None
+
+        update_result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "Updated Title"},
+            node_id=node_id,
+        )
+        assert update_result.success is True
+        assert update_result.node_id == node_id
+
+        # Verify the entity was persisted to the dataset
+        await session.refresh(dataset)
+        assert len(dataset.data["tree"]) == 1
+        assert dataset.data["tree"][0]["data"]["title"] == "Updated Title"
+
+    @pytest.mark.asyncio
+    async def test_missing_published_spec_returns_clear_error(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Dataset whose published spec row cannot be loaded raises SpecNotFoundError.
+
+        The FK is SET NULL, so a dangling spec_id cannot be stored; simulate the
+        defensive branch by stubbing the spec lookup to return no row.
+        """
+        dataset = await self._make_published_spec_dataset(session, INVESTIGATION_SPEC_DATA)
+
+        async def missing_spec(entity: object, ident: object) -> None:
+            return None
+
+        monkeypatch.setattr(session, "get", missing_spec)
+
+        service = EntityService(session, dataset)
+
+        with pytest.raises(SpecNotFoundError) as exc_info:
+            await service.ensure_state()
+
+        assert "could not be found" in exc_info.value.user_message.lower()
+
+    @pytest.mark.asyncio
+    async def test_empty_published_spec_data_returns_clear_error(
+        self, session: AsyncSession
+    ) -> None:
+        """Published spec with empty spec_data raises SpecNotFoundError."""
+        dataset = await self._make_published_spec_dataset(session, {})
+
+        service = EntityService(session, dataset)
+
+        with pytest.raises(SpecNotFoundError) as exc_info:
+            await service.ensure_state()
+
+        assert "empty" in exc_info.value.user_message.lower()
+
+
+class TestEntityServiceTreeLoadFailure:
+    """Tests for handling failures when loading stored entity data."""
+
+    async def _make_dataset_with_data(self, session: AsyncSession) -> Dataset:
+        """Create a miappe dataset that already contains one stored entity."""
+        tenant = Tenant(name="Test Tenant", slug=f"test-load-{uuid4().hex[:8]}")
+        session.add(tenant)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Test Dataset",
+            tenant_id=tenant.id,
+            profile="miappe",
+            version="1.2",
+            data={"profile": "miappe", "version": "1.2", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+
+        service = EntityService(session, dataset)
+        result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "Stored Investigation"},
+        )
+        assert result.success is True
+        await session.refresh(dataset)
+        return dataset
+
+    @pytest.mark.asyncio
+    async def test_load_failure_raises_typed_error(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A deserialization failure raises DatasetDataLoadError from ensure_state()."""
+        from metaseed import MetaseedClient
+
+        dataset = await self._make_dataset_with_data(session)
+
+        def broken_load(self: MetaseedClient, data: dict) -> int:
+            raise RuntimeError("corrupted payload")
+
+        monkeypatch.setattr(MetaseedClient, "load", broken_load)
+
+        service = EntityService(session, dataset)
+
+        with pytest.raises(DatasetDataLoadError) as exc_info:
+            await service.ensure_state()
+
+        assert "could not be loaded" in exc_info.value.user_message.lower()
+
+    @pytest.mark.asyncio
+    async def test_load_failure_does_not_overwrite_stored_data(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A save attempt after a load failure fails without touching stored data."""
+        from metaseed import MetaseedClient
+
+        dataset = await self._make_dataset_with_data(session)
+        stored_data = dataset.data
+
+        def broken_load(self: MetaseedClient, data: dict) -> int:
+            raise RuntimeError("corrupted payload")
+
+        monkeypatch.setattr(MetaseedClient, "load", broken_load)
+
+        service = EntityService(session, dataset)
+        result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-002", "title": "New Investigation"},
+        )
+
+        assert result.success is False
+        assert result.error_message is not None
+
+        await session.refresh(dataset)
+        assert dataset.data == stored_data
+
+
+class TestEntityServiceStaleNodeId:
+    """Tests for updates that reference a node that no longer exists."""
+
+    @pytest.mark.asyncio
+    async def test_stale_node_id_fails_instead_of_creating_duplicate(
+        self, session: AsyncSession
+    ) -> None:
+        """An update with an unknown node_id fails instead of creating an entity."""
+        tenant = Tenant(name="Test Tenant", slug="test-stale")
+        session.add(tenant)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Test Dataset",
+            tenant_id=tenant.id,
+            profile="miappe",
+            version="1.2",
+            data={"profile": "miappe", "version": "1.2", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+
+        service = EntityService(session, dataset)
+        state = await service.ensure_state()
+        node_count_before = len(state.nodes_by_id)
+
+        result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "Ghost"},
+            node_id="stale-node-id",
+        )
+
+        assert result.success is False
+        assert "not found" in result.error_message.lower()
+        assert len(state.nodes_by_id) == node_count_before
+
+
+class TestEntityServiceSaveDelegation:
+    """Tests that persistence goes through the shared dataset-state helper."""
+
+    @pytest.mark.asyncio
+    async def test_save_delegates_to_save_dataset_state(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Entity saves persist via save_dataset_state, not a private copy."""
+        from metaseed_hub.ui.services import entity_service as entity_service_module
+
+        tenant = Tenant(name="Test Tenant", slug="test-dlg")
+        session.add(tenant)
+        await session.flush()
+
+        dataset = Dataset(
+            name="Test Dataset",
+            tenant_id=tenant.id,
+            profile="miappe",
+            version="1.2",
+            data={"profile": "miappe", "version": "1.2", "tree": []},
+        )
+        session.add(dataset)
+        await session.commit()
+
+        calls: list[tuple] = []
+
+        async def spy_save_dataset_state(session_, dataset_, state_, user_=None) -> None:
+            calls.append((session_, dataset_, state_, user_))
+
+        monkeypatch.setattr(entity_service_module, "save_dataset_state", spy_save_dataset_state)
+
+        service = EntityService(session, dataset)
+        result = await service.create_or_update_entity(
+            entity_type="Investigation",
+            values={"unique_id": "INV-001", "title": "Delegated"},
+        )
+
+        assert result.success is True
+        assert len(calls) == 1
+        assert calls[0][0] is session
+        assert calls[0][1] is dataset
+        assert calls[0][2] is service.state

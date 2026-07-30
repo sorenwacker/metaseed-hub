@@ -2,6 +2,7 @@
 
 from .entity_service import EntitySaveResult, EntityService
 from .exceptions import (
+    DatasetDataLoadError,
     EntityServiceError,
     EntityTypeNotFoundError,
     FacadeLoadError,
@@ -9,6 +10,7 @@ from .exceptions import (
 )
 
 __all__ = [
+    "DatasetDataLoadError",
     "EntitySaveResult",
     "EntityService",
     "EntityServiceError",
