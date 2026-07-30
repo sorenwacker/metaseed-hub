@@ -446,21 +446,21 @@ async def dataset_graph_api(
 ) -> Response:
     """Return graph data for visualization (JSON API).
 
-    Uses metaseed's build_graph to extract nodes and edges from instance data.
+    Builds nodes and edges from the facade via the hub's graph service.
 
     Args:
         node_id: Optional. If provided, only include this node and its descendants.
     """
     from fastapi.responses import JSONResponse
-    from metaseed.ui.services.graph import build_graph
+
+    from metaseed_hub.ui.services.graph import build_graph
 
     # Verify user has access to this dataset
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
     state = await ensure_dataset_facade(dataset, session)
 
-    # Use metaseed's graph builder which properly extracts nested entities
-    graph_data = build_graph(state)
+    graph_data = build_graph(state.get_or_create_facade())
     if node_id:
         graph_data = _filter_graph_to_subtree(graph_data, node_id)
 
@@ -475,18 +475,19 @@ async def dataset_export(
 ) -> Response:
     """Export dataset data to Excel file.
 
-    Uses metaseed's export service to generate an Excel workbook
-    containing all entities in the dataset.
+    Uses the hub's export service to generate an Excel workbook containing all
+    entities in the dataset.
     """
     from fastapi.responses import StreamingResponse
-    from metaseed.ui.services.export import export_to_bytes, generate_filename
+
+    from metaseed_hub.ui.services.export import export_to_bytes, generate_filename
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
     state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
 
-    # Generate Excel file using metaseed's export service
-    excel_bytes = export_to_bytes(state)
-    filename = generate_filename(state)
+    excel_bytes = export_to_bytes(facade)
+    filename = generate_filename(facade)
 
     # If no data, use dataset name for filename
     if not filename or filename == "export.xlsx":
@@ -544,8 +545,7 @@ async def dataset_export_adapter(
     from io import BytesIO
 
     from fastapi.responses import StreamingResponse
-    from metaseed import adapters
-    from metaseed.api.client import MetaseedClient
+    from metaseed import MetaseedClient, adapters
 
     action = adapters.find_action(fmt)
     if action is None or action.kind != "export":

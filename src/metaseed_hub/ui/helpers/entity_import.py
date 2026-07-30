@@ -7,9 +7,8 @@ and node-creation logic lives in one place.
 import logging
 from typing import Any
 
-from metaseed.ui.state import AppState
-
 from metaseed_hub.ui.helpers.tree import add_entity_node
+from metaseed_hub.ui.metaseed_ui import AppState
 
 logger = logging.getLogger("metaseed_hub")
 

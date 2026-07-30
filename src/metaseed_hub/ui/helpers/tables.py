@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from metaseed.ui.state import AppState, TreeNode
+from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 
 logger = logging.getLogger("metaseed_hub")
 

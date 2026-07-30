@@ -6,7 +6,7 @@ from collections.abc import Collection
 from datetime import date, datetime
 from typing import Any
 
-from metaseed.ui.state import AppState, TreeNode
+from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 
 logger = logging.getLogger("metaseed_hub")
 

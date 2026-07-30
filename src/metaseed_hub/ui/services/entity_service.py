@@ -115,7 +115,7 @@ class EntityService:
             FacadeLoadError: If client creation fails for any reason.
             DatasetDataLoadError: If stored entity data cannot be deserialized.
         """
-        from metaseed.ui.state import AppState
+        from metaseed_hub.ui.metaseed_ui import AppState
 
         if self._state is not None:
             return self._state

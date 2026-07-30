@@ -3,11 +3,11 @@
 import logging
 from typing import TYPE_CHECKING, Any
 
-from metaseed.ui.state import AppState
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, DatasetVersion
 from metaseed_hub.ui.helpers.tree import sanitize_tree_payload, serialize_tree
+from metaseed_hub.ui.metaseed_ui import AppState
 
 if TYPE_CHECKING:
     from metaseed import MetaseedClient

@@ -46,21 +46,23 @@ The metaseed `ProfileFacade` is the single source of truth for entity data. `Tre
 
 Every save that changes `dataset.data` also records a `DatasetVersion` row (see the versions feature).
 
+Dependency rule: routes and templates call hub helpers (`ui/helpers/`, `ui/services/`), and the helpers call metaseed's public API (`MetaseedClient`, `ProfileFacade`). Imports of metaseed's internal UI layer (`metaseed.ui`) are allowed only in the designated boundary module `ui/metaseed_ui.py`, which re-exports what the hub still uses: `AppState`/`TreeNode` (the request-scoped entity-tree cache derived from the facade) and the packaged template/static directories. The gate test `tests/test_metaseed_coupling.py` scans every module under `src/metaseed_hub` and fails on any other `metaseed.ui` import.
+
 ## Integration with metaseed
 
-Metaseed Hub uses metaseed as a library:
+Metaseed Hub uses metaseed as a library through its public API:
 
 ```python
-from metaseed.ui.state import AppState
-from metaseed.ui.services.export import export_to_bytes
-from metaseed.ui.services.graph import build_graph
+from metaseed import MetaseedClient, ProfileFacade
 ```
 
 Key integrations:
 
 | Service | Module | Purpose |
 |---------|--------|---------|
+| Entity data | `metaseed` (`MetaseedClient`, `ProfileFacade`) | Load, mutate, serialize entities |
 | Entity forms | `metaseed.facade` | Dynamic form generation |
 | Validation | `metaseed.validators` | Schema validation |
-| Export | `metaseed.ui.services.export` | Excel export |
-| Graph | `metaseed.ui.services.graph` | Visualization data |
+| Export | `metaseed_hub.ui.services.export` | Excel export over the facade API |
+| Graph | `metaseed_hub.ui.services.graph` | Visualization data via `ProfileFacade.to_graph` |
+| UI internals | `metaseed_hub.ui.metaseed_ui` | Sole boundary to `metaseed.ui` (`AppState`, assets) |

@@ -10,7 +10,6 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
-from metaseed.ui.state import AppState, TreeNode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
@@ -18,6 +17,7 @@ from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import save_dataset_state
+from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 
 router = APIRouter(tags=["table"])
 

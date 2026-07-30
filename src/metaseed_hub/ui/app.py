@@ -35,6 +35,7 @@ from metaseed_hub.ui.helpers import (
     escape_pattern_hyphen,
     humanize_field_name,
 )
+from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR, METASEED_TEMPLATES_DIR
 from metaseed_hub.ui.render import get_repo_stars, render_template
 from metaseed_hub.ui.routes import (
     admin_router,
@@ -166,17 +167,13 @@ def create_hub_app() -> FastAPI:
 
     app.add_exception_handler(DraftConflictError, handle_draft_conflict)
 
-    # Get metaseed's template directory for reusing Explorer templates
-    import metaseed.ui
-
-    metaseed_templates_dir = Path(metaseed.ui.__file__).parent / "templates"
-
-    # Create Jinja2 with multiple template directories (hub first, then metaseed)
+    # Create Jinja2 with multiple template directories (hub first, then
+    # metaseed's Explorer templates)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     templates.env.loader = ChoiceLoader(
         [
             FileSystemLoader(str(TEMPLATES_DIR)),
-            FileSystemLoader(str(metaseed_templates_dir)),
+            FileSystemLoader(str(METASEED_TEMPLATES_DIR)),
         ]
     )
 
@@ -199,8 +196,7 @@ def create_hub_app() -> FastAPI:
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")
 
     # Mount metaseed's static files for Explorer template
-    metaseed_static_dir = Path(metaseed.ui.__file__).parent / "static"
-    app.mount("/static", StaticFiles(directory=str(metaseed_static_dir)), name="metaseed-static")
+    app.mount("/static", StaticFiles(directory=str(METASEED_STATIC_DIR)), name="metaseed-static")
 
     # Include route modules
     app.include_router(auth_router)
