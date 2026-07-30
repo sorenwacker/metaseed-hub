@@ -32,6 +32,9 @@ from metaseed.agent.mcp.server import SPEC_BUILDING_INSTRUCTIONS
 from sqlalchemy import select
 
 from metaseed_hub.database import db
+from metaseed_hub.mcp._ontology_tools import register_ontology_tools
+from metaseed_hub.mcp._profile_tools import register_profile_tools
+from metaseed_hub.mcp._spec_tools import register_spec_tools
 from metaseed_hub.models import (
     Dataset,
     DatasetVersion,
@@ -258,6 +261,83 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     await session.commit()
 
 
+def _create_one(
+    client: Any, entity_type: str, data: dict[str, Any], parent_id: str | None
+) -> dict[str, str]:
+    """Create one entity through a loaded client, unvalidated.
+
+    ``skip_validation``, because a partially filled entity is a normal
+    intermediate state; what is missing is reported by the caller's validation
+    report rather than refused, so an agent can build a dataset in steps.
+    Shared by ``create_entity`` and ``batch_create`` so the two cannot drift.
+
+    Args:
+        client: A ``MetaseedClient`` over the dataset being edited.
+        entity_type: A type from the dataset's profile.
+        data: Field values, keyed by the field's codename.
+        parent_id: The entity this one belongs under, or None for a root.
+
+    Returns:
+        The created entity's id and type.
+    """
+    entity = client.create_entity(entity_type, data, parent_id=parent_id, skip_validation=True)
+    return {"id": entity.id, "entity_type": entity.entity_type}
+
+
+def _batch_item(
+    client: Any, index: int, item: dict[str, Any], created_ids: list[str | None]
+) -> dict[str, Any]:
+    """One batch_create item: resolve its parent, create it, report either way.
+
+    A failed item is reported in place rather than raised, so one bad entity
+    does not sink the rest of the batch — the same contract the standalone
+    metaseed server's batch_create keeps.
+
+    Args:
+        client: A ``MetaseedClient`` over the dataset being edited.
+        index: The item's position in the batch, echoed in the result.
+        item: The item's entity_type, data, and parent_id or parent_index.
+        created_ids: Ids of the batch's earlier items, None where one failed;
+            what ``parent_index`` resolves against.
+
+    Returns:
+        A per-item result with ``status`` "created" or "error".
+    """
+    from metaseed import MetaseedError
+
+    entity_type = item.get("entity_type")
+    if not entity_type:
+        return {"index": index, "status": "error", "message": "Missing entity_type"}
+
+    parent_id = item.get("parent_id")
+    parent_index = item.get("parent_index")
+    if parent_index is not None:
+        if not isinstance(parent_index, int) or not 0 <= parent_index < index:
+            return {
+                "index": index,
+                "status": "error",
+                "entity_type": entity_type,
+                "message": (
+                    f"parent_index {parent_index!r} must name an earlier item of this "
+                    "batch; parents come before their children"
+                ),
+            }
+        parent_id = created_ids[parent_index]
+        if parent_id is None:
+            return {
+                "index": index,
+                "status": "error",
+                "entity_type": entity_type,
+                "message": f"the item at parent_index {parent_index} was not created",
+            }
+
+    try:
+        created = _create_one(client, entity_type, item.get("data") or {}, parent_id)
+    except (MetaseedError, ValueError) as e:
+        return {"index": index, "status": "error", "entity_type": entity_type, "message": str(e)}
+    return {"index": index, "status": "created", **created}
+
+
 async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraft:
     """The caller's own spec draft, by name.
 
@@ -398,7 +478,8 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             "Populating a dataset: call list_profiles, then get_profile_schema "
             "for the profile you are using. Only the entity types it names "
             "exist, and any other is rejected. Build the dataset with "
-            "create_entity and update_entity one entity at a time rather than "
+            "create_entity and update_entity one entity at a time — or "
+            "batch_create for several at once — rather than "
             "save_dataset, which replaces the whole dataset and overwrites "
             "anything changed meanwhile. Every edit reports what is still "
             "missing; work through that until validate_dataset is clean.\n\n"
@@ -410,7 +491,12 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             # shared with the standalone metaseed server so both teach the
             # same tree model.
             + SPEC_BUILDING_INSTRUCTIONS
-            + "\nDrafts are private to you. Publishing is deliberately not "
+            + "\nA draft is correctable in place: spec_update_entity, "
+            "spec_rename_entity, spec_delete_entity, spec_update_field, "
+            "spec_delete_field, spec_move_field, the rule tools, and "
+            "spec_set_metadata revise what exists, and spec_status "
+            "summarizes where the draft stands.\n"
+            "\nDrafts are private to you. Publishing is deliberately not "
             "available here — it shares a specification with every user of "
             "the hub, so the person must do it themselves in the web "
             "interface."
@@ -695,16 +781,59 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
             async with _editing(session, row, user) as client:
-                # skip_validation, because a partially filled entity is a normal
-                # intermediate state; what is missing is reported below rather
-                # than refused, so an agent can build a dataset in steps.
-                entity = client.create_entity(
-                    entity_type, data, parent_id=parent_id, skip_validation=True
-                )
-                created = {"id": entity.id, "entity_type": entity.entity_type}
+                created = _create_one(client, entity_type, data, parent_id)
             report = await _validation_report(session, row)
             logger.info("mcp: %s created %s in %r", user.email, entity_type, dataset)
             return json.dumps({**created, **report})
+
+    @mcp.tool()
+    async def batch_create(dataset: str, entities: list[dict[str, Any]]) -> str:
+        """Create several entities in one call, root-first.
+
+        One call is one write: the previous dataset state is kept as a single
+        version, however many entities the batch holds. Items are created in
+        order, so a parent must come before its children; a failed item is
+        reported in its result while the rest of the batch still lands.
+
+        Args:
+            dataset: The dataset's name in the caller's workspace.
+            entities: One object per entity, each with:
+                entity_type: A type from get_profile_schema.
+                data: Field values, keyed by the field's codename.
+                parent_id: The id of an already stored entity to nest under.
+                parent_index: The position (0-based) of an earlier item in
+                    this batch to nest under, for parents this call creates.
+        """
+        if not entities:
+            raise ValueError("The batch is empty; pass at least one entity")
+
+        async with _caller() as (session, user):
+            row = await _owned_dataset(session, user, dataset)
+            results: list[dict[str, Any]] = []
+            created_ids: list[str | None] = []
+            async with _editing(session, row, user) as client:
+                for index, item in enumerate(entities):
+                    outcome = _batch_item(client, index, item, created_ids)
+                    created_ids.append(outcome.get("id"))
+                    results.append(outcome)
+            report = await _validation_report(session, row)
+            created = sum(1 for r in results if r["status"] == "created")
+            logger.info(
+                "mcp: %s batch-created %d/%d entities in %r",
+                user.email,
+                created,
+                len(entities),
+                dataset,
+            )
+            return json.dumps(
+                {
+                    "total": len(entities),
+                    "created": created,
+                    "failed": len(entities) - created,
+                    "results": results,
+                    **report,
+                }
+            )
 
     @mcp.tool()
     async def update_entity(dataset: str, entity_id: str, data: dict[str, Any]) -> str:
@@ -800,171 +929,8 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 }
             )
 
-    @mcp.tool()
-    async def spec_create(name: str, version: str, description: str = "") -> str:
-        """Start a new specification as a private draft.
-
-        A draft is visible only to you. Publishing it — which shares it with
-        every user of the hub — is done from the web interface, deliberately:
-        it is not something an agent should do on your behalf.
-
-        Args:
-            name: The profile name.
-            version: The profile version, e.g. "1.0".
-            description: What the specification is for.
-        """
-        from metaseed.specs.builder import SpecBuilder
-
-        from metaseed_hub.ui.spec_builder.access import create_new_draft
-
-        async with _caller() as (session, user):
-            # Scoped to the user like _owned_draft: draft names are unique per
-            # user, so someone else's draft must not block this name.
-            existing = await session.execute(
-                select(SpecDraft).where(
-                    SpecDraft.tenant_id == user.tenant_id,
-                    SpecDraft.user_id == user.id,
-                    SpecDraft.name == name,
-                )
-            )
-            if existing.scalar_one_or_none() is not None:
-                raise ValueError(f"A draft named {name!r} already exists")
-
-            builder = SpecBuilder.empty(name, version, description=description)
-            draft = await create_new_draft(
-                session,
-                user_id=user.id,
-                tenant_id=user.tenant_id,
-                name=name,
-                spec=builder.spec,
-            )
-            logger.info("mcp: %s created spec draft %r", user.email, name)
-            return json.dumps({"name": draft.name, "version": draft.version})
-
-    @mcp.tool()
-    async def spec_add_entity(
-        draft: str, entity: str, description: str = "", ontology_term: str | None = None
-    ) -> str:
-        """Add an entity type to a draft specification.
-
-        Args:
-            draft: The draft's name in the caller's workspace.
-            entity: The entity type's name, e.g. "Study".
-            description: What the entity represents.
-            ontology_term: An ontology term identifying it, where one applies.
-        """
-        async with _caller() as (session, user):
-            row = await _owned_draft(session, user, draft)
-            async with _building(session, row, user) as builder:
-                builder.add_entity(entity, description=description, ontology_term=ontology_term)
-                problems = builder.validate()
-            return json.dumps({"entity": entity, "problems": problems})
-
-    @mcp.tool()
-    async def spec_add_field(
-        draft: str,
-        entity: str,
-        field: str,
-        field_type: str,
-        required: bool = False,
-        description: str = "",
-        ontology_term: str | None = None,
-    ) -> str:
-        """Add a field to an entity in a draft specification.
-
-        Args:
-            draft: The draft's name in the caller's workspace.
-            entity: The entity type to add the field to.
-            field: The field's name.
-            field_type: One of string, integer, float, boolean, date, datetime,
-                uri, ontology_term, list, entity.
-            required: Whether a dataset must supply it.
-            description: What the field records.
-            ontology_term: An ontology term identifying it, where one applies.
-        """
-        async with _caller() as (session, user):
-            row = await _owned_draft(session, user, draft)
-            async with _building(session, row, user) as builder:
-                builder.add_field(
-                    entity,
-                    field,
-                    field_type,
-                    required=required,
-                    description=description,
-                    ontology_term=ontology_term,
-                )
-                problems = builder.validate()
-            return json.dumps({"entity": entity, "field": field, "problems": problems})
-
-    @mcp.tool()
-    async def spec_set_root_entity(draft: str, entity: str) -> str:
-        """Set which entity a dataset of this profile starts from.
-
-        Args:
-            draft: The draft's name in the caller's workspace.
-            entity: The entity type to use as the root.
-        """
-        async with _caller() as (session, user):
-            row = await _owned_draft(session, user, draft)
-            async with _building(session, row, user) as builder:
-                builder.set_root_entity(entity)
-                problems = builder.validate()
-            return json.dumps({"root_entity": entity, "problems": problems})
-
-    @mcp.tool()
-    async def spec_validate(draft: str) -> str:
-        """Report what is wrong or missing in a draft specification.
-
-        Args:
-            draft: The draft's name in the caller's workspace.
-        """
-        from metaseed.specs.builder import SpecBuilder
-
-        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
-
-        async with _caller() as (session, user):
-            row = await _owned_draft(session, user, draft)
-            state = (
-                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
-            )
-            if state.spec is None:
-                return json.dumps(
-                    {"draft": draft, "problems": ["The draft holds no specification"]}
-                )
-            problems = SpecBuilder.from_spec(state.spec).validate()
-            return json.dumps({"draft": draft, "valid": not problems, "problems": problems})
-
-    @mcp.tool()
-    async def spec_preview_yaml(draft: str) -> str:
-        """Return a draft specification as YAML, without saving anything.
-
-        Args:
-            draft: The draft's name in the caller's workspace.
-        """
-        from metaseed.specs.builder import SpecBuilder
-
-        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
-
-        async with _caller() as (session, user):
-            row = await _owned_draft(session, user, draft)
-            state = (
-                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
-            )
-            if state.spec is None:
-                raise ValueError(f"Draft {draft!r} holds no specification")
-            return json.dumps({"draft": draft, "yaml": SpecBuilder.from_spec(state.spec).to_yaml()})
-
-    @mcp.tool()
-    async def list_spec_drafts() -> str:
-        """List the caller's own draft specifications."""
-        async with _caller() as (session, user):
-            result = await session.execute(
-                select(SpecDraft)
-                .where(SpecDraft.tenant_id == user.tenant_id, SpecDraft.user_id == user.id)
-                .order_by(SpecDraft.updated_at.desc())
-            )
-            return json.dumps(
-                [{"name": d.name, "version": d.version} for d in result.scalars().all()]
-            )
+    register_spec_tools(mcp, caller=_caller, owned_draft=_owned_draft, building=_building)
+    register_profile_tools(mcp, caller=_caller, profile_spec=_profile_spec)
+    register_ontology_tools(mcp, caller=_caller)
 
     return mcp

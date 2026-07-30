@@ -32,18 +32,20 @@ claude mcp add --transport http metaseed-hub https://metaseed.ewi.tudelft.nl/hub
 | `delete_dataset` | Remove a dataset (soft — it is not erased) |
 | `list_profiles` | Built-in standards, plus every published specification |
 | `get_profile_schema` | A profile's entity types and their fields |
+| `get_profile_relationships` | A profile's hierarchy: each entity's identifier, children, and cross-references |
 
 ### Editing entities
 
 | Tool | |
 | --- | --- |
 | `create_entity` | Add one entity, without rewriting the dataset |
+| `batch_create` | Add several entities in one call, root-first; one version is kept for the whole batch |
 | `update_entity` | Change named fields; unnamed fields keep their values |
 | `delete_entity` | Remove one entity |
 | `list_entities` | The dataset's entities, with ids and values |
 | `get_entity` | One entity's stored values |
 
-Each of these reports what is still missing after the change, using the profile's own rules, so an agent can fill a dataset step by step instead of resending all of it.
+Each of these reports what is still missing after the change, using the profile's own rules, so an agent can fill a dataset step by step instead of resending all of it. In a `batch_create` call, `parent_index` nests an item under an earlier item of the same batch, so a parent and its children can land together.
 
 ### Building a specification
 
@@ -51,8 +53,19 @@ Each of these reports what is still missing after the change, using the profile'
 | --- | --- |
 | `spec_create` | Start a new specification as a private draft |
 | `spec_add_entity` | Add an entity type |
+| `spec_update_entity` | Change an entity's description or ontology term; unset arguments keep their values |
+| `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |
+| `spec_delete_entity` | Remove an entity type |
 | `spec_add_field` | Add a field to an entity |
+| `spec_update_field` | Change a field's attributes in place; unset arguments keep their values |
+| `spec_delete_field` | Remove a field |
+| `spec_move_field` | Move a field one position up or down |
+| `spec_add_rule` | Add a validation rule |
+| `spec_update_rule` | Change a validation rule in place |
+| `spec_delete_rule` | Remove a validation rule |
 | `spec_set_root_entity` | Set the entity a dataset starts from |
+| `spec_set_metadata` | Change the profile-level name, version, display name, description, or ontology |
+| `spec_status` | A summary of the draft: name, version, root, entities, rules |
 | `spec_validate` | What is wrong with the draft |
 | `spec_preview_yaml` | The draft as YAML |
 | `list_spec_drafts` | Your drafts |
@@ -62,6 +75,17 @@ A specification is a tree: every entity except the root must be linked under a p
 Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, so it stays something you do yourself in the web interface.
 
 Published specifications are included in `list_profiles`, because publishing shares a specification with every user of the hub — an agent can build a dataset against one it did not write.
+
+### Ontology lookups
+
+| Tool | |
+| --- | --- |
+| `search_ontology` | Search EMBL-EBI OLS4 for terms matching a query |
+| `get_ontology_term` | One term's definition and synonyms, by CURIE id |
+| `suggest_ontology_term` | Lighter suggestions for a partly typed term |
+| `list_ontologies` | The ontologies OLS4 offers, with their ids |
+
+These are read-only lookups against the [Ontology Lookup Service](https://www.ebi.ac.uk/ols4), through the same cached, rate-limited service the web interface uses. They require a valid token — an open endpoint would let anyone drive traffic through the hub — but touch no dataset.
 
 ## What an agent cannot do to your work
 

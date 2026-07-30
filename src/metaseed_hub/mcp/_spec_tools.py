@@ -1,0 +1,541 @@
+"""Specification-drafting tools for the hub's MCP endpoint.
+
+Every tool here follows the package's per-call pattern: the caller is resolved
+from its token, the draft is looked up in that user's own workspace, and
+mutations run inside the ``building`` context, which persists the draft after
+the block. The mutations themselves are metaseed's :class:`SpecBuilder`'s,
+already shared with the web UI; the hub adds only loading and saving.
+
+The registrar takes the shared helpers as arguments rather than importing them
+from the package, so the package can import this module without a cycle.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import select
+
+from metaseed_hub.models import SpecDraft
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+    from contextlib import AbstractAsyncContextManager
+
+    from mcp.server.fastmcp import FastMCP
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from metaseed_hub.models import User
+
+    Caller = Callable[[], AbstractAsyncContextManager[tuple[AsyncSession, User]]]
+    OwnedDraft = Callable[[AsyncSession, User, str], Awaitable[SpecDraft]]
+    Building = Callable[[AsyncSession, SpecDraft, User], AbstractAsyncContextManager[Any]]
+
+logger = logging.getLogger("metaseed_hub")
+
+
+def _clean(attrs: dict[str, Any]) -> dict[str, Any]:
+    """Drop keys whose value is None, so unset arguments leave fields unchanged."""
+    return {key: value for key, value in attrs.items() if value is not None}
+
+
+def _status(builder: Any) -> dict[str, Any]:
+    """A summary of a draft's spec: name, version, root, entities, rules.
+
+    The same shape the standalone metaseed server reports, so an agent moving
+    between the two reads the same summary.
+    """
+    spec = builder.spec
+    return {
+        "name": spec.name,
+        "version": spec.version,
+        "display_name": spec.display_name,
+        "root_entity": spec.root_entity,
+        "entities": {
+            entity_name: [f.name for f in entity.fields]
+            for entity_name, entity in spec.entities.items()
+        },
+        "validation_rules": [r.name for r in spec.validation_rules],
+    }
+
+
+def _loaded_spec(row: SpecDraft, draft: str) -> Any:
+    """The ProfileSpec a draft row holds.
+
+    Raises:
+        ValueError: If the row holds no specification.
+    """
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+    state = SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
+    if state.spec is None:
+        raise ValueError(f"Draft {draft!r} holds no specification")
+    return state.spec
+
+
+def register_spec_tools(  # noqa: C901
+    mcp: FastMCP, *, caller: Caller, owned_draft: OwnedDraft, building: Building
+) -> None:
+    """Register the specification tools with the hub's MCP server.
+
+    Args:
+        mcp: The FastMCP server to add the tools to.
+        caller: Async context manager resolving the current call's token to a
+            ``(session, user)`` pair.
+        owned_draft: Coroutine returning the caller's own draft by name.
+        building: Async context manager yielding a ``SpecBuilder`` over a draft
+            and persisting the draft after the block.
+    """
+
+    @mcp.tool()
+    async def spec_create(name: str, version: str, description: str = "") -> str:
+        """Start a new specification as a private draft.
+
+        A draft is visible only to you. Publishing it — which shares it with
+        every user of the hub — is done from the web interface, deliberately:
+        it is not something an agent should do on your behalf.
+
+        Args:
+            name: The profile name.
+            version: The profile version, e.g. "1.0".
+            description: What the specification is for.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        from metaseed_hub.ui.spec_builder.access import create_new_draft
+
+        async with caller() as (session, user):
+            # Scoped to the user like owned_draft: draft names are unique per
+            # user, so someone else's draft must not block this name.
+            existing = await session.execute(
+                select(SpecDraft).where(
+                    SpecDraft.tenant_id == user.tenant_id,
+                    SpecDraft.user_id == user.id,
+                    SpecDraft.name == name,
+                )
+            )
+            if existing.scalar_one_or_none() is not None:
+                raise ValueError(f"A draft named {name!r} already exists")
+
+            builder = SpecBuilder.empty(name, version, description=description)
+            draft = await create_new_draft(
+                session,
+                user_id=user.id,
+                tenant_id=user.tenant_id,
+                name=name,
+                spec=builder.spec,
+            )
+            logger.info("mcp: %s created spec draft %r", user.email, name)
+            return json.dumps({"name": draft.name, "version": draft.version})
+
+    @mcp.tool()
+    async def spec_add_entity(
+        draft: str, entity: str, description: str = "", ontology_term: str | None = None
+    ) -> str:
+        """Add an entity type to a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type's name, e.g. "Study".
+            description: What the entity represents.
+            ontology_term: An ontology term identifying it, where one applies.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.add_entity(entity, description=description, ontology_term=ontology_term)
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "problems": problems})
+
+    @mcp.tool()
+    async def spec_update_entity(
+        draft: str,
+        entity: str,
+        description: str | None = None,
+        ontology_term: str | None = None,
+    ) -> str:
+        """Change an entity's description or ontology term in place.
+
+        Arguments left unset keep their current values.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to change.
+            description: The new description.
+            ontology_term: The new ontology term.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.update_entity(entity, description=description, ontology_term=ontology_term)
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "problems": problems})
+
+    @mcp.tool()
+    async def spec_rename_entity(draft: str, old_name: str, new_name: str) -> str:
+        """Rename an entity type, cascading every reference to it.
+
+        The root entity, nested-field ``items`` links, and cross-references
+        follow the new name, so the spec is never left pointing at an entity
+        that no longer exists.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            old_name: The entity type's current name.
+            new_name: The name to give it.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.rename_entity(old_name, new_name)
+                problems = builder.validate()
+            return json.dumps({"entity": new_name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_delete_entity(draft: str, entity: str) -> str:
+        """Remove an entity type from a draft specification.
+
+        If the entity was the root, the draft is left without a root entity
+        until spec_set_root_entity names a new one.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to remove.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.delete_entity(entity)
+                problems = builder.validate()
+            return json.dumps({"deleted": entity, "problems": problems})
+
+    @mcp.tool()
+    async def spec_add_field(
+        draft: str,
+        entity: str,
+        field: str,
+        field_type: str,
+        required: bool = False,
+        description: str = "",
+        ontology_term: str | None = None,
+    ) -> str:
+        """Add a field to an entity in a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to add the field to.
+            field: The field's name.
+            field_type: One of string, integer, float, boolean, date, datetime,
+                uri, ontology_term, list, entity.
+            required: Whether a dataset must supply it.
+            description: What the field records.
+            ontology_term: An ontology term identifying it, where one applies.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.add_field(
+                    entity,
+                    field,
+                    field_type,
+                    required=required,
+                    description=description,
+                    ontology_term=ontology_term,
+                )
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "field": field, "problems": problems})
+
+    @mcp.tool()
+    async def spec_update_field(
+        draft: str,
+        entity: str,
+        field_name: str,
+        field_type: str | None = None,
+        required: bool | None = None,
+        description: str | None = None,
+        items: str | None = None,
+        ontology_term: str | None = None,
+        reference: str | None = None,
+        parent_ref: str | None = None,
+    ) -> str:
+        """Change a field in place. Arguments left unset keep their values.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type holding the field.
+            field_name: The field to change.
+            field_type: A new type (string, integer, float, boolean, date,
+                datetime, uri, ontology_term, list, entity).
+            required: Whether a dataset must supply it.
+            description: The new description.
+            items: For list and entity fields, the child entity type this
+                field nests — the link that makes the child reachable.
+            reference: A cross-reference target as "Entity.field".
+            parent_ref: The parent-reference field this one answers.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.update_field(
+                    entity,
+                    field_name,
+                    **_clean(
+                        {
+                            "type": field_type,
+                            "required": required,
+                            "description": description,
+                            "items": items,
+                            "ontology_term": ontology_term,
+                            "reference": reference,
+                            "parent_ref": parent_ref,
+                        }
+                    ),
+                )
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "field": field_name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_delete_field(draft: str, entity: str, field_name: str) -> str:
+        """Remove a field from an entity in a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type holding the field.
+            field_name: The field to remove.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.delete_field(entity, field_name)
+                problems = builder.validate()
+            return json.dumps({"entity": entity, "deleted": field_name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_move_field(draft: str, entity: str, field_name: str, direction: str) -> str:
+        """Move a field one position up or down within its entity.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type holding the field.
+            field_name: The field to move.
+            direction: "up" or "down".
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.move_field(entity, field_name, direction)
+                problems = builder.validate()
+            return json.dumps(
+                {"entity": entity, "field": field_name, "moved": direction, "problems": problems}
+            )
+
+    @mcp.tool()
+    async def spec_set_root_entity(draft: str, entity: str) -> str:
+        """Set which entity a dataset of this profile starts from.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            entity: The entity type to use as the root.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.set_root_entity(entity)
+                problems = builder.validate()
+            return json.dumps({"root_entity": entity, "problems": problems})
+
+    @mcp.tool()
+    async def spec_set_metadata(
+        draft: str,
+        name: str | None = None,
+        version: str | None = None,
+        display_name: str | None = None,
+        description: str | None = None,
+        ontology: str | None = None,
+    ) -> str:
+        """Change the draft's profile-level metadata in place.
+
+        Arguments left unset keep their values. Renaming here changes the
+        specification's profile name; the draft keeps the name it is addressed
+        by in these tools.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            name: The new profile name.
+            version: The new profile version.
+            display_name: The human-readable name shown in listings.
+            description: What the specification is for.
+            ontology: The ontology prefix the profile draws terms from.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.set_metadata(
+                    **_clean(
+                        {
+                            "name": name,
+                            "version": version,
+                            "display_name": display_name,
+                            "description": description,
+                            "ontology": ontology,
+                        }
+                    )
+                )
+                problems = builder.validate()
+            return json.dumps({"draft": draft, "problems": problems})
+
+    @mcp.tool()
+    async def spec_add_rule(
+        draft: str,
+        name: str,
+        type: str | None = None,
+        message: str | None = None,
+        applies_to: str | None = None,
+        field: str | None = None,
+        reference: str | None = None,
+    ) -> str:
+        """Add a validation rule to a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            name: The rule's name.
+            type: The rule type, e.g. "min_count" or "required_fields".
+            message: What a dataset is told when the rule fails.
+            applies_to: The entity type the rule checks.
+            field: The field the rule checks, where one applies.
+            reference: The reference the rule checks, where one applies.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.add_rule(
+                    name,
+                    **_clean(
+                        {
+                            "type": type,
+                            "message": message,
+                            "applies_to": applies_to,
+                            "field": field,
+                            "reference": reference,
+                        }
+                    ),
+                )
+                problems = builder.validate()
+            return json.dumps({"rule": name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_update_rule(
+        draft: str,
+        rule_name: str,
+        message: str | None = None,
+        applies_to: str | None = None,
+        field: str | None = None,
+        reference: str | None = None,
+    ) -> str:
+        """Change a validation rule in place. Unset arguments keep their values.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            rule_name: The rule to change.
+            message: What a dataset is told when the rule fails.
+            applies_to: The entity type the rule checks.
+            field: The field the rule checks, where one applies.
+            reference: The reference the rule checks, where one applies.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.update_rule(
+                    rule_name,
+                    **_clean(
+                        {
+                            "message": message,
+                            "applies_to": applies_to,
+                            "field": field,
+                            "reference": reference,
+                        }
+                    ),
+                )
+                problems = builder.validate()
+            return json.dumps({"rule": rule_name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_delete_rule(draft: str, rule_name: str) -> str:
+        """Remove a validation rule from a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+            rule_name: The rule to remove.
+        """
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            async with building(session, row, user) as builder:
+                builder.delete_rule(rule_name)
+                problems = builder.validate()
+            return json.dumps({"deleted": rule_name, "problems": problems})
+
+    @mcp.tool()
+    async def spec_status(draft: str) -> str:
+        """Summarize a draft: name, version, root, entities, and rules.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            builder = SpecBuilder.from_spec(_loaded_spec(row, draft))
+            return json.dumps(_status(builder))
+
+    @mcp.tool()
+    async def spec_validate(draft: str) -> str:
+        """Report what is wrong or missing in a draft specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            state = (
+                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
+            )
+            if state.spec is None:
+                return json.dumps(
+                    {"draft": draft, "problems": ["The draft holds no specification"]}
+                )
+            problems = SpecBuilder.from_spec(state.spec).validate()
+            return json.dumps({"draft": draft, "valid": not problems, "problems": problems})
+
+    @mcp.tool()
+    async def spec_preview_yaml(draft: str) -> str:
+        """Return a draft specification as YAML, without saving anything.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed.specs.builder import SpecBuilder
+
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            builder = SpecBuilder.from_spec(_loaded_spec(row, draft))
+            return json.dumps({"draft": draft, "yaml": builder.to_yaml()})
+
+    @mcp.tool()
+    async def list_spec_drafts() -> str:
+        """List the caller's own draft specifications."""
+        async with caller() as (session, user):
+            result = await session.execute(
+                select(SpecDraft)
+                .where(SpecDraft.tenant_id == user.tenant_id, SpecDraft.user_id == user.id)
+                .order_by(SpecDraft.updated_at.desc())
+            )
+            return json.dumps(
+                [{"name": d.name, "version": d.version} for d in result.scalars().all()]
+            )
