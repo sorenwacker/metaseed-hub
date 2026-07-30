@@ -10,6 +10,7 @@ the part that can leak.
 from __future__ import annotations
 
 import json
+import os
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -59,7 +60,31 @@ async def _user_with_token(session: AsyncSession, *, slug: str, email: str):
     return tenant, user, secret, token
 
 
-TEST_URL = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub_test"
+def _tree_nodes(data: dict) -> list[dict]:
+    """Flatten a stored tree envelope into its nodes, parents before children.
+
+    The hub stores dataset.data as {profile, version, tree: [...]}; reading the
+    tree here asserts the format the web UI consumes, not merely what the MCP
+    tools echo back.
+    """
+    nodes: list[dict] = []
+
+    def walk(node: dict) -> None:
+        nodes.append(node)
+        for child in node.get("children", []):
+            walk(child)
+
+    for root in data.get("tree", []):
+        walk(root)
+    return nodes
+
+
+# Same override the conftest session fixture honors, so a parallel run can
+# point every database touch at its own database.
+TEST_URL = os.environ.get(
+    "METASEED_HUB_TEST_DB_URL",
+    "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub_test",
+)
 
 
 @pytest.fixture
@@ -530,9 +555,9 @@ class TestEntityTools:
             result = json.loads(await create("ds1", "Investigation", {"title": "My study"}))
 
         assert result["entity_type"] == "Investigation"
-        entities = (await self._stored("ds1"))["entities"]
-        assert [e["_type"] for e in entities] == ["Investigation"]
-        assert entities[0]["title"] == "My study"
+        nodes = _tree_nodes(await self._stored("ds1"))
+        assert [n["entity_type"] for n in nodes] == ["Investigation"]
+        assert nodes[0]["data"]["title"] == "My study"
 
     async def test_creating_an_entity_reports_what_is_still_missing(
         self, server, session: AsyncSession
@@ -559,7 +584,7 @@ class TestEntityTools:
             )
             await update("ds3", created["id"], {"unique_id": "U2"})
 
-        entity = (await self._stored("ds3"))["entities"][0]
+        entity = _tree_nodes(await self._stored("ds3"))[0]["data"]
         assert entity["unique_id"] == "U2", "the named field changed"
         assert entity["title"] == "Keep", "the unnamed field survived"
 
@@ -573,7 +598,7 @@ class TestEntityTools:
             await create("ds4", "Investigation", {"title": "B"})
             await delete("ds4", a["id"])
 
-        titles = [e["title"] for e in (await self._stored("ds4"))["entities"]]
+        titles = [n["data"]["title"] for n in _tree_nodes(await self._stored("ds4"))]
         assert titles == ["B"]
 
     async def test_an_edit_snapshots_the_previous_state(
@@ -745,6 +770,349 @@ class TestSpecTools:
         add_entity = await _tool(server, "spec_add_entity")
         with _calling_with(secret_a), pytest.raises(ValueError, match="No specification draft"):
             await add_entity("Theirs", "Sneaky")
+
+
+class TestTreeFormat:
+    """MCP reads and writes the tree format the hub actually stores.
+
+    The web UI persists ``client.serialize(format="tree")``; the MCP tools once
+    read only the legacy flat envelope, so every dataset a person built in the
+    browser looked empty over MCP, and any MCP edit replaced the tree with a
+    flat payload the UI's readers cannot see.
+    """
+
+    @staticmethod
+    def _web_built_dataset() -> dict:
+        """A dataset exactly as the web UI's EntityService stores it."""
+        from metaseed import MetaseedClient
+
+        client = MetaseedClient(profile="miappe", version="1.1")
+        inv = client.create_entity("Investigation", {"title": "Web-built"}, skip_validation=True)
+        client.create_entity(
+            "Study", {"title": "First study"}, parent_id=inv.id, skip_validation=True
+        )
+        return client.serialize(format="tree")
+
+    async def _seeded(self, session: AsyncSession, *, slug: str, name: str, data: dict) -> str:
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug=slug, email=f"{slug}@example.org"
+        )
+        session.add(
+            make_dataset(tenant=tenant, name=name, profile="miappe", version="1.1", data=data)
+        )
+        await session.commit()
+        return secret
+
+    async def test_a_web_built_dataset_is_visible_over_mcp(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The dataset an agent is pointed at is usually web-built."""
+        secret = await self._seeded(
+            session, slug="tree0001", name="webds", data=self._web_built_dataset()
+        )
+
+        listing = await _tool(server, "list_entities")
+        with _calling_with(secret):
+            listed = json.loads(await listing("webds"))
+
+        types = sorted(e["entity_type"] for e in listed["entities"])
+        assert types == ["Investigation", "Study"], "tree-format entities must be listed"
+
+    async def test_a_tree_entity_can_be_read_by_id(self, server, session: AsyncSession) -> None:
+        secret = await self._seeded(
+            session, slug="tree0002", name="webread", data=self._web_built_dataset()
+        )
+
+        listing = await _tool(server, "list_entities")
+        get = await _tool(server, "get_entity")
+        with _calling_with(secret):
+            listed = json.loads(await listing("webread", entity_type="Study"))
+            one = json.loads(await get("webread", listed["entities"][0]["id"]))
+
+        assert one["entity_type"] == "Study"
+        assert one["data"]["title"] == "First study"
+
+    async def test_a_legacy_flat_dataset_still_reads(self, server, session: AsyncSession) -> None:
+        """Rows written before the tree format load through the same facade."""
+        from metaseed import MetaseedClient
+
+        client = MetaseedClient(profile="miappe", version="1.1")
+        client.create_entity("Investigation", {"title": "Old flat"}, skip_validation=True)
+        secret = await self._seeded(
+            session, slug="tree0003", name="flatds", data=client.serialize()
+        )
+
+        listing = await _tool(server, "list_entities")
+        with _calling_with(secret):
+            listed = json.loads(await listing("flatds"))
+
+        assert [e["entity_type"] for e in listed["entities"]] == ["Investigation"]
+        assert listed["entities"][0]["data"]["title"] == "Old flat"
+
+    async def test_an_mcp_edit_stores_the_tree_the_web_ui_reads(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Round trip into the UI's own reader, not just back through MCP."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.ui.helpers.dataset_state import get_dataset_state
+
+        secret = await self._seeded(session, slug="tree0004", name="edited", data={})
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret):
+            await create("edited", "Investigation", {"title": "From MCP"})
+
+        async with db.session_factory() as check:
+            row = (
+                await check.execute(select(Dataset).where(Dataset.name == "edited"))
+            ).scalar_one()
+        assert "tree" in row.data, "the hub's canonical storage is the tree envelope"
+        assert "entities" not in row.data, "no flat payload may replace the tree"
+        state = get_dataset_state(row)
+        assert [n.entity_type for n in state.entity_tree] == ["Investigation"]
+
+    async def test_an_mcp_edit_keeps_a_web_built_dataset_intact(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Adding one entity must not overwrite what the browser built."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+
+        secret = await self._seeded(
+            session, slug="tree0005", name="augmented", data=self._web_built_dataset()
+        )
+
+        create = await _tool(server, "create_entity")
+        with _calling_with(secret):
+            await create("augmented", "Investigation", {"title": "Second"})
+
+        async with db.session_factory() as check:
+            row = (
+                await check.execute(select(Dataset).where(Dataset.name == "augmented"))
+            ).scalar_one()
+        titles = sorted(n["data"].get("title", "") for n in _tree_nodes(row.data))
+        assert titles == ["First study", "Second", "Web-built"]
+
+
+class TestCreateDatasetNames:
+    """create_dataset must fail with an error an agent can act on.
+
+    The unique constraint on (tenant, name) is not scoped to deleted_at, so a
+    soft-deleted row still holds its name and a blind insert dies with an
+    IntegrityError the agent cannot interpret.
+    """
+
+    async def test_a_soft_deleted_name_is_refused_with_a_reason(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="name0001", email="n1@example.org"
+        )
+
+        create = await _tool(server, "create_dataset")
+        delete = await _tool(server, "delete_dataset")
+        with _calling_with(secret):
+            await create("recycled", "miappe", "1.1")
+            await delete("recycled")
+            with pytest.raises(ValueError, match="deleted dataset"):
+                await create("recycled", "miappe", "1.1")
+
+    async def test_an_unknown_profile_is_refused(self, server, session: AsyncSession) -> None:
+        """A dataset bound to a profile nothing can load is unusable."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="name0002", email="n2@example.org"
+        )
+
+        create = await _tool(server, "create_dataset")
+        with _calling_with(secret), pytest.raises(ValueError, match="list_profiles"):
+            await create("doomed", "no-such-profile", "1.0")
+
+    async def test_an_unknown_version_is_refused(self, server, session: AsyncSession) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="name0003", email="n3@example.org"
+        )
+
+        create = await _tool(server, "create_dataset")
+        with _calling_with(secret), pytest.raises(ValueError, match="no version"):
+            await create("doomed", "miappe", "9.9")
+
+
+def _shared_spec_data() -> dict:
+    """spec_data as the publish flow stores it: SpecBuilderState with a spec."""
+    from metaseed.specs.builder import SpecBuilder
+
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+    builder = SpecBuilder.empty("SharedSpec", "1.0", description="published for everyone")
+    builder.add_entity("Sample", description="One sample")
+    builder.add_field("Sample", "name", "string", required=True)
+    builder.set_root_entity("Sample")
+    return SpecBuilderState(spec=builder.spec).to_dict()
+
+
+class TestPublishedSpecs:
+    """Published specifications are usable, not merely advertised.
+
+    list_profiles offers them, so get_profile_schema and create_dataset must
+    resolve them too; otherwise the agent is sent in a circle — told the
+    profile exists, then told to confirm it exists.
+    """
+
+    async def _published(self, session: AsyncSession, *, slug: str) -> str:
+        from metaseed_hub.models import SpecStatus
+        from tests.factories import make_spec
+
+        tenant, user, secret, _token = await _user_with_token(
+            session, slug=slug, email=f"{slug}@example.org"
+        )
+        session.add(
+            make_spec(
+                tenant=tenant,
+                created_by=user,
+                name="SharedSpec",
+                version="1.0",
+                spec_data=_shared_spec_data(),
+                status=SpecStatus.PUBLISHED,
+            )
+        )
+        await session.commit()
+        return secret
+
+    async def test_list_profiles_carries_versions_for_everything(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Every follow-up tool requires an exact version, so each entry must
+        say which exist."""
+        secret = await self._published(session, slug="pub00001")
+
+        list_profiles = await _tool(server, "list_profiles")
+        with _calling_with(secret):
+            result = json.loads(await list_profiles())
+
+        assert all(p["versions"] for p in result["built_in"])
+        miappe = next(p for p in result["built_in"] if p["name"] == "miappe")
+        assert "1.1" in miappe["versions"]
+        shared = next(p for p in result["published"] if p["name"] == "SharedSpec")
+        assert shared["versions"] == ["1.0"]
+
+    async def test_the_schema_of_a_published_spec_is_readable(
+        self, server, session: AsyncSession
+    ) -> None:
+        secret = await self._published(session, slug="pub00002")
+
+        schema = await _tool(server, "get_profile_schema")
+        with _calling_with(secret):
+            result = json.loads(await schema("SharedSpec", "1.0"))
+
+        assert result["root_entity"] == "Sample"
+        fields = result["entities"]["Sample"]["fields"]
+        assert [f["name"] for f in fields] == ["name"]
+        assert fields[0]["required"] is True
+
+    async def test_a_dataset_on_a_published_spec_can_be_created_and_edited(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The whole advertised flow: create against the spec, then add data."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+
+        secret = await self._published(session, slug="pub00003")
+
+        create_ds = await _tool(server, "create_dataset")
+        create_entity = await _tool(server, "create_entity")
+        listing = await _tool(server, "list_entities")
+        with _calling_with(secret):
+            await create_ds("spec-backed", "SharedSpec", "1.0")
+            await create_entity("spec-backed", "Sample", {"name": "S1"})
+            listed = json.loads(await listing("spec-backed"))
+
+        assert [e["entity_type"] for e in listed["entities"]] == ["Sample"]
+        async with db.session_factory() as check:
+            row = (
+                await check.execute(select(Dataset).where(Dataset.name == "spec-backed"))
+            ).scalar_one()
+        assert row.spec_id is not None, "the dataset must remember which spec defines it"
+        assert row.profile == "sharedspec"
+
+
+class TestDraftScoping:
+    """Draft names are unique per user, so lookups must be user-scoped.
+
+    A tenant-wide lookup would let two same-named drafts in one tenant crash
+    the query — or let one user edit another's draft.
+    """
+
+    async def _two_users_one_tenant(self, session: AsyncSession):
+        from metaseed_hub.tokens import issue_token
+
+        tenant = make_tenant(slug="draftscope")
+        session.add(tenant)
+        await session.flush()
+        alice = make_user(tenant=tenant, email="alice-drafts@example.org")
+        bob = make_user(tenant=tenant, email="bob-drafts@example.org")
+        session.add_all([alice, bob])
+        await session.commit()
+        secret_a, _ = await issue_token(session, alice, name="agent")
+        secret_b, _ = await issue_token(session, bob, name="agent")
+        return secret_a, secret_b
+
+    async def test_two_users_may_hold_the_same_draft_name(
+        self, server, session: AsyncSession
+    ) -> None:
+        secret_a, secret_b = await self._two_users_one_tenant(session)
+
+        create = await _tool(server, "spec_create")
+        with _calling_with(secret_a):
+            await create("Twin", "1.0")
+        with _calling_with(secret_b):
+            # Unique per user, not per tenant: this must not be refused.
+            await create("Twin", "1.0")
+
+    async def test_a_users_edit_lands_in_their_own_draft(
+        self, server, session: AsyncSession
+    ) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import SpecDraft
+
+        secret_a, secret_b = await self._two_users_one_tenant(session)
+
+        create = await _tool(server, "spec_create")
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret_a):
+            await create("Twin", "1.0")
+        with _calling_with(secret_b):
+            await create("Twin", "1.0")
+            await add_entity("Twin", "OnlyBobs")
+
+        async with db.session_factory() as check:
+            drafts = (
+                (await check.execute(select(SpecDraft).where(SpecDraft.name == "Twin")))
+                .scalars()
+                .all()
+            )
+        entities_by_draft = sorted(
+            list((d.spec_data.get("spec") or {}).get("entities", {})) for d in drafts
+        )
+        assert entities_by_draft == [[], ["OnlyBobs"]], "the edit must touch only Bob's draft"
+
+    async def test_a_same_tenant_users_draft_is_not_editable(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Tenant scoping alone would make these drafts mutually writable."""
+        secret_a, secret_b = await self._two_users_one_tenant(session)
+
+        create = await _tool(server, "spec_create")
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret_a):
+            await create("Private", "1.0")
+        with _calling_with(secret_b), pytest.raises(ValueError, match="No specification draft"):
+            await add_entity("Private", "Sneaky")
 
 
 async def test_the_instructions_cover_the_tools_that_exist(server) -> None:

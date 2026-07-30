@@ -309,3 +309,79 @@ class TestReactionEnumPersistence:
         spec_type = SpecCommentReaction.__table__.c.reaction.type
         assert list(spec_type.enums) == list(comment_type.enums)
         assert spec_type.name == comment_type.name
+
+
+class TestCommentThreadDeletion:
+    """Deleting a comment removes its replies through the FK cascade.
+
+    parent_id is ON DELETE CASCADE; without passive_deletes on the replies
+    relationship the ORM nulls parent_id before the delete, so the cascade
+    never fires and replies silently survive as top-level comments.
+    """
+
+    async def _thread(self, session: AsyncSession):
+        from metaseed_hub.models import Comment
+
+        tenant = make_tenant()
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant)
+        dataset = make_dataset(tenant=tenant)
+        session.add_all([user, dataset])
+        await session.flush()
+        parent = Comment(dataset_id=dataset.id, user_id=user.id, content="thread root")
+        session.add(parent)
+        await session.flush()
+        reply = Comment(
+            dataset_id=dataset.id, user_id=user.id, parent_id=parent.id, content="a reply"
+        )
+        session.add(reply)
+        await session.flush()
+        return parent
+
+    async def test_deleting_a_comment_removes_its_replies(self, session: AsyncSession) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.models import Comment
+
+        parent = await self._thread(session)
+
+        await session.delete(parent)
+        await session.flush()
+        session.expire_all()
+
+        remaining = (await session.execute(select(Comment))).scalars().all()
+        assert remaining == [], "replies must die with the thread, not float to top level"
+
+    async def test_deleting_a_spec_comment_removes_its_replies(self, session: AsyncSession) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.models import SpecComment
+
+        from .factories import make_spec_draft
+
+        tenant = make_tenant()
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant)
+        session.add(user)
+        await session.flush()
+        draft = make_spec_draft(tenant=tenant, user=user)
+        session.add(draft)
+        await session.flush()
+        parent = SpecComment(spec_draft_id=draft.id, user_id=user.id, content="root")
+        session.add(parent)
+        await session.flush()
+        session.add(
+            SpecComment(
+                spec_draft_id=draft.id, user_id=user.id, parent_id=parent.id, content="reply"
+            )
+        )
+        await session.flush()
+
+        await session.delete(parent)
+        await session.flush()
+        session.expire_all()
+
+        remaining = (await session.execute(select(SpecComment))).scalars().all()
+        assert remaining == []

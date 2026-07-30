@@ -502,8 +502,11 @@ class Comment(TimestampMixin, Base):
     parent: Mapped["Comment | None"] = relationship(
         "Comment", remote_side="Comment.id", back_populates="replies"
     )
+    # passive_deletes: parent_id is ON DELETE CASCADE, so deleting a comment
+    # must let the database remove its replies. Without this the ORM nulls
+    # parent_id first, silently promoting replies to top-level comments.
     replies: Mapped[list["Comment"]] = relationship(
-        "Comment", back_populates="parent", order_by="Comment.created_at"
+        "Comment", back_populates="parent", order_by="Comment.created_at", passive_deletes=True
     )
     reactions: Mapped[list["CommentReaction"]] = relationship(
         "CommentReaction", back_populates="comment", cascade="all, delete-orphan"
@@ -586,8 +589,13 @@ class SpecComment(TimestampMixin, Base):
     parent: Mapped["SpecComment | None"] = relationship(
         "SpecComment", remote_side="SpecComment.id", back_populates="replies"
     )
+    # passive_deletes: same reasoning as Comment.replies — the FK cascade
+    # removes replies, and the ORM must not null parent_id first.
     replies: Mapped[list["SpecComment"]] = relationship(
-        "SpecComment", back_populates="parent", order_by="SpecComment.created_at"
+        "SpecComment",
+        back_populates="parent",
+        order_by="SpecComment.created_at",
+        passive_deletes=True,
     )
     reactions: Mapped[list["SpecCommentReaction"]] = relationship(
         "SpecCommentReaction", back_populates="comment", cascade="all, delete-orphan"
@@ -828,6 +836,7 @@ class SpecDraftMember(Base):
 
 
 __all__ = [
+    "ApiToken",
     "Base",
     "Comment",
     "CommentReaction",
@@ -835,6 +844,7 @@ __all__ = [
     "DatasetMember",
     "DatasetRole",
     "DatasetVersion",
+    "ErrorEvent",
     "Note",
     "ReactionType",
     "SoftDeleteMixin",

@@ -70,8 +70,13 @@ def _bearer_token() -> str | None:
     return token_from_header(request.headers.get("authorization"))
 
 
+@asynccontextmanager
 async def _caller() -> AsyncIterator[tuple[AsyncSession, User]]:
     """Yield a session and the user the current call acts as.
+
+    A context manager rather than a bare generator, so returning from the tool
+    body closes the session deterministically instead of leaving it to the
+    event loop's async-generator finalization.
 
     Raises:
         NotAuthenticatedError: If no valid, unrevoked token was presented.
@@ -198,6 +203,27 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
     return {"valid": False, "issues": reported, "next_step": next_step}
 
 
+async def _loaded_client(session: AsyncSession, dataset: Dataset) -> Any:
+    """A ``MetaseedClient`` holding the dataset's stored entities.
+
+    Loads through ``ensure_dataset_facade``, the same loader the web UI uses,
+    so the tree format the hub stores and the legacy flat format both read
+    correctly, and built-in, draft-spec, and published-spec datasets all
+    resolve their profile the same way.
+    """
+    from metaseed import MetaseedClient
+
+    from metaseed_hub.ui.helpers import ensure_dataset_facade
+
+    state = await ensure_dataset_facade(dataset, session)
+    if state.facade is None:
+        raise ValueError(
+            f"The profile {dataset.profile!r} could not be loaded, so this "
+            "dataset cannot be used. Check it with list_profiles."
+        )
+    return MetaseedClient.from_facade(state.facade)
+
+
 @asynccontextmanager
 async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> AsyncIterator[Any]:
     """Yield a client over ``dataset``, then persist what the block changed.
@@ -207,22 +233,18 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     client, and writes back. Wrapping it once means no tool can forget the
     snapshot or the size check.
     """
-    from metaseed import MetaseedClient
     from sqlalchemy.orm.attributes import flag_modified
 
-    from metaseed_hub.ui.helpers import ensure_dataset_facade
+    from metaseed_hub.ui.helpers import make_json_serializable
 
-    state = await ensure_dataset_facade(dataset, session)
-    if state.facade is None:
-        raise ValueError(
-            f"The profile {dataset.profile!r} could not be loaded, so this "
-            "dataset cannot be edited. Check it with list_profiles."
-        )
-
-    client = MetaseedClient.from_facade(state.facade)
+    client = await _loaded_client(session, dataset)
     yield client
 
-    data = client.serialize()
+    # Tree format, the hub's canonical storage: the web UI's EntityService
+    # persists serialize(format="tree"), and readers such as the version diff
+    # view consume data["tree"]. A flat write here would make those readers see
+    # an empty dataset.
+    data = make_json_serializable(client.serialize(format="tree"))
     size = len(json.dumps(data).encode())
     if size > MAX_DATASET_BYTES:
         raise ValueError(
@@ -236,9 +258,18 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
 
 
 async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraft:
-    """A spec draft in the caller's own workspace, by name."""
+    """The caller's own spec draft, by name.
+
+    Scoped to the user, not only the tenant: draft names are unique per user
+    (``uq_spec_drafts_tenant_user_name``), so a tenant-wide lookup could match
+    several drafts and would let one user edit another's.
+    """
     result = await session.execute(
-        select(SpecDraft).where(SpecDraft.tenant_id == user.tenant_id, SpecDraft.name == name)
+        select(SpecDraft).where(
+            SpecDraft.tenant_id == user.tenant_id,
+            SpecDraft.user_id == user.id,
+            SpecDraft.name == name,
+        )
     )
     draft = result.scalar_one_or_none()
     if draft is None:
@@ -270,6 +301,65 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     draft.spec_data = state.to_dict()
     draft.version = builder.spec.version
     await session.commit()
+
+
+async def _published_spec(session: AsyncSession, profile: str, version: str) -> Spec | None:
+    """The published specification a profile name and version refer to, if any.
+
+    Publishing shares a specification with every user of the hub, so the lookup
+    is deliberately not scoped to the caller's tenant. Matched case-insensitively
+    because datasets store the lowercased profile name while list_profiles
+    reports the name as published.
+    """
+    from sqlalchemy import func
+
+    result = await session.execute(
+        select(Spec).where(
+            func.lower(Spec.name) == profile.lower(),
+            Spec.version == version,
+            Spec.status == SpecStatus.PUBLISHED,
+            Spec.deleted_at.is_(None),
+        )
+    )
+    return result.scalars().first()
+
+
+async def _profile_spec(session: AsyncSession, profile: str, version: str) -> Any:
+    """The ``ProfileSpec`` behind a profile name: built-in first, then published.
+
+    Raises:
+        ValueError: If neither a built-in profile nor a published specification
+            matches the name and version.
+    """
+    from metaseed.specs.loader import SpecLoader
+
+    loader = SpecLoader()
+    if profile.lower() in loader.list_profiles():
+        versions = loader.list_versions(profile.lower())
+        if version not in versions:
+            raise ValueError(
+                f"Profile {profile!r} has no version {version!r}; available: {versions}"
+            )
+        return loader.load_profile(version=version, profile=profile.lower())
+
+    published = await _published_spec(session, profile, version)
+    if published is None:
+        raise ValueError(
+            f"No profile named {profile!r} with version {version!r}. "
+            "Call list_profiles for what exists."
+        )
+    from metaseed.specs.schema import ProfileSpec
+
+    raw = published.spec_data or {}
+    if isinstance(raw, dict) and "spec" in raw:
+        raw = raw["spec"]
+    try:
+        return ProfileSpec(**raw)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f"The published specification {published.name!r} {published.version!r} "
+            f"could not be loaded: {e}"
+        ) from e
 
 
 def _allowed_hosts() -> list[str]:
@@ -341,14 +431,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
     @mcp.tool()
     async def whoami() -> str:
         """Report which hub account this token acts as."""
-        async for _session, user in _caller():
+        async with _caller() as (_session, user):
             return json.dumps({"email": user.email, "display_name": user.display_name})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def list_datasets() -> str:
         """List the datasets in the caller's own workspace."""
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             result = await session.execute(
                 select(Dataset)
                 .where(Dataset.tenant_id == user.tenant_id, Dataset.deleted_at.is_(None))
@@ -360,7 +449,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                     for d in result.scalars().all()
                 ]
             )
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def get_dataset(name: str) -> str:
@@ -369,7 +457,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         Args:
             name: The dataset's name in the caller's workspace.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
             return json.dumps(
                 {
@@ -379,39 +467,69 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                     "data": dataset.data,
                 }
             )
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def create_dataset(name: str, profile: str, version: str) -> str:
         """Create an empty dataset in the caller's workspace.
+
+        The profile may be a built-in standard or a published specification;
+        both appear in list_profiles.
 
         Args:
             name: A name unique within the workspace.
             profile: A profile name from list_profiles.
             version: The profile version.
         """
-        async for session, user in _caller():
+        from metaseed.specs.loader import SpecLoader
+
+        async with _caller() as (session, user):
+            # Checked without the deleted_at filter: the unique constraint
+            # uq_datasets_tenant_name is not scoped to deleted_at, so a
+            # soft-deleted row still holds the name and an insert would fail
+            # with an IntegrityError the agent cannot act on.
             existing = await session.execute(
                 select(Dataset).where(
                     Dataset.tenant_id == user.tenant_id,
                     Dataset.name == name,
-                    Dataset.deleted_at.is_(None),
                 )
             )
-            if existing.scalar_one_or_none() is not None:
+            held = existing.scalar_one_or_none()
+            if held is not None:
+                if held.is_deleted:
+                    raise ValueError(
+                        f"The name {name!r} is held by a deleted dataset; choose a different name"
+                    )
                 raise ValueError(f"A dataset named {name!r} already exists")
+
+            spec_id: str | None = None
+            if profile.lower() in SpecLoader().list_profiles():
+                # Validates the profile and version; loading is the check.
+                await _profile_spec(session, profile, version)
+                profile = profile.lower()
+            else:
+                published = await _published_spec(session, profile, version)
+                if published is None:
+                    raise ValueError(
+                        f"No profile named {profile!r} with version {version!r}. "
+                        "Call list_profiles for what exists."
+                    )
+                # Mirrors the web UI's dataset_create: the lowercased name plus
+                # spec_id is what ensure_dataset_facade resolves the spec from.
+                spec_id = published.id
+                profile = published.name.lower()
+                version = published.version
 
             dataset = Dataset(
                 tenant_id=user.tenant_id,
                 name=name,
                 profile=profile,
                 version=version,
+                spec_id=spec_id,
                 data={},
             )
             session.add(dataset)
             await session.commit()
             return json.dumps({"name": name, "profile": profile, "version": version})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def save_dataset(name: str, data: dict[str, Any]) -> str:
@@ -430,7 +548,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         if size > MAX_DATASET_BYTES:
             raise ValueError(f"That dataset is {size} bytes; the limit is {MAX_DATASET_BYTES}.")
 
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
             if data != dataset.data:
                 await _snapshot(session, dataset, user)
@@ -447,7 +565,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             # what lets it finish the job instead of believing it is done.
             report = await _validation_report(session, dataset)
             return json.dumps({"name": name, "saved": True, "bytes": size, **report})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def delete_dataset(name: str) -> str:
@@ -459,13 +576,12 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         Args:
             name: The dataset to remove.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
             dataset.soft_delete()
             await session.commit()
             logger.info("mcp: %s deleted dataset %r", user.email, name)
             return json.dumps({"name": name, "deleted": True})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def validate_dataset(name: str) -> str:
@@ -474,50 +590,51 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         Args:
             name: The dataset to validate, in the caller's workspace.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
             report = await _validation_report(session, dataset)
             return json.dumps({"name": name, **report})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def list_profiles() -> str:
         """List the metadata standards available, built-in and published.
 
         Published specifications are included: publishing shares a specification
-        with every user of the hub, so any of them can be used here.
+        with every user of the hub, so any of them can be used here. Every entry
+        carries its versions, because get_profile_schema and create_dataset
+        require an exact version.
         """
         from metaseed.specs.loader import SpecLoader
 
-        built_in = SpecLoader().list_profiles()
+        loader = SpecLoader()
+        built_in = [
+            {"name": name, "versions": loader.list_versions(name), "source": "built_in"}
+            for name in loader.list_profiles()
+        ]
 
-        async for session, _user in _caller():
+        async with _caller() as (session, _user):
             result = await session.execute(
                 select(Spec).where(Spec.status == SpecStatus.PUBLISHED, Spec.deleted_at.is_(None))
             )
             published = [
-                {"name": s.name, "version": s.version, "source": "published"}
+                {"name": s.name, "versions": [s.version], "source": "published"}
                 for s in result.scalars().all()
             ]
             return json.dumps({"built_in": built_in, "published": published})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def get_profile_schema(profile: str, version: str) -> str:
         """Return a profile's entity types and their fields.
 
         Call this before creating entities: only the types it names exist.
+        Works for built-in profiles and published specifications alike.
 
         Args:
             profile: The profile name.
             version: The profile version.
         """
-        from metaseed.specs.loader import SpecLoader
-
-        # Pure: reads the packaged spec, touches no caller state. Still behind
-        # authentication, so an unauthenticated caller learns nothing.
-        async for _session, _user in _caller():
-            spec = SpecLoader(profile=profile).load_profile(version=version, profile=profile)
+        async with _caller() as (session, _user):
+            spec = await _profile_spec(session, profile, version)
             return json.dumps(
                 {
                     "name": spec.name,
@@ -554,7 +671,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                     },
                 }
             )
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def create_entity(
@@ -572,7 +688,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             parent_id: The entity this one belongs under, where the profile
                 nests them. Omit for a root entity.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
             async with _editing(session, row, user) as client:
                 # skip_validation, because a partially filled entity is a normal
@@ -585,7 +701,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             report = await _validation_report(session, row)
             logger.info("mcp: %s created %s in %r", user.email, entity_type, dataset)
             return json.dumps({**created, **report})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def update_entity(dataset: str, entity_id: str, data: dict[str, Any]) -> str:
@@ -596,7 +711,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             entity_id: The entity to change, from list_entities.
             data: The fields to set. Fields not named keep their values.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
             async with _editing(session, row, user) as client:
                 # Merged, not replaced. metaseed's update_entity overwrites the
@@ -609,7 +724,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             report = await _validation_report(session, row)
             logger.info("mcp: %s updated %s in %r", user.email, entity_id, dataset)
             return json.dumps({**updated, **report})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def delete_entity(dataset: str, entity_id: str) -> str:
@@ -619,14 +733,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             dataset: The dataset's name in the caller's workspace.
             entity_id: The entity to remove.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
             async with _editing(session, row, user) as client:
                 client.delete_entity(entity_id)
             report = await _validation_report(session, row)
             logger.info("mcp: %s deleted entity %s in %r", user.email, entity_id, dataset)
             return json.dumps({"deleted": entity_id, **report})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def list_entities(dataset: str, entity_type: str | None = None) -> str:
@@ -636,21 +749,25 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             dataset: The dataset's name in the caller's workspace.
             entity_type: Restrict to one type. Omit for all of them.
         """
-        async for session, user in _caller():
+        from metaseed_hub.ui.helpers import make_json_serializable
+
+        async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
+            # Read through the facade, not the raw JSONB: the hub stores the
+            # tree format the web UI writes, and the facade loads that as well
+            # as the legacy flat format.
+            client = await _loaded_client(session, row)
             entities = [
                 {
                     "id": e.get("_node_id"),
                     "entity_type": e.get("_type"),
                     "data": {k: v for k, v in e.items() if not k.startswith("_")},
                 }
-                for e in (row.data or {}).get("entities", [])
-                if isinstance(e, dict)
+                for e in client.serialize()["entities"]
             ]
             if entity_type:
                 entities = [e for e in entities if e["entity_type"] == entity_type]
-            return json.dumps({"dataset": dataset, "entities": entities})
-        raise NotAuthenticatedError("unreachable")
+            return json.dumps({"dataset": dataset, "entities": make_json_serializable(entities)})
 
     @mcp.tool()
     async def get_entity(dataset: str, entity_id: str) -> str:
@@ -660,19 +777,24 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             dataset: The dataset's name in the caller's workspace.
             entity_id: The entity to read.
         """
-        async for session, user in _caller():
+        from metaseed import EntityNotFoundError
+
+        from metaseed_hub.ui.helpers import make_json_serializable
+
+        async with _caller() as (session, user):
             row = await _owned_dataset(session, user, dataset)
-            for entity in (row.data or {}).get("entities", []):
-                if isinstance(entity, dict) and entity.get("_node_id") == entity_id:
-                    return json.dumps(
-                        {
-                            "id": entity_id,
-                            "entity_type": entity.get("_type"),
-                            "data": {k: v for k, v in entity.items() if not k.startswith("_")},
-                        }
-                    )
-            raise ValueError(f"No entity {entity_id!r} in {dataset!r}")
-        raise NotAuthenticatedError("unreachable")
+            client = await _loaded_client(session, row)
+            try:
+                entity = client.get_entity(entity_id)
+            except EntityNotFoundError:
+                raise ValueError(f"No entity {entity_id!r} in {dataset!r}") from None
+            return json.dumps(
+                {
+                    "id": entity.id,
+                    "entity_type": entity.entity_type,
+                    "data": make_json_serializable(entity.data),
+                }
+            )
 
     @mcp.tool()
     async def spec_create(name: str, version: str, description: str = "") -> str:
@@ -691,10 +813,14 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
         from metaseed_hub.ui.spec_builder.access import create_new_draft
 
-        async for session, user in _caller():
+        async with _caller() as (session, user):
+            # Scoped to the user like _owned_draft: draft names are unique per
+            # user, so someone else's draft must not block this name.
             existing = await session.execute(
                 select(SpecDraft).where(
-                    SpecDraft.tenant_id == user.tenant_id, SpecDraft.name == name
+                    SpecDraft.tenant_id == user.tenant_id,
+                    SpecDraft.user_id == user.id,
+                    SpecDraft.name == name,
                 )
             )
             if existing.scalar_one_or_none() is not None:
@@ -710,7 +836,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             )
             logger.info("mcp: %s created spec draft %r", user.email, name)
             return json.dumps({"name": draft.name, "version": draft.version})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def spec_add_entity(
@@ -724,13 +849,12 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             description: What the entity represents.
             ontology_term: An ontology term identifying it, where one applies.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_draft(session, user, draft)
             async with _building(session, row, user) as builder:
                 builder.add_entity(entity, description=description, ontology_term=ontology_term)
                 problems = builder.validate()
             return json.dumps({"entity": entity, "problems": problems})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def spec_add_field(
@@ -754,7 +878,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             description: What the field records.
             ontology_term: An ontology term identifying it, where one applies.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_draft(session, user, draft)
             async with _building(session, row, user) as builder:
                 builder.add_field(
@@ -767,7 +891,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 )
                 problems = builder.validate()
             return json.dumps({"entity": entity, "field": field, "problems": problems})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def spec_set_root_entity(draft: str, entity: str) -> str:
@@ -777,13 +900,12 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             draft: The draft's name in the caller's workspace.
             entity: The entity type to use as the root.
         """
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_draft(session, user, draft)
             async with _building(session, row, user) as builder:
                 builder.set_root_entity(entity)
                 problems = builder.validate()
             return json.dumps({"root_entity": entity, "problems": problems})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def spec_validate(draft: str) -> str:
@@ -796,7 +918,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
         from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_draft(session, user, draft)
             state = (
                 SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
@@ -807,7 +929,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 )
             problems = SpecBuilder.from_spec(state.spec).validate()
             return json.dumps({"draft": draft, "valid": not problems, "problems": problems})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def spec_preview_yaml(draft: str) -> str:
@@ -820,7 +941,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
         from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 
-        async for session, user in _caller():
+        async with _caller() as (session, user):
             row = await _owned_draft(session, user, draft)
             state = (
                 SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
@@ -828,20 +949,18 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             if state.spec is None:
                 raise ValueError(f"Draft {draft!r} holds no specification")
             return json.dumps({"draft": draft, "yaml": SpecBuilder.from_spec(state.spec).to_yaml()})
-        raise NotAuthenticatedError("unreachable")
 
     @mcp.tool()
     async def list_spec_drafts() -> str:
-        """List the caller's draft specifications."""
-        async for session, user in _caller():
+        """List the caller's own draft specifications."""
+        async with _caller() as (session, user):
             result = await session.execute(
                 select(SpecDraft)
-                .where(SpecDraft.tenant_id == user.tenant_id)
+                .where(SpecDraft.tenant_id == user.tenant_id, SpecDraft.user_id == user.id)
                 .order_by(SpecDraft.updated_at.desc())
             )
             return json.dumps(
                 [{"name": d.name, "version": d.version} for d in result.scalars().all()]
             )
-        raise NotAuthenticatedError("unreachable")
 
     return mcp

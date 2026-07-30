@@ -1,5 +1,6 @@
 """Pytest fixtures for metaseed-hub tests."""
 
+import os
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
@@ -21,7 +22,12 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     Yields:
         AsyncSession for database operations.
     """
-    url = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub_test"
+    # Overridable so parallel test runs can use separate databases; the fixture
+    # drops and recreates every table, so two runs sharing one database deadlock.
+    url = os.environ.get(
+        "METASEED_HUB_TEST_DB_URL",
+        "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub_test",
+    )
     engine = create_async_engine(url, echo=False)
 
     # Create tables
