@@ -28,6 +28,7 @@ nav:
     - Publishing and sharing: spec-builder/publishing.md
   - Explorer: explorer.md
   - Connecting an agent (MCP): mcp.md
+  - MCP FAQ: mcp-faq.md
   - Reference:
     - Supported profiles: reference/profiles.md
     - Ontology lookup: reference/ontology-lookup.md
