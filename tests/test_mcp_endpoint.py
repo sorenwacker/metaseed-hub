@@ -856,7 +856,7 @@ class TestTreeFormat:
         from sqlalchemy import select
 
         from metaseed_hub.database import db
-        from metaseed_hub.ui.helpers.dataset_state import get_dataset_state
+        from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
 
         secret = await self._seeded(session, slug="tree0004", name="edited", data={})
 
@@ -868,9 +868,9 @@ class TestTreeFormat:
             row = (
                 await check.execute(select(Dataset).where(Dataset.name == "edited"))
             ).scalar_one()
-        assert "tree" in row.data, "the hub's canonical storage is the tree envelope"
-        assert "entities" not in row.data, "no flat payload may replace the tree"
-        state = get_dataset_state(row)
+            assert "tree" in row.data, "the hub's canonical storage is the tree envelope"
+            assert "entities" not in row.data, "no flat payload may replace the tree"
+            state = await ensure_dataset_facade(row, check)
         assert [n.entity_type for n in state.entity_tree] == ["Investigation"]
 
     async def test_an_mcp_edit_keeps_a_web_built_dataset_intact(

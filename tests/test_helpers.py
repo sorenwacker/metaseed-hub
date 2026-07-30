@@ -9,8 +9,8 @@ from metaseed.ui.state import AppState, TreeNode
 from metaseed_hub.ui.helpers import (
     build_entity_form_context,
     build_inline_tables,
+    ensure_dataset_facade,
     escape_pattern_hyphen,
-    get_dataset_state,
     get_or_create_csrf_token,
     get_tree_data_from_nodes,
     humanize_field_name,
@@ -214,30 +214,32 @@ class TestGetTreeDataFromNodes:
         assert result[0]["children"][0]["id"] == "child-1"
 
 
-class TestGetDatasetState:
-    """Tests for get_dataset_state function."""
+class TestEnsureDatasetFacade:
+    """Tests for ensure_dataset_facade, the single dataset load path."""
 
-    def test_creates_new_state(self) -> None:
-        """Creates new state for dataset."""
+    @staticmethod
+    def _dataset(data: dict | None) -> Mock:
         dataset = Mock()
         dataset.id = "ds-1"
         dataset.profile = "miappe"
         dataset.version = "1.1"
-        dataset.data = None
+        dataset.data = data
+        dataset.spec_draft_id = None
+        dataset.spec_id = None
+        return dataset
 
-        state = get_dataset_state(dataset)
+    async def test_creates_new_state(self) -> None:
+        """Creates a state with a facade for an empty dataset."""
+        state = await ensure_dataset_facade(self._dataset(None), Mock())
 
         assert state is not None
         assert state.profile == "miappe"
         assert state.version == "1.1"
+        assert state.facade is not None
 
-    def test_loads_from_data(self) -> None:
-        """Loads entity tree from dataset data."""
-        dataset = Mock()
-        dataset.id = "ds-2"
-        dataset.profile = "miappe"
-        dataset.version = "1.1"
-        dataset.data = {
+    async def test_loads_from_data(self) -> None:
+        """Loads the stored entity tree into the facade."""
+        data = {
             "profile": "miappe",
             "version": "1.1",
             "tree": [
@@ -251,11 +253,10 @@ class TestGetDatasetState:
             ],
         }
 
-        state = get_dataset_state(dataset)
+        state = await ensure_dataset_facade(self._dataset(data), Mock())
 
-        # Note: Deserialization requires facade, so tree may be empty
-        # This tests that the function runs without error
         assert state.profile == "miappe"
+        assert [r.entity_type for r in state.facade.get_roots()] == ["Investigation"]
 
 
 class TestBuildInlineTables:

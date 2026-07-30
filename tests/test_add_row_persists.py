@@ -1,18 +1,24 @@
-"""Regression: a table row added to the AppState cache must survive save (#54 revert).
+"""Regression: a just-added table row must survive save (#54 revert, #53 redo).
 
-The "add entity row" flow (`_add_entity_list_row`) appends the new child to the
-AppState cache (parent_node.children / nodes_by_id) to allow an incomplete draft
-row, deliberately bypassing facade validation. serialize_tree MUST include such
-cache-added children, or a just-added row is silently lost on save. This test
-fails against a facade-only serializer.
+PR #54 flipped ``serialize_tree`` to a facade-only serializer while the add-row
+flow still appended children only to the AppState cache, so a just-added row
+was silently lost on save. The add flows now write through the facade
+(``state.add_node(skip_validation=True)``), which makes a facade-based save
+safe. These tests pin the two halves of that contract:
+
+- a row added through the supported add path is in the facade and in the
+  serialized output;
+- a node that somehow exists only in the TreeNode cache makes ``serialize_tree``
+  fail loudly instead of silently dropping the node (#54's failure mode).
 """
 
 import uuid
 
+import pytest
 from metaseed import MetaseedClient
 from metaseed.ui.state import AppState, TreeNode
 
-from metaseed_hub.ui.helpers.tree import serialize_tree
+from metaseed_hub.ui.helpers.tree import CacheDesyncError, serialize_tree
 
 
 def _entity_types(tree: list[dict]) -> list[str]:
@@ -27,53 +33,68 @@ def _entity_types(tree: list[dict]) -> list[str]:
     return out
 
 
-def test_cache_added_child_is_serialized() -> None:
+def _state_with_investigation() -> tuple[AppState, str]:
     client = MetaseedClient("miappe", "1.2")
     inv = client.create_entity("Investigation", {"unique_id": "INV-1", "title": "T"})
 
     state = AppState()
     state.profile = "miappe"
     state.version = "1.2"
-    state.facade = client._facade
+    state.facade = client.facade
     state.invalidate_cache()
+    return state, inv.id
 
-    # Mimic _add_entity_list_row: add an (incomplete) child straight to the cache.
-    parent_node = state.nodes_by_id[inv.id]
-    study_model = getattr(state.facade, "Study")._model
+
+def test_added_row_is_serialized() -> None:
+    """A draft row added through the supported add path survives save."""
+    state, inv_id = _state_with_investigation()
+
+    # What _add_entity_list_row does: add an incomplete draft child via the facade.
+    study_model = state.facade.Study._model
+    draft = study_model.model_construct(unique_id="STU-1", title="S")
+    state.add_node("Study", draft, parent_id=inv_id, skip_validation=True)
+
+    data = serialize_tree(state)
+
+    assert "Study" in _entity_types(data["tree"]), "a just-added row must not be lost"
+
+
+def test_cache_only_node_fails_loudly_not_silently() -> None:
+    """A node existing only in the TreeNode cache must not be silently dropped.
+
+    No production flow creates such nodes anymore; if one reappears (a #54
+    regression), serializing from the facade would silently lose it. The
+    serializer must refuse instead, so the bug is caught at save time.
+    """
+    state, inv_id = _state_with_investigation()
+
+    parent_node = state.nodes_by_id[inv_id]
+    study_model = state.facade.Study._model
     child = TreeNode(
         id=str(uuid.uuid4()),
         entity_type="Study",
         instance=study_model.model_construct(unique_id="STU-1", title="S"),
         label="S",
-        parent_id=inv.id,
+        parent_id=inv_id,
     )
     parent_node.children.append(child)
     state.nodes_by_id[child.id] = child
 
-    data = serialize_tree(state)
-
-    assert "Study" in _entity_types(data["tree"]), "a cache-added row must not be lost"
+    with pytest.raises(CacheDesyncError):
+        serialize_tree(state)
 
 
 def test_add_row_flow_writes_to_facade() -> None:
-    """The migrated add-row path (state.add_node skip_validation) lands in the facade.
+    """The add-row path (state.add_node skip_validation) lands in the facade.
 
-    This is the invariant that makes the eventual facade-based serializer safe:
-    a facade serialization of the state now includes the just-added row.
+    This is the invariant that makes the facade-based serializer safe: a
+    facade serialization of the state includes the just-added row.
     """
-    client = MetaseedClient("miappe", "1.2")
-    inv = client.create_entity("Investigation", {"unique_id": "INV-1", "title": "T"})
+    state, inv_id = _state_with_investigation()
 
-    state = AppState()
-    state.profile = "miappe"
-    state.version = "1.2"
-    state.facade = client._facade
-    state.invalidate_cache()
-
-    # What _add_entity_list_row now does: add an incomplete draft child via the facade.
-    study_model = getattr(state.facade, "Study")._model
+    study_model = state.facade.Study._model
     draft = study_model.model_construct(unique_id="STU-1", title="S")
-    state.add_node("Study", draft, parent_id=inv.id, skip_validation=True)
+    state.add_node("Study", draft, parent_id=inv_id, skip_validation=True)
 
     # Force the cache to rebuild purely from the facade. If the child were only
     # in the cache (the old bug), it would vanish here; because add_node wrote it

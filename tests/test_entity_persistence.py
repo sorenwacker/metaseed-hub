@@ -1,802 +1,139 @@
-"""Tests for entity save and load functionality in the Hub UI.
+"""Entity persistence through the real save and load paths.
 
-Note: serialize_tree and deserialize_tree are defined inside create_hub_app()
-so we test them indirectly through the app or by recreating the logic here.
+Exercises the production pipeline end to end against the database:
+``ensure_dataset_facade`` (load), the facade write paths
+(``add_entity_node``/``AppState.update_node``), and ``save_dataset_state``
+(save). Serializer unit behavior is pinned in test_save_serializes_facade.py
+and test_serialization_roundtrip.py; this file covers that entities — including
+incomplete drafts — survive a save/reload cycle through PostgreSQL.
 """
 
-from metaseed.ui.state import AppState, TreeNode
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade, save_dataset_state
+from metaseed_hub.ui.helpers.tree import add_entity_node
 
 from .factories import make_dataset, make_tenant
 
 
-# Recreate serialize/deserialize logic for testing
-# These mirror the functions in app.py
-def serialize_tree(state: AppState) -> dict:
-    """Serialize AppState entity tree to JSON-compatible dict."""
+async def _make_saved_dataset(session: AsyncSession):
+    """Persist a tenant and an empty miappe dataset, returning the dataset."""
+    tenant = make_tenant()
+    session.add(tenant)
+    await session.flush()
 
-    def serialize_node(node: TreeNode) -> dict:
-        node_data = {
-            "id": node.id,
-            "entity_type": node.entity_type,
-            "label": node.label,
-            "parent_id": node.parent_id,
-            "data": {},
-        }
-        if node.instance and hasattr(node.instance, "model_dump"):
-            node_data["data"] = node.instance.model_dump(exclude_none=True)
-        if node.children:
-            node_data["children"] = [serialize_node(c) for c in node.children]
-        return node_data
-
-    return {
-        "profile": state.profile,
-        "version": state.version,
-        "tree": [serialize_node(n) for n in state.entity_tree],
-    }
-
-
-def deserialize_tree(state: AppState, data: dict | None) -> None:
-    """Deserialize JSON data into AppState entity tree."""
-    if not data or "tree" not in data:
-        state.entity_tree = []
-        state.nodes_by_id = {}
-        return
-
-    # For testing, we create simple nodes without full facade
-    def deserialize_node(node_data: dict, parent_id: str | None = None) -> TreeNode | None:
-        entity_type = node_data.get("entity_type")
-        if not entity_type:
-            return None
-
-        # Create a simple instance holder
-        class DataHolder:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        node = TreeNode(
-            id=node_data.get("id", ""),
-            entity_type=entity_type,
-            instance=DataHolder(node_data.get("data", {})),
-            label=node_data.get("label", f"New {entity_type}"),
-            parent_id=parent_id,
-        )
-
-        for child_data in node_data.get("children", []):
-            child = deserialize_node(child_data, parent_id=node.id)
-            if child:
-                node.children.append(child)
-                state.nodes_by_id[child.id] = child
-
-        return node
-
-    state.entity_tree = []
-    state.nodes_by_id = {}
-
-    for node_data in data.get("tree", []):
-        node = deserialize_node(node_data)
-        if node:
-            state.entity_tree.append(node)
-            state.nodes_by_id[node.id] = node
-
-
-class TestSerializeDeserializeTree:
-    """Tests for entity tree serialization and deserialization."""
-
-    def test_serialize_empty_tree(self) -> None:
-        """Empty AppState serializes to empty tree."""
-        state = AppState()
-        state.profile = "test"
-        state.version = "1.0"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        result = serialize_tree(state)
-
-        assert result["profile"] == "test"
-        assert result["version"] == "1.0"
-        assert result["tree"] == []
-
-    def test_serialize_single_node(self) -> None:
-        """Single root node serializes correctly."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        # Create a mock instance with model_dump
-        class MockInstance:
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "inv-001", "title": "Test Investigation"}
-
-        node = TreeNode(
-            id="node-1",
-            entity_type="Investigation",
-            instance=MockInstance(),
-            label="Test Investigation",
-            parent_id=None,
-        )
-        state.entity_tree = [node]
-        state.nodes_by_id = {"node-1": node}
-
-        result = serialize_tree(state)
-
-        assert len(result["tree"]) == 1
-        serialized_node = result["tree"][0]
-        assert serialized_node["id"] == "node-1"
-        assert serialized_node["entity_type"] == "Investigation"
-        assert serialized_node["label"] == "Test Investigation"
-        assert serialized_node["data"]["unique_id"] == "inv-001"
-        assert serialized_node["data"]["title"] == "Test Investigation"
-
-    def test_serialize_nested_nodes(self) -> None:
-        """Nested nodes serialize with children."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        class MockInvestigation:
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "inv-001", "title": "Parent"}
-
-        class MockStudy:
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "study-001", "title": "Child Study"}
-
-        parent = TreeNode(
-            id="parent-1",
-            entity_type="Investigation",
-            instance=MockInvestigation(),
-            label="Parent",
-            parent_id=None,
-        )
-        child = TreeNode(
-            id="child-1",
-            entity_type="Study",
-            instance=MockStudy(),
-            label="Child Study",
-            parent_id="parent-1",
-        )
-        parent.children = [child]
-
-        state.entity_tree = [parent]
-        state.nodes_by_id = {"parent-1": parent, "child-1": child}
-
-        result = serialize_tree(state)
-
-        assert len(result["tree"]) == 1
-        parent_data = result["tree"][0]
-        assert parent_data["id"] == "parent-1"
-        assert len(parent_data.get("children", [])) == 1
-
-        child_data = parent_data["children"][0]
-        assert child_data["id"] == "child-1"
-        assert child_data["entity_type"] == "Study"
-        assert child_data["parent_id"] == "parent-1"
-
-    def test_deserialize_empty_tree(self) -> None:
-        """Empty tree data deserializes to empty state."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        deserialize_tree(state, {"tree": []})
-
-        assert state.entity_tree == []
-        assert state.nodes_by_id == {}
-
-    def test_deserialize_preserves_none_data(self) -> None:
-        """Deserialization handles None data gracefully."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        deserialize_tree(state, None)
-
-        assert state.entity_tree == []
-        # nodes_by_id may be empty or unchanged
-
-    def test_round_trip_preserves_data(self) -> None:
-        """Serialize then deserialize preserves entity data."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        class MockInstance:
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "test-123", "title": "Round Trip Test"}
-
-        node = TreeNode(
-            id="node-rt",
-            entity_type="Investigation",
-            instance=MockInstance(),
-            label="Round Trip Test",
-            parent_id=None,
-        )
-        state.entity_tree = [node]
-        state.nodes_by_id = {"node-rt": node}
-
-        # Serialize
-        serialized = serialize_tree(state)
-
-        # Create new state and deserialize
-        new_state = AppState()
-        new_state.profile = "miappe"
-        new_state.version = "1.1"
-        deserialize_tree(new_state, serialized)
-
-        # Verify
-        assert len(new_state.entity_tree) == 1
-        restored_node = new_state.entity_tree[0]
-        assert restored_node.id == "node-rt"
-        assert restored_node.entity_type == "Investigation"
-        assert restored_node.label == "Round Trip Test"
+    dataset = make_dataset(tenant=tenant, profile="miappe", version="1.2", data={})
+    session.add(dataset)
+    await session.flush()
+    await session.refresh(dataset)
+    return dataset
 
 
 class TestEntityPersistence:
-    """Tests for entity persistence to database."""
+    """Save/reload round trips through the database."""
 
-    async def test_save_and_load_dataset_state(self, session: AsyncSession) -> None:
-        """Saving and loading dataset state preserves entity data."""
-        # Setup
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
+    async def test_save_and_reload_preserves_entities(self, session: AsyncSession) -> None:
+        """A parent with a child survives save and reload intact."""
+        dataset = await _make_saved_dataset(session)
 
-        dataset = make_dataset(tenant=tenant, profile="miappe", version="1.1")
-        session.add(dataset)
-        await session.flush()
-        await session.refresh(dataset)
-
-        # Create state directly (mimics what get_dataset_state does)
-        state = AppState()
-        state.profile = dataset.profile
-        state.version = dataset.version
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "persist-test", "title": "Persistence Test"}
-
-        node = TreeNode(
-            id="persist-node",
-            entity_type="Investigation",
-            instance=MockInstance(),
-            label="Persistence Test",
-            parent_id=None,
+        state = await ensure_dataset_facade(dataset, session)
+        inv = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "T"})
+        add_entity_node(
+            state,
+            "Study",
+            {"unique_id": "STU-1", "title": "S", "investigation_id": "INV-1"},
+            parent_id=inv.id,
         )
-        state.entity_tree.append(node)
-        state.nodes_by_id["persist-node"] = node
+        await save_dataset_state(session, dataset, state)
 
-        # Save to database
-        from sqlalchemy.orm.attributes import flag_modified
-
-        dataset.data = serialize_tree(state)
-        flag_modified(dataset, "data")
-        await session.commit()
-        await session.refresh(dataset)
-
-        # Verify data is in dataset.data
-        assert dataset.data is not None
-        assert "tree" in dataset.data
+        assert dataset.data["profile"] == "miappe"
         assert len(dataset.data["tree"]) == 1
-        assert dataset.data["tree"][0]["id"] == "persist-node"
-        assert dataset.data["tree"][0]["data"]["title"] == "Persistence Test"
 
-        # Test loading back
-        new_state = AppState()
-        new_state.profile = dataset.profile
-        new_state.version = dataset.version
-        deserialize_tree(new_state, dataset.data)
+        reloaded = await ensure_dataset_facade(dataset, session)
+        root = reloaded.entity_tree[0]
+        assert root.entity_type == "Investigation"
+        assert root.instance.title == "T"
+        assert [c.entity_type for c in root.children] == ["Study"]
+        assert root.children[0].instance.unique_id == "STU-1"
 
-        assert len(new_state.entity_tree) == 1
-        loaded_node = new_state.entity_tree[0]
-        assert loaded_node.id == "persist-node"
-        assert loaded_node.label == "Persistence Test"
-        assert loaded_node.instance.model_dump()["title"] == "Persistence Test"
+    async def test_incomplete_draft_row_survives_save_and_reload(
+        self, session: AsyncSession
+    ) -> None:
+        """The add-row -> save -> reload round trip keeps an incomplete draft.
 
+        This is the flow that lost data in #54: a draft child (missing required
+        fields) added next to a complete parent must still be there after the
+        dataset is saved and loaded again.
+        """
+        dataset = await _make_saved_dataset(session)
 
-class TestFieldUpdates:
-    """Tests for updating entity fields."""
+        state = await ensure_dataset_facade(dataset, session)
+        inv = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "T"})
+        # No unique_id: an incomplete draft as the add-row button creates.
+        add_entity_node(state, "Study", {"title": "draft"}, parent_id=inv.id)
+        await save_dataset_state(session, dataset, state)
 
-    def test_update_node_instance_preserves_in_tree(self) -> None:
-        """Updating a node's instance should be reflected when serializing."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
+        reloaded = await ensure_dataset_facade(dataset, session)
+        children = reloaded.entity_tree[0].children
+        assert [c.entity_type for c in children] == ["Study"]
+        assert children[0].instance.title == "draft"
 
-        class MockInstance:
-            def __init__(self, title: str):
-                self._title = title
+    async def test_field_update_persists(self, session: AsyncSession) -> None:
+        """An update written through the facade is the value read back."""
+        dataset = await _make_saved_dataset(session)
 
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "test-1", "title": self._title}
+        state = await ensure_dataset_facade(dataset, session)
+        inv = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "Old"})
+        await save_dataset_state(session, dataset, state)
 
-        # Create initial node
-        node = TreeNode(
-            id="node-1",
-            entity_type="Investigation",
-            instance=MockInstance("Original Title"),
-            label="Original Title",
-            parent_id=None,
-        )
-        state.entity_tree = [node]
-        state.nodes_by_id = {"node-1": node}
+        state.update_node(inv.id, {"unique_id": "INV-1", "title": "New"}, skip_validation=True)
+        await save_dataset_state(session, dataset, state)
 
-        # Verify original value
-        serialized = serialize_tree(state)
-        assert serialized["tree"][0]["data"]["title"] == "Original Title"
+        reloaded = await ensure_dataset_facade(dataset, session)
+        assert reloaded.entity_tree[0].instance.title == "New"
 
-        # Update the node's instance (simulating a save)
-        node.instance = MockInstance("New Title")
-        node.label = "New Title"
+    async def test_update_parent_keeps_children(self, session: AsyncSession) -> None:
+        """Updating a parent must not detach or drop its children."""
+        dataset = await _make_saved_dataset(session)
 
-        # Serialize again - should have new value
-        serialized_after = serialize_tree(state)
-        assert serialized_after["tree"][0]["data"]["title"] == "New Title"
-        assert serialized_after["tree"][0]["label"] == "New Title"
-
-    def test_update_nested_node_preserves_in_tree(self) -> None:
-        """Updating a nested node should be reflected when serializing."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Create parent and child
-        parent = TreeNode(
-            id="parent-1",
-            entity_type="Investigation",
-            instance=MockInstance({"unique_id": "inv-1", "title": "Parent"}),
-            label="Parent",
-            parent_id=None,
-        )
-        child = TreeNode(
-            id="child-1",
-            entity_type="Study",
-            instance=MockInstance({"unique_id": "study-1", "title": "Original Study"}),
-            label="Original Study",
-            parent_id="parent-1",
-        )
-        parent.children = [child]
-
-        state.entity_tree = [parent]
-        state.nodes_by_id = {"parent-1": parent, "child-1": child}
-
-        # Update child via nodes_by_id (how the UI does it)
-        state.nodes_by_id["child-1"].instance = MockInstance(
-            {"unique_id": "study-1", "title": "Updated Study"}
-        )
-        state.nodes_by_id["child-1"].label = "Updated Study"
-
-        # Serialize - child should have new value
-        serialized = serialize_tree(state)
-        child_data = serialized["tree"][0]["children"][0]
-        assert child_data["data"]["title"] == "Updated Study"
-        assert child_data["label"] == "Updated Study"
-
-    async def test_field_update_persists_to_database(self, session: AsyncSession) -> None:
-        """Field updates should persist to database and reload correctly."""
-        # Setup
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        dataset = make_dataset(tenant=tenant, profile="miappe", version="1.1")
-        session.add(dataset)
-        await session.flush()
-        await session.refresh(dataset)
-
-        # Create initial state with entity
-        state = AppState()
-        state.profile = dataset.profile
-        state.version = dataset.version
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, title: str):
-                self._title = title
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return {"unique_id": "field-test", "title": self._title}
-
-        node = TreeNode(
-            id="field-node",
-            entity_type="Investigation",
-            instance=MockInstance("Initial Title"),
-            label="Initial Title",
-            parent_id=None,
-        )
-        state.entity_tree.append(node)
-        state.nodes_by_id["field-node"] = node
-
-        # Save initial state
-        from sqlalchemy.orm.attributes import flag_modified
-
-        dataset.data = serialize_tree(state)
-        flag_modified(dataset, "data")
-        await session.commit()
-        await session.refresh(dataset)
-
-        # Verify initial save
-        assert dataset.data["tree"][0]["data"]["title"] == "Initial Title"
-
-        # Simulate field update (like UI would do)
-        node.instance = MockInstance("Updated Title")
-        node.label = "Updated Title"
-
-        # Save updated state
-        dataset.data = serialize_tree(state)
-        flag_modified(dataset, "data")
-        await session.commit()
-        await session.refresh(dataset)
-
-        # Verify update persisted
-        assert dataset.data["tree"][0]["data"]["title"] == "Updated Title"
-        assert dataset.data["tree"][0]["label"] == "Updated Title"
-
-        # Simulate server restart - create new state and load from DB
-        new_state = AppState()
-        new_state.profile = dataset.profile
-        new_state.version = dataset.version
-        deserialize_tree(new_state, dataset.data)
-
-        # Verify loaded state has updated values
-        assert len(new_state.entity_tree) == 1
-        loaded_node = new_state.entity_tree[0]
-        assert loaded_node.label == "Updated Title"
-        assert loaded_node.instance.model_dump()["title"] == "Updated Title"
-
-
-class TestInlineTablePersistence:
-    """Tests for inline table (child entity) persistence."""
-
-    def test_add_child_via_add_node(self) -> None:
-        """Adding a child via add_node should link it to parent correctly."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Add parent node
-        parent = state.add_node(
-            "Investigation",
-            MockInstance({"unique_id": "inv-1", "title": "Parent"}),
-        )
-        parent.label = "Parent"
-
-        # Add child node (like add_table_row does)
-        # Study requires investigation_id as a required field
-        child = state.add_node(
+        state = await ensure_dataset_facade(dataset, session)
+        inv = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "T"})
+        add_entity_node(
+            state,
             "Study",
-            MockInstance(
-                {"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child Study"}
-            ),
-            parent_id=parent.id,
+            {"unique_id": "STU-1", "title": "S", "investigation_id": "INV-1"},
+            parent_id=inv.id,
         )
-        child.label = "Child Study"
+        state.update_node(inv.id, {"unique_id": "INV-1", "title": "Renamed"}, skip_validation=True)
+        await save_dataset_state(session, dataset, state)
 
-        # Verify child is in parent's children
-        assert len(parent.children) == 1
-        assert parent.children[0].id == child.id
+        reloaded = await ensure_dataset_facade(dataset, session)
+        root = reloaded.entity_tree[0]
+        assert root.instance.title == "Renamed"
+        assert [c.entity_type for c in root.children] == ["Study"]
 
-        # Verify child is in nodes_by_id
-        assert child.id in state.nodes_by_id
+    async def test_three_level_hierarchy_round_trips(self, session: AsyncSession) -> None:
+        """Investigation -> Study -> ObservationUnit survives save and reload."""
+        dataset = await _make_saved_dataset(session)
 
-        # Serialize and verify structure
-        serialized = serialize_tree(state)
-        assert len(serialized["tree"]) == 1
-        parent_data = serialized["tree"][0]
-        assert len(parent_data.get("children", [])) == 1
-        assert parent_data["children"][0]["id"] == child.id
-
-    def test_child_survives_round_trip(self) -> None:
-        """Child nodes should persist through serialize/deserialize cycle."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Create parent with child
-        parent = state.add_node(
-            "Investigation",
-            MockInstance({"unique_id": "inv-1", "title": "Parent"}),
-        )
-        # Study requires investigation_id as a required field
-        child = state.add_node(
+        state = await ensure_dataset_facade(dataset, session)
+        inv = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "T"})
+        study = add_entity_node(
+            state,
             "Study",
-            MockInstance({"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child"}),
-            parent_id=parent.id,
+            {"unique_id": "STU-1", "title": "S", "investigation_id": "INV-1"},
+            parent_id=inv.id,
         )
-
-        # Serialize
-        serialized = serialize_tree(state)
-
-        # Deserialize into new state (simulates server restart)
-        new_state = AppState()
-        new_state.profile = "miappe"
-        new_state.version = "1.1"
-        deserialize_tree(new_state, serialized)
-
-        # Verify parent exists
-        assert len(new_state.entity_tree) == 1
-        loaded_parent = new_state.entity_tree[0]
-        assert loaded_parent.id == parent.id
-
-        # Verify child exists and is linked
-        assert len(loaded_parent.children) == 1
-        loaded_child = loaded_parent.children[0]
-        assert loaded_child.id == child.id
-        assert loaded_child.parent_id == parent.id
-
-        # Verify both are in nodes_by_id
-        assert parent.id in new_state.nodes_by_id
-        assert child.id in new_state.nodes_by_id
-
-    def test_update_parent_preserves_children(self) -> None:
-        """Updating parent instance should not affect children."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Create parent with child
-        parent = state.add_node(
-            "Investigation",
-            MockInstance({"unique_id": "inv-1", "title": "Original Parent"}),
-        )
-        # Study requires investigation_id as a required field
-        child = state.add_node(
-            "Study",
-            MockInstance(
-                {"unique_id": "study-1", "investigation_id": "inv-1", "title": "Child Study"}
-            ),
-            parent_id=parent.id,
-        )
-
-        # Update parent instance (simulates form save)
-        state.update_node(
-            parent.id,
-            MockInstance({"unique_id": "inv-1", "title": "Updated Parent"}),
-        )
-
-        # Verify child still exists
-        assert len(parent.children) == 1
-        assert parent.children[0].id == child.id
-
-        # Serialize and verify child is still there
-        serialized = serialize_tree(state)
-        parent_data = serialized["tree"][0]
-        assert parent_data["data"]["title"] == "Updated Parent"
-        assert len(parent_data.get("children", [])) == 1
-        assert parent_data["children"][0]["data"]["title"] == "Child Study"
-
-
-class TestExampleLoading:
-    """Tests for loading example data with nested entities."""
-
-    def test_nested_items_become_child_nodes(self) -> None:
-        """Nested items in example data should become child TreeNodes."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Simulate loading example with nested data
-        # Parent node
-        parent = state.add_node(
-            "Investigation",
-            MockInstance(
-                {
-                    "unique_id": "inv-001",
-                    "title": "Test Investigation",
-                }
-            ),
-        )
-
-        # Add nested items as child nodes (like the fixed load_example does)
-        # Study requires investigation_id as a required field
-        nested_items = [
-            {"unique_id": "study-001", "investigation_id": "inv-001", "title": "Study 1"},
-            {"unique_id": "study-002", "investigation_id": "inv-001", "title": "Study 2"},
-        ]
-        for item_data in nested_items:
-            state.add_node(
-                "Study",
-                MockInstance(item_data),
-                parent_id=parent.id,
-            )
-
-        # Verify children were created
-        assert len(parent.children) == 2
-        assert parent.children[0].entity_type == "Study"
-        assert parent.children[1].entity_type == "Study"
-
-        # Verify serialization includes children
-        serialized = serialize_tree(state)
-        parent_data = serialized["tree"][0]
-        assert len(parent_data.get("children", [])) == 2
-        assert parent_data["children"][0]["data"]["title"] == "Study 1"
-        assert parent_data["children"][1]["data"]["title"] == "Study 2"
-
-    def test_nested_items_survive_round_trip(self) -> None:
-        """Nested items should persist through save/load cycle."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Create parent with nested children
-        parent = state.add_node(
-            "Investigation",
-            MockInstance({"unique_id": "inv-001", "title": "Parent"}),
-        )
-        # Study requires investigation_id as a required field
-        for i in range(3):
-            state.add_node(
-                "Study",
-                MockInstance(
-                    {
-                        "unique_id": f"study-{i}",
-                        "investigation_id": "inv-001",
-                        "title": f"Study {i}",
-                    }
-                ),
-                parent_id=parent.id,
-            )
-
-        # Serialize (save to DB)
-        serialized = serialize_tree(state)
-
-        # Deserialize into new state (load from DB)
-        new_state = AppState()
-        new_state.profile = "miappe"
-        new_state.version = "1.1"
-        deserialize_tree(new_state, serialized)
-
-        # Verify parent exists
-        assert len(new_state.entity_tree) == 1
-        loaded_parent = new_state.entity_tree[0]
-
-        # Verify all children exist
-        assert len(loaded_parent.children) == 3
-        for i, child in enumerate(loaded_parent.children):
-            assert child.entity_type == "Study"
-            assert child.instance.model_dump()["title"] == f"Study {i}"
-
-    def test_deeply_nested_items(self) -> None:
-        """Deeply nested items (3+ levels) should work correctly."""
-        state = AppState()
-        state.profile = "miappe"
-        state.version = "1.1"
-        state.entity_tree = []
-        state.nodes_by_id = {}
-
-        class MockInstance:
-            def __init__(self, data: dict):
-                self._data = data
-
-            def model_dump(self, exclude_none: bool = False) -> dict:
-                return self._data
-
-        # Create 3-level hierarchy: Investigation -> Study -> ObservationUnit
-        # Each entity requires its parent's ID as a required field
-        investigation = state.add_node(
-            "Investigation",
-            MockInstance({"unique_id": "inv-001", "title": "Investigation"}),
-        )
-        study = state.add_node(
-            "Study",
-            MockInstance(
-                {"unique_id": "study-001", "investigation_id": "inv-001", "title": "Study"}
-            ),
-            parent_id=investigation.id,
-        )
-        obs_unit = state.add_node(
+        add_entity_node(
+            state,
             "ObservationUnit",
-            MockInstance({"unique_id": "ou-001", "study_id": "study-001"}),
+            {"unique_id": "OU-1", "study_id": "STU-1"},
             parent_id=study.id,
         )
+        await save_dataset_state(session, dataset, state)
 
-        # Verify hierarchy
-        assert len(investigation.children) == 1
-        assert investigation.children[0].id == study.id
-        assert len(study.children) == 1
-        assert study.children[0].id == obs_unit.id
-
-        # Serialize and verify structure
-        serialized = serialize_tree(state)
-        inv_data = serialized["tree"][0]
-        assert len(inv_data["children"]) == 1
-
-        study_data = inv_data["children"][0]
-        assert study_data["entity_type"] == "Study"
-        assert len(study_data["children"]) == 1
-
-        ou_data = study_data["children"][0]
-        assert ou_data["entity_type"] == "ObservationUnit"
-
-        # Round trip
-        new_state = AppState()
-        new_state.profile = "miappe"
-        new_state.version = "1.1"
-        deserialize_tree(new_state, serialized)
-
-        # Verify 3-level hierarchy restored
-        loaded_inv = new_state.entity_tree[0]
-        loaded_study = loaded_inv.children[0]
-        loaded_ou = loaded_study.children[0]
-
-        assert loaded_inv.entity_type == "Investigation"
-        assert loaded_study.entity_type == "Study"
-        assert loaded_ou.entity_type == "ObservationUnit"
-
-
-class TestValidation:
-    """Tests for entity validation via metaseed."""
-
-    def test_validation_placeholder(self) -> None:
-        """Placeholder for validation tests.
-
-        Validation is handled by metaseed's ProfileFacade.
-        When creating an entity via helper.create(**values),
-        Pydantic validation runs automatically.
-
-        Full validation tests should:
-        1. Test required field validation
-        2. Test type coercion
-        3. Test constraint validation (min/max, pattern, enum)
-        4. Test nested entity validation
-        """
-        # TODO: Add comprehensive validation tests
-        pass
+        reloaded = await ensure_dataset_facade(dataset, session)
+        root = reloaded.entity_tree[0]
+        assert root.entity_type == "Investigation"
+        assert root.children[0].entity_type == "Study"
+        assert root.children[0].children[0].entity_type == "ObservationUnit"

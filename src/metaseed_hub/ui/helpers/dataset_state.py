@@ -7,7 +7,7 @@ from metaseed.ui.state import AppState
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, DatasetVersion
-from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
+from metaseed_hub.ui.helpers.tree import sanitize_tree_payload, serialize_tree
 
 if TYPE_CHECKING:
     from metaseed import MetaseedClient
@@ -36,42 +36,46 @@ def _client_from_spec_data(raw_data: dict[str, Any]) -> "MetaseedClient":
     return MetaseedClient.from_spec(raw_data)
 
 
-def get_dataset_state(dataset: Dataset) -> AppState:
-    """Create AppState for a dataset from database.
+def _has_stored_entities(data: dict[str, Any] | None) -> bool:
+    """Report whether a stored payload contains entities that a save could lose.
 
     Args:
-        dataset: Dataset model with profile, version, and data fields.
+        data: The stored ``dataset.data`` payload.
 
     Returns:
-        AppState populated with dataset's entity tree.
+        True if the payload holds a non-empty ``tree`` or flat ``entities`` list.
     """
-    state = AppState()
-    state.profile = dataset.profile
-    state.version = dataset.version
-    if dataset.data:
-        deserialize_tree(state, dataset.data)
-    return state
+    if not data:
+        return False
+    return bool(data.get("tree") or data.get("entities"))
 
 
 async def ensure_dataset_facade(
     dataset: Dataset,
     session: AsyncSession,
 ) -> AppState:
-    """Get dataset state and ensure facade is properly set for user-defined specs.
+    """Load a dataset into an AppState whose facade holds the stored entities.
 
-    For datasets using database-stored specs (spec_draft_id), this loads the spec
-    and creates a MetaseedClient with from_spec(). For built-in profiles, it creates
-    a standard client.
-
-    Uses MetaseedClient.load() to populate the facade's internal entity store,
-    which is required for operations like to_graph() and get_roots().
+    This is the single load path: the facade is the source of truth for entity
+    data, so every loaded state must carry one. For datasets using
+    database-stored specs (spec_draft_id or spec_id), the spec is loaded and a
+    MetaseedClient is created with from_spec(); built-in profiles get a
+    standard client. The stored payload is passed through
+    ``sanitize_tree_payload`` and loaded with ``MetaseedClient.load()``, which
+    reconstructs entities permissively (``skip_validation``), so incomplete
+    drafts and legacy payloads load without loss.
 
     Args:
-        dataset: Dataset model with profile, version, and optional spec_draft_id.
+        dataset: Dataset model with profile, version, and optional spec ids.
         session: Database session for loading spec drafts.
 
     Returns:
         AppState with facade ready to use.
+
+    Raises:
+        DatasetDataLoadError: If the dataset holds entity data that could not
+            be loaded. This must propagate: returning an empty state instead
+            would let the next save overwrite the stored entity tree.
     """
     from metaseed import MetaseedClient
 
@@ -125,16 +129,32 @@ async def ensure_dataset_facade(
         except Exception as e:
             logger.error(f"Failed to load profile {dataset.profile}: {e}")
 
-    # Load entities into facade's internal store using client.load()
-    # This is required for to_graph() and other facade operations
-    if client and dataset.data:
+    # Load entities into the facade's internal store using client.load().
+    # A failure here must raise, not fall through to an empty state: mutation
+    # routes save the facade's contents, so an empty state would overwrite the
+    # stored entity tree on the next save.
+    if _has_stored_entities(dataset.data):
+        from metaseed_hub.ui.services.exceptions import DatasetDataLoadError
+
+        if client is None:
+            raise DatasetDataLoadError(
+                f"No client for dataset {dataset.id}; cannot load its stored entities",
+                user_message="The schema for this dataset could not be loaded. "
+                "Editing is disabled to protect the stored data.",
+            )
         try:
-            count = client.load(dataset.data)
+            payload = sanitize_tree_payload(client.facade.entities, dataset.data)
+            count = client.load(payload)
             logger.debug(f"Loaded {count} entities for dataset {dataset.id}")
-            # Invalidate AppState cache to rebuild from facade
-            state.invalidate_cache()
         except Exception as e:
             logger.error(f"Failed to load entities for dataset {dataset.id}: {e}")
+            raise DatasetDataLoadError(
+                f"Failed to load entities for dataset {dataset.id}: {e}",
+                user_message="The stored entities for this dataset could not be "
+                "loaded. Editing is disabled to protect the stored data.",
+            ) from e
+        # Invalidate AppState cache to rebuild from facade
+        state.invalidate_cache()
 
     return state
 

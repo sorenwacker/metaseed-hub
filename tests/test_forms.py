@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 from starlette.datastructures import FormData
 
-from metaseed_hub.ui.forms import extract_entity_values, get_label_from_values, parse_form_field
+from metaseed_hub.ui.forms import extract_entity_values, parse_form_field
 
 
 class TestParseFormField:
@@ -198,39 +198,3 @@ class TestExtractEntityValues:
 
         assert "title" in result
         assert "description" not in result
-
-
-class TestGetLabelFromValues:
-    """Tests for get_label_from_values function."""
-
-    def test_title_field_used_as_label(self) -> None:
-        assert get_label_from_values({"title": "My Title"}) == "My Title"
-
-    def test_name_field_used_as_label(self) -> None:
-        assert get_label_from_values({"name": "My Name"}) == "My Name"
-
-    def test_unique_id_field_used_as_label(self) -> None:
-        assert get_label_from_values({"unique_id": "INV-001"}) == "INV-001"
-
-    def test_person_name_combined(self) -> None:
-        """Person entities combine first_name and last_name."""
-        result = get_label_from_values({"first_name": "John", "last_name": "Doe"})
-        assert result == "John Doe"
-
-    def test_person_partial_name(self) -> None:
-        """Works with only first_name or last_name."""
-        assert get_label_from_values({"first_name": "John"}) == "John"
-        assert get_label_from_values({"last_name": "Doe"}) == "Doe"
-
-    def test_empty_values_returns_none(self) -> None:
-        assert get_label_from_values({}) is None
-
-    def test_priority_title_over_name(self) -> None:
-        """Title takes priority over name."""
-        result = get_label_from_values({"title": "Title", "name": "Name"})
-        assert result == "Title"
-
-    def test_identifier_field_wins_over_person_name(self) -> None:
-        """An identifier field is preferred over a first/last-name composite."""
-        result = get_label_from_values({"name": "Lab Strain", "last_name": "Doe"})
-        assert result == "Lab Strain"

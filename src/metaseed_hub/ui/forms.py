@@ -83,25 +83,3 @@ def extract_entity_values(
 
     # Remove None values
     return {k: v for k, v in values.items() if v is not None}
-
-
-def get_label_from_values(values: dict[str, Any]) -> str | None:
-    """Extract label from entity values using common identifier fields.
-
-    Args:
-        values: Dictionary of entity field values.
-
-    Returns:
-        Label string or None if no suitable field found.
-    """
-    # Check common identifier fields
-    for label_field in ("title", "name", "unique_id", "alias", "id", "identifier"):
-        if values.get(label_field):
-            return str(values[label_field])
-
-    # Special case for Person: combine first_name and last_name
-    if values.get("first_name") or values.get("last_name"):
-        parts = [values.get("first_name", ""), values.get("last_name", "")]
-        return " ".join(p for p in parts if p)
-
-    return None

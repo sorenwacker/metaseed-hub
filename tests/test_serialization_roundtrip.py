@@ -1,30 +1,16 @@
-"""Cross-compatibility of the two dataset serializers (issue #51).
+"""Round-trip of the single dataset serializer through the hub load path (#51).
 
-metaseed's ``MetaseedClient.serialize(format="tree")`` (used by EntityService)
-and the hub's ``serialize_tree`` (used by ``save_dataset_state``) both write the
-same ``dataset.data`` column. This pins that they produce the same tree shape and
-that either serializer's output round-trips through the hub reader, so the two
-cannot silently diverge into incompatible formats.
+``serialize_tree`` delegates to metaseed's ``MetaseedClient.serialize
+(format="tree")`` and the hub loads ``dataset.data`` with
+``sanitize_tree_payload`` + ``MetaseedClient.load``. This pins that a saved
+payload reloads and reserializes identically, so the write and read paths
+cannot silently diverge.
 """
 
 from metaseed import MetaseedClient
 from metaseed.ui.state import AppState
 
-from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
-
-
-def _flatten(tree: list[dict]) -> set[tuple[str, str]]:
-    """Reduce a serialized tree to a set of (entity_type, sorted data) pairs."""
-    out: set[tuple[str, str]] = set()
-
-    def walk(nodes: list[dict]) -> None:
-        for n in nodes:
-            data = {k: v for k, v in n.get("data", {}).items()}
-            out.add((n["entity_type"], repr(sorted(data.items()))))
-            walk(n.get("children", []))
-
-    walk(tree)
-    return out
+from metaseed_hub.ui.helpers.tree import sanitize_tree_payload, serialize_tree
 
 
 def _client_with_tree() -> MetaseedClient:
@@ -38,39 +24,48 @@ def _client_with_tree() -> MetaseedClient:
     return client
 
 
-def test_client_tree_output_reloads_and_reserializes_equivalently() -> None:
-    """Path A output (client.serialize tree) round-trips through the hub path."""
-    client = _client_with_tree()
-    data_a = client.serialize(format="tree")
-
-    # Hub reader consumes Path A output...
+def _reload(data: dict) -> AppState:
+    """Load a stored payload the way ensure_dataset_facade does."""
+    client = MetaseedClient("miappe", "1.2")
+    client.load(sanitize_tree_payload(client.facade.entities, data))
     state = AppState()
     state.profile = "miappe"
     state.version = "1.2"
-    deserialize_tree(state, data_a)
-
-    # ...and the hub serializer (Path B) reproduces the same entities.
-    data_b = serialize_tree(state)
-
-    assert _flatten(data_a["tree"]) == _flatten(data_b["tree"])
-    assert data_a["profile"] == data_b["profile"]
+    state.facade = client.facade
+    state.invalidate_cache()
+    return state
 
 
-def test_both_serializers_use_the_same_tree_envelope() -> None:
-    """Both serializers wrap the tree in the same {profile, version, tree} keys."""
+def test_saved_payload_reloads_and_reserializes_identically() -> None:
+    """save -> load -> save is the identity on the stored payload."""
     client = _client_with_tree()
-    data_a = client.serialize(format="tree")
 
     state = AppState()
     state.profile = "miappe"
     state.version = "1.2"
-    deserialize_tree(state, data_a)
-    data_b = serialize_tree(state)
+    state.facade = client.facade
+    state.invalidate_cache()
 
-    assert set(data_a) >= {"profile", "version", "tree"}
-    assert set(data_b) >= {"profile", "version", "tree"}
-    # Node shape agrees on the core keys (hub adds parent_id).
-    node_a = data_a["tree"][0]
-    node_b = data_b["tree"][0]
-    assert {"id", "entity_type", "label", "data", "children"} <= set(node_a)
-    assert {"id", "entity_type", "label", "data", "children"} <= set(node_b)
+    data_a = serialize_tree(state)
+    data_b = serialize_tree(_reload(data_a))
+
+    assert data_a == data_b
+
+
+def test_saved_payload_uses_the_tree_envelope() -> None:
+    """The stored payload is the {profile, version, tree} envelope."""
+    client = _client_with_tree()
+
+    state = AppState()
+    state.profile = "miappe"
+    state.version = "1.2"
+    state.facade = client.facade
+    state.invalidate_cache()
+
+    data = serialize_tree(state)
+
+    assert set(data) >= {"profile", "version", "tree"}
+    assert data["profile"] == "miappe"
+    node = data["tree"][0]
+    assert {"id", "entity_type", "label", "data", "children"} <= set(node)
+    assert [c["entity_type"] for c in node["children"]] == ["Study"]

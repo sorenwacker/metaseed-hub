@@ -140,13 +140,13 @@ async def test_save_dataset_state_records_version_author(session):
 
     from metaseed_hub.auth import TokenUser
     from metaseed_hub.models import DatasetVersion
-    from metaseed_hub.ui.helpers.dataset_state import get_dataset_state, save_dataset_state
+    from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade, save_dataset_state
 
     tenant = await _add(session, make_tenant())
     db_user = await _add(session, make_user(tenant=tenant))
     dataset = await _add(session, make_dataset(tenant=tenant))
 
-    state = get_dataset_state(dataset)
+    state = await ensure_dataset_facade(dataset, session)
     token = TokenUser(sub=db_user.keycloak_id, email=db_user.email, name="n", roles=[])
     await save_dataset_state(session, dataset, state, token)
 

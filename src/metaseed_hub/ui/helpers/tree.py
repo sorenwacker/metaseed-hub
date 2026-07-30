@@ -1,12 +1,12 @@
 """Entity-tree construction and JSON (de)serialization for AppState."""
 
 import logging
+import uuid
+from collections.abc import Collection
 from datetime import date, datetime
 from typing import Any
 
 from metaseed.ui.state import AppState, TreeNode
-
-from metaseed_hub.ui.forms import get_label_from_values
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -77,126 +77,118 @@ def add_entity_node(
     return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
 
 
-def serialize_tree(state: AppState) -> dict[str, Any]:
-    """Serialize AppState entity tree to JSON-compatible dict.
+def sanitize_tree_payload(
+    valid_entity_types: Collection[str],
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """Prepare a stored ``{profile, version, tree}`` payload for ``client.load``.
 
-    Writes the same ``dataset.data`` column as metaseed's
-    ``MetaseedClient.serialize(format="tree")`` (used by EntityService), so the
-    two MUST stay format-compatible: a ``{profile, version, tree: [...]}``
-    envelope with ``id``/``entity_type``/``label``/``data``/``children`` nodes.
-    ``tests/test_serialization_roundtrip.py`` enforces that equivalence.
+    ``MetaseedClient.load`` fails the whole load on the first malformed node,
+    while the hub must load legacy and hand-edited payloads permissively: one
+    bad node must not make a dataset appear empty. This pre-pass applies the
+    hub's tolerance before handing the payload to the client:
+
+    - Nodes without an ``entity_type``, or with one the schema does not define,
+      are dropped together with their subtree (with a warning).
+    - Nodes without an ``id`` get a generated one, so their children keep their
+      parent linkage instead of being flattened to roots.
+
+    Node *field* data is left untouched; ``client.load`` already reconstructs
+    instances with ``skip_validation`` (``model_construct``), so incomplete
+    drafts load without error and field names the model does not define are
+    ignored, exactly as the previous cache-based reader behaved. Payloads
+    without a ``tree`` key (for example the legacy flat ``{entities: [...]}``
+    format) are returned unchanged.
+
+    A future metaseed release could absorb this behind a ``client.load``
+    permissive mode; until then the hub applies it before calling the pinned
+    library.
 
     Args:
-        state: AppState with entity tree to serialize.
+        valid_entity_types: Entity type names the target schema defines.
+        data: The stored ``dataset.data`` payload.
 
     Returns:
-        Dictionary that can be stored as JSONB in database.
+        A payload safe to pass to ``client.load``.
+    """
+    if "tree" not in data:
+        return data
+    valid = set(valid_entity_types)
+
+    def clean(nodes: Any) -> list[dict[str, Any]]:
+        cleaned: list[dict[str, Any]] = []
+        if not isinstance(nodes, list):
+            return cleaned
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            entity_type = node.get("entity_type")
+            if entity_type not in valid:
+                logger.warning(
+                    f"sanitize_tree_payload: dropping node with entity_type "
+                    f"{entity_type!r} (not in schema)"
+                )
+                continue
+            out = dict(node)
+            if not out.get("id"):
+                out["id"] = str(uuid.uuid4())
+            out["children"] = clean(node.get("children", []))
+            cleaned.append(out)
+        return cleaned
+
+    return {**data, "tree": clean(data.get("tree"))}
+
+
+class CacheDesyncError(RuntimeError):
+    """The TreeNode cache holds nodes that are missing from the facade.
+
+    A facade-based save would silently drop such nodes (the #54 data-loss
+    incident). No production flow creates cache-only nodes anymore; if one
+    reappears, serialization must fail loudly instead of losing the data.
     """
 
-    def serialize_node(node: TreeNode) -> dict[str, Any]:
-        node_data: dict[str, Any] = {
-            "id": node.id,
-            "entity_type": node.entity_type,
-            "label": node.label,
-            "parent_id": node.parent_id,
-            "data": {},
-        }
-        if node.instance and hasattr(node.instance, "model_dump"):
-            # Use mode="json" to ensure datetime objects are serialized to strings
-            node_data["data"] = node.instance.model_dump(exclude_none=True, mode="json")
-        if node.children:
-            node_data["children"] = [serialize_node(c) for c in node.children]
-        return node_data
 
-    result = {
-        "profile": state.profile,
-        "version": state.version,
-        "tree": [serialize_node(n) for n in state.entity_tree],
-    }
-    # Ensure all date/datetime objects are converted to strings for JSON storage
-    serialized: dict[str, Any] = make_json_serializable(result)
-    return serialized
+def serialize_tree(state: AppState) -> dict[str, Any]:
+    """Serialize the dataset to a JSON-compatible ``{profile, version, tree}`` dict.
 
-
-def deserialize_tree(state: AppState, data: dict[str, Any]) -> None:
-    """Deserialize JSON data into AppState entity tree.
+    Delegates to metaseed's ``MetaseedClient.serialize(format="tree")`` via the
+    state's facade — the source of truth for entities — so the hub writes one
+    format through one serializer (the same one EntityService uses). Every
+    mutation flow writes through the facade, which is what makes this safe;
+    the cache-consistency check below guards that invariant.
 
     Args:
-        state: AppState to populate.
-        data: Dictionary loaded from database JSONB.
+        state: AppState whose facade holds the entities to serialize.
+
+    Returns:
+        Dictionary that can be stored as JSONB in the database.
+
+    Raises:
+        CacheDesyncError: If the TreeNode cache holds nodes the facade does
+            not, meaning a facade-based save would silently drop them.
     """
-    if not data or "tree" not in data:
-        logger.debug(
-            f"deserialize_tree: no tree in data, keys={list(data.keys()) if data else 'None'}"
-        )
-        return
+    from metaseed import MetaseedClient
 
     facade = state.get_or_create_facade()
-    if facade is None:
-        logger.error("deserialize_tree: facade is None, cannot deserialize")
-        return
+    serialized: dict[str, Any] = make_json_serializable(
+        MetaseedClient.from_facade(facade).serialize(format="tree")
+    )
 
-    logger.debug(f"deserialize_tree: facade entities={facade.entities}")
+    serialized_ids: set[str] = set()
 
-    def deserialize_node(
-        node_data: dict[str, Any],
-        parent_id: str | None = None,
-    ) -> TreeNode | None:
-        entity_type = node_data.get("entity_type")
-        if not entity_type:
-            logger.warning("deserialize_node: no entity_type in node_data")
-            return None
+    def collect_ids(nodes: list[dict[str, Any]]) -> None:
+        for node in nodes:
+            serialized_ids.add(node["id"])
+            collect_ids(node.get("children", []))
 
-        try:
-            helper = getattr(facade, entity_type)
-        except AttributeError:
-            logger.warning(f"deserialize_node: entity_type '{entity_type}' not in facade")
-            return None
-
-        # Create instance from stored data using skip_validation for permissive loading
-        instance_data = node_data.get("data", {})
-        instance = None
-        try:
-            instance = helper.create(skip_validation=True, **instance_data)
-        except Exception as e:
-            logger.warning(f"Failed to create {entity_type} with skip_validation: {e}")
-            # Fall back to model_construct as last resort
-            try:
-                model_class = helper._model
-                instance = model_class.model_construct(**instance_data)
-                logger.info(f"Created {entity_type} with model_construct - data preserved")
-            except Exception as e2:
-                logger.error(f"model_construct also failed for {entity_type}: {e2}")
-                instance = None
-
-        if instance is None:
-            logger.error(f"No instance created for {entity_type} - node will have no data")
-
-        node = TreeNode(
-            id=node_data.get("id", ""),
-            entity_type=entity_type,
-            instance=instance,
-            label=node_data.get("label", f"New {entity_type}"),
-            parent_id=parent_id,
+    collect_ids(serialized["tree"])
+    stray_ids = set(state.nodes_by_id) - serialized_ids
+    if stray_ids:
+        raise CacheDesyncError(
+            f"Refusing to save: {len(stray_ids)} cached node(s) are not in the "
+            f"facade and would be lost: {sorted(stray_ids)[:5]}"
         )
-
-        # Recursively deserialize children
-        for child_data in node_data.get("children", []):
-            child = deserialize_node(child_data, parent_id=node.id)
-            if child:
-                node.children.append(child)
-                state.nodes_by_id[child.id] = child
-
-        return node
-
-    state.entity_tree = []
-    state.nodes_by_id = {}
-
-    for node_data in data.get("tree", []):
-        node = deserialize_node(node_data)
-        if node:
-            state.entity_tree.append(node)
-            state.nodes_by_id[node.id] = node
+    return serialized
 
 
 def create_nested_nodes(
@@ -261,12 +253,6 @@ def create_nested_nodes(
                 child_node = add_entity_node(
                     state, nested_type, item_data, parent_id=parent_node.id, helper=nested_helper
                 )
-
-                # Set label from common identifier fields (falling back to a
-                # first/last-name composite only when no identifier is present).
-                label = get_label_from_values(item_data)
-                if label:
-                    child_node.label = label
 
                 # Recursively process this child's nested fields
                 create_nested_nodes(state, facade, child_node, nested_type, item_data)

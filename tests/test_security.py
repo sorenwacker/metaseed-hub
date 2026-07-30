@@ -340,34 +340,6 @@ class TestFormProcessing:
 
         assert parse_form_field("", "string") is None
 
-    def test_get_label_from_values_title(self) -> None:
-        """Extracts label from title field."""
-        from metaseed_hub.ui.forms import get_label_from_values
-
-        values = {"title": "My Title", "description": "A description"}
-        assert get_label_from_values(values) == "My Title"
-
-    def test_get_label_from_values_name(self) -> None:
-        """Extracts label from name field."""
-        from metaseed_hub.ui.forms import get_label_from_values
-
-        values = {"name": "Entity Name", "type": "Investigation"}
-        assert get_label_from_values(values) == "Entity Name"
-
-    def test_get_label_from_values_person(self) -> None:
-        """Extracts label from person name fields."""
-        from metaseed_hub.ui.forms import get_label_from_values
-
-        values = {"first_name": "John", "last_name": "Doe"}
-        assert get_label_from_values(values) == "John Doe"
-
-    def test_get_label_from_values_none(self) -> None:
-        """Returns None when no suitable field found."""
-        from metaseed_hub.ui.forms import get_label_from_values
-
-        values = {"field1": "value1", "field2": "value2"}
-        assert get_label_from_values(values) is None
-
 
 class TestOAuthScopes:
     """Tests for OAuth scope configuration."""

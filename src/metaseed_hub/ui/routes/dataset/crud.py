@@ -31,7 +31,6 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
     ensure_dataset_facade,
-    get_dataset_state,
     group_entities_by_type,
     parse_workbook_sheets,
     read_upload_capped,
@@ -276,11 +275,9 @@ async def dataset_import(
         spec = loader.load_profile(version, profile)
         root_entity = spec.root_entity or "Investigation"
 
-        state = get_dataset_state(dataset)
-        state.reset()
-        state.profile = profile
-        state.version = version
-        state.facade = None
+        # The dataset was just created empty, so this yields a fresh state whose
+        # facade is the authoritative store for the imported entities.
+        state = await ensure_dataset_facade(dataset, session)
         facade = state.get_or_create_facade()
 
         # Handle different data structures
@@ -400,7 +397,7 @@ async def create_dataset_from_accession(
     session.add(dataset)
     await session.flush()
 
-    state = get_dataset_state(dataset)
+    state = await ensure_dataset_facade(dataset, session)
     state.profile = client.profile
     state.version = client.version
     # Swap in the importer's facade and rebuild caches; do not reset() (it clears).
@@ -655,11 +652,9 @@ async def dataset_create(
                 spec = loader.load_profile(version, profile)
                 root_entity = spec.root_entity or "Investigation"
 
-                state = get_dataset_state(dataset)
-                state.reset()
-                state.profile = profile
-                state.version = version
-                state.facade = None
+                # The dataset was just created empty, so this yields a fresh
+                # state whose facade will hold the example entities.
+                state = await ensure_dataset_facade(dataset, session)
                 facade = state.get_or_create_facade()
 
                 node = add_entity_node(state, root_entity, example_data)
@@ -774,8 +769,10 @@ async def dataset_load_example(
     spec = loader.load_profile(dataset.version, dataset.profile)
     root_entity = spec.root_entity or "Investigation"
 
-    # Load example into dataset state (append, don't replace)
-    state = get_dataset_state(dataset)
+    # Load example into dataset state (append, don't replace). The facade must
+    # hold the already-stored entities before the example is appended, or a
+    # facade-based save would drop them.
+    state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
     try:

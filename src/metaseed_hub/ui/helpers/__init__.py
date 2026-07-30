@@ -16,7 +16,6 @@ from metaseed_hub.ui.helpers.csrf import (
 )
 from metaseed_hub.ui.helpers.dataset_state import (
     ensure_dataset_facade,
-    get_dataset_state,
     save_dataset_state,
 )
 from metaseed_hub.ui.helpers.entity_import import (
@@ -34,9 +33,9 @@ from metaseed_hub.ui.helpers.text import (
 from metaseed_hub.ui.helpers.tree import (
     add_entity_node,
     create_nested_nodes,
-    deserialize_tree,
     get_tree_data_from_nodes,
     make_json_serializable,
+    sanitize_tree_payload,
     serialize_tree,
 )
 from metaseed_hub.ui.helpers.uploads import (
@@ -55,10 +54,8 @@ __all__ = [
     "build_entity_form_context",
     "build_inline_tables",
     "create_nested_nodes",
-    "deserialize_tree",
     "ensure_dataset_facade",
     "escape_pattern_hyphen",
-    "get_dataset_state",
     "get_or_create_csrf_token",
     "group_entities_by_type",
     "set_csrf_cookie",
@@ -67,6 +64,7 @@ __all__ = [
     "make_json_serializable",
     "parse_workbook_sheets",
     "read_upload_capped",
+    "sanitize_tree_payload",
     "save_dataset_state",
     "serialize_tree",
     "validate_csrf_token",

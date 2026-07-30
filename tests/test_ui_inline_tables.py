@@ -1,6 +1,5 @@
 """Tests for UI inline table functionality."""
 
-import pytest
 from metaseed.ui.state import AppState, TreeNode
 
 
@@ -143,106 +142,32 @@ class TestTreeSerialization:
     def test_serialize_node_with_children(self) -> None:
         """Nodes with children serialize recursively."""
         state = AppState()
-        state.profile = "isa"
-        state.version = "1.0"
+        state.profile = "miappe"
+        state.version = "1.2"
 
-        # Create a mock tree structure
-        parent = TreeNode(
-            id="parent-1",
-            entity_type="Investigation",
-            instance=None,
-            label="Test Investigation",
-            parent_id=None,
-        )
-        child = TreeNode(
-            id="child-1",
-            entity_type="Study",
-            instance=None,
-            label="Test Study",
-            parent_id="parent-1",
-        )
-        parent.children.append(child)
-        state.entity_tree.append(parent)
-        state.nodes_by_id["parent-1"] = parent
-        state.nodes_by_id["child-1"] = child
+        from metaseed_hub.ui.helpers import add_entity_node, serialize_tree
 
-        from metaseed_hub.ui.helpers import serialize_tree
+        parent = add_entity_node(state, "Investigation", {"unique_id": "INV-1", "title": "T"})
+        child = add_entity_node(
+            state,
+            "Study",
+            {"unique_id": "STU-1", "title": "S", "investigation_id": "INV-1"},
+            parent_id=parent.id,
+        )
 
         result = serialize_tree(state)
 
         assert len(result["tree"]) == 1
         parent_data = result["tree"][0]
-        assert parent_data["id"] == "parent-1"
+        assert parent_data["id"] == parent.id
         assert parent_data["entity_type"] == "Investigation"
         assert len(parent_data["children"]) == 1
-        assert parent_data["children"][0]["id"] == "child-1"
-
-    def test_deserialize_empty_data(self) -> None:
-        """Empty data leaves tree empty."""
-        state = AppState()
-        state.profile = "isa"
-        state.version = "1.0"
-
-        from metaseed_hub.ui.helpers import deserialize_tree
-
-        deserialize_tree(state, {})
-
-        assert state.entity_tree == []
-        assert state.nodes_by_id == {}
-
-    @pytest.mark.skip(reason="Requires metaseed profile with Investigation/Study types")
-    def test_deserialize_preserves_parent_child_relationship(self) -> None:
-        """Deserialization preserves parent-child relationships."""
-        state = AppState()
-        state.profile = "isa"
-        state.version = "1.0"
-
-        data = {
-            "profile": "isa",
-            "version": "1.0",
-            "tree": [
-                {
-                    "id": "parent-1",
-                    "entity_type": "Investigation",
-                    "label": "Test",
-                    "parent_id": None,
-                    "data": {"unique_id": "inv-001", "title": "Test Investigation"},
-                    "children": [
-                        {
-                            "id": "child-1",
-                            "entity_type": "Study",
-                            "label": "Study 1",
-                            "parent_id": "parent-1",
-                            "data": {
-                                "unique_id": "study-001",
-                                "investigation_id": "inv-001",
-                                "title": "Test Study",
-                            },
-                            "children": [],
-                        }
-                    ],
-                }
-            ],
-        }
-
-        from metaseed_hub.ui.helpers import deserialize_tree
-
-        deserialize_tree(state, data)
-
-        # Check parent was created
-        assert "parent-1" in state.nodes_by_id
-        parent = state.nodes_by_id["parent-1"]
-        assert parent.entity_type == "Investigation"
-
-        # Check child was created and linked
-        assert "child-1" in state.nodes_by_id
-        child = state.nodes_by_id["child-1"]
-        assert child.entity_type == "Study"
-        assert child.parent_id == "parent-1"
+        assert parent_data["children"][0]["id"] == child.id
+        assert child.parent_id == parent.id
 
         # Check child is in parent's children list
         assert len(parent.children) == 1
-        assert parent.children[0].id == "child-1"
+        assert parent.children[0].id == child.id
 
 
 class TestInlineTableCellEditing:
