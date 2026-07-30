@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from metaseed.agent.mcp.server import SPEC_BUILDING_INSTRUCTIONS
 from sqlalchemy import select
 
 from metaseed_hub.database import db
@@ -405,11 +406,14 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             "than inventing a value: an empty required field is a smaller "
             "problem than a wrong one, and it is reported so it can be filled "
             "later.\n\n"
-            "Building a specification: spec_create makes a private draft, then "
-            "spec_add_entity and spec_add_field build it up and spec_validate "
-            "reports problems. Publishing is deliberately not available here — "
-            "it shares a specification with every user of the hub, so the "
-            "person must do it themselves in the web interface."
+            # The spec-building workflow (entity linkage, root, orphans) is
+            # shared with the standalone metaseed server so both teach the
+            # same tree model.
+            + SPEC_BUILDING_INSTRUCTIONS
+            + "\nDrafts are private to you. Publishing is deliberately not "
+            "available here — it shares a specification with every user of "
+            "the hub, so the person must do it themselves in the web "
+            "interface."
         ),
         stateless_http=True,
         # Served at the mount root: the app is mounted at /hub/mcp, and the

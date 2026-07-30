@@ -1125,3 +1125,16 @@ async def test_the_instructions_cover_the_tools_that_exist(server) -> None:
         assert expected in instructions, f"{expected} is not mentioned"
     assert "save_dataset, which replaces the whole dataset" in instructions
     assert "Publishing is deliberately not available" in instructions
+
+
+async def test_the_instructions_teach_spec_entity_linkage(server) -> None:
+    """Without the linkage workflow an agent builds a flat spec: entities but
+    no parent field whose items names the child, no root — and spec_validate
+    does not flag orphans. The shared block from metaseed carries it so the
+    hub and the standalone server teach the same tree model."""
+    from metaseed.agent.mcp.server import SPEC_BUILDING_INSTRUCTIONS
+
+    instructions = server.instructions or ""
+    assert SPEC_BUILDING_INSTRUCTIONS in instructions
+    for expected in ("spec_set_root_entity", "items", "orphan"):
+        assert expected in instructions, f"{expected} is not mentioned"
