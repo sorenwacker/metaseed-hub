@@ -178,9 +178,8 @@ def create_app() -> FastAPI:
         # mirroring the HTTP routes. Without this any authenticated user
         # could join any project's room and read its messages and presence.
         try:
-            async for session in db.session():
+            async with db.session_factory() as session:
                 await get_dataset_for_user(project_id, session, user)
-                break
         except Exception:
             await websocket.close(code=4003)
             return

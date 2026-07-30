@@ -4,8 +4,9 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import redis.asyncio as redis
 from fastapi import WebSocket, WebSocketDisconnect
@@ -22,7 +23,7 @@ class Connection:
     websocket: WebSocket
     user_id: str
     user_name: str
-    connected_at: datetime = field(default_factory=datetime.now)
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -149,7 +150,10 @@ class WebSocketManager:
 
         room = self._rooms[project_id]
         disconnected: list[str] = []
-        for conn_id, connection in room.connections.items():
+        # Snapshot the connections: each send is a suspension point, and a
+        # concurrent join/leave mutating the dict mid-iteration would raise
+        # RuntimeError and drop delivery to the remaining recipients.
+        for conn_id, connection in list(room.connections.items()):
             if conn_id == exclude_connection:
                 continue
             try:
@@ -169,7 +173,7 @@ class WebSocketManager:
             except asyncio.CancelledError:
                 pass
         if self._pubsub:
-            await self._pubsub.close()
+            await self._pubsub.aclose()  # type: ignore[no-untyped-call]
         if self._redis:
             await self._redis.aclose()
 
@@ -292,7 +296,8 @@ class WebSocketManager:
         room = self._rooms[project_id]
         message_json = json.dumps(message)
         disconnected: list[str] = []
-        for conn_id, connection in room.connections.items():
+        # Snapshot the connections; see _dispatch_local for why.
+        for conn_id, connection in list(room.connections.items()):
             if conn_id == exclude_connection:
                 continue
             try:
@@ -303,32 +308,6 @@ class WebSocketManager:
         # Clean up disconnected connections
         for conn_id in disconnected:
             await self.leave_room(project_id, conn_id)
-
-    async def send_to_connection(
-        self,
-        project_id: str,
-        connection_id: str,
-        message: dict[str, Any],
-    ) -> None:
-        """Send a message to a specific connection.
-
-        Args:
-            project_id: Project identifier.
-            connection_id: Connection identifier.
-            message: Message to send.
-        """
-        if project_id not in self._rooms:
-            return
-
-        room = self._rooms[project_id]
-        if connection_id not in room.connections:
-            return
-
-        connection = room.connections[connection_id]
-        try:
-            await connection.websocket.send_text(json.dumps(message))
-        except Exception:
-            await self.leave_room(project_id, connection_id)
 
     async def handle_connection(
         self,
@@ -345,7 +324,9 @@ class WebSocketManager:
             user_id: User identifier.
             user_name: User display name.
         """
-        connection_id = f"{user_id}:{id(websocket)}"
+        # The ID travels through Redis as the broadcast exclude marker, so it
+        # must be unique across app instances, not just within this process.
+        connection_id = f"{user_id}:{uuid4().hex}"
 
         await self.join_room(project_id, connection_id, websocket, user_id, user_name)
 
@@ -357,7 +338,7 @@ class WebSocketManager:
                 # Add sender information
                 message["sender_id"] = user_id
                 message["sender_name"] = user_name
-                message["timestamp"] = datetime.now().isoformat()
+                message["timestamp"] = datetime.now(UTC).isoformat()
 
                 # Broadcast to room
                 await self.broadcast_to_room(

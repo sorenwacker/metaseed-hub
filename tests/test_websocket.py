@@ -8,10 +8,14 @@ honoring the per-message exclude.
 
 import asyncio
 import json
+import re
+from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
+from fastapi import WebSocketDisconnect
 
-from metaseed_hub.websocket import Connection, WebSocketManager
+from metaseed_hub.websocket import Connection, Room, WebSocketManager
 
 
 class FakeWebSocket:
@@ -260,3 +264,230 @@ async def test_broadcast_roundtrip_through_dispatch_delivers_once() -> None:
 
     assert sender_ws.sent == []  # excluded
     assert len(peer_ws.sent) == 1  # delivered exactly once
+
+
+class _RecordingSessionContext:
+    """Async context manager standing in for an AsyncSession from the factory."""
+
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.session = object()
+
+    async def __aenter__(self) -> object:
+        self.events.append("session-open")
+        return self.session
+
+    async def __aexit__(self, *exc: object) -> None:
+        self.events.append("session-close")
+
+
+class _ClosableWebSocket(FakeWebSocket):
+    """A FakeWebSocket that also records close codes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.close_codes: list[int] = []
+
+    async def close(self, code: int = 1000) -> None:
+        self.close_codes.append(code)
+
+
+def _websocket_endpoint():
+    """Return the /ws/{project_id} endpoint function from the application."""
+    from metaseed_hub import main as main_module
+
+    for route in main_module.app.routes:
+        if getattr(route, "path", "") == "/ws/{project_id}":
+            return route.endpoint
+    raise AssertionError("websocket route not found")
+
+
+@pytest.mark.asyncio
+async def test_ws_room_authorization_closes_db_session(monkeypatch):
+    """The authorization DB session is closed before the connection is handled.
+
+    The endpoint must drive the session as a context manager; the previous
+    async-for/break pattern deferred the session close to garbage collection,
+    leaking pool connections.
+    """
+    import metaseed_hub.main as main_module
+    import metaseed_hub.ui.dependencies as deps_module
+
+    events: list[str] = []
+    ctx = _RecordingSessionContext(events)
+    user = SimpleNamespace(keycloak_id="kc-1", name="User One")
+
+    async def fake_verify_token(token: str):
+        return user
+
+    async def fake_get_dataset_for_user(project_id, session, token_user):
+        events.append("authorized")
+        assert session is ctx.session
+        assert project_id == "proj-1"
+        assert token_user is user
+        return object()
+
+    async def fake_handle_connection(**kwargs):
+        events.append("handled")
+
+    monkeypatch.setattr(main_module, "verify_token", fake_verify_token)
+    monkeypatch.setattr(deps_module, "get_dataset_for_user", fake_get_dataset_for_user)
+    monkeypatch.setattr(main_module.db, "_session_factory", lambda: ctx)
+    monkeypatch.setattr(main_module.manager, "handle_connection", fake_handle_connection)
+
+    ws = _ClosableWebSocket()
+    await _websocket_endpoint()(websocket=ws, project_id="proj-1", token="tok")
+
+    assert events == ["session-open", "authorized", "session-close", "handled"]
+    assert ws.close_codes == []
+
+
+@pytest.mark.asyncio
+async def test_ws_room_authorization_denial_closes_db_session(monkeypatch):
+    """A denied room join closes the socket with 4003 and still closes the session."""
+    from fastapi import HTTPException
+
+    import metaseed_hub.main as main_module
+    import metaseed_hub.ui.dependencies as deps_module
+
+    events: list[str] = []
+    ctx = _RecordingSessionContext(events)
+
+    async def fake_verify_token(token: str):
+        return SimpleNamespace(keycloak_id="kc-1", name="User One")
+
+    async def fake_get_dataset_for_user(project_id, session, token_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    monkeypatch.setattr(main_module, "verify_token", fake_verify_token)
+    monkeypatch.setattr(deps_module, "get_dataset_for_user", fake_get_dataset_for_user)
+    monkeypatch.setattr(main_module.db, "_session_factory", lambda: ctx)
+
+    ws = _ClosableWebSocket()
+    await _websocket_endpoint()(websocket=ws, project_id="proj-1", token="tok")
+
+    assert events == ["session-open", "session-close"]
+    assert ws.close_codes == [4003]
+
+
+class RoomMutatingWebSocket(FakeWebSocket):
+    """A websocket whose first send mutates the room, like a concurrent join.
+
+    Every ``send_text`` in a broadcast loop is a suspension point where a
+    concurrent ``join_room``/``leave_room`` can add or remove connections. This
+    fake performs that mutation inside the send so iterating the live dict
+    would raise ``RuntimeError: dictionary changed size during iteration``.
+    """
+
+    def __init__(self, room: Room) -> None:
+        super().__init__()
+        self._room = room
+        self._mutated = False
+
+    async def send_text(self, text: str) -> None:
+        if not self._mutated:
+            self._mutated = True
+            self._room.add_connection(
+                "conn-late",
+                Connection(websocket=FakeWebSocket(), user_id="late", user_name="late"),  # type: ignore[arg-type]
+            )
+        await super().send_text(text)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_local_survives_room_mutation_during_send() -> None:
+    """A join landing mid-dispatch must not abort delivery to remaining peers."""
+    manager = WebSocketManager()
+    room = manager._get_or_create_room("proj-1")
+    mutating_ws = RoomMutatingWebSocket(room)
+    room.add_connection(
+        "conn-1",
+        Connection(websocket=mutating_ws, user_id="u1", user_name="u1"),  # type: ignore[arg-type]
+    )
+    ws2 = _add_connection(manager, "proj-1", "conn-2")
+
+    envelope = json.dumps({"exclude": None, "message": {"type": "chat", "text": "hi"}})
+    await manager._dispatch_local("project:proj-1:messages", envelope)
+
+    assert len(mutating_ws.sent) == 1
+    assert len(ws2.sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_broadcast_without_redis_survives_room_mutation_during_send() -> None:
+    """The no-Redis broadcast path tolerates the same mid-send room mutation."""
+    manager = WebSocketManager()
+    room = manager._get_or_create_room("proj-1")
+    mutating_ws = RoomMutatingWebSocket(room)
+    room.add_connection(
+        "conn-1",
+        Connection(websocket=mutating_ws, user_id="u1", user_name="u1"),  # type: ignore[arg-type]
+    )
+    ws2 = _add_connection(manager, "proj-1", "conn-2")
+
+    await manager.broadcast_to_room("proj-1", {"type": "chat", "text": "hi"})
+
+    assert len(mutating_ws.sent) == 1
+    assert len(ws2.sent) == 1
+
+
+class ScriptedWebSocket(FakeWebSocket):
+    """A websocket that yields scripted frames, then disconnects."""
+
+    def __init__(self, frames: list[str]) -> None:
+        super().__init__()
+        self._frames = iter(frames)
+
+    async def receive_text(self) -> str:
+        try:
+            return next(self._frames)
+        except StopIteration:
+            raise WebSocketDisconnect(1000) from None
+
+
+async def _run_connection_and_get_chat_envelope(
+    manager: WebSocketManager, user_id: str
+) -> dict[str, object]:
+    ws = ScriptedWebSocket([json.dumps({"type": "chat", "text": "hi"})])
+    await manager.handle_connection(ws, "proj-1", user_id, "User")  # type: ignore[arg-type]
+    chat_envelopes = [
+        envelope
+        for _, payload in manager._redis.published  # type: ignore[attr-defined]
+        if (envelope := json.loads(payload))["message"]["type"] == "chat"
+    ]
+    assert len(chat_envelopes) == 1
+    return chat_envelopes[0]  # type: ignore[no-any-return]
+
+
+@pytest.mark.asyncio
+async def test_handle_connection_ids_are_uuid_based_and_unique() -> None:
+    """Connection IDs travel through Redis cluster-wide, so they must not rely on ``id()``."""
+    envelope1 = await _run_connection_and_get_chat_envelope(_manager_with_redis(), "user-1")
+    envelope2 = await _run_connection_and_get_chat_envelope(_manager_with_redis(), "user-1")
+
+    assert re.fullmatch(r"user-1:[0-9a-f]{32}", str(envelope1["exclude"]))
+    assert envelope1["exclude"] != envelope2["exclude"]
+
+
+@pytest.mark.asyncio
+async def test_handle_connection_timestamps_are_utc_aware() -> None:
+    """Broadcast timestamps carry a UTC offset, matching the HTTP side."""
+    envelope = await _run_connection_and_get_chat_envelope(_manager_with_redis(), "user-1")
+
+    message = envelope["message"]
+    assert isinstance(message, dict)
+    timestamp = datetime.fromisoformat(message["timestamp"])
+    assert timestamp.utcoffset() is not None
+    assert timestamp.tzinfo == UTC
+
+
+def _manager_with_redis() -> WebSocketManager:
+    manager = WebSocketManager()
+    manager._redis = FakeRedis()  # type: ignore[assignment]
+    return manager
+
+
+def test_connection_connected_at_is_utc_aware() -> None:
+    """Presence ``connected_at`` values are timezone-aware UTC."""
+    connection = Connection(websocket=FakeWebSocket(), user_id="u1", user_name="U1")  # type: ignore[arg-type]
+    assert connection.connected_at.tzinfo == UTC
