@@ -52,6 +52,8 @@ Each of these reports what is still missing after the change, using the profile'
 | Tool | |
 | --- | --- |
 | `spec_create` | Start a new specification as a private draft |
+| `spec_import_yaml` | Start a new private draft from a YAML specification document |
+| `spec_clone` | Start a new private draft from a built-in profile or a published specification |
 | `spec_add_entity` | Add an entity type |
 | `spec_update_entity` | Change an entity's description or ontology term; unset arguments keep their values |
 | `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |

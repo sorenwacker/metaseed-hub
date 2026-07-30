@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     Caller = Callable[[], AbstractAsyncContextManager[tuple[AsyncSession, User]]]
     OwnedDraft = Callable[[AsyncSession, User, str], Awaitable[SpecDraft]]
     Building = Callable[[AsyncSession, SpecDraft, User], AbstractAsyncContextManager[Any]]
+    ProfileSpecResolver = Callable[[AsyncSession, str, str], Awaitable[Any]]
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -75,8 +76,52 @@ def _loaded_spec(row: SpecDraft, draft: str) -> Any:
     return state.spec
 
 
+async def _new_named_draft(
+    session: AsyncSession,
+    user: User,
+    name: str,
+    spec: Any,
+    template_source: tuple[str, str] | None = None,
+) -> SpecDraft:
+    """Create a draft holding ``spec``, under a name free in the caller's workspace.
+
+    The one draft-creation path of this module, shared by spec_create,
+    spec_import_yaml, and spec_clone so the name-uniqueness rule cannot drift
+    between them. Scoped to the user like ``_owned_draft``: draft names are
+    unique per user, so someone else's draft must not block the name.
+
+    Raises:
+        ValueError: If the caller already has a draft by that name.
+    """
+    from metaseed_hub.ui.spec_builder.access import create_new_draft
+
+    existing = await session.execute(
+        select(SpecDraft).where(
+            SpecDraft.tenant_id == user.tenant_id,
+            SpecDraft.user_id == user.id,
+            SpecDraft.name == name,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise ValueError(f"A draft named {name!r} already exists")
+
+    return await create_new_draft(
+        session,
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        name=name,
+        spec=spec,
+        template_source=template_source,
+    )
+
+
 def register_spec_tools(  # noqa: C901
-    mcp: FastMCP, *, caller: Caller, owned_draft: OwnedDraft, building: Building
+    mcp: FastMCP,
+    *,
+    caller: Caller,
+    owned_draft: OwnedDraft,
+    building: Building,
+    profile_spec: ProfileSpecResolver,
 ) -> None:
     """Register the specification tools with the hub's MCP server.
 
@@ -87,6 +132,8 @@ def register_spec_tools(  # noqa: C901
         owned_draft: Coroutine returning the caller's own draft by name.
         building: Async context manager yielding a ``SpecBuilder`` over a draft
             and persisting the draft after the block.
+        profile_spec: Coroutine resolving a profile name and version to a
+            ``ProfileSpec``, built-in first, then published.
     """
 
     @mcp.tool()
@@ -104,30 +151,59 @@ def register_spec_tools(  # noqa: C901
         """
         from metaseed.specs.builder import SpecBuilder
 
-        from metaseed_hub.ui.spec_builder.access import create_new_draft
+        async with caller() as (session, user):
+            builder = SpecBuilder.empty(name, version, description=description)
+            draft = await _new_named_draft(session, user, name, builder.spec)
+            logger.info("mcp: %s created spec draft %r", user.email, name)
+            return json.dumps({"name": draft.name, "version": draft.version})
+
+    @mcp.tool()
+    async def spec_import_yaml(yaml_text: str, name: str = "") -> str:
+        """Start a new private draft from a YAML specification document.
+
+        The same parser the web interface's Import page uses, so a spec written
+        elsewhere — for example saved by the standalone metaseed server, which
+        keeps its files on the local filesystem and not on the hub — lands here
+        as a draft. Publishing stays a human action in the web interface.
+
+        Args:
+            yaml_text: The specification as a YAML document.
+            name: The draft's name in your workspace. Left empty, the spec's
+                own name is used.
+        """
+        from metaseed_hub.ui.spec_builder_helpers import parse_spec_from_yaml
 
         async with caller() as (session, user):
-            # Scoped to the user like owned_draft: draft names are unique per
-            # user, so someone else's draft must not block this name.
-            existing = await session.execute(
-                select(SpecDraft).where(
-                    SpecDraft.tenant_id == user.tenant_id,
-                    SpecDraft.user_id == user.id,
-                    SpecDraft.name == name,
-                )
-            )
-            if existing.scalar_one_or_none() is not None:
-                raise ValueError(f"A draft named {name!r} already exists")
+            spec = parse_spec_from_yaml(yaml_text)
+            draft_name = name.strip() or spec.name or "Imported Spec"
+            draft = await _new_named_draft(session, user, draft_name, spec)
+            logger.info("mcp: %s imported spec draft %r", user.email, draft_name)
+            return json.dumps({"name": draft.name, "version": draft.version})
 
-            builder = SpecBuilder.empty(name, version, description=description)
-            draft = await create_new_draft(
-                session,
-                user_id=user.id,
-                tenant_id=user.tenant_id,
-                name=name,
-                spec=builder.spec,
+    @mcp.tool()
+    async def spec_clone(profile: str, version: str, name: str = "") -> str:
+        """Start a new private draft from a built-in profile or published spec.
+
+        The clone is your own copy: editing it changes nothing for anyone else.
+        Both kinds of source appear in list_profiles.
+
+        Args:
+            profile: A profile name from list_profiles.
+            version: The profile version.
+            name: The draft's name in your workspace. Left empty, the
+                profile's own name is used.
+        """
+        import copy
+
+        async with caller() as (session, user):
+            spec = copy.deepcopy(await profile_spec(session, profile, version))
+            draft_name = name.strip() or spec.name
+            draft = await _new_named_draft(
+                session, user, draft_name, spec, template_source=(profile, version)
             )
-            logger.info("mcp: %s created spec draft %r", user.email, name)
+            logger.info(
+                "mcp: %s cloned %s %s as spec draft %r", user.email, profile, version, draft_name
+            )
             return json.dumps({"name": draft.name, "version": draft.version})
 
     @mcp.tool()

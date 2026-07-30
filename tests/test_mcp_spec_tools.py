@@ -253,6 +253,193 @@ class TestSpecCorrectability:
             await rename("TheirsToo", "A", "B")
 
 
+_ROUND_TRIP_YAML = """
+name: RoundTrip
+version: "1.0"
+display_name: Round Trip
+description: An imported specification
+root_entity: Study
+entities:
+  Study:
+    description: A study of things
+    fields:
+      - name: title
+        type: string
+        required: true
+      - name: samples
+        type: list
+        items: Sample
+  Sample:
+    description: A sample
+    fields:
+      - name: label
+        type: string
+"""
+
+
+class TestSpecImportYaml:
+    """A YAML document becomes a private draft, the way the web Import page
+    already does it — same parser, same draft row, same name-uniqueness."""
+
+    async def test_an_imported_draft_round_trips_through_the_preview(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Import then preview must describe the same specification: nothing
+        gained, nothing lost, or the hub's copy is not the user's spec."""
+        from metaseed_hub.ui.spec_builder_helpers import parse_spec_from_yaml
+
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="imp00001", email="imp00001@example.org"
+        )
+        import_yaml = await _tool(server, "spec_import_yaml")
+        preview = await _tool(server, "spec_preview_yaml")
+        with _calling_with(secret):
+            created = json.loads(await import_yaml(_ROUND_TRIP_YAML))
+            assert created["name"] == "RoundTrip", "an empty name falls back to the spec's own"
+            assert created["version"] == "1.0"
+            previewed = json.loads(await preview("RoundTrip"))
+
+        assert parse_spec_from_yaml(previewed["yaml"]) == parse_spec_from_yaml(_ROUND_TRIP_YAML)
+
+    async def test_the_draft_name_argument_wins_over_the_specs_own(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="imp00002", email="imp00002@example.org"
+        )
+        import_yaml = await _tool(server, "spec_import_yaml")
+        with _calling_with(secret):
+            created = json.loads(await import_yaml(_ROUND_TRIP_YAML, "Renamed Import"))
+
+        assert created["name"] == "Renamed Import"
+        spec = await _spec_of("Renamed Import")
+        assert spec["name"] == "RoundTrip", "the draft name does not rewrite the spec"
+
+    async def test_a_name_collision_is_a_clean_error(self, server, session: AsyncSession) -> None:
+        """Same rule as spec_create: draft names are unique per user."""
+        secret = await _drafting(server, session, slug="imp00003", name="RoundTrip")
+        import_yaml = await _tool(server, "spec_import_yaml")
+        with _calling_with(secret), pytest.raises(ValueError, match="already exists"):
+            await import_yaml(_ROUND_TRIP_YAML)
+
+    async def test_invalid_yaml_is_a_clean_error(self, server, session: AsyncSession) -> None:
+        """A syntax error reads as a ValueError the agent can act on, not a
+        stack trace."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="imp00004", email="imp00004@example.org"
+        )
+        import_yaml = await _tool(server, "spec_import_yaml")
+        with _calling_with(secret), pytest.raises(ValueError, match="Invalid YAML"):
+            await import_yaml("entities: [unclosed")
+
+    async def test_a_non_mapping_document_is_refused(self, server, session: AsyncSession) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="imp00005", email="imp00005@example.org"
+        )
+        import_yaml = await _tool(server, "spec_import_yaml")
+        with _calling_with(secret), pytest.raises(ValueError, match="mapping"):
+            await import_yaml("- just\n- a list")
+
+    async def test_an_imported_draft_is_scoped_to_its_importer(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Another user of the same tenant can neither see nor edit it."""
+        from metaseed_hub.tokens import issue_token
+        from tests.factories import make_tenant, make_user
+
+        tenant = make_tenant(slug="imp00006")
+        session.add(tenant)
+        await session.flush()
+        user_a = make_user(tenant=tenant, email="imp00006-a@example.org")
+        user_b = make_user(tenant=tenant, email="imp00006-b@example.org")
+        session.add_all([user_a, user_b])
+        await session.commit()
+        secret_a, _ = await issue_token(session, user_a, name="agent")
+        secret_b, _ = await issue_token(session, user_b, name="agent")
+
+        import_yaml = await _tool(server, "spec_import_yaml")
+        listing = await _tool(server, "list_spec_drafts")
+        status = await _tool(server, "spec_status")
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret_a):
+            await import_yaml(_ROUND_TRIP_YAML, "OnlyMine")
+        with _calling_with(secret_b):
+            assert json.loads(await listing()) == [], "not visible in the other user's list"
+            with pytest.raises(ValueError, match="No specification draft"):
+                await status("OnlyMine")
+            with pytest.raises(ValueError, match="No specification draft"):
+                await add_entity("OnlyMine", "Intruder")
+
+
+class TestSpecClone:
+    """A built-in profile or published specification becomes a private draft."""
+
+    async def test_a_built_in_profile_can_be_cloned(self, server, session: AsyncSession) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="clo00001", email="clo00001@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret):
+            created = json.loads(await clone("miappe", "1.1", "MyMiappe"))
+
+        assert created["name"] == "MyMiappe"
+        spec = await _spec_of("MyMiappe")
+        assert spec["root_entity"] == "Investigation"
+        assert "Study" in spec["entities"]
+
+    async def test_the_draft_name_defaults_to_the_profiles_own(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="clo00002", email="clo00002@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret):
+            created = json.loads(await clone("miappe", "1.1"))
+
+        assert created["name"] == "miappe"
+
+    async def test_a_cloned_draft_is_editable_in_place(self, server, session: AsyncSession) -> None:
+        """The clone is the caller's own copy, so edits land in the draft."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="clo00003", email="clo00003@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret):
+            await clone("miappe", "1.1", "Extended")
+            await add_entity("Extended", "Drone", "An aerial platform")
+
+        spec = await _spec_of("Extended")
+        assert spec["entities"]["Drone"]["description"] == "An aerial platform"
+
+    async def test_an_unknown_version_lists_the_available_ones(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="clo00004", email="clo00004@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret), pytest.raises(ValueError, match=r"available.*1\.1"):
+            await clone("miappe", "99.9")
+
+    async def test_an_unknown_profile_points_at_list_profiles(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="clo00005", email="clo00005@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret), pytest.raises(ValueError, match="list_profiles"):
+            await clone("no-such-profile", "1.0")
+
+    async def test_a_name_collision_is_a_clean_error(self, server, session: AsyncSession) -> None:
+        secret = await _drafting(server, session, slug="clo00006", name="miappe")
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret), pytest.raises(ValueError, match="already exists"):
+            await clone("miappe", "1.1")
+
+
 class TestBatchCreate:
     """Several entities in one call, with one version snapshot for the batch.
 

@@ -34,6 +34,8 @@ Answers to the questions that come up when connecting an agent to the hub. For s
 
 **Where did my draft go?** Drafts persist in the hub database automatically per user — there is no separate save step over MCP. `list_spec_drafts` shows yours; a draft named like a colleague's is still only yours.
 
+**I saved a spec through the metaseed MCP but it is not on the hub.** The standalone metaseed server's `spec_save` writes to the local filesystem of the machine it runs on; the hub keeps its own store and never reads that directory. Bring such a spec into the hub with `spec_import_yaml` (or the web interface's Import page), which starts a private draft from the YAML. Publishing the draft stays a human action in the web interface.
+
 ## Troubleshooting
 
 **Calls suddenly return 421 or fail behind a proxy.** The endpoint pins the Host header to the deployment's own hostname (DNS-rebinding protection). Call it via its public URL, not by IP or an alternate name.

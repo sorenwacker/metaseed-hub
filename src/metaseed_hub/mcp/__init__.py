@@ -929,7 +929,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 }
             )
 
-    register_spec_tools(mcp, caller=_caller, owned_draft=_owned_draft, building=_building)
+    register_spec_tools(
+        mcp,
+        caller=_caller,
+        owned_draft=_owned_draft,
+        building=_building,
+        profile_spec=_profile_spec,
+    )
     register_profile_tools(mcp, caller=_caller, profile_spec=_profile_spec)
     register_ontology_tools(mcp, caller=_caller)
 
