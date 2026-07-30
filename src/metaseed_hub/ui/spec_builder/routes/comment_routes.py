@@ -152,6 +152,13 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         user_id, _ = user_ctx
         await require_draft_access(session, draft_id, user_id)
 
+        # The reaction is a client-controlled string; an unrecognized value
+        # must be a validation error, not an unhandled ValueError (500).
+        try:
+            reaction_type = ReactionType(reaction)
+        except ValueError:
+            return HTMLResponse("<div class='error'>Invalid reaction</div>", status_code=400)
+
         # Confirm the comment belongs to the URL draft before reacting, mirroring
         # delete_spec_comment. Without this a member of one draft could toggle a
         # reaction on another draft's comment by supplying its comment_id.
@@ -171,8 +178,6 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
             )
         )
         existing = existing_result.scalar_one_or_none()
-
-        reaction_type = ReactionType(reaction)
 
         if existing:
             if existing.reaction == reaction_type:

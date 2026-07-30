@@ -140,20 +140,52 @@ def register_rule_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             max_items=max_items,
         )
 
+        # Validate the name and parse numeric bounds before mutating the rule,
+        # so malformed input surfaces as a friendly form error instead of a 500
+        # and leaves the rule unchanged. Mirrors update_field in field_routes.
+        error: str | None = None
+        rule_name = form_data.name.strip()
+        if not rule_name:
+            error = "Rule name is required"
+        parsed_minimum: float | None = None
+        parsed_maximum: float | None = None
+        parsed_min_items: int | None = None
+        parsed_max_items: int | None = None
+        if not error:
+            try:
+                parsed_minimum = form_data.get_minimum()
+                parsed_maximum = form_data.get_maximum()
+                parsed_min_items = form_data.get_min_items()
+                parsed_max_items = form_data.get_max_items()
+            except ValueError as exc:
+                error = str(exc)
+        if error:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/validation_rules_list.html",
+                {
+                    "draft_id": ctx.draft.id,
+                    "rules": ctx.spec.validation_rules,
+                    "editing_rule_idx": idx,
+                    "entities": list(ctx.spec.entities.keys()),
+                    "error": error,
+                },
+            )
+
         rule = ctx.spec.validation_rules[idx]
-        rule.name = form_data.name.strip()
+        rule.name = rule_name
         rule.description = form_data.description.strip()
         rule.applies_to = form_data.get_applies_to()
         rule.field = form_data.field_name.strip() or None
         rule.condition = form_data.condition.strip() or None
         rule.pattern = form_data.pattern.strip() or None
-        rule.minimum = float(form_data.minimum) if form_data.minimum.strip() else None
-        rule.maximum = float(form_data.maximum) if form_data.maximum.strip() else None
+        rule.minimum = parsed_minimum
+        rule.maximum = parsed_maximum
         rule.enum = form_data.get_enum()
         rule.reference = form_data.reference.strip() or None
         rule.unique_within = form_data.unique_within.strip() or None
-        rule.min_items = int(form_data.min_items) if form_data.min_items.strip() else None
-        rule.max_items = int(form_data.max_items) if form_data.max_items.strip() else None
+        rule.min_items = parsed_min_items
+        rule.max_items = parsed_max_items
 
         ctx.builder.editing_rule_idx = None
         ctx.builder.mark_changed()

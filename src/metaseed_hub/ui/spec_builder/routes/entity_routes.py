@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from metaseed.specs.schema import EntityDefSpec, FieldType
+from metaseed.specs.schema import EntityDefSpec, FieldType, ValidationRuleSpec
 
 from metaseed_hub.ui.spec_builder_helpers import validate_entity_name
 
@@ -236,6 +236,36 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
 
         if ctx.spec.root_entity == name:
             ctx.spec.root_entity = ""
+
+        # Clear the same cross-entity references the rename branch in
+        # update_entity rewrites, so the saved spec never names an entity that
+        # no longer exists.
+        for other_entity in ctx.spec.entities.values():
+            for field in other_entity.fields:
+                if field.items == name:
+                    field.items = None
+                if field.reference and field.reference.startswith(f"{name}."):
+                    field.reference = None
+                if field.parent_ref and field.parent_ref.startswith(f"{name}."):
+                    field.parent_ref = None
+
+        # Drop the deleted entity from validation rules, and drop rules that
+        # applied only to it.
+        kept_rules: list[ValidationRuleSpec] = []
+        for rule in ctx.spec.validation_rules:
+            if rule.applies_to == name:
+                continue
+            if isinstance(rule.applies_to, list) and name in rule.applies_to:
+                remaining = [e for e in rule.applies_to if e != name]
+                if not remaining:
+                    continue
+                rule.applies_to = remaining
+            kept_rules.append(rule)
+        if len(kept_rules) != len(ctx.spec.validation_rules):
+            # Rule indices shifted, so any editing pointer into the old list
+            # would reference the wrong rule.
+            ctx.spec.validation_rules = kept_rules
+            ctx.builder.editing_rule_idx = None
 
         ctx.builder.mark_changed()
         await ctx.save(session)

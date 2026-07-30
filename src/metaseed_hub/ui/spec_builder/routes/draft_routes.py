@@ -15,9 +15,11 @@ from starlette.responses import Response
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
+    can_edit_draft,
     can_edit_spec,
     create_new_draft,
     load_state_for_draft,
+    require_owner_role,
     save_state_to_draft,
     unpublish_spec,
     workspace_owner,
@@ -54,7 +56,11 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         if builder.spec is None:
             builder.spec = create_empty_spec()
-            await save_state_to_draft(session, builder, draft)
+            # Only persist the scaffold when the caller may write; a viewer
+            # opening an uninitialized draft still gets a rendered page from
+            # the in-memory state without mutating the row.
+            if await can_edit_draft(session, draft, user_id):
+                await save_state_to_draft(session, builder, draft)
 
         # Load draft owner - draft.user_id is a FK to users.id
         owner_result = await session.execute(select(User).where(User.id == draft.user_id))
@@ -150,6 +156,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
+        # Resetting discards the whole specification, so it is reserved for the
+        # draft owner and OWNER-role members, not editors or viewers.
+        await require_owner_role(session, draft, user_id)
+
         builder.reset_to_empty(draft.name, draft.version)
 
         draft.spec_data = builder.to_dict()
@@ -169,6 +179,14 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
+        # Publishing deletes the draft and creates an immutable Spec, so it is
+        # reserved for the draft owner and OWNER-role members. No permission on
+        # a fork's source spec is required: the new Spec row lands in the
+        # draft's own tenant and the source is never touched, and anyone may
+        # fork a published spec (see create_draft_from_spec), so a fork must be
+        # publishable by its forker.
+        await require_owner_role(session, draft, user_id)
+
         if builder.spec is None:
             raise HTTPException(status_code=400, detail="No spec to publish")
 
@@ -178,14 +196,6 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "spec_builder/partials/save_result.html",
                 {"error": "Profile name is required before publishing"},
             )
-
-        if draft.source_spec_id:
-            result = await session.execute(
-                select(Spec).where(Spec.id == draft.source_spec_id, Spec.deleted_at.is_(None))
-            )
-            existing_spec = result.scalar_one_or_none()
-            if existing_spec and not await can_edit_spec(session, user_id, existing_spec.id):
-                raise HTTPException(status_code=403, detail="Cannot edit this spec")
 
         spec = Spec(
             tenant_id=draft.tenant_id,

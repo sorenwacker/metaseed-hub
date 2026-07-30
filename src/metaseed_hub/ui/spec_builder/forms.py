@@ -124,3 +124,19 @@ class ValidationRuleFormData:
         if not self.enum_values.strip():
             return None
         return [v.strip() for v in self.enum_values.split("\n") if v.strip()]
+
+    def get_minimum(self) -> float | None:
+        """Parse the minimum bound, or raise ValueError with a clear message."""
+        return _parse_float(self.minimum, "Minimum")
+
+    def get_maximum(self) -> float | None:
+        """Parse the maximum bound, or raise ValueError with a clear message."""
+        return _parse_float(self.maximum, "Maximum")
+
+    def get_min_items(self) -> int | None:
+        """Parse the minimum item count, or raise ValueError with a clear message."""
+        return _parse_int(self.min_items, "Minimum items")
+
+    def get_max_items(self) -> int | None:
+        """Parse the maximum item count, or raise ValueError with a clear message."""
+        return _parse_int(self.max_items, "Maximum items")

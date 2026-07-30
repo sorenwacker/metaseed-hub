@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.models import SpecDraft
 from metaseed_hub.ui.spec_builder.access import (
     DraftConflictError,
+    create_new_draft,
     load_state_for_draft,
     save_state_to_draft,
 )
@@ -151,6 +152,43 @@ def test_the_user_is_told_rather_than_shown_a_success() -> None:
     assert "notification-error" in body
     assert "success" not in body.lower()
     assert "Reload" in body, "the message must say what to do next"
+
+
+async def test_a_new_draft_is_cached_at_its_row_revision(session: AsyncSession) -> None:
+    """create_new_draft must tag its cache write with the row revision.
+
+    An untagged entry never matches the revision check, so the very next load
+    rebuilt from the row and the cache write was dead weight; worse, a save
+    from that entry would resolve expected_revision to None and be refused as
+    a spurious conflict.
+    """
+    tenant = make_tenant()
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant)
+    session.add(user)
+    await session.commit()
+
+    draft = await create_new_draft(session, user.id, tenant.id, "demo", _spec("Investigation"))
+
+    assert state_cache.revision(draft.id) == draft.updated_at
+
+
+async def test_saving_a_state_with_no_spec_is_refused(session: AsyncSession) -> None:
+    """A spec-less state has nothing meaningful to persist.
+
+    The old code path deleted the draft row instead -- before the conflict
+    check, so it would have destroyed intervening edits had it ever run.
+    """
+    draft, user_id = await _draft(session)
+    state, draft = await load_state_for_draft(session, draft.id, user_id)
+    state.spec = None
+
+    with pytest.raises(ValueError, match="no spec"):
+        await save_state_to_draft(session, state, draft)
+
+    await session.refresh(draft)
+    assert draft.spec_data["spec"] is not None, "the draft row must survive untouched"
 
 
 async def test_consecutive_edits_by_the_same_holder_keep_working(

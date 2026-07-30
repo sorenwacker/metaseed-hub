@@ -22,6 +22,7 @@ from metaseed_hub.models import (
     Spec,
     SpecDraft,
     SpecDraftMember,
+    SpecDraftRole,
     Team,
     TeamMembership,
     TeamRole,
@@ -106,21 +107,6 @@ async def get_user_context(
     return user.id, tenant.id
 
 
-async def can_access_tenant(
-    session: AsyncSession,
-    user_id: str,
-    tenant_id: str,
-) -> bool:
-    """Check if user belongs to tenant."""
-    result = await session.execute(
-        select(User).where(
-            User.id == user_id,
-            User.tenant_id == tenant_id,
-        )
-    )
-    return result.scalar_one_or_none() is not None
-
-
 async def can_edit_spec(
     session: AsyncSession,
     user_id: str,
@@ -152,8 +138,26 @@ async def can_edit_spec(
     return result.scalars().first() is not None
 
 
-async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:
-    """Check if user can access a draft (owner or member).
+# Roles allowed to modify a draft's specification. VIEWER is read-only.
+_EDIT_ROLES = frozenset({SpecDraftRole.EDITOR, SpecDraftRole.OWNER})
+
+# Request methods that never modify a draft; everything else must be gated on
+# an edit-capable role.
+_READ_METHODS = frozenset({"GET", "HEAD"})
+
+
+async def get_draft_role(
+    session: AsyncSession, draft: SpecDraft, user_id: str
+) -> SpecDraftRole | None:
+    """Resolve the caller's effective role on a draft.
+
+    Access is granted through three paths, checked in order of precedence:
+
+    - The draft owner (``draft.user_id``, a User.id FK) holds ``OWNER``.
+    - An explicit ``SpecDraftMember`` row holds its recorded role.
+    - Any other user in the draft's tenant holds ``VIEWER``. This tenant-wide
+      grant exists so workspace colleagues can read a draft without being
+      shared on it; it never confers edit rights.
 
     Args:
         session: Database session
@@ -161,30 +165,85 @@ async def _user_can_access_draft(session: AsyncSession, draft: SpecDraft, user_i
         user_id: Database User.id (not keycloak_id)
 
     Returns:
-        True if user is the owner or a member of the draft
+        The effective role, or None if the user may not access the draft.
     """
-    # Owner can always access (draft.user_id is User.id FK)
     if draft.user_id == user_id:
-        return True
+        return SpecDraftRole.OWNER
 
-    # Check if user is a member (SpecDraftMember.user_id is also User.id FK)
     member_result = await session.execute(
         select(SpecDraftMember).where(
             SpecDraftMember.spec_draft_id == draft.id,
             SpecDraftMember.user_id == user_id,
         )
     )
-    if member_result.scalar_one_or_none() is not None:
-        return True
+    member = member_result.scalar_one_or_none()
+    if member is not None:
+        role: SpecDraftRole = member.role
+        return role
 
-    # Check if user belongs to the same tenant
     result = await session.execute(
         select(User).where(
             User.id == user_id,
             User.tenant_id == draft.tenant_id,
         )
     )
-    return result.scalar_one_or_none() is not None
+    if result.scalar_one_or_none() is not None:
+        return SpecDraftRole.VIEWER
+    return None
+
+
+async def can_edit_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:
+    """Whether the caller may modify the draft's specification content.
+
+    Args:
+        session: Database session.
+        draft: The draft to check.
+        user_id: Database User.id (not keycloak_id).
+
+    Returns:
+        True if the caller holds an EDITOR or OWNER role on the draft.
+    """
+    return await get_draft_role(session, draft, user_id) in _EDIT_ROLES
+
+
+async def require_edit_role(session: AsyncSession, draft: SpecDraft, user_id: str) -> None:
+    """Require the caller to hold an edit-capable role on a draft.
+
+    Gates every route that modifies the draft's specification. Members shared
+    with the VIEWER role, and tenant colleagues who were never shared on the
+    draft at all, may read it but not change it.
+
+    Args:
+        session: Database session.
+        draft: The draft being modified.
+        user_id: Database User.id (not keycloak_id) of the caller.
+
+    Raises:
+        HTTPException: 403 if the caller does not hold EDITOR or OWNER.
+    """
+    if not await can_edit_draft(session, draft, user_id):
+        raise HTTPException(
+            status_code=403, detail="Viewer access only: editing requires the editor or owner role"
+        )
+
+
+async def require_owner_role(session: AsyncSession, draft: SpecDraft, user_id: str) -> None:
+    """Require the caller to hold the OWNER role on a draft.
+
+    Gates the destructive draft-level operations (publish, reset), which are
+    granted to the draft owner and to members explicitly given the OWNER role,
+    but not to editors or viewers.
+
+    Args:
+        session: Database session.
+        draft: The draft being operated on.
+        user_id: Database User.id (not keycloak_id) of the caller.
+
+    Raises:
+        HTTPException: 403 if the caller's effective role is not OWNER.
+    """
+    if await get_draft_role(session, draft, user_id) is not SpecDraftRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only a draft owner may do this")
 
 
 async def require_draft_owner(
@@ -222,9 +281,11 @@ async def require_draft_access(
     draft_id: str,
     user_id: str,
 ) -> SpecDraft:
-    """Load a draft, requiring the caller to be its owner or a member.
+    """Load a draft, requiring the caller to hold any role on it.
 
-    Used to gate reading and commenting on a draft.
+    Used to gate reading and commenting on a draft. Access is granted to the
+    draft owner, to explicit members regardless of role, and to any user in
+    the draft's tenant (see ``get_draft_role``).
 
     Args:
         session: Database session.
@@ -242,7 +303,7 @@ async def require_draft_access(
     draft = result.scalar_one_or_none()
     if draft is None:
         raise HTTPException(status_code=404, detail="Draft not found")
-    if not await _user_can_access_draft(session, draft, user_id):
+    if await get_draft_role(session, draft, user_id) is None:
         raise HTTPException(status_code=403, detail="Access denied")
     return draft
 
@@ -263,7 +324,7 @@ async def load_state_for_draft(
         Tuple of (SpecBuilderState, SpecDraft)
 
     Raises:
-        HTTPException 404 if draft not found or not accessible
+        HTTPException 404 if draft not found, 403 if not accessible
     """
     result = await session.execute(
         select(SpecDraft).options(selectinload(SpecDraft.tenant)).where(SpecDraft.id == draft_id)
@@ -273,7 +334,7 @@ async def load_state_for_draft(
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
 
-    if not await _user_can_access_draft(session, draft, user_id):
+    if await get_draft_role(session, draft, user_id) is None:
         raise HTTPException(status_code=403, detail="Access denied to this draft")
 
     # The cache is only trusted while the stored row has not moved on. Another
@@ -315,14 +376,13 @@ async def save_state_to_draft(
         DraftConflictError: If the row changed since the state was read. Saving
             anyway would rewrite ``spec_data`` from an older copy and destroy
             the intervening edit while reporting success.
+        ValueError: If the state holds no spec; there is nothing meaningful to
+            persist and writing it would empty the draft.
     """
     from sqlalchemy.orm.attributes import flag_modified
 
     if state.spec is None:
-        await session.delete(draft)
-        await session.commit()
-        state_cache.pop(draft.id, None)
-        return
+        raise ValueError("Cannot save a state with no spec")
 
     if expected_revision is _UNSET_REVISION:
         expected_revision = state_cache.revision(draft.id)
@@ -380,7 +440,9 @@ async def create_new_draft(
     await session.commit()
     await session.refresh(draft)
 
-    state_cache.set(draft.id, state)
+    # Tag the entry with the row revision, as every other cache write does;
+    # an untagged entry never matches the revision check and is always stale.
+    state_cache.set(draft.id, state, revision=draft.updated_at)
     return draft
 
 
@@ -412,9 +474,22 @@ async def get_draft_context(
     draft_id: str,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DraftContext:
-    """FastAPI dependency that loads and validates draft context."""
+    """FastAPI dependency that loads and validates draft context.
+
+    For mutating request methods (anything other than GET/HEAD) the caller
+    must additionally hold an EDITOR or OWNER role on the draft, so a member
+    shared as VIEWER can read every panel but cannot change the spec.
+
+    Raises:
+        HTTPException: 404 if the draft does not exist, 403 if the caller may
+            not access it or holds only read access on a mutating request,
+            400 if the draft holds no spec.
+    """
     user_id, tenant_id = await get_user_context(request, session)
     builder, draft = await load_state_for_draft(session, draft_id, user_id)
+
+    if request.method not in _READ_METHODS:
+        await require_edit_role(session, draft, user_id)
 
     if builder.spec is None:
         raise HTTPException(status_code=400, detail="No spec in progress")

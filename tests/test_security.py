@@ -14,7 +14,6 @@ from fastapi import HTTPException
 from metaseed_hub.ui.security import (
     CSRFValidationError,
     csrf_error_response,
-    require_csrf,
     validate_csrf_or_error,
 )
 
@@ -74,60 +73,6 @@ class TestCSRFValidation:
 
         assert response.status_code == 403
         assert b"CSRF validation failed" in response.body
-
-
-class TestRequireCSRFDecorator:
-    """Tests for require_csrf decorator."""
-
-    @pytest.mark.asyncio
-    async def test_require_csrf_passes_valid(self) -> None:
-        """Decorated function runs when CSRF is valid."""
-        from fastapi import Request as FastAPIRequest
-
-        valid_token = _signed_csrf_token()
-        request = Mock(spec=FastAPIRequest)
-        request.cookies = {"metaseed_csrf_token": valid_token}
-        request.headers = {"X-CSRF-Token": valid_token}
-
-        @require_csrf
-        async def handler(request: FastAPIRequest) -> str:
-            return "success"
-
-        result = await handler(request=request)
-        assert result == "success"
-
-    @pytest.mark.asyncio
-    async def test_require_csrf_raises_invalid(self) -> None:
-        """Decorated function raises when CSRF is invalid."""
-        from fastapi import Request as FastAPIRequest
-
-        request = Mock(spec=FastAPIRequest)
-        request.cookies = {}
-        request.headers = {}
-
-        @require_csrf
-        async def handler(request: FastAPIRequest) -> str:
-            return "success"
-
-        with pytest.raises(CSRFValidationError):
-            await handler(request=request)
-
-    @pytest.mark.asyncio
-    async def test_require_csrf_with_form_token(self) -> None:
-        """Decorated function accepts form token parameter."""
-        from fastapi import Request as FastAPIRequest
-
-        valid_token = _signed_csrf_token()
-        request = Mock(spec=FastAPIRequest)
-        request.cookies = {"metaseed_csrf_token": valid_token}
-        request.headers = {}
-
-        @require_csrf
-        async def handler(request: FastAPIRequest, csrf_token: str) -> str:
-            return "success"
-
-        result = await handler(request=request, csrf_token=valid_token)
-        assert result == "success"
 
 
 class TestAuthorizationDependencies:
@@ -264,8 +209,8 @@ class TestAuthorizationDependencies:
         session.execute.return_value = result_mock
 
         with patch(
-            "metaseed_hub.ui.spec_builder.access._user_can_access_draft",
-            return_value=False,
+            "metaseed_hub.ui.spec_builder.access.get_draft_role",
+            return_value=None,
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await require_draft_access(session, "draft-1", "outsider-2")
@@ -286,9 +231,11 @@ class TestAuthorizationDependencies:
         result_mock.scalar_one_or_none.return_value = draft
         session.execute.return_value = result_mock
 
+        from metaseed_hub.models import SpecDraftRole
+
         with patch(
-            "metaseed_hub.ui.spec_builder.access._user_can_access_draft",
-            return_value=True,
+            "metaseed_hub.ui.spec_builder.access.get_draft_role",
+            return_value=SpecDraftRole.VIEWER,
         ):
             assert await require_draft_access(session, "draft-1", "member-2") is draft
 

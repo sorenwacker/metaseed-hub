@@ -88,6 +88,25 @@ def clone_spec(profile: str, version: str) -> ProfileSpec:
     return copy.deepcopy(spec)
 
 
+class _SpecDumper(yaml.Dumper):
+    """Dumper for spec YAML output with the custom string representer.
+
+    A dedicated subclass keeps the representer registration local: registering
+    it on the default ``yaml.Dumper`` would silently change how every other
+    ``yaml.dump`` call in the process renders multi-line strings.
+    """
+
+
+def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.Node:
+    """Render multi-line strings in block style for readable spec output."""
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+_SpecDumper.add_representer(str, _str_representer)
+
+
 def spec_to_yaml(spec: ProfileSpec) -> str:
     """Convert a ProfileSpec to YAML string.
 
@@ -100,16 +119,9 @@ def spec_to_yaml(spec: ProfileSpec) -> str:
     # Convert to dict, using mode='json' to serialize enums as strings
     data = spec.model_dump(mode="json", exclude_none=True, exclude_defaults=False)
 
-    # Custom representer for cleaner output
-    def str_representer(dumper: yaml.Dumper, data: str) -> yaml.Node:
-        if "\n" in data:
-            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data)
-
-    yaml.add_representer(str, str_representer)
-
     result: str = yaml.dump(
         data,
+        Dumper=_SpecDumper,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,

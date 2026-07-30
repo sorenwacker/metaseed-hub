@@ -130,6 +130,13 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         current_user_id, _ = user_ctx
         await require_draft_owner(session, draft_id, current_user_id)
 
+        # The role is a client-controlled string; an unrecognized value must be
+        # a validation error, not an unhandled ValueError (500).
+        try:
+            new_role = SpecDraftRole(role)
+        except ValueError:
+            return HTMLResponse("<div class='error'>Invalid role</div>", status_code=400)
+
         result = await session.execute(
             select(SpecDraftMember).where(
                 SpecDraftMember.spec_draft_id == draft_id,
@@ -139,7 +146,7 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         member = result.scalar_one_or_none()
 
         if member:
-            member.role = SpecDraftRole(role)
+            member.role = new_role
             await session.commit()
 
         return await _get_spec_members_html(request, draft_id, session, current_user_id)
