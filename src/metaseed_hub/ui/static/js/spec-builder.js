@@ -185,12 +185,19 @@ window.SpecBuilder = (function() {
 
         fields.forEach(function(field) {
             if ((field.type === 'entity' || field.type === 'list') && field.items && window.entities[field.items]) {
-                edgeData.push(createEdge(name, field.items, field.name, 'nested'));
+                edgeData.push(createEdge(name, field.items, field.name, 'nested',
+                    name + '.' + field.name + ' contains ' + field.items));
             }
+            // Reference edges label both connected fields, not just the
+            // source field, so the edge names the exact columns it joins.
             if (field.reference) {
-                var targetEntity = field.reference.split('.')[0];
+                var parts = field.reference.split('.');
+                var targetEntity = parts[0];
+                var targetField = parts[1];
                 if (window.entities[targetEntity]) {
-                    edgeData.push(createEdge(name, targetEntity, field.name, 'reference'));
+                    var label = targetField ? field.name + ' → ' + targetField : field.name;
+                    edgeData.push(createEdge(name, targetEntity, label, 'reference',
+                        name + '.' + field.name + ' → ' + field.reference));
                 }
             }
         });
@@ -198,7 +205,9 @@ window.SpecBuilder = (function() {
         return edgeData;
     }
 
-    function createEdge(from, to, label, type) {
+    // The title renders as the hover tooltip with the fully qualified
+    // Entity.field endpoints.
+    function createEdge(from, to, label, type, title) {
         var colors = type === 'reference' ? EDGE_COLORS.reference : EDGE_COLORS.nested;
         var fontColor = type === 'reference' ? '#6b5a62' : '#5a6b62';
 
@@ -206,6 +215,7 @@ window.SpecBuilder = (function() {
             from: from,
             to: to,
             label: label,
+            title: title,
             arrows: { to: { enabled: true, type: 'arrow' } },
             color: colors,
             font: { size: 11, color: fontColor, background: 'white', strokeWidth: 0 },
