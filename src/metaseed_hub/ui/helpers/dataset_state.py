@@ -1,7 +1,7 @@
 """Loading and persisting a dataset's AppState (facade + entity tree)."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from metaseed.ui.state import AppState
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,9 +10,30 @@ from metaseed_hub.models import Dataset, DatasetVersion
 from metaseed_hub.ui.helpers.tree import deserialize_tree, serialize_tree
 
 if TYPE_CHECKING:
+    from metaseed import MetaseedClient
+
     from metaseed_hub.auth import TokenUser
 
 logger = logging.getLogger("metaseed_hub")
+
+
+def _client_from_spec_data(raw_data: dict[str, Any]) -> "MetaseedClient":
+    """Build a client from stored spec data, unwrapping SpecBuilderState.
+
+    Both spec drafts and published specs store ``spec_data`` that may be in
+    SpecBuilderState format with the ProfileSpec nested under a ``"spec"`` key.
+
+    Args:
+        raw_data: The stored ``spec_data`` payload.
+
+    Returns:
+        MetaseedClient built from the contained ProfileSpec data.
+    """
+    from metaseed import MetaseedClient
+
+    if isinstance(raw_data, dict) and "spec" in raw_data:
+        raw_data = raw_data["spec"]
+    return MetaseedClient.from_spec(raw_data)
 
 
 def get_dataset_state(dataset: Dataset) -> AppState:
@@ -68,12 +89,7 @@ async def ensure_dataset_facade(
         try:
             spec_draft = await session.get(SpecDraft, dataset.spec_draft_id)
             if spec_draft and spec_draft.spec_data:
-                # spec_data may be SpecBuilderState format with spec nested under "spec" key
-                raw_data = spec_draft.spec_data
-                if isinstance(raw_data, dict) and "spec" in raw_data:
-                    raw_data = raw_data["spec"]
-                # Create client from custom spec
-                client = MetaseedClient.from_spec(raw_data)
+                client = _client_from_spec_data(spec_draft.spec_data)
                 state.facade = client.facade
                 # Update state.profile to match facade's lowercased version
                 state.profile = state.facade.profile
@@ -94,10 +110,7 @@ async def ensure_dataset_facade(
         try:
             published = await session.get(Spec, dataset.spec_id)
             if published and published.spec_data:
-                raw_data = published.spec_data
-                if isinstance(raw_data, dict) and "spec" in raw_data:
-                    raw_data = raw_data["spec"]
-                client = MetaseedClient.from_spec(raw_data)
+                client = _client_from_spec_data(published.spec_data)
                 state.facade = client.facade
                 state.profile = state.facade.profile
             else:

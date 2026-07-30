@@ -57,6 +57,79 @@ async def test_import_by_accession_unknown_profile_raises(session):
         await create_dataset_from_accession(session, tenant.id, "x", "darwin-core", "X")
 
 
+async def test_import_by_accession_records_version_author(session):
+    """The accession import was the one save path without an author."""
+    from sqlalchemy import select
+
+    from metaseed_hub.auth import TokenUser
+    from metaseed_hub.models import DatasetVersion
+
+    tenant = await _add(session, make_tenant())
+    db_user = await _add(session, make_user(tenant=tenant))
+    token = TokenUser(sub=db_user.keycloak_id, email=db_user.email, name="n", roles=[])
+
+    with patch("metaseed.metabolights.import_accession", _fake_importer):
+        dataset = await create_dataset_from_accession(
+            session, tenant.id, "authored", "metabolights", "MTBLS0001", token
+        )
+
+    versions = (
+        (
+            await session.execute(
+                select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert versions, "the import should create a version"
+    assert versions[0].created_by_id == db_user.id
+
+
+def _empty_importer(_accession, **_kw):
+    """An importer that ran fine but resolved the accession to nothing."""
+    return MetaseedClient("metabolights", "1.0")
+
+
+async def test_import_that_found_nothing_raises_value_error(session):
+    """Distinct from LookupError so the caller does not blame a missing importer."""
+    tenant = await _add(session, make_tenant())
+    with (
+        patch("metaseed.metabolights.import_accession", _empty_importer),
+        pytest.raises(ValueError),
+    ):
+        await create_dataset_from_accession(session, tenant.id, "x", "metabolights", "MTBLS404")
+
+
+async def test_route_reports_empty_result_as_import_empty(session):
+    """The redirect previously said no_importer, the wrong diagnosis."""
+    from unittest.mock import Mock
+
+    from metaseed_hub.auth import TokenUser
+    from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+    from metaseed_hub.ui.routes.dataset.crud import dataset_import_accession
+
+    csrf = get_or_create_csrf_token(Mock(cookies={}))
+    request = Mock()
+    request.cookies = {CSRF_TOKEN_COOKIE: csrf}
+    request.headers = {"X-CSRF-Token": csrf}
+    token = TokenUser(sub="empty-import-caller", email="e@example.org", name="E", roles=[])
+
+    with patch("metaseed.metabolights.import_accession", _empty_importer):
+        response = await dataset_import_accession(
+            request,
+            session,
+            token,
+            profile="metabolights",
+            accession="MTBLS404",
+            name="nothing",
+            csrf_token=csrf,
+        )
+
+    assert response.status_code == 302
+    assert "error=import_empty" in response.headers["location"]
+
+
 async def test_save_dataset_state_records_version_author(session):
     """Passing the acting user records them as the dataset version's author.
 

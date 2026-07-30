@@ -511,3 +511,86 @@ class TestMetaseedSerializeContract:
 
         # This must not raise - if it does, metaseed has a bug
         json.dumps(tree_data)
+
+
+class TestParseWorkbookSheets:
+    """Tests for workbook parsing edge cases."""
+
+    def test_empty_row_tuple_is_skipped(self) -> None:
+        """A row with no cell records must be skipped, not raise IndexError.
+
+        openpyxl in read_only mode can yield such rows as empty tuples for
+        formatted-but-empty rows, which previously 500ed both import routes.
+        """
+        from unittest.mock import patch
+
+        from metaseed_hub.ui.helpers import parse_workbook_sheets
+
+        class _FakeSheet:
+            def iter_rows(self, values_only: bool = True):
+                return iter([("title",), ("A",), (), ("B",)])
+
+        class _FakeWorkbook:
+            sheetnames = ["Investigation"]
+
+            def __getitem__(self, name: str) -> _FakeSheet:
+                return _FakeSheet()
+
+        with patch("openpyxl.load_workbook", return_value=_FakeWorkbook()):
+            result = parse_workbook_sheets(b"ignored")
+
+        assert result == {"Investigation": [{"title": "A"}, {"title": "B"}]}
+
+
+class TestEntityImportHelpers:
+    """Tests for the shared import grouping and node-creation helpers."""
+
+    @staticmethod
+    def _state() -> AppState:
+        state = AppState()
+        state.profile = "miappe"
+        state.version = "1.1"
+        return state
+
+    def test_group_defaults_untyped_payloads(self) -> None:
+        from metaseed_hub.ui.helpers import group_entities_by_type
+
+        grouped = group_entities_by_type(
+            [{"_type": "Study", "title": "S"}, {"title": "untyped"}], "Investigation"
+        )
+
+        assert grouped == {
+            "Study": [{"_type": "Study", "title": "S"}],
+            "Investigation": [{"title": "untyped"}],
+        }
+
+    def test_add_entities_in_order_imports_and_strips_metadata(self) -> None:
+        from metaseed_hub.ui.helpers import add_entities_in_order
+
+        state = self._state()
+        facade = state.get_or_create_facade()
+        entities_by_type = {
+            "Study": [{"title": "S", "_type": "Study", "_node_id": "old"}],
+            "Investigation": [{"title": "I"}],
+        }
+
+        imported, errors = add_entities_in_order(state, facade, entities_by_type, "Investigation")
+
+        assert imported == 2
+        assert errors == []
+        types = sorted(n.entity_type for n in state.nodes_by_id.values())
+        assert types == ["Investigation", "Study"]
+
+    def test_add_entities_reports_unknown_types(self) -> None:
+        """A payload typed with a non-entity name is an error, not a silent skip."""
+        from metaseed_hub.ui.helpers import add_entities_in_order
+
+        state = self._state()
+        facade = state.get_or_create_facade()
+        entities_by_type = {"miappe": [{"title": "wrongly typed"}]}
+
+        imported, errors = add_entities_in_order(state, facade, entities_by_type, "Investigation")
+
+        assert imported == 0
+        assert len(errors) == 1
+        assert "miappe" in errors[0]

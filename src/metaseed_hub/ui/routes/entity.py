@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import escape
 
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_dataset_for_user
 from metaseed_hub.ui.forms import extract_entity_values
@@ -42,12 +43,12 @@ async def dataset_entity_form(
     try:
         state = await service.ensure_state()
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     try:
         helper = service.get_helper(entity_type)
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     form_context = build_entity_form_context(state, helper, node_id, parent_id)
 
@@ -98,7 +99,7 @@ async def dataset_entity_create(
         helper = service.get_helper(entity_type)
     except EntityServiceError as e:
         logger.error(f"Failed to load dataset or facade for {entity_type}: {e.message}")
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     # Get existing values if updating
     existing_node = state.nodes_by_id.get(node_id) if node_id else None
@@ -187,7 +188,7 @@ async def dataset_entity_validate(
         state = await service.ensure_state()
         helper = service.get_helper(entity_type)
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error-message'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error-message'>{escape(e.user_message)}</div>")
 
     # Get existing values if validating existing entity
     existing_node = state.nodes_by_id.get(node_id) if node_id else None
@@ -209,7 +210,7 @@ async def dataset_entity_validate(
     # Format errors as list
     error_html = "<div class='warning-message'><strong>Validation issues:</strong><ul>"
     for error in errors:
-        error_html += f"<li>{error}</li>"
+        error_html += f"<li>{escape(error)}</li>"
     error_html += "</ul></div>"
     return HTMLResponse(error_html)
 
@@ -229,7 +230,7 @@ async def dataset_entity_edit(
     try:
         state = await service.ensure_state()
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     if node_id not in state.nodes_by_id:
         return HTMLResponse("<div class='error'>Entity not found</div>")
@@ -240,7 +241,7 @@ async def dataset_entity_edit(
     try:
         helper = service.get_helper(entity_type)
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     form_context = build_entity_form_context(state, helper, node_id, node.parent_id)
 
@@ -277,12 +278,12 @@ async def dataset_entity_delete(
     try:
         state = await service.ensure_state()
     except EntityServiceError as e:
-        return HTMLResponse(f"<div class='error'>{e.user_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(e.user_message)}</div>")
 
     result = await service.delete_entity(node_id)
 
     if not result.success:
-        return HTMLResponse(f"<div class='error'>{result.error_message}</div>")
+        return HTMLResponse(f"<div class='error'>{escape(result.error_message)}</div>")
 
     # Return updated tree
     tree_data = state.get_tree_data()

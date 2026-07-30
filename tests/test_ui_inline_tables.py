@@ -271,26 +271,29 @@ class TestInlineTableCellEditing:
         assert "title" in processed_fields
         assert len(processed_fields) == 1
 
-    def test_empty_values_are_skipped(self) -> None:
-        """Empty string values should be skipped."""
+    def test_empty_values_clear_the_field(self) -> None:
+        """An explicit empty submission clears the stored value.
+
+        Previously empty values were skipped, so a user who deleted a cell's
+        content saw an empty cell while the server kept the old value.
+        """
+        current_values = {"title": "Old", "description": "Old description"}
         form_data = {
             "title": "New Title",
             "description": "",
             "notes": None,
         }
 
-        # Simulate the filtering logic
-        processed_fields = {}
+        # Simulate the update logic from update_table_cell
         for field_name, value in form_data.items():
-            if field_name.startswith("_"):
+            if field_name.startswith("_") or value is None:
                 continue
-            if value is None or value == "":
+            if value == "":
+                current_values.pop(field_name, None)
                 continue
-            processed_fields[field_name] = value
+            current_values[field_name] = value
 
-        assert "title" in processed_fields
-        assert "description" not in processed_fields
-        assert "notes" not in processed_fields
+        assert current_values == {"title": "New Title"}
 
     def test_javascript_filters_cell_input_parameters(self) -> None:
         """Verify that hub.js has htmx:configRequest handler for cell-input filtering."""
@@ -335,3 +338,119 @@ class TestInlineTableCellEditing:
         assert values["title"] == "Updated Title"
         assert values["unique_id"] == "test-123"
         assert values["description"] == "Some description"
+
+
+class TestRowHtmlEscaping:
+    """Hand-built row HTML must escape structural interpolations."""
+
+    def test_primitive_row_escapes_field_name(self) -> None:
+        from metaseed_hub.ui.routes.table import _build_primitive_row_html
+
+        hostile = 'notes" onmouseover="alert(1)'
+        html = _build_primitive_row_html("ds", "node", hostile, 0, "string")
+
+        assert hostile not in html
+        assert "notes&quot; onmouseover=&quot;alert(1)" in html
+
+    def test_entity_row_escapes_field_name_and_type(self) -> None:
+        from metaseed_hub.ui.routes.table import _build_entity_row_html
+
+        hostile_field = 'x" onfocus="alert(1)'
+        hostile_type = '<img src=x onerror="alert(1)">'
+        child = TreeNode(
+            id="child-1", entity_type="Study", instance=None, label="L", parent_id=None
+        )
+        html = _build_entity_row_html(
+            "ds",
+            hostile_field,
+            0,
+            child,
+            hostile_type,
+            ["title"],
+            {"title": "string"},
+            set(),
+            {"title": "v"},
+        )
+
+        assert hostile_field not in html
+        assert hostile_type not in html
+
+
+class TestUpdateTableCellRoute:
+    """Functional tests for update_table_cell against a real dataset."""
+
+    @staticmethod
+    def _request(form: dict) -> object:
+        from unittest.mock import Mock
+
+        request = Mock()
+
+        async def _form() -> dict:
+            return form
+
+        request.form = _form
+        return request
+
+    @staticmethod
+    async def _dataset_with_node(session):
+        from uuid import uuid4
+
+        from metaseed_hub.ui.dependencies import tenant_slug_for
+        from metaseed_hub.ui.helpers import add_entity_node
+        from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
+        from tests.factories import make_dataset, make_tenant
+
+        tenant = make_tenant(slug=tenant_slug_for(f"cells-{uuid4().hex[:8]}"))
+        session.add(tenant)
+        await session.flush()
+        dataset = make_dataset(tenant=tenant, profile="miappe", version="1.1")
+        session.add(dataset)
+        await session.commit()
+
+        state = await ensure_dataset_facade(dataset, session)
+        node = add_entity_node(
+            state,
+            "Investigation",
+            {"unique_id": "inv-1", "title": "Kept", "description": "tobedeleted"},
+        )
+        return dataset, state, node
+
+    async def test_empty_submission_clears_the_cell(self, session) -> None:
+        """The cleared value must not survive on the server (silent divergence)."""
+        from metaseed_hub.ui.routes.table import update_table_cell
+
+        dataset, state, node = await self._dataset_with_node(session)
+
+        response = await update_table_cell(
+            self._request({"description": ""}),
+            dataset.id,
+            node.id,
+            (dataset, state),
+            None,
+            session,
+        )
+
+        assert response.status_code == 200
+        values = state.nodes_by_id[node.id].instance.model_dump(exclude_none=True)
+        assert "description" not in values
+        assert values["title"] == "Kept"
+        await session.refresh(dataset)
+        assert "tobedeleted" not in str(dataset.data)
+
+    async def test_nonempty_submission_updates_the_cell(self, session) -> None:
+        from metaseed_hub.ui.routes.table import update_table_cell
+
+        dataset, state, node = await self._dataset_with_node(session)
+
+        response = await update_table_cell(
+            self._request({"description": "updated"}),
+            dataset.id,
+            node.id,
+            (dataset, state),
+            None,
+            session,
+        )
+
+        assert response.status_code == 200
+        values = state.nodes_by_id[node.id].instance.model_dump(exclude_none=True)
+        assert values["description"] == "updated"

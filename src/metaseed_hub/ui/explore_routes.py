@@ -214,7 +214,6 @@ async def _build_explore_catalog(
     tenant = result.scalar_one_or_none()
 
     user_drafts: list[SpecDraft] = []
-    published_specs: list[Spec] = []
 
     db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
     db_user = db_user_result.scalar_one_or_none()
@@ -225,13 +224,15 @@ async def _build_explore_catalog(
         )
         user_drafts = list(drafts_result.scalars().all())
 
-        specs_result = await session.execute(
-            select(Spec).where(
-                Spec.status == SpecStatus.PUBLISHED,
-                Spec.deleted_at.is_(None),
-            )
+    # Published specs are readable by anyone -- that is what publishing means --
+    # so they are offered even to a user whose Tenant row does not exist yet.
+    specs_result = await session.execute(
+        select(Spec).where(
+            Spec.status == SpecStatus.PUBLISHED,
+            Spec.deleted_at.is_(None),
         )
-        published_specs = list(specs_result.scalars().all())
+    )
+    published_specs: list[Spec] = list(specs_result.scalars().all())
 
     # Drafts shared with the user via SpecDraftMember
     if db_user:

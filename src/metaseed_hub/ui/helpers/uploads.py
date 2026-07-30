@@ -62,6 +62,11 @@ def parse_workbook_sheets(content: bytes) -> dict[str, list[dict[str, Any]]]:
         headers = [str(h).strip() if h else f"col_{i}" for i, h in enumerate(rows[0])]
 
         for row in rows[1:]:
+            # A formatted-but-empty row comes back as an empty tuple in
+            # read_only mode, so guard the index before the truthiness check.
+            if not row:
+                continue
+
             # Skip placeholder rows (first cell like ``<value>``).
             first_val = str(row[0]) if row[0] else ""
             if first_val.startswith("<") and first_val.endswith(">"):

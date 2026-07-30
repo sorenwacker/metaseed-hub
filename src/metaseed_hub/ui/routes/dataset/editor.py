@@ -19,9 +19,10 @@ from metaseed_hub.ui.dependencies import (
     get_dataset_for_user,
 )
 from metaseed_hub.ui.helpers import (
-    add_entity_node,
+    add_entities_in_order,
     ensure_dataset_facade,
     get_tree_data_from_nodes,
+    group_entities_by_type,
     parse_workbook_sheets,
     read_upload_capped,
     save_dataset_state,
@@ -400,6 +401,42 @@ async def dataset_graph(
     )
 
 
+def _filter_graph_to_subtree(graph_data: dict[str, Any], node_id: str) -> dict[str, Any]:
+    """Restrict graph data to ``node_id`` and its descendants.
+
+    Descendants are found by following edges outward from ``node_id``. An
+    unknown ``node_id`` returns the graph unchanged, so a stale link renders
+    the whole graph rather than an empty canvas.
+
+    Args:
+        graph_data: ``build_graph`` output with ``nodes`` and ``edges`` lists.
+        node_id: Root of the subtree to keep.
+
+    Returns:
+        Graph data with nodes and edges outside the subtree removed.
+    """
+    if node_id not in {n["id"] for n in graph_data["nodes"]}:
+        return graph_data
+
+    children: dict[str, list[str]] = {}
+    for edge in graph_data["edges"]:
+        children.setdefault(edge["from"], []).append(edge["to"])
+
+    keep = {node_id}
+    queue = [node_id]
+    while queue:
+        for child in children.get(queue.pop(), []):
+            if child not in keep:
+                keep.add(child)
+                queue.append(child)
+
+    return {
+        **graph_data,
+        "nodes": [n for n in graph_data["nodes"] if n["id"] in keep],
+        "edges": [e for e in graph_data["edges"] if e["from"] in keep and e["to"] in keep],
+    }
+
+
 @router.get("/{dataset_id}/api/graph")
 async def dataset_graph_api(
     dataset_id: str,
@@ -424,6 +461,8 @@ async def dataset_graph_api(
 
     # Use metaseed's graph builder which properly extracts nested entities
     graph_data = build_graph(state)
+    if node_id:
+        graph_data = _filter_graph_to_subtree(graph_data, node_id)
 
     return JSONResponse(content=graph_data)
 
@@ -577,9 +616,11 @@ async def dataset_import_into_existing(
 
     Supports JSON, YAML, and Excel files. Adds entities to the existing dataset.
     """
+    import html
     import json
 
     import yaml
+    from metaseed.specs.loader import SpecLoader
 
     try:
         validate_csrf_or_error(request)
@@ -597,44 +638,22 @@ async def dataset_import_into_existing(
         )
     filename = file.filename or ""
 
+    # The profile's root entity type: the default for payloads without a _type
+    # marker (a profile name is never an entity type), and the first type
+    # processed so children can attach to it.
+    loader = SpecLoader(profile=dataset.profile)
+    spec = loader.load_profile(dataset.version, dataset.profile)
+    root_entity = spec.root_entity or "Investigation"
+
     # Parse based on file type
     entities_by_type: dict[str, list[dict[str, Any]]] = {}
 
     try:
+        data: Any = None
         if filename.endswith((".yaml", ".yml")):
             data = yaml.safe_load(content.decode("utf-8"))
-            # For YAML, treat as single root entity or check for entities list
-            if isinstance(data, dict) and "entities" in data:
-                for entity in data["entities"]:
-                    etype = entity.get("_type", dataset.profile)
-                    if etype not in entities_by_type:
-                        entities_by_type[etype] = []
-                    entities_by_type[etype].append(entity)
-            elif isinstance(data, dict):
-                # Single entity - use root entity type
-                from metaseed.specs.loader import SpecLoader
-
-                loader = SpecLoader(profile=dataset.profile)
-                spec = loader.load_profile(dataset.version, dataset.profile)
-                root_entity = spec.root_entity or "Investigation"
-                entities_by_type[root_entity] = [data]
-
         elif filename.endswith(".json"):
             data = json.loads(content.decode("utf-8"))
-            if isinstance(data, dict) and "entities" in data:
-                for entity in data["entities"]:
-                    etype = entity.get("_type", dataset.profile)
-                    if etype not in entities_by_type:
-                        entities_by_type[etype] = []
-                    entities_by_type[etype].append(entity)
-            elif isinstance(data, dict):
-                from metaseed.specs.loader import SpecLoader
-
-                loader = SpecLoader(profile=dataset.profile)
-                spec = loader.load_profile(dataset.version, dataset.profile)
-                root_entity = spec.root_entity or "Investigation"
-                entities_by_type[root_entity] = [data]
-
         elif filename.endswith((".xlsx", ".xls")):
             entities_by_type = parse_workbook_sheets(content)
         else:
@@ -643,10 +662,19 @@ async def dataset_import_into_existing(
                 status_code=400,
             )
 
+        if isinstance(data, dict):
+            if "entities" in data:
+                entities_by_type = group_entities_by_type(data["entities"], root_entity)
+            else:
+                # Single entity - use root entity type
+                entities_by_type[root_entity] = [data]
+
     except Exception as e:
+        # Parse exceptions embed excerpts of the uploaded file, so the text must
+        # be escaped before it lands in the HTMX swap target.
         logger.exception(f"Failed to parse import file: {e}")
         return HTMLResponse(
-            f"<div class='notification error'>Parse error: {e}</div>",
+            f"<div class='notification error'>Parse error: {html.escape(str(e)[:200])}</div>",
             status_code=400,
         )
 
@@ -654,34 +682,7 @@ async def dataset_import_into_existing(
     state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
-    imported_count = 0
-    errors: list[str] = []
-
-    # Process entities in order (root first)
-    from metaseed.specs.loader import SpecLoader
-
-    loader = SpecLoader(profile=dataset.profile)
-    spec = loader.load_profile(dataset.version, dataset.profile)
-    root_entity = spec.root_entity or "Investigation"
-
-    entity_order = [root_entity] + [e for e in facade.entities if e != root_entity]
-
-    for entity_type in entity_order:
-        if entity_type not in entities_by_type:
-            continue
-
-        for entity_data in entities_by_type[entity_type]:
-            try:
-                clean_data = {
-                    k: v
-                    for k, v in entity_data.items()
-                    if v is not None and str(v).strip() and not k.startswith("_")
-                }
-                if clean_data:
-                    add_entity_node(state, entity_type, clean_data)
-                    imported_count += 1
-            except Exception as e:
-                errors.append(f"{entity_type}: {e}")
+    imported_count, errors = add_entities_in_order(state, facade, entities_by_type, root_entity)
 
     # Save to database with version history
     await save_dataset_state(session, dataset, state, user)

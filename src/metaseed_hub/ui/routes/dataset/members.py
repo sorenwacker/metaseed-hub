@@ -124,6 +124,11 @@ async def update_dataset_member_role(
     # Only an owner may change member roles.
     await require_dataset_owner(dataset_id, session, user)
 
+    try:
+        new_role = DatasetRole(role)
+    except ValueError:
+        return HTMLResponse("<div class='error'>Invalid role</div>", status_code=400)
+
     # Find membership
     result = await session.execute(
         select(DatasetMember).where(
@@ -134,7 +139,7 @@ async def update_dataset_member_role(
     member = result.scalar_one_or_none()
 
     if member:
-        member.role = DatasetRole(role)
+        member.role = new_role
         await session.commit()
 
     return await _get_members_html(request, dataset_id, session)

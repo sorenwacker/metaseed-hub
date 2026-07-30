@@ -80,6 +80,10 @@ def _build_primitive_row_html(
     elif nested_type.lower() == "datetime":
         input_type = "datetime-local"
 
+    # field_name is a caller-controlled path parameter interpolated into
+    # attribute values; escape it so it cannot break out of the attribute.
+    field_name = escape(field_name)
+
     post_url = f"/hub/datasets/{dataset_id}/table/{parent_node_id}"
     post_url += f"/primitive/{field_name}/{row_idx}"
 
@@ -179,6 +183,11 @@ def _build_entity_row_html(
         HTML string for the table row.
     """
     node_id = child_node.id
+
+    # Structural values interpolated into attributes must not break out of the
+    # attribute context; field_name in particular is caller-controlled.
+    field_name = escape(field_name)
+    nested_type = escape(nested_type)
 
     html = f'<tr id="row-{field_name}-{row_idx}" data-idx="{row_idx}" '
     html += f'data-node-id="{node_id}">'
@@ -438,7 +447,12 @@ async def update_table_cell(
     for field_name, raw_value in form_data.items():
         if field_name.startswith("_"):
             continue
-        if raw_value is None or raw_value == "":
+        if raw_value is None:
+            continue
+        if raw_value == "":
+            # An explicit empty submission clears the cell. Skipping it would
+            # keep the old value while the UI shows an empty cell.
+            current_values.pop(field_name, None)
             continue
 
         raw_str = str(raw_value)
@@ -585,8 +599,6 @@ async def update_single_entity_field(
     Single entity fields are nested objects that are not lists - they contain
     a single instance of another entity type embedded in the parent.
     """
-    logger.info(f"update_single_entity_field: node_id={node_id}, field_name={field_name}")
-
     dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
@@ -635,11 +647,6 @@ async def update_single_entity_field(
     if hasattr(node.instance, "model_dump"):
         current_values = node.instance.model_dump(exclude_none=True)
 
-    logger.info(f"update_single_entity_field: nested_data={nested_data}")
-    logger.info(
-        f"update_single_entity_field: current_values BEFORE={current_values.get(field_name)}"
-    )
-
     # Merge new values with existing nested field data (don't replace entirely)
     existing_nested = current_values.get(field_name, {}) or {}
     if isinstance(existing_nested, dict):
@@ -648,10 +655,6 @@ async def update_single_entity_field(
     else:
         current_values[field_name] = nested_data
 
-    logger.info(
-        f"update_single_entity_field: current_values AFTER={current_values.get(field_name)}"
-    )
-
     # Create updated parent instance (skip validation)
     model_class = helper._model
     instance = model_class.model_construct(**current_values)
@@ -659,7 +662,6 @@ async def update_single_entity_field(
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)
-    logger.info("update_single_entity_field: saved successfully")
 
     return HTMLResponse(
         status_code=200,
@@ -714,15 +716,17 @@ async def delete_single_entity_field(
     # Save to database
     await save_dataset_state(session, dataset, state, user)
 
-    # Return empty inline table HTML for the cleared field
+    # Return empty inline table HTML for the cleared field. field_name is a
+    # caller-controlled path parameter, so escape the interpolations.
     field_info = helper.field_info(field_name)
-    nested_type = field_info.get("items", "Entity")
+    nested_type = escape(field_info.get("items", "Entity"))
+    safe_field_name = escape(field_name)
 
-    html = f"""<div class="inline-table-section" id="inline-table-{field_name}">
+    html = f"""<div class="inline-table-section" id="inline-table-{safe_field_name}">
     <div class="inline-table-header">
         <div class="inline-table-title">
             <span class="inline-table-icon">&#9660;</span>
-            <h4>{field_name.replace("_", " ").title()}</h4>
+            <h4>{escape(field_name.replace("_", " ").title())}</h4>
         </div>
     </div>
     <div class="inline-table-content">

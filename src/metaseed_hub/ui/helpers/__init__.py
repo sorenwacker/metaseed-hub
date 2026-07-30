@@ -19,6 +19,10 @@ from metaseed_hub.ui.helpers.dataset_state import (
     get_dataset_state,
     save_dataset_state,
 )
+from metaseed_hub.ui.helpers.entity_import import (
+    add_entities_in_order,
+    group_entities_by_type,
+)
 from metaseed_hub.ui.helpers.tables import (
     build_entity_form_context,
     build_inline_tables,
@@ -46,6 +50,7 @@ __all__ = [
     "MAX_UPLOAD_BYTES",
     "_csrf_signature_valid",
     "_sign_csrf",
+    "add_entities_in_order",
     "add_entity_node",
     "build_entity_form_context",
     "build_inline_tables",
@@ -55,6 +60,7 @@ __all__ = [
     "escape_pattern_hyphen",
     "get_dataset_state",
     "get_or_create_csrf_token",
+    "group_entities_by_type",
     "set_csrf_cookie",
     "get_tree_data_from_nodes",
     "humanize_field_name",

@@ -1,6 +1,7 @@
 """Dataset comment and reaction routes."""
 
 import logging
+import uuid
 from typing import Annotated
 
 from fastapi import Form, Request
@@ -123,6 +124,26 @@ async def add_dataset_comment(
     if not db_user:
         return HTMLResponse("<div class='error'>User not found</div>", status_code=400)
 
+    # A reply must attach to a comment that exists and belongs to this dataset.
+    # Without the scope check a caller could attach a reply under another
+    # dataset's thread; without the existence check the foreign key raises an
+    # unhandled IntegrityError on commit. The id is parsed first because the
+    # column is UUID-typed and a malformed value would fail at the query.
+    if parent_id:
+        try:
+            uuid.UUID(parent_id)
+        except ValueError:
+            return HTMLResponse(
+                "<div class='error'>Parent comment not found</div>", status_code=404
+            )
+        parent_result = await session.execute(
+            select(Comment).where(Comment.id == parent_id, Comment.dataset_id == dataset_id)
+        )
+        if parent_result.scalar_one_or_none() is None:
+            return HTMLResponse(
+                "<div class='error'>Parent comment not found</div>", status_code=404
+            )
+
     comment = Comment(
         dataset_id=dataset_id,
         user_id=db_user.id,
@@ -215,7 +236,10 @@ async def react_to_comment(
     )
     existing = existing_result.scalar_one_or_none()
 
-    reaction_type = ReactionType(reaction)
+    try:
+        reaction_type = ReactionType(reaction)
+    except ValueError:
+        return HTMLResponse("<div class='error'>Invalid reaction</div>", status_code=400)
 
     if existing:
         if existing.reaction == reaction_type:

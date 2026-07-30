@@ -130,6 +130,38 @@ async def test_soft_deleted_spec_not_loaded(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_offers_published_specs_without_tenant_row(
+    session: AsyncSession,
+) -> None:
+    """The explorer catalog lists published specs even for a caller whose
+    Tenant row does not exist yet.
+
+    The published-specs query was previously nested under the tenant lookup,
+    so the catalog depended on whether the user had visited a page that runs
+    ensure_tenant_and_user first.
+    """
+    from metaseed_hub.auth import TokenUser
+    from metaseed_hub.ui.explore_routes import _build_explore_catalog
+
+    owner_tenant = make_tenant(slug="owner789")
+    session.add(owner_tenant)
+    await session.flush()
+    owner = make_user(tenant=owner_tenant)
+    session.add(owner)
+    await session.flush()
+    spec = make_spec(tenant=owner_tenant, created_by=owner, spec_data=_spec_data())
+    session.add(spec)
+    await session.commit()
+
+    caller = TokenUser(sub="fresh-user-no-tenant", email="f@example.org", name="F", roles=[])
+    profiles, profile_versions, display_names = await _build_explore_catalog(session, caller)
+
+    assert f"spec:{spec.id}" in profiles
+    assert profile_versions[f"spec:{spec.id}"] == [spec.version]
+    assert "Published" in display_names[f"spec:{spec.id}"]
+
+
+@pytest.mark.asyncio
 async def test_no_tenant_blocks_database_specs(session: AsyncSession) -> None:
     """When the caller has no tenant, database specs are inaccessible."""
     tenant = make_tenant(slug="own99999")

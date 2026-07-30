@@ -27,10 +27,12 @@ from metaseed_hub.ui.dependencies import (
     get_dataset_for_user,
 )
 from metaseed_hub.ui.helpers import (
+    add_entities_in_order,
     add_entity_node,
     create_nested_nodes,
     ensure_dataset_facade,
     get_dataset_state,
+    group_entities_by_type,
     parse_workbook_sheets,
     read_upload_capped,
     save_dataset_state,
@@ -42,6 +44,8 @@ from ._router import router
 
 if TYPE_CHECKING:
     from metaseed import MetaseedClient
+
+    from metaseed_hub.auth import TokenUser
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -281,46 +285,34 @@ async def dataset_import(
 
         # Handle different data structures
         entities_by_type = data.get("_entities_by_type", {}) if isinstance(data, dict) else {}
+        entities_data = data.get("entities", []) if isinstance(data, dict) else []
 
         if entities_by_type:
-            # Excel import - create entities by type
-            # Process root entity first, then children in hierarchy order
-            entity_order = [root_entity] + [e for e in facade.entities if e != root_entity]
+            # Excel import - one sheet per entity type, root entity first.
+            _, import_errors = add_entities_in_order(state, facade, entities_by_type, root_entity)
+            if import_errors:
+                logger.warning(f"Import errors: {import_errors[:5]}")
+        elif entities_data:
+            # Export format ({"entities": [...]} as produced by serialize/export):
+            # recreate each entity by its _type marker so an export round-trips.
+            grouped = group_entities_by_type(entities_data, root_entity)
+            _, import_errors = add_entities_in_order(state, facade, grouped, root_entity)
+            if import_errors:
+                logger.warning(f"Import errors: {import_errors[:5]}")
+        elif isinstance(data, dict):
+            # Try to use the data directly as root entity
+            # Filter out metadata fields
+            entity_data = {
+                k: v
+                for k, v in data.items()
+                if not k.startswith("_") and k not in ("profile", "version")
+            }
+            if entity_data:
+                node = add_entity_node(state, root_entity, entity_data)
+                create_nested_nodes(state, facade, node, root_entity, copy.deepcopy(entity_data))
 
-            for entity_type in entity_order:
-                if entity_type not in entities_by_type:
-                    continue
-
-                for entity_data in entities_by_type[entity_type]:
-                    try:
-                        # Filter out empty values
-                        clean_data = {
-                            k: v for k, v in entity_data.items() if v is not None and str(v).strip()
-                        }
-                        if clean_data:
-                            node = add_entity_node(state, entity_type, clean_data)
-                            if not state.editing_node_id:
-                                state.editing_node_id = node.id
-                    except Exception as e:
-                        logger.warning(f"Failed to create {entity_type}: {e}")
-
-        else:
-            # JSON/YAML import - use existing logic
-            entities_data = data.get("entities", []) if isinstance(data, dict) else []
-            if not entities_data and isinstance(data, dict):
-                # Try to use the data directly as root entity
-                # Filter out metadata fields
-                entity_data = {
-                    k: v
-                    for k, v in data.items()
-                    if not k.startswith("_") and k not in ("profile", "version")
-                }
-                if entity_data:
-                    node = add_entity_node(state, root_entity, entity_data)
-                    state.editing_node_id = node.id
-                    create_nested_nodes(
-                        state, facade, node, root_entity, copy.deepcopy(entity_data)
-                    )
+        if state.editing_node_id is None and state.entity_tree:
+            state.editing_node_id = state.entity_tree[0].id
 
         # Save to database with version history
         await save_dataset_state(session, dataset, state, user)
@@ -369,6 +361,7 @@ async def create_dataset_from_accession(
     name: str,
     profile: str,
     accession: str,
+    user: "TokenUser | None" = None,
 ) -> Dataset:
     """Import a public dataset from a source database into a new dataset.
 
@@ -378,14 +371,24 @@ async def create_dataset_from_accession(
     reimplemented here. The imported entities are loaded into the new dataset by
     swapping in the importer's facade.
 
+    Args:
+        session: Database session.
+        tenant_id: Tenant that will own the dataset.
+        name: Name for the new dataset.
+        profile: Profile whose registered importer resolves the accession.
+        accession: Identifier to import.
+        user: The acting user, recorded as the created version's author.
+
     Raises:
         LookupError: If no accession importer is registered for ``profile``.
+        ValueError: If the importer resolved ``accession`` to nothing.
     """
     client = run_source_import(profile, accession)
     if not client.serialize().get("entities"):
         # Creating an empty dataset named after an accession that resolved to
-        # nothing leaves the user to discover the failure themselves.
-        raise LookupError(f"Nothing was found for '{accession}'")
+        # nothing leaves the user to discover the failure themselves. Distinct
+        # from LookupError above so the caller does not blame a missing importer.
+        raise ValueError(f"Nothing was found for '{accession}'")
 
     dataset = Dataset(
         tenant_id=tenant_id,
@@ -403,7 +406,7 @@ async def create_dataset_from_accession(
     # Swap in the importer's facade and rebuild caches; do not reset() (it clears).
     state.facade = client.facade
     state.invalidate_cache()
-    await save_dataset_state(session, dataset, state)
+    await save_dataset_state(session, dataset, state, user)
     return dataset
 
 
@@ -527,10 +530,14 @@ async def dataset_import_accession(
     tenant, _ = await ensure_tenant_and_user(session, user)
     try:
         dataset = await create_dataset_from_accession(
-            session, tenant.id, name.strip(), profile, accession.strip()
+            session, tenant.id, name.strip(), profile, accession.strip(), user
         )
     except LookupError:
         return RedirectResponse("/hub/datasets/new?error=no_importer", status_code=302)
+    except ValueError:
+        # The importer ran but the accession resolved to nothing -- a typo, not
+        # a missing importer.
+        return RedirectResponse("/hub/datasets/new?error=import_empty", status_code=302)
     except IntegrityError:
         await session.rollback()
         return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
@@ -779,31 +786,17 @@ async def dataset_load_example(
         create_nested_nodes(state, facade, node, root_entity, example_data_copy)
 
         # Save to database with version history
-        logger.info(f"Saving tree with {len(state.entity_tree)} root nodes")
-        for n in state.entity_tree:
-            if n.instance:
-                data = n.instance.model_dump(exclude_none=True)
-                logger.info(f"  {n.entity_type} '{n.label}': {len(data)} fields")
-            for c in n.children[:3]:
-                if c.instance:
-                    cdata = c.instance.model_dump(exclude_none=True)
-                    logger.info(f"    Child {c.entity_type} '{c.label}': {len(cdata)} fields")
-
         await save_dataset_state(session, dataset, state, user)
 
     except Exception as e:
-        import traceback
-
+        # The traceback belongs in the log, not in the browser: it exposes
+        # internal paths and code to the user without helping them.
         logger.exception(f"Failed to load example: {e}")
-        tb = traceback.format_exc()
-        error_html = f"""
-        <div class='notification error' style='user-select: text;'>
-            <strong>Error loading example:</strong>
-            <pre style='white-space: pre-wrap; font-size: 0.75rem; margin-top: 0.5rem;'>{e}
-
-{tb}</pre>
-        </div>"""
-        return HTMLResponse(error_html)
+        return HTMLResponse(
+            "<div class='notification error'>Could not load the example dataset. "
+            "The error has been logged.</div>",
+            status_code=500,
+        )
 
     # Use HX-Redirect for HTMX to do a full page redirect
     response = HTMLResponse(status_code=200)
