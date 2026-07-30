@@ -72,3 +72,16 @@ async def test_standalone_verify_token_reuses_singleton(monkeypatch) -> None:
     assert result.sub == "s"
     fake_auth.verify_token.assert_awaited_once_with("a-token")
     assert calls == ["settings-obj"]
+
+
+def test_standalone_verify_token_accepts_no_settings() -> None:
+    """The standalone verify_token takes only the token.
+
+    A settings parameter would be silently ignored after singleton
+    initialization, so the signature must not offer one.
+    """
+    import inspect
+
+    params = list(inspect.signature(auth_module.verify_token).parameters)
+
+    assert params == ["token"]

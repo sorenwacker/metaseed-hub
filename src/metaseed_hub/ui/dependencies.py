@@ -16,6 +16,9 @@ from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
 if TYPE_CHECKING:
     from metaseed.ui.state import AppState
 
+# Single source of truth for the access token cookie name; cookie writers
+# (ui.routes.auth, ui.app) import it from here so reads and writes cannot
+# silently diverge.
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 
 

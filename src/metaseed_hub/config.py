@@ -9,6 +9,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # value is still in use.
 DEFAULT_SECRET_KEY = "metaseed-hub-dev-secret-key"
 
+# Development OIDC fallbacks, applied only in the ``effective_*`` properties and
+# only when neither OIDC_* nor legacy KEYCLOAK_* variables are configured. They
+# must not be field defaults: a non-empty ``oidc_*`` default would shadow the
+# legacy KEYCLOAK_* configuration, silently authenticating such deployments
+# against the localhost development issuer.
+DEV_OIDC_ISSUER = "http://localhost:7080/realms/metaseed"
+DEV_OIDC_CLIENT_ID = "metaseed-hub"
+DEV_OIDC_CLIENT_SECRET = "metaseed-hub-dev-secret"
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -22,10 +31,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://metaseed:metaseed_dev@localhost:7432/metaseed_hub"
 
-    # OIDC (supports Keycloak, SRAM, or any OIDC provider)
-    oidc_issuer: str = "http://localhost:7080/realms/metaseed"
-    oidc_client_id: str = "metaseed-hub"
-    oidc_client_secret: str = "metaseed-hub-dev-secret"
+    # OIDC (supports Keycloak, SRAM, or any OIDC provider). Empty by default so
+    # the legacy KEYCLOAK_* variables below can take effect; the effective_*
+    # properties fall back to the development defaults when neither is set.
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
     oidc_scope: str = "openid email profile"  # Add offline_access eduperson_entitlement for SRAM
 
     # Legacy Keycloak settings (for backwards compatibility)
@@ -63,23 +74,26 @@ class Settings(BaseSettings):
 
     @property
     def effective_issuer(self) -> str:
-        """Return the OIDC issuer URL (supports legacy Keycloak config)."""
+        """Return the OIDC issuer URL.
+
+        Precedence: OIDC_ISSUER, then legacy KEYCLOAK_URL/KEYCLOAK_REALM, then
+        the development default.
+        """
         if self.oidc_issuer:
             return self.oidc_issuer
-        # Fallback to legacy Keycloak config
         if self.keycloak_url and self.keycloak_realm:
             return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
-        return ""
+        return DEV_OIDC_ISSUER
 
     @property
     def effective_client_id(self) -> str:
-        """Return the OIDC client ID."""
-        return self.oidc_client_id or self.keycloak_client_id
+        """Return the OIDC client ID (same precedence as effective_issuer)."""
+        return self.oidc_client_id or self.keycloak_client_id or DEV_OIDC_CLIENT_ID
 
     @property
     def effective_client_secret(self) -> str:
-        """Return the OIDC client secret."""
-        return self.oidc_client_secret or self.keycloak_client_secret
+        """Return the OIDC client secret (same precedence as effective_issuer)."""
+        return self.oidc_client_secret or self.keycloak_client_secret or DEV_OIDC_CLIENT_SECRET
 
     @property
     def oidc_discovery_url(self) -> str:

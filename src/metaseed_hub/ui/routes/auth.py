@@ -17,14 +17,17 @@ if TYPE_CHECKING:
 from metaseed_hub.config import get_settings
 from metaseed_hub.models import ApiToken
 from metaseed_hub.tokens import active_tokens
+
+# ACCESS_TOKEN_COOKIE is single-sourced in ui.dependencies and re-exported here
+# for the cookie writers (ui.app middleware) that import it from this module.
+from metaseed_hub.ui.dependencies import ACCESS_TOKEN_COOKIE as ACCESS_TOKEN_COOKIE
 from metaseed_hub.ui.dependencies import DbSession
 
 logger = logging.getLogger("metaseed_hub")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Cookie names
-ACCESS_TOKEN_COOKIE = "metaseed_access_token"
+# Cookie names (ACCESS_TOKEN_COOKIE is single-sourced in ui.dependencies)
 REFRESH_TOKEN_COOKIE = "metaseed_refresh_token"
 STATE_COOKIE = "metaseed_oauth_state"
 
@@ -50,19 +53,20 @@ async def get_oidc_config() -> dict[str, Any]:
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(discovery_url)
+            response = await client.get(discovery_url, timeout=10.0)
             response.raise_for_status()
             _oidc_config = response.json()
             return _oidc_config
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail=f"OIDC provider not reachable at {settings.effective_issuer}",
-        )
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=503,
             detail=f"OIDC discovery failed: {e.response.status_code} from {discovery_url}",
+        )
+    except httpx.HTTPError:
+        # Covers connect errors, timeouts, and all other transport failures.
+        raise HTTPException(
+            status_code=503,
+            detail=f"OIDC provider not reachable at {settings.effective_issuer}",
         )
 
 
@@ -151,17 +155,24 @@ async def auth_callback(
     oidc_config = await get_oidc_config()
     redirect_uri = f"{hub_base_url}/auth/callback"
 
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            oidc_config["token_endpoint"],
-            data={
-                "grant_type": "authorization_code",
-                "client_id": settings.effective_client_id,
-                "client_secret": settings.effective_client_secret,
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-        )
+    try:
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                oidc_config["token_endpoint"],
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": settings.effective_client_id,
+                    "client_secret": settings.effective_client_secret,
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+                timeout=10.0,
+            )
+    except httpx.HTTPError:
+        # An IdP outage mid sign-in must produce the same friendly redirect as
+        # a non-200 response, not an unhandled 500.
+        logger.exception("Token exchange with the OIDC provider failed")
+        return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)
 
     if token_response.status_code != 200:
         return RedirectResponse(url="/hub/?error=token_exchange_failed", status_code=302)

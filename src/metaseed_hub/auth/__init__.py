@@ -253,21 +253,21 @@ async def get_current_user(
     return await auth.verify_token(presented)
 
 
-async def verify_token(token: str, settings: Settings | None = None) -> TokenUser:
-    """Standalone function to verify a token.
+async def verify_token(token: str) -> TokenUser:
+    """Standalone function to verify a token against the application settings.
 
     Args:
         token: JWT access token.
-        settings: Optional settings, uses default if not provided.
 
     Returns:
         TokenUser extracted from the JWT token.
     """
-    if settings is None:
-        settings = get_settings()
     # Reuse the shared singleton so the OIDC discovery and JWKS caches are
-    # shared across requests instead of refetched on every call.
-    auth = get_oidc_auth(settings)
+    # shared across requests instead of refetched on every call. The singleton
+    # keeps the settings it was constructed with, so alternate settings cannot
+    # be honored here; callers needing a different issuer must construct their
+    # own OIDCAuth.
+    auth = get_oidc_auth(get_settings())
     return await auth.verify_token(token)
 
 
