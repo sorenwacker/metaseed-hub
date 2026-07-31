@@ -65,3 +65,38 @@ def test_boundary_module_exports_the_remaining_internals() -> None:
         assert hasattr(metaseed_ui, name), f"metaseed_ui must export {name}"
     assert metaseed_ui.METASEED_STATIC_DIR.is_dir()
     assert metaseed_ui.METASEED_TEMPLATES_DIR.is_dir()
+
+
+# Private attributes of metaseed objects the hub has reached for in the past.
+# Each has a public equivalent; reaching past it couples the hub to metaseed's
+# internals just as an internal import would, and static analysis cannot tell a
+# metaseed object from a hub one, so the check is a named list rather than a
+# blanket rule on leading underscores.
+PRIVATE_METASEED_ATTRIBUTES = {"_model": "EntityHelper.model"}
+
+
+def _private_attribute_uses(path: Path) -> list[str]:
+    """Accesses of a known metaseed-private attribute in one module."""
+    tree = ast.parse(path.read_text())
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in PRIVATE_METASEED_ATTRIBUTES:
+            public = PRIVATE_METASEED_ATTRIBUTES[node.attr]
+            found.append(
+                f"{path.relative_to(SRC_ROOT.parent.parent)}:{node.lineno} "
+                f"uses .{node.attr}; use {public}"
+            )
+    return found
+
+
+def test_no_module_reaches_past_a_public_attribute() -> None:
+    """The hub uses metaseed's public surface, not the object's private one.
+
+    ``EntityHelper._model`` was read in eight places while ``.model`` -- the
+    same object -- is public. A private attribute can be renamed in a patch
+    release without warning, so each use is a break waiting for an upgrade.
+    """
+    offenders: list[str] = []
+    for path in sorted(SRC_ROOT.rglob("*.py")):
+        offenders.extend(_private_attribute_uses(path))
+    assert not offenders, "use metaseed's public attributes:\n" + "\n".join(offenders)

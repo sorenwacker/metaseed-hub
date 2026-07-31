@@ -288,7 +288,7 @@ async def add_table_row(
             # Update parent instance with new list (use model_construct to skip validation)
             update_data = parent_node.instance.model_dump(exclude_none=True)
             update_data[field_name] = current_list
-            model_class = parent_helper._model
+            model_class = parent_helper.model
             updated_instance = model_class.model_construct(**update_data)
             state.update_node(parent_node_id, updated_instance)
 
@@ -354,7 +354,7 @@ async def _add_entity_list_row(
     default_values = _get_default_values(nested_helper, parent_node, parent_identifier)
 
     # Create instance with defaults (use model_construct to skip validation)
-    model_class = nested_helper._model
+    model_class = nested_helper.model
     instance = model_class.model_construct(**default_values)
 
     # Add the child through the facade (skip_validation lets an incomplete draft
@@ -466,7 +466,7 @@ async def update_table_cell(
         except ValueError:
             current_values[field_name] = raw_str
 
-    model_class = helper._model
+    model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
     await save_dataset_state(session, dataset, state, user)
@@ -520,7 +520,7 @@ async def update_primitive_list_item(
     current_values[field_name] = current_list
 
     # Create updated instance (skip validation)
-    model_class = helper._model
+    model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
@@ -569,7 +569,7 @@ async def delete_primitive_list_item(
     current_values[field_name] = current_list
 
     # Create updated instance (skip validation)
-    model_class = helper._model
+    model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
@@ -656,7 +656,7 @@ async def update_single_entity_field(
         current_values[field_name] = nested_data
 
     # Create updated parent instance (skip validation)
-    model_class = helper._model
+    model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 
@@ -709,7 +709,7 @@ async def delete_single_entity_field(
         del current_values[field_name]
 
     # Create updated parent instance (skip validation)
-    model_class = helper._model
+    model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
 

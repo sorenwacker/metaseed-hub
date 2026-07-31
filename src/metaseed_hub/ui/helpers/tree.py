@@ -72,7 +72,7 @@ def add_entity_node(
         helper = getattr(facade, entity_type)
 
     # Create instance using model_construct (skips validation)
-    instance = helper._model.model_construct(**data)
+    instance = helper.model.model_construct(**data)
 
     return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
 
