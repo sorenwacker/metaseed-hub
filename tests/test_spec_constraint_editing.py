@@ -13,15 +13,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.test_mcp_endpoint import _calling_with, _tool
-
-# Imported under an alias and re-exposed by assignment: pytest discovers the
-# fixture by module attribute name, and a plain import would trip F811 on every
-# test whose `server` parameter shadows it.
-from tests.test_mcp_endpoint import server as mcp_server
-from tests.test_mcp_spec_tools import _drafting, _field, _spec_of
-
-server = mcp_server
+from tests.mcp_helpers import _calling_with, _drafting, _field, _spec_of, _tool
 
 
 async def _constrained_field(server, session: AsyncSession, name: str) -> str:

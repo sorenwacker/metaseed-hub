@@ -24,14 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.models import Dataset, SpecDraft
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from tests.factories import make_dataset, make_spec_draft, make_tenant, make_user
-from tests.test_mcp_endpoint import _calling_with, _tool, _user_with_token
-
-# Imported under an alias and re-exposed by assignment: pytest discovers the
-# fixture by module attribute name, and a plain import would trip F811 on every
-# test whose `server` parameter shadows it.
-from tests.test_mcp_endpoint import server as mcp_server
-
-server = mcp_server
+from tests.mcp_helpers import _calling_with, _tool, _user_with_token
 
 _UNRELATED_HASH = "sha256:" + "0" * 64
 
