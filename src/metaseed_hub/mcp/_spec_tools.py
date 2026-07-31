@@ -42,6 +42,18 @@ def _clean(attrs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in attrs.items() if value is not None}
 
 
+def _constraints(limits: dict[str, Any]) -> Any | None:
+    """A ``Constraints`` over the limits supplied, or None if none were.
+
+    None rather than an empty object: an empty ``constraints`` block would be
+    written into every field of every draft the hub builds.
+    """
+    from metaseed.specs.schema import Constraints
+
+    values = _clean(limits)
+    return Constraints(**values) if values else None
+
+
 def _status(builder: Any) -> dict[str, Any]:
     """A summary of a draft's spec: name, version, root, entities, rules.
 
@@ -295,9 +307,25 @@ def register_spec_tools(  # noqa: C901
         field_type: str,
         required: bool = False,
         description: str = "",
+        items: str | None = None,
         ontology_term: str | None = None,
+        reference: str | None = None,
+        parent_ref: str | None = None,
+        pattern: str | None = None,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        minimum: float | None = None,
+        maximum: float | None = None,
+        min_items: int | None = None,
+        max_items: int | None = None,
+        enum: list[str] | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
+
+        A nested field — a ``list`` or ``entity`` whose ``items`` names a child
+        entity — is what links the child under this one, and adding it also
+        creates the parent's identifier and the child's back-reference. Without
+        it the child is an orphan no dataset can reach.
 
         Args:
             draft: The draft's name in the caller's workspace.
@@ -307,8 +335,32 @@ def register_spec_tools(  # noqa: C901
                 uri, ontology_term, list, entity.
             required: Whether a dataset must supply it.
             description: What the field records.
+            items: For list and entity fields, the child entity type this field
+                nests — the link that makes the child reachable.
             ontology_term: An ontology term identifying it, where one applies.
+            reference: A cross-reference target as "Entity.field".
+            parent_ref: The parent-reference field this one answers.
+            pattern: A regular expression a string value must match.
+            min_length: The shortest a string value may be.
+            max_length: The longest a string value may be.
+            minimum: The smallest a numeric value may be.
+            maximum: The largest a numeric value may be.
+            min_items: The fewest entries a list may hold.
+            max_items: The most entries a list may hold.
+            enum: The values allowed, where the field is enumerated.
         """
+        constraints = _constraints(
+            {
+                "pattern": pattern,
+                "min_length": min_length,
+                "max_length": max_length,
+                "minimum": minimum,
+                "maximum": maximum,
+                "min_items": min_items,
+                "max_items": max_items,
+                "enum": enum,
+            }
+        )
         async with caller() as (session, user):
             row = await owned_draft(session, user, draft)
             async with building(session, row, user) as builder:
@@ -318,7 +370,15 @@ def register_spec_tools(  # noqa: C901
                     field_type,
                     required=required,
                     description=description,
-                    ontology_term=ontology_term,
+                    **_clean(
+                        {
+                            "items": items,
+                            "ontology_term": ontology_term,
+                            "reference": reference,
+                            "parent_ref": parent_ref,
+                            "constraints": constraints,
+                        }
+                    ),
                 )
                 problems = builder.validate()
             return json.dumps({"entity": entity, "field": field, "problems": problems})
@@ -602,6 +662,31 @@ def register_spec_tools(  # noqa: C901
             row = await owned_draft(session, user, draft)
             builder = SpecBuilder.from_spec(_loaded_spec(row, draft))
             return json.dumps({"draft": draft, "yaml": builder.to_yaml()})
+
+    @mcp.tool()
+    async def spec_delete_draft(draft: str) -> str:
+        """Delete one of your own draft specifications.
+
+        The whole draft goes, with no version history to restore it from, so
+        this is the one spec tool that cannot be undone. A draft that datasets
+        are built on is kept instead: they validate against it and would be left
+        without a specification.
+
+        Args:
+            draft: The draft's name in the caller's workspace.
+        """
+        from metaseed_hub.ui.spec_builder.access import delete_draft
+
+        async with caller() as (session, user):
+            row = await owned_draft(session, user, draft)
+            dependents = await delete_draft(session, row)
+            if dependents:
+                raise ValueError(
+                    f"{len(dependents)} dataset(s) are built on {draft!r} "
+                    f"({', '.join(dependents)}); delete or move them first"
+                )
+            logger.info("mcp: %s deleted spec draft %r", user.email, draft)
+            return json.dumps({"deleted": draft})
 
     @mcp.tool()
     async def list_spec_drafts() -> str:

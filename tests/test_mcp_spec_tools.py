@@ -8,10 +8,13 @@ already uses (metaseed's OntologyService), so no test reaches EMBL-EBI.
 
 from __future__ import annotations
 
+import inspect
 import json
+import re
 from unittest.mock import patch
 
 import pytest
+import yaml
 from metaseed.services.ontology import OntologySearchResult, OntologyTerm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +58,18 @@ async def _spec_of(name: str) -> dict:
 
 def _field(spec: dict, entity: str, name: str) -> dict:
     return next(f for f in spec["entities"][entity]["fields"] if f["name"] == name)
+
+
+async def _draft_id(name: str) -> str:
+    """The row id of a draft, for assertions about state outside the spec."""
+    from sqlalchemy import select
+
+    from metaseed_hub.database import db
+    from metaseed_hub.models import SpecDraft
+
+    async with db.session_factory() as check:
+        draft = (await check.execute(select(SpecDraft).where(SpecDraft.name == name))).scalar_one()
+        return draft.id
 
 
 class TestSpecCorrectability:
@@ -839,6 +854,267 @@ class TestOntologyTools:
             pytest.raises(ValueError, match="could not be reached"),
         ):
             await listing()
+
+
+class TestSpecFieldRelationships:
+    """A field can say what it points at, which is what makes a spec a tree.
+
+    Without ``items`` a list field names no child entity, so every draft built
+    here is flat and unusable as a profile — the endpoint's own instructions
+    teach the linking call, so the tool has to accept it.
+    """
+
+    async def test_a_list_field_nests_the_entity_its_items_names(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The end-to-end case: Collection.movies is a list of Movie, and the
+        parent identifier and the child's back-reference come with it."""
+        secret = await _drafting(server, session, slug="lnk00001", name="Films")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        preview = await _tool(server, "spec_preview_yaml")
+        with _calling_with(secret):
+            await add_entity("Films", "Collection")
+            await add_entity("Films", "Movie")
+            await add_field("Films", "Collection", "movies", "list", items="Movie")
+            previewed = json.loads(await preview("Films"))["yaml"]
+
+        entities = yaml.safe_load(previewed)["entities"]
+        movies = next(f for f in entities["Collection"]["fields"] if f["name"] == "movies")
+        assert movies["type"] == "list"
+        assert movies["items"] == "Movie", "a list must say what it is a list of"
+
+        identifier = next(f for f in entities["Collection"]["fields"] if f["name"] == "identifier")
+        assert identifier["required"] is True, "the parent needs an id to be referenced by"
+        back = next(
+            f for f in entities["Movie"]["fields"] if f.get("reference") == "Collection.identifier"
+        )
+        assert back["name"] == "collection_id"
+
+    async def test_a_reference_field_is_persisted(self, server, session: AsyncSession) -> None:
+        secret = await _drafting(server, session, slug="lnk00002", name="Referring")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Referring", "Study")
+            await add_entity("Referring", "Sample")
+            await add_field("Referring", "Study", "unique_id", "string")
+            await add_field(
+                "Referring", "Sample", "study_id", "string", reference="Study.unique_id"
+            )
+
+        assert _field(await _spec_of("Referring"), "Sample", "study_id")["reference"] == (
+            "Study.unique_id"
+        )
+
+    async def test_a_parent_ref_field_is_persisted(self, server, session: AsyncSession) -> None:
+        secret = await _drafting(server, session, slug="lnk00003", name="Parented")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Parented", "Study")
+            await add_entity("Parented", "Sample")
+            await add_field("Parented", "Sample", "parent_study", "string", parent_ref="Study.name")
+
+        assert _field(await _spec_of("Parented"), "Sample", "parent_study")["parent_ref"] == (
+            "Study.name"
+        )
+
+    async def test_constraints_round_trip(self, server, session: AsyncSession) -> None:
+        """Constraints are the spec's own validation; a field that cannot carry
+        them describes less than the profile it is meant to replace."""
+        secret = await _drafting(server, session, slug="lnk00004", name="Constrained")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Constrained", "Study")
+            await add_field("Constrained", "Study", "status", "string", enum=["draft", "published"])
+            await add_field("Constrained", "Study", "replicates", "integer", minimum=1)
+
+        spec = await _spec_of("Constrained")
+        assert _field(spec, "Study", "status")["constraints"]["enum"] == ["draft", "published"]
+        assert _field(spec, "Study", "replicates")["constraints"]["minimum"] == 1
+
+    async def test_a_field_without_constraints_stores_none(
+        self, server, session: AsyncSession
+    ) -> None:
+        """No constraint argument means no constraints object, not an empty one."""
+        secret = await _drafting(server, session, slug="lnk00005", name="Plain")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Plain", "Study")
+            await add_field("Plain", "Study", "title", "string")
+
+        assert "constraints" not in _field(await _spec_of("Plain"), "Study", "title")
+
+    async def test_items_can_be_set_on_an_existing_list_field(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The correction path the instructions promise: a list added without
+        items is repaired in place rather than deleted and re-added."""
+        secret = await _drafting(server, session, slug="lnk00006", name="Repaired")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        update_field = await _tool(server, "spec_update_field")
+        with _calling_with(secret):
+            await add_entity("Repaired", "Collection")
+            await add_entity("Repaired", "Movie")
+            await add_field("Repaired", "Collection", "movies", "list")
+            await update_field("Repaired", "Collection", "movies", items="Movie")
+
+        assert _field(await _spec_of("Repaired"), "Collection", "movies")["items"] == "Movie"
+
+    async def test_a_dangling_items_target_is_reported(self, server, session: AsyncSession) -> None:
+        """A list whose items name no entity is reported by spec_validate, so an
+        agent is told rather than left with a link to nowhere."""
+        secret = await _drafting(server, session, slug="lnk00007", name="Dangling")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Dangling", "Collection")
+            result = json.loads(
+                await add_field("Dangling", "Collection", "movies", "list", items="NoSuchEntity")
+            )
+
+        assert any("NoSuchEntity" in problem for problem in result["problems"])
+
+
+class TestSpecDeleteDraft:
+    """A draft the caller no longer wants is removable without the web UI.
+
+    Every other draft mutation is available here; without this one an agent can
+    only accumulate drafts it cannot clear.
+    """
+
+    async def test_a_draft_is_deleted(self, server, session: AsyncSession) -> None:
+        from metaseed_hub.ui.spec_builder.cache import state_cache
+
+        secret = await _drafting(server, session, slug="del00001", name="Disposable")
+        draft_id = await _draft_id("Disposable")
+        delete = await _tool(server, "spec_delete_draft")
+        listing = await _tool(server, "list_spec_drafts")
+        with _calling_with(secret):
+            result = json.loads(await delete("Disposable"))
+            assert result == {"deleted": "Disposable"}
+            assert json.loads(await listing()) == []
+
+        assert draft_id not in state_cache, "a deleted draft must not stay cached"
+
+    async def test_a_deleted_draft_is_no_longer_editable(
+        self, server, session: AsyncSession
+    ) -> None:
+        secret = await _drafting(server, session, slug="del00002", name="Gone")
+        delete = await _tool(server, "spec_delete_draft")
+        add_entity = await _tool(server, "spec_add_entity")
+        with _calling_with(secret):
+            await delete("Gone")
+            with pytest.raises(ValueError, match="No specification draft"):
+                await add_entity("Gone", "Study")
+
+    async def test_another_users_draft_is_not_deletable(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Scoped like every other draft tool: a name someone else owns reads as
+        absent, not as reachable."""
+        from metaseed_hub.tokens import issue_token
+        from tests.factories import make_tenant, make_user
+
+        tenant = make_tenant(slug="del00003")
+        session.add(tenant)
+        await session.flush()
+        user_a = make_user(tenant=tenant, email="del00003-a@example.org")
+        user_b = make_user(tenant=tenant, email="del00003-b@example.org")
+        session.add_all([user_a, user_b])
+        await session.commit()
+        secret_a, _ = await issue_token(session, user_a, name="agent")
+        secret_b, _ = await issue_token(session, user_b, name="agent")
+
+        create = await _tool(server, "spec_create")
+        delete = await _tool(server, "spec_delete_draft")
+        with _calling_with(secret_a):
+            await create("Guarded", "1.0")
+        with _calling_with(secret_b), pytest.raises(ValueError, match="No specification draft"):
+            await delete("Guarded")
+
+        assert (await _spec_of("Guarded"))["name"] == "Guarded", "the owner still has it"
+
+    async def test_an_unknown_name_is_a_clean_error(self, server, session: AsyncSession) -> None:
+        secret = await _drafting(server, session, slug="del00004", name="Kept")
+        delete = await _tool(server, "spec_delete_draft")
+        with _calling_with(secret), pytest.raises(ValueError, match="No specification draft"):
+            await delete("NeverExisted")
+
+    async def test_a_draft_a_dataset_depends_on_is_kept(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Deleting it would leave the dataset without a specification, so the
+        agent is told which datasets to deal with first."""
+        from sqlalchemy import select
+
+        from metaseed_hub.models import SpecDraft
+        from tests.factories import make_dataset
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="del00005", email="del00005@example.org"
+        )
+        create = await _tool(server, "spec_create")
+        with _calling_with(secret):
+            await create("InUse", "1.0")
+
+        draft = (
+            await session.execute(select(SpecDraft).where(SpecDraft.name == "InUse"))
+        ).scalar_one()
+        dataset = make_dataset(tenant=tenant, name="dependent", profile="inuse", version="1.0")
+        dataset.spec_draft_id = draft.id
+        session.add(dataset)
+        await session.commit()
+
+        delete = await _tool(server, "spec_delete_draft")
+        with _calling_with(secret), pytest.raises(ValueError, match="dependent"):
+            await delete("InUse")
+
+        assert (await _spec_of("InUse"))["name"] == "InUse", "the draft survived"
+
+
+_TOOL_MENTION = re.compile(r"\b(spec_[a-z_]+)\b")
+_PARAMETER_MENTION = re.compile(r"\b([a-z_]+)=")
+
+
+def _sentences(text: str) -> list[str]:
+    """Split instructions into sentences, so a tool and its arguments pair up."""
+    return [part for part in re.split(r"(?<=\.)\s|\n", text) if part.strip()]
+
+
+async def test_the_instructions_only_name_tools_and_arguments_that_exist(server) -> None:
+    """The instructions are the agent's whole picture of the endpoint.
+
+    They told agents to call spec_add_field with items=<ChildEntityName> while
+    the tool had no items parameter, so every agent that followed them hit an
+    unexpected-argument error. Checked generally: any spec_* tool named, and any
+    ``argument=`` shown, must exist in the registered signatures.
+    """
+    instructions = server.instructions or ""
+    registered = {t.name for t in await server.list_tools()}
+    parameters = {
+        name: set(inspect.signature(server._tool_manager.get_tool(name).fn).parameters)
+        for name in registered
+    }
+    known_parameters = set().union(*parameters.values())
+
+    for mentioned in sorted(set(_TOOL_MENTION.findall(instructions))):
+        assert mentioned in registered, f"the instructions name {mentioned}, which is not a tool"
+
+    for sentence in _sentences(instructions):
+        named = sorted(set(_TOOL_MENTION.findall(sentence)) & registered)
+        for argument in sorted(set(_PARAMETER_MENTION.findall(sentence))):
+            # One tool in the sentence means the argument is that tool's;
+            # otherwise it only has to belong to some registered tool.
+            expected = parameters[named[0]] if len(named) == 1 else known_parameters
+            where = named[0] if len(named) == 1 else "any tool"
+            assert argument in expected, (
+                f"the instructions show {argument}= but {where} has no such parameter"
+            )
 
 
 async def test_the_instructions_mention_correctability(server) -> None:

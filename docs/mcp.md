@@ -58,8 +58,8 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_update_entity` | Change an entity's description or ontology term; unset arguments keep their values |
 | `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |
 | `spec_delete_entity` | Remove an entity type |
-| `spec_add_field` | Add a field to an entity |
-| `spec_update_field` | Change a field's attributes in place; unset arguments keep their values |
+| `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values |
+| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them; unset arguments keep their values |
 | `spec_delete_field` | Remove a field |
 | `spec_move_field` | Move a field one position up or down |
 | `spec_add_rule` | Add a validation rule |
@@ -71,8 +71,11 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_validate` | What is wrong with the draft |
 | `spec_preview_yaml` | The draft as YAML |
 | `list_spec_drafts` | Your drafts |
+| `spec_delete_draft` | Remove one of your own drafts |
 
 A specification is a tree: every entity except the root must be linked under a parent by a field on the parent whose type is `list` or `entity` and whose `items` names the child. An unlinked entity is an orphan a dataset can never reach, and `spec_validate` does not flag orphans. The endpoint's instructions carry this workflow (shared with the standalone metaseed MCP server), so connected agents link entities as they build.
+
+Adding a nested field with `items` also creates the parent's `identifier` field and a back-reference on the child, so the relationship is complete in both directions without further calls. `spec_delete_draft` removes a draft the caller owns; a draft a dataset is built on is not deleted, because the dataset would lose its specification.
 
 Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, so it stays something you do yourself in the web interface.
 

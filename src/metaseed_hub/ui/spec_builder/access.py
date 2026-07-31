@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from metaseed_hub.database import get_session
 from metaseed_hub.models import (
+    Dataset,
     Spec,
     SpecDraft,
     SpecDraftMember,
@@ -444,6 +445,39 @@ async def create_new_draft(
     # an untagged entry never matches the revision check and is always stale.
     state_cache.set(draft.id, state, revision=draft.updated_at)
     return draft
+
+
+async def delete_draft(session: AsyncSession, draft: SpecDraft) -> list[str]:
+    """Remove a draft, unless datasets are built on it.
+
+    The draft holds the specification those datasets validate against, so
+    deleting it would leave them without one; they are reported instead and
+    nothing is removed. The cached state goes with the row, or a later read in
+    this process would serve a draft that no longer exists.
+
+    The caller is responsible for authorization: this deletes whatever draft it
+    is given.
+
+    Args:
+        session: The session to delete in.
+        draft: The draft to remove.
+
+    Returns:
+        The names of the datasets still built on the draft. A non-empty list
+        means nothing was deleted.
+    """
+    result = await session.execute(
+        select(Dataset.name).where(Dataset.spec_draft_id == draft.id, Dataset.deleted_at.is_(None))
+    )
+    dependents = list(result.scalars().all())
+    if dependents:
+        return dependents
+
+    draft_id = draft.id
+    await session.delete(draft)
+    await session.commit()
+    state_cache.pop(draft_id, None)
+    return []
 
 
 @dataclass

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
-from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
+from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
     can_edit_draft,
@@ -23,6 +23,9 @@ from metaseed_hub.ui.spec_builder.access import (
     save_state_to_draft,
     unpublish_spec,
     workspace_owner,
+)
+from metaseed_hub.ui.spec_builder.access import (
+    delete_draft as delete_draft_row,
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
@@ -115,16 +118,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if draft.user_id != user_id:
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Check if any datasets are using this spec. Exclude soft-deleted rows,
-        # matching every other Dataset query; otherwise a draft whose only
-        # referencing datasets were deleted is wrongly reported as in use.
-        datasets_result = await session.execute(
-            select(Dataset).where(Dataset.spec_draft_id == draft_id, Dataset.deleted_at.is_(None))
-        )
-        dependent_datasets = list(datasets_result.scalars().all())
-
+        dependent_datasets = await delete_draft_row(session, draft)
         if dependent_datasets:
-            dataset_names = ", ".join(d.name for d in dependent_datasets[:3])
+            dataset_names = ", ".join(dependent_datasets[:3])
             if len(dependent_datasets) > 3:
                 dataset_names += f" and {len(dependent_datasets) - 3} more"
             msg = (
@@ -135,10 +131,6 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 content=f'<div class="notification notification-error">{msg}</div>',
                 headers={"HX-Reswap": "beforeend", "HX-Retarget": "#notification-container"},
             )
-
-        await session.delete(draft)
-        await session.commit()
-        state_cache.pop(draft_id, None)
 
         return HTMLResponse(
             content='<div hx-redirect="/hub/spec-builder"></div>',
