@@ -32,6 +32,8 @@ When an entity contains a collection of nested entities, the form shows a **Rela
 
 Click **Validate** to check the dataset against the profile schema. The result lists errors and warnings per entity and field so you can correct them. Validation does not change the data.
 
+The result also names any stored entity that could not be loaded — for example one whose entity type the current specification no longer defines. Such an entity is not shown in the tree and is not part of the dataset you are editing, so saving removes it; the validation panel is where you find out before that happens.
+
 ## Deleting an entity
 
 Use the delete control next to an entity in the tree or on an inline-table row. Deleting an entity records a new version, so the change is reversible by [restoring an earlier version](versions.md#restoring-a-version).

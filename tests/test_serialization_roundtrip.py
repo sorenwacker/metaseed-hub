@@ -2,15 +2,14 @@
 
 ``serialize_tree`` delegates to metaseed's ``MetaseedClient.serialize
 (format="tree")`` and the hub loads ``dataset.data`` with
-``sanitize_tree_payload`` + ``MetaseedClient.load``. This pins that a saved
-payload reloads and reserializes identically, so the write and read paths
-cannot silently diverge.
+``MetaseedClient.load``. This pins that a saved payload reloads and
+reserializes identically, so the write and read paths cannot silently diverge.
 """
 
 from metaseed import MetaseedClient
 from metaseed.ui.state import AppState
 
-from metaseed_hub.ui.helpers.tree import sanitize_tree_payload, serialize_tree
+from metaseed_hub.ui.helpers.tree import serialize_tree
 
 
 def _client_with_tree() -> MetaseedClient:
@@ -27,7 +26,9 @@ def _client_with_tree() -> MetaseedClient:
 def _reload(data: dict) -> AppState:
     """Load a stored payload the way ensure_dataset_facade does."""
     client = MetaseedClient("miappe", "1.2")
-    client.load(sanitize_tree_payload(client.facade.entities, data))
+    skipped: list = []
+    client.load(data, on_skip=skipped.append)
+    assert skipped == [], skipped
     state = AppState()
     state.profile = "miappe"
     state.version = "1.2"

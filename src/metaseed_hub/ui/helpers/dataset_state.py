@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Dataset, DatasetVersion
-from metaseed_hub.ui.helpers.tree import sanitize_tree_payload, serialize_tree
+from metaseed_hub.ui.helpers.tree import serialize_tree
 from metaseed_hub.ui.metaseed_ui import AppState
 
 if TYPE_CHECKING:
-    from metaseed import MetaseedClient
+    from collections.abc import Callable
+
+    from metaseed import MetaseedClient, SkippedNode
 
     from metaseed_hub.auth import TokenUser
 
@@ -53,6 +55,7 @@ def _has_stored_entities(data: dict[str, Any] | None) -> bool:
 async def ensure_dataset_facade(
     dataset: Dataset,
     session: AsyncSession,
+    on_skip: "Callable[[SkippedNode], None] | None" = None,
 ) -> AppState:
     """Load a dataset into an AppState whose facade holds the stored entities.
 
@@ -60,14 +63,23 @@ async def ensure_dataset_facade(
     data, so every loaded state must carry one. For datasets using
     database-stored specs (spec_draft_id or spec_id), the spec is loaded and a
     MetaseedClient is created with from_spec(); built-in profiles get a
-    standard client. The stored payload is passed through
-    ``sanitize_tree_payload`` and loaded with ``MetaseedClient.load()``, which
+    standard client.
+
+    The payload is loaded with ``MetaseedClient.load(..., on_skip=...)``, which
     reconstructs entities permissively (``skip_validation``), so incomplete
-    drafts and legacy payloads load without loss.
+    drafts and legacy payloads load without loss, and drops -- rather than
+    fails on -- a node the profile cannot place. Every drop is logged with the
+    dataset id and passed to ``on_skip``: a dropped node is absent from the
+    facade, so the next save deletes it from storage, which callers that report
+    to a user or an agent must be able to say (see
+    ``metaseed_hub.ui.helpers.load_report``).
 
     Args:
         dataset: Dataset model with profile, version, and optional spec ids.
         session: Database session for loading spec drafts.
+        on_skip: Called once per dropped node. Optional: omitting it changes
+            nothing about the load, only whether the caller hears about the
+            drops, which are logged either way.
 
     Returns:
         AppState with facade ready to use.
@@ -142,9 +154,21 @@ async def ensure_dataset_facade(
                 user_message="The schema for this dataset could not be loaded. "
                 "Editing is disabled to protect the stored data.",
             )
+
+        def report(skip: "SkippedNode") -> None:
+            """Log a dropped node, then hand it to the caller if one is listening."""
+            logger.warning(
+                "Dataset %s: skipped a stored %s node (%s), dropping %d node(s) below it",
+                dataset.id,
+                skip.entity_type or "untyped",
+                skip.reason,
+                skip.descendants_dropped,
+            )
+            if on_skip is not None:
+                on_skip(skip)
+
         try:
-            payload = sanitize_tree_payload(client.facade.entities, dataset.data)
-            count = client.load(payload)
+            count = client.load(dataset.data, on_skip=report)
             logger.debug(f"Loaded {count} entities for dataset {dataset.id}")
         except Exception as e:
             logger.error(f"Failed to load entities for dataset {dataset.id}: {e}")

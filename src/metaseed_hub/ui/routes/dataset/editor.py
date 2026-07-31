@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
+from metaseed import SkippedNode
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +28,7 @@ from metaseed_hub.ui.helpers import (
     read_upload_capped,
     save_dataset_state,
 )
+from metaseed_hub.ui.helpers.load_report import skipped_node_message
 from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
@@ -244,12 +246,23 @@ async def dataset_validate(
     # Verify user has access to this dataset
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    state = await ensure_dataset_facade(dataset, session)
+    # Collected during the load: a stored node that did not load is missing from
+    # everything below, including the counts, so the panel has to say so itself.
+    skipped: list[SkippedNode] = []
+    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
     facade = state.get_or_create_facade()
 
     errors = _collect_validation_errors(state, facade)
     drift = await spec_drift_message(session, dataset)
-    return HTMLResponse(_render_validation_results(dataset_id, state, errors, drift=drift))
+    return HTMLResponse(
+        _render_validation_results(
+            dataset_id,
+            state,
+            errors,
+            drift=drift,
+            unloadable=[skipped_node_message(skip) for skip in skipped],
+        )
+    )
 
 
 def _collect_validation_errors(state: Any, facade: Any) -> list[dict[str, Any]]:
@@ -303,6 +316,7 @@ def _render_validation_results(
     state: Any,
     errors: list[dict[str, Any]],
     drift: str | None = None,
+    unloadable: list[str] | None = None,
 ) -> str:
     """Render the validation summary, per-type breakdown, and error list as HTML.
 
@@ -314,6 +328,9 @@ def _render_validation_results(
             written, or None. Shown above the summary because it usually
             explains the issues below it, but kept out of the counts: it is
             provenance, not an entity that failed.
+        unloadable: One message per stored node that did not load. Shown first
+            and kept out of the counts, which can only count what loaded --
+            that is exactly why these need saying separately.
 
     Returns:
         The panel's HTML.
@@ -329,6 +346,12 @@ def _render_validation_results(
     valid_count = total - len(errors)
 
     html = '<div class="validation-results">'
+
+    if unloadable:
+        html += '<div class="validation-unloadable"><strong>Entities that did not load</strong>'
+        for message in unloadable:
+            html += f"<p>{html_module.escape(message)}</p>"
+        html += "</div>"
 
     if drift:
         html += (

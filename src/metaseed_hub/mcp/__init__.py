@@ -157,10 +157,14 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
     it has finished stops, leaving a half-filled dataset that was reported as
     saved.
     """
+    from metaseed import SkippedNode
+
     from metaseed_hub.ui.helpers import ensure_dataset_facade
+    from metaseed_hub.ui.helpers.load_report import SKIPPED_NODE_NEXT_STEP, skipped_node_issues
     from metaseed_hub.ui.helpers.spec_hash import DRIFT_RULE, spec_drift_message
 
-    state = await ensure_dataset_facade(dataset, session)
+    skipped: list[SkippedNode] = []
+    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
     if state.facade is None:
         return {
             "valid": False,
@@ -200,6 +204,13 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
     if drift is not None:
         reported.append({"entity_id": None, "field": None, "rule": DRIFT_RULE, "message": drift})
 
+    # A node that did not load is not a validation failure either -- the
+    # validator never saw it. It does make `valid` false all the same: what was
+    # checked is a subset of what is stored, so vouching for the dataset would
+    # be vouching for something other than what the agent asked about.
+    reported.extend(skipped_node_issues(skipped))
+    valid = valid and not skipped
+
     if not reported:
         return {"valid": True, "issues": [], "next_step": "Nothing is missing."}
 
@@ -221,11 +232,15 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
     for issue in reported:
         by_rule[issue["rule"]] = by_rule.get(issue["rule"], 0) + 1
     summary = ", ".join(f"{count} x {rule}" for rule, count in sorted(by_rule.items()))
-    next_step = (
-        f"{len(reported)} item(s) still need attention ({summary}). Fill these "
-        "from the source. Leave a field empty rather than inventing a value; an "
-        "empty required field is a smaller problem than a wrong one."
-    )
+    next_step = f"{len(reported)} item(s) still need attention ({summary})."
+    if issues:
+        next_step += (
+            " Fill these from the source. Leave a field empty rather than "
+            "inventing a value; an empty required field is a smaller problem "
+            "than a wrong one."
+        )
+    if skipped:
+        next_step += SKIPPED_NODE_NEXT_STEP
     if drift is not None:
         next_step += (
             " The spec_drift item is not one of them: it says the specification "

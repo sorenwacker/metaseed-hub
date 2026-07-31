@@ -1212,7 +1212,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.22.1"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1227,9 +1227,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/c8/98ddfca6868b7d7ae73976c3fd25d43d7e0a6eea5bef65891c8f39e42586/metaseed-0.22.1.tar.gz", hash = "sha256:2e2c8096ed251978a58fbc620fcfeddc5121fe44085dc424015552de709e3ea0", size = 603256, upload-time = "2026-07-31T10:20:38.688Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/70/41390de43a88e6b1df30fa13be0b4a208cf87165c1bcf3b302f8909ee4f7/metaseed-0.23.0.tar.gz", hash = "sha256:e942480d52edc1c5d8aee7973a5b40f6fb2dffe6e2c4feb56065d4b2ef2e8cf9", size = 606785, upload-time = "2026-07-31T12:32:37.382Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/de/29392285b704fb7f2f439221f2c0bfd3007aef1e1203091fbc9a37bccee2/metaseed-0.22.1-py3-none-any.whl", hash = "sha256:2c168ed0eae25d527c4a8f1bc9b43a46d0d6cd980571a38147f445fd799dd04c", size = 740422, upload-time = "2026-07-31T10:20:36.663Z" },
+    { url = "https://files.pythonhosted.org/packages/94/55/bc8e5789f0a5871f5a6c053c97c4d34bef8724346f4e167599798499094d/metaseed-0.23.0-py3-none-any.whl", hash = "sha256:c75d989d83dac82cdb3da8c99427e9f77da11d8ebf437ec0a691b00268ce4b01", size = 744064, upload-time = "2026-07-31T12:32:34.862Z" },
 ]
 
 [package.optional-dependencies]
@@ -1295,7 +1295,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "metaseed", extras = ["dcat"], specifier = ">=0.22.1" },
+    { name = "metaseed", extras = ["dcat"], specifier = ">=0.23.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },

@@ -1,8 +1,6 @@
 """Entity-tree construction and JSON (de)serialization for AppState."""
 
 import logging
-import uuid
-from collections.abc import Collection
 from datetime import date, datetime
 from typing import Any
 
@@ -75,68 +73,6 @@ def add_entity_node(
     instance = helper.model.model_construct(**data)
 
     return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
-
-
-def sanitize_tree_payload(
-    valid_entity_types: Collection[str],
-    data: dict[str, Any],
-) -> dict[str, Any]:
-    """Prepare a stored ``{profile, version, tree}`` payload for ``client.load``.
-
-    ``MetaseedClient.load`` fails the whole load on the first malformed node,
-    while the hub must load legacy and hand-edited payloads permissively: one
-    bad node must not make a dataset appear empty. This pre-pass applies the
-    hub's tolerance before handing the payload to the client:
-
-    - Nodes without an ``entity_type``, or with one the schema does not define,
-      are dropped together with their subtree (with a warning).
-    - Nodes without an ``id`` get a generated one, so their children keep their
-      parent linkage instead of being flattened to roots.
-
-    Node *field* data is left untouched; ``client.load`` already reconstructs
-    instances with ``skip_validation`` (``model_construct``), so incomplete
-    drafts load without error and field names the model does not define are
-    ignored, exactly as the previous cache-based reader behaved. Payloads
-    without a ``tree`` key (for example the legacy flat ``{entities: [...]}``
-    format) are returned unchanged.
-
-    A future metaseed release could absorb this behind a ``client.load``
-    permissive mode; until then the hub applies it before calling the pinned
-    library.
-
-    Args:
-        valid_entity_types: Entity type names the target schema defines.
-        data: The stored ``dataset.data`` payload.
-
-    Returns:
-        A payload safe to pass to ``client.load``.
-    """
-    if "tree" not in data:
-        return data
-    valid = set(valid_entity_types)
-
-    def clean(nodes: Any) -> list[dict[str, Any]]:
-        cleaned: list[dict[str, Any]] = []
-        if not isinstance(nodes, list):
-            return cleaned
-        for node in nodes:
-            if not isinstance(node, dict):
-                continue
-            entity_type = node.get("entity_type")
-            if entity_type not in valid:
-                logger.warning(
-                    f"sanitize_tree_payload: dropping node with entity_type "
-                    f"{entity_type!r} (not in schema)"
-                )
-                continue
-            out = dict(node)
-            if not out.get("id"):
-                out["id"] = str(uuid.uuid4())
-            out["children"] = clean(node.get("children", []))
-            cleaned.append(out)
-        return cleaned
-
-    return {**data, "tree": clean(data.get("tree"))}
 
 
 class CacheDesyncError(RuntimeError):

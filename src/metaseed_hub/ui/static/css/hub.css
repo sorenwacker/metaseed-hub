@@ -7382,3 +7382,19 @@ html, body {
     margin: var(--space-xs) 0 0;
     font-size: 0.875rem;
 }
+
+/* Stored entities that did not load. Styled as an error rather than a warning,
+   and placed first: unlike drift, this is data the dataset holds but cannot
+   show, and saving over it destroys it. */
+.validation-unloadable {
+    padding: var(--space-md) var(--space-lg);
+    margin-bottom: var(--space-lg);
+    border-radius: var(--radius-md);
+    background: var(--clr-error-bg, #fef2f2);
+    border: 1px solid var(--clr-error, #ef4444);
+}
+
+.validation-unloadable p {
+    margin: var(--space-xs) 0 0;
+    font-size: 0.875rem;
+}
