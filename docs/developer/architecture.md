@@ -36,7 +36,11 @@ CREATE TABLE projects (
 
 ## Dataset persistence
 
-`dataset.data` (JSONB) stores a `{profile, version, tree: [...]}` envelope produced by metaseed's `MetaseedClient.serialize(format="tree")`. Each tree node carries `id`, `entity_type`, `label`, `data`, and `children`.
+`dataset.data` (JSONB) stores a `{profile, version, spec_hash, tree: [...]}` envelope. The `{profile, version, tree}` part is produced by metaseed's `MetaseedClient.serialize(format="tree")`; each tree node carries `id`, `entity_type`, `label`, `data`, and `children`.
+
+`spec_hash` is the hub's addition: `metaseed.specs.content_hash` of the profile spec the dataset was authored against, added by `stamp_spec_hash` on every write path (`save_dataset_state` and the MCP `_editing` context). It records provenance the `version` field cannot — a specification can be edited without its version changing, and two specs can declare the same version with different content. On load, `spec_drift_message` compares the stamp with the profile's current hash and reports a difference as a validation issue (`rule: "spec_drift"`) through both reporting paths: `_validation_report` (MCP) and `_render_validation_results` (web). Drift never blocks a load and never changes `valid`, which stays what metaseed's validator returned.
+
+Envelopes written before the stamp existed have no `spec_hash`. A missing stamp means "unknown provenance", not "unchanged", so no drift is reported for it; the next save adds one.
 
 The metaseed `ProfileFacade` is the single source of truth for entity data. `TreeNode`/`AppState` caches are derived views for template rendering; they are never written independently of the facade.
 

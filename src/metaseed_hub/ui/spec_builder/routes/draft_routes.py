@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from metaseed.specs import content_hash, short_hash
 from metaseed.specs.schema import FieldType
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -29,6 +31,7 @@ from metaseed_hub.ui.spec_builder.access import (
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
 from metaseed_hub.ui.spec_builder_helpers import (
     create_empty_spec,
     slugify_spec_name,
@@ -38,6 +41,8 @@ from metaseed_hub.ui.spec_builder_helpers import (
 from ._common import DraftContextDep, SessionDep, UserContextDep, create_render_helper
 
 __all__ = ["register_draft_routes"]
+
+logger = logging.getLogger(__name__)
 
 
 def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None:
@@ -189,12 +194,36 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 {"error": "Profile name is required before publishing"},
             )
 
+        # The release event, and the only moment the declared version becomes a
+        # claim about compatibility. Saving a draft is not: an author is allowed
+        # to be mid-thought, which is why this gate is here and not in
+        # metaseed's save path.
+        previous = await latest_published_spec(
+            session, tenant_id=draft.tenant_id, name=builder.spec.name
+        )
+        if previous is not None and previous.spec_data:
+            previous_spec = SpecBuilderState.from_dict(previous.spec_data).spec
+            refusal = (
+                bump_refusal(previous_spec, builder.spec) if previous_spec is not None else None
+            )
+            if refusal is not None:
+                logger.info("Refused publish of draft %s: %s", draft_id, refusal.message)
+                return templates.TemplateResponse(
+                    request,
+                    "spec_builder/partials/save_result.html",
+                    {"refusal": refusal},
+                )
+
         spec = Spec(
             tenant_id=draft.tenant_id,
             name=builder.spec.name,
             version=builder.spec.version,
             description=builder.spec.description,
             spec_data=builder.to_dict(),
+            # A version says how a specification relates to its predecessor; it
+            # does not identify one. Two releases can declare the same version
+            # and differ, so the hash is what datasets record and compare.
+            content_hash=content_hash(builder.spec),
             status=SpecStatus.PUBLISHED,
             created_by_id=user_id,
         )
@@ -271,6 +300,12 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {
                 "spec_record": spec,
                 "spec": builder.spec,
+                # Recomputed rather than read from the column: the column is
+                # what was recorded at publish time, and showing a stale value
+                # beside the content it is supposed to name would be worse than
+                # showing none. Rows published before the column existed have
+                # nothing stored at all.
+                "spec_short_hash": short_hash(builder.spec) if builder.spec else None,
                 "tenant": spec.tenant,
                 "owner": await workspace_owner(session, spec.tenant_id),
                 "can_edit": await can_edit_spec(session, user_id, spec_id),

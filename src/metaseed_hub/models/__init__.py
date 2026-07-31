@@ -676,6 +676,10 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # "sha256:" plus 64 hex digits. Nullable because a row whose stored spec
+    # cannot be deserialized has no hash to record, and pretending otherwise
+    # would give it a name that identifies nothing.
+    content_hash: Mapped[str | None] = mapped_column(String(71), nullable=True)
     status: Mapped[SpecStatus] = mapped_column(
         Enum(SpecStatus, values_callable=_enum_values),
         nullable=False,

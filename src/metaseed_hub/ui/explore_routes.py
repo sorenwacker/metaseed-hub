@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from metaseed_hub.database import get_session
+from metaseed_hub.ui.spec_builder.state import dict_to_spec
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +104,7 @@ async def load_profile_spec(
         draft = result.scalar_one_or_none()
         if draft and draft.spec_data:
             spec_data = _extract_spec_data(draft.spec_data)
-            spec = ProfileSpec.model_validate(spec_data)
+            spec = dict_to_spec(spec_data)
             return (f"{draft.name} (Draft)", spec)
         return None
 
@@ -122,7 +123,7 @@ async def load_profile_spec(
         db_spec = result.scalar_one_or_none()
         if db_spec and db_spec.spec_data:
             spec_data = _extract_spec_data(db_spec.spec_data)
-            spec = ProfileSpec.model_validate(spec_data)
+            spec = dict_to_spec(spec_data)
             return (f"{db_spec.name} (Published)", spec)
         return None
 

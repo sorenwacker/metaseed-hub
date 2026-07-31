@@ -34,6 +34,8 @@ Answers to the questions that come up when connecting an agent to the hub. For s
 
 **Where did my draft go?** Drafts persist in the hub database automatically per user — there is no separate save step over MCP. `list_spec_drafts` shows yours; a draft named like a colleague's is still only yours.
 
+**Publishing was refused because my change is breaking.** Publishing compares the draft with the latest published specification of the same name and refuses when the version you declared claims more compatibility than the content has. Making a field required, removing a field or entity, changing a field's type, narrowing an enum, or tightening a bound all invalidate datasets that were valid before, so they need a MAJOR bump: 1.1 → 2.0, not 1.1 → 1.2. The refusal names the breaking changes it found and the version to declare instead — set that version in **Profile Settings** and publish again, or make the change compatible and keep the MINOR bump. An agent cannot publish, so this is something you will meet in the web interface; the rules are metaseed's, described under [Profile versioning](https://sorenwacker.github.io/metaseed/api/schema-specs/#profile-versioning).
+
 **I saved a spec through the metaseed MCP but it is not on the hub.** The standalone metaseed server's `spec_save` writes to the local filesystem of the machine it runs on; the hub keeps its own store and never reads that directory. Bring such a spec into the hub with `spec_import_yaml` (or the web interface's Import page), which starts a private draft from the YAML. Publishing the draft stays a human action in the web interface.
 
 ## Troubleshooting

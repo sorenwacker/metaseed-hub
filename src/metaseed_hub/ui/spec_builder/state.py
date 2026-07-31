@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Self
 
 from metaseed.specs.schema import ProfileSpec
+from pydantic import ValidationError
 
 
 def spec_to_dict(spec: ProfileSpec) -> dict[str, Any]:
@@ -28,8 +29,30 @@ def dict_to_spec(data: dict[str, Any]) -> ProfileSpec:
     Uses Pydantic validation so the round-trip is lossless. Older drafts stored
     with a subset of fields still load because missing fields fall back to their
     schema defaults.
+
+    Args:
+        data: A serialized ``ProfileSpec``.
+
+    Returns:
+        The deserialized specification.
+
+    Raises:
+        SpecVersionError: If the payload's ``version`` is not ``MAJOR.MINOR``.
+            Rows written before that rule existed would otherwise surface as a
+            server error on the very page the author needs to fix them from.
+            Every reader of stored spec data goes through here, so they all
+            report it the same way.
+        ValidationError: If the payload is unusable for any other reason.
     """
-    return ProfileSpec.model_validate(data)
+    from metaseed_hub.ui.spec_builder.versioning import SpecVersionError
+
+    try:
+        return ProfileSpec.model_validate(data)
+    except ValidationError:
+        problem = SpecVersionError.in_stored_spec(data)
+        if problem is not None:
+            raise problem from None
+        raise
 
 
 @dataclass

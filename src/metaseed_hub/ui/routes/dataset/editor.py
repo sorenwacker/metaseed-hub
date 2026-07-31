@@ -27,6 +27,7 @@ from metaseed_hub.ui.helpers import (
     read_upload_capped,
     save_dataset_state,
 )
+from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
@@ -247,7 +248,8 @@ async def dataset_validate(
     facade = state.get_or_create_facade()
 
     errors = _collect_validation_errors(state, facade)
-    return HTMLResponse(_render_validation_results(dataset_id, state, errors))
+    drift = await spec_drift_message(session, dataset)
+    return HTMLResponse(_render_validation_results(dataset_id, state, errors, drift=drift))
 
 
 def _collect_validation_errors(state: Any, facade: Any) -> list[dict[str, Any]]:
@@ -296,8 +298,26 @@ def _collect_validation_errors(state: Any, facade: Any) -> list[dict[str, Any]]:
     return errors
 
 
-def _render_validation_results(dataset_id: str, state: Any, errors: list[dict[str, Any]]) -> str:
-    """Render the validation summary, per-type breakdown, and error list as HTML."""
+def _render_validation_results(
+    dataset_id: str,
+    state: Any,
+    errors: list[dict[str, Any]],
+    drift: str | None = None,
+) -> str:
+    """Render the validation summary, per-type breakdown, and error list as HTML.
+
+    Args:
+        dataset_id: The dataset being reported on, for the entity links.
+        state: The loaded AppState, for the per-type counts.
+        errors: One record per entity that failed validation.
+        drift: A message saying the specification changed since the dataset was
+            written, or None. Shown above the summary because it usually
+            explains the issues below it, but kept out of the counts: it is
+            provenance, not an entity that failed.
+
+    Returns:
+        The panel's HTML.
+    """
     import html as html_module
 
     # Count entities by type
@@ -309,6 +329,14 @@ def _render_validation_results(dataset_id: str, state: Any, errors: list[dict[st
     valid_count = total - len(errors)
 
     html = '<div class="validation-results">'
+
+    if drift:
+        html += (
+            '<div class="validation-drift">'
+            "<strong>Specification drift</strong>"
+            f"<p>{html_module.escape(drift)}</p>"
+            "</div>"
+        )
 
     # Summary section
     if not errors:

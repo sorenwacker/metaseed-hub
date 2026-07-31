@@ -59,7 +59,7 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |
 | `spec_delete_entity` | Remove an entity type |
 | `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values |
-| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them; unset arguments keep their values |
+| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them, plus the eight constraints and `clear`; unset arguments keep their values |
 | `spec_delete_field` | Remove a field |
 | `spec_move_field` | Move a field one position up or down |
 | `spec_add_rule` | Add a validation rule |
@@ -74,6 +74,12 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_delete_draft` | Remove one of your own drafts |
 
 A specification is a tree: every entity except the root must be linked under a parent by a field on the parent whose type is `list` or `entity` and whose `items` names the child. An unlinked entity is an orphan a dataset can never reach, and `spec_validate` does not flag orphans. The endpoint's instructions carry this workflow (shared with the standalone metaseed MCP server), so connected agents link entities as they build.
+
+#### Editing constraints
+
+`spec_update_field` accepts the same eight constraints as `spec_add_field` — `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, `enum` — and merges them into the field's existing constraints. A constraint you do not supply keeps the value it had, so tightening `maximum` on a field that already has a `minimum` no longer discards the `minimum`.
+
+Because an omitted argument means "unchanged", it cannot express removal. `clear` names the constraints to unset: `clear=["pattern"]` removes the pattern and leaves every other constraint alone. Setting and clearing the same constraint in one call is refused rather than resolved in some arbitrary order — the two requests contradict each other. The field is left untouched when a call is refused, including when a name is not one of the eight.
 
 Adding a nested field with `items` also creates the parent's `identifier` field and a back-reference on the child, so the relationship is complete in both directions without further calls. `spec_delete_draft` removes a draft the caller owns; a draft a dataset is built on is not deleted, because the dataset would lose its specification.
 

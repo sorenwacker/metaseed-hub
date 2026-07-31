@@ -7337,3 +7337,48 @@ a.start-option-card:hover {
 html, body {
     overflow-x: hidden;
 }
+
+/* Content hash beside a published specification's version. Provenance, so it
+   sits quietly next to the version rather than competing with it. */
+.spec-content-hash {
+    margin-left: var(--space-sm);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+/* A publish refused because the declared version claims more compatibility
+   than the change has. Not a .notification: those auto-dismiss after three
+   seconds, and this is a list the author has to read and act on. */
+.publish-refusal {
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    background: var(--clr-error-bg, #fef2f2);
+    border: 1px solid var(--clr-error, #ef4444);
+    color: var(--clr-error-text, #991b1b);
+}
+
+.publish-refusal p,
+.publish-refusal ul {
+    margin: var(--space-sm) 0 0;
+}
+
+.publish-refusal ul {
+    padding-left: var(--space-lg);
+}
+
+/* The specification changed after the dataset was written. Shown above the
+   validation summary because it usually explains it, but styled as a warning
+   rather than an error: nothing failed, and nothing was blocked. */
+.validation-drift {
+    padding: var(--space-md) var(--space-lg);
+    margin-bottom: var(--space-lg);
+    border-radius: var(--radius-md);
+    background: var(--clr-warning-bg, #fffbeb);
+    border: 1px solid var(--clr-warning, #f59e0b);
+}
+
+.validation-drift p {
+    margin: var(--space-xs) 0 0;
+    font-size: 0.875rem;
+}

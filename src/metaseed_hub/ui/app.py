@@ -167,6 +167,17 @@ def create_hub_app() -> FastAPI:
 
     app.add_exception_handler(DraftConflictError, handle_draft_conflict)
 
+    # A stored profile version that predates the MAJOR.MINOR rule cannot be
+    # deserialized, and the page the author would fix it from is the page that
+    # fails. Handled centrally so every reader of stored spec data reports the
+    # same fixable problem instead of a 500.
+    from metaseed_hub.ui.spec_builder.versioning import (
+        SpecVersionError,
+        handle_spec_version_error,
+    )
+
+    app.add_exception_handler(SpecVersionError, handle_spec_version_error)
+
     # Create Jinja2 with multiple template directories (hub first, then
     # metaseed's Explorer templates)
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))

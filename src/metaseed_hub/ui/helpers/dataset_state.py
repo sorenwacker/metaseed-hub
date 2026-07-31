@@ -179,8 +179,11 @@ async def save_dataset_state(
     from sqlalchemy.orm.attributes import flag_modified
 
     from metaseed_hub.models import User
+    from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
-    new_data = serialize_tree(state)
+    # Stamped here rather than inside serialize_tree: the hash comes from the
+    # database row, and serialize_tree only has the in-memory facade.
+    new_data = stamp_spec_hash(serialize_tree(state), await dataset_spec_hash(session, dataset))
 
     # Resolve the acting user's database id for version authorship.
     created_by_id: str | None = None

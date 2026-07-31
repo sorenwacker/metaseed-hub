@@ -158,6 +158,7 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
     saved.
     """
     from metaseed_hub.ui.helpers import ensure_dataset_facade
+    from metaseed_hub.ui.helpers.spec_hash import DRIFT_RULE, spec_drift_message
 
     state = await ensure_dataset_facade(dataset, session)
     if state.facade is None:
@@ -190,8 +191,29 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
         for i in issues
     ]
 
+    # Provenance, not a validation failure: the dataset is exactly as valid as
+    # metaseed judged it. Reported alongside the issues because it is usually
+    # the explanation for them -- but it never flips `valid`, or an agent would
+    # start "fixing" a dataset that has nothing wrong with it.
+    valid = not reported
+    drift = await spec_drift_message(session, dataset)
+    if drift is not None:
+        reported.append({"entity_id": None, "field": None, "rule": DRIFT_RULE, "message": drift})
+
     if not reported:
         return {"valid": True, "issues": [], "next_step": "Nothing is missing."}
+
+    if valid:
+        # Only the drift. Nothing to fill in, so saying so would send an agent
+        # looking for missing values that are not missing.
+        return {
+            "valid": True,
+            "issues": reported,
+            "next_step": (
+                "Nothing is missing. The specification has changed since this "
+                "dataset was written, though; re-save it to record the current one."
+            ),
+        }
 
     # Grouped by the spec rule that failed, so an agent sees "3 required fields
     # missing" rather than a flat list it has to re-read.
@@ -204,6 +226,12 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
         "from the source. Leave a field empty rather than inventing a value; an "
         "empty required field is a smaller problem than a wrong one."
     )
+    if drift is not None:
+        next_step += (
+            " The spec_drift item is not one of them: it says the specification "
+            "changed after this dataset was written, which is often why the rest "
+            "appeared."
+        )
     return {"valid": False, "issues": reported, "next_step": next_step}
 
 
@@ -240,6 +268,7 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     from sqlalchemy.orm.attributes import flag_modified
 
     from metaseed_hub.ui.helpers import make_json_serializable
+    from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
     client = await _loaded_client(session, dataset)
     yield client
@@ -247,8 +276,13 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     # Tree format, the hub's canonical storage: the web UI's EntityService
     # persists serialize(format="tree"), and readers such as the version diff
     # view consume data["tree"]. A flat write here would make those readers see
-    # an empty dataset.
-    data = make_json_serializable(client.serialize(format="tree"))
+    # an empty dataset. The spec hash is stamped on the same envelope the web
+    # save path stamps, so an agent's write and a person's are indistinguishable
+    # to the drift check.
+    data = stamp_spec_hash(
+        make_json_serializable(client.serialize(format="tree")),
+        await dataset_spec_hash(session, dataset),
+    )
     size = len(json.dumps(data).encode())
     if size > MAX_DATASET_BYTES:
         raise ValueError(

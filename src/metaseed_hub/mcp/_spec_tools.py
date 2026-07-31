@@ -42,6 +42,33 @@ def _clean(attrs: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in attrs.items() if value is not None}
 
 
+def _constraint_values(supplied: dict[str, Any]) -> dict[str, Any]:
+    """The constraints the caller actually supplied, keyed as metaseed names them.
+
+    Args:
+        supplied: Every constraint this tool exposes, mapped to the argument the
+            caller passed, with None for the ones left unset.
+
+    Returns:
+        The subset whose value is not None, ready to merge.
+
+    Raises:
+        ValueError: If metaseed defines a constraint this tool does not expose.
+            Such a constraint would be silently uneditable over MCP, so it is
+            reported rather than skipped.
+    """
+    from metaseed.specs.builder import CONSTRAINT_NAMES
+
+    missing = sorted(set(CONSTRAINT_NAMES) - set(supplied))
+    if missing:
+        raise ValueError(
+            f"This tool does not expose the constraint(s) {', '.join(missing)}, "
+            "which metaseed defines. Edit the field through the web interface "
+            "until the tool is extended."
+        )
+    return _clean(supplied)
+
+
 def _constraints(limits: dict[str, Any]) -> Any | None:
     """A ``Constraints`` over the limits supplied, or None if none were.
 
@@ -395,8 +422,24 @@ def register_spec_tools(  # noqa: C901
         ontology_term: str | None = None,
         reference: str | None = None,
         parent_ref: str | None = None,
+        pattern: str | None = None,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        minimum: float | None = None,
+        maximum: float | None = None,
+        min_items: int | None = None,
+        max_items: int | None = None,
+        enum: list[str] | None = None,
+        clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
+
+        A constraint you do not supply keeps the value it had, so tightening one
+        bound no longer discards the rest. Because an unset argument means
+        "unchanged", it cannot express removal: ``clear`` names the constraints
+        to unset. Naming a constraint in both ``clear`` and its own argument is
+        refused — the two requests contradict each other — and the field is left
+        untouched, as it is when a name is not a constraint at all.
 
         Args:
             draft: The draft's name in the caller's workspace.
@@ -408,27 +451,61 @@ def register_spec_tools(  # noqa: C901
             description: The new description.
             items: For list and entity fields, the child entity type this
                 field nests — the link that makes the child reachable.
+            ontology_term: An ontology term identifying it, where one applies.
             reference: A cross-reference target as "Entity.field".
             parent_ref: The parent-reference field this one answers.
+            pattern: A regular expression a string value must match.
+            min_length: The shortest a string value may be.
+            max_length: The longest a string value may be.
+            minimum: The smallest a numeric value may be.
+            maximum: The largest a numeric value may be.
+            min_items: The fewest entries a list may hold.
+            max_items: The most entries a list may hold.
+            enum: The values allowed, where the field is enumerated.
+            clear: Constraint names to remove, e.g. ["pattern"].
         """
+        from metaseed.specs.builder import validate_constraint_names
+
+        constraints = _constraint_values(
+            {
+                "pattern": pattern,
+                "min_length": min_length,
+                "max_length": max_length,
+                "minimum": minimum,
+                "maximum": maximum,
+                "min_items": min_items,
+                "max_items": max_items,
+                "enum": enum,
+            }
+        )
+        cleared = list(clear or ())
+        # Checked before anything is mutated: update_field below lands first, so
+        # letting the merge reject the name would leave the ordinary attributes
+        # applied and the constraints not.
+        name_error = validate_constraint_names(cleared)
+        if name_error:
+            raise ValueError(name_error)
+
         async with caller() as (session, user):
             row = await owned_draft(session, user, draft)
             async with building(session, row, user) as builder:
-                builder.update_field(
-                    entity,
-                    field_name,
-                    **_clean(
-                        {
-                            "type": field_type,
-                            "required": required,
-                            "description": description,
-                            "items": items,
-                            "ontology_term": ontology_term,
-                            "reference": reference,
-                            "parent_ref": parent_ref,
-                        }
-                    ),
+                attributes = _clean(
+                    {
+                        "type": field_type,
+                        "required": required,
+                        "description": description,
+                        "items": items,
+                        "ontology_term": ontology_term,
+                        "reference": reference,
+                        "parent_ref": parent_ref,
+                    }
                 )
+                if attributes:
+                    builder.update_field(entity, field_name, **attributes)
+                if constraints or cleared:
+                    builder.update_field_constraints(
+                        entity, field_name, clear=cleared, **constraints
+                    )
                 problems = builder.validate()
             return json.dumps({"entity": entity, "field": field_name, "problems": problems})
 

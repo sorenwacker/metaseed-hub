@@ -238,6 +238,13 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.parent_ref = form_data.parent_ref.strip() or None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
+        # Whole-object replacement, deliberately, and not the merging path
+        # ``SpecBuilder.update_field_constraints`` offers: the field form posts
+        # every constraint input on every save, so an empty one means "cleared",
+        # not "unsupplied". Merging here would make a constraint impossible to
+        # remove from the web editor. Metaseed's own field editor replaces for
+        # the same reason; the merging path is for partial callers such as the
+        # MCP tool, which cannot tell an omitted argument from an empty one.
         field.constraints = parsed_constraints
 
         # spec_version 0.6 markers. Booleans default to None (not False) so an

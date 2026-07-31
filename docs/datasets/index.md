@@ -27,6 +27,14 @@ The editor has three areas:
 
 From the sidebar you can also **Validate** the dataset, open the **Graph** view, **Import** into the dataset, **Export** it, and **Delete** it.
 
+## Specification drift
+
+Every save records the content hash of the specification the dataset was authored against. When you validate, the hub compares that stamp with the specification's current hash and reports **specification drift** if they differ — the specification changed after this dataset was written, so entities that were complete when you saved them may no longer be.
+
+Drift is reported, not enforced: the dataset still opens, still edits, and still validates against the current specification. The report tells you why a dataset you had finished suddenly has issues.
+
+Datasets saved before the hub started recording the stamp have none. Their provenance is unknown rather than unchanged, so no drift is reported for them; the stamp is recorded the next time the dataset is saved.
+
 See:
 
 - [Editing entities](entities.md) — entity tree, forms, inline tables, validation

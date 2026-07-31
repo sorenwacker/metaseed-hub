@@ -2,6 +2,28 @@
 <div class="notification notification-success">
     {{ message or 'Saved successfully' }}
 </div>
+{% elif refusal %}
+{# Deliberately not a .notification: the script below auto-dismisses those
+   after three seconds, and this is a list of changes the author has to read
+   and act on. Nothing was published; the draft is untouched. #}
+<div class="publish-refusal">
+    <strong>Not published.</strong>
+    <p>
+        {{ refusal.profile }} {{ refusal.declared_version }} claims a
+        {{ refusal.declared }} change over the published
+        {{ refusal.published_version }}, but the content requires a
+        {{ refusal.required }} bump.
+    </p>
+    <p>Breaking changes:</p>
+    <ul>
+        {% for change in refusal.breaking %}<li>{{ change }}</li>{% endfor %}
+    </ul>
+    <p>
+        Declare version <code>{{ refusal.suggested_version }}</code> under
+        Profile Settings and publish again, or make the change compatible and
+        keep {{ refusal.declared_version }}.
+    </p>
+</div>
 {% elif error %}
 <div class="notification notification-error">
     {{ error }}
