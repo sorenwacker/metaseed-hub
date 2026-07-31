@@ -1,6 +1,6 @@
 # Spec Builder
 
-The Spec Builder is where you design custom metadata **specifications** — your own entity types, fields, relationships, and validation rules — instead of using a built-in profile. Open it from **Specs** in the header.
+The Spec Builder is where you design custom metadata **specifications** — your own entity types, fields, relationships, and validation rules — instead of using a built-in profile. Open it from **Builder** in the header.
 
 A specification exists in two states:
 
