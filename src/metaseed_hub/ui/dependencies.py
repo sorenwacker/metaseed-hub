@@ -12,8 +12,11 @@ from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, Tenant, User
 from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
+from metaseed_hub.ui.helpers.load_report import BROWSER_WAY_THROUGH, unloadable_node_refusal
 
 if TYPE_CHECKING:
+    from metaseed import SkippedNode
+
     from metaseed_hub.ui.metaseed_ui import AppState
 
 # Single source of truth for the access token cookie name; cookie writers
@@ -343,7 +346,16 @@ async def get_dataset_state_for_mutation(
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
     # Get or create AppState for the dataset
-    # Use ensure_dataset_facade to properly load specs from database for draft specs
-    state = await ensure_dataset_facade(dataset, session)
+    # Use ensure_dataset_facade to properly load specs from database for draft specs.
+    # Collect the nodes the load could not place: saving rewrites the dataset from
+    # what loaded, so editing one cell is what deletes them. Refusing here covers
+    # every browser mutation at once, the way _editing covers every MCP one.
+    skipped: list[SkippedNode] = []
+    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
+    if skipped:
+        raise HTTPException(
+            status_code=409,
+            detail=unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH),
+        )
 
     return dataset, state

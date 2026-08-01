@@ -43,7 +43,22 @@ SKIPPED_NODE_NEXT_STEP = (
 """Appended to an agent's next step, because these issues cannot be 'filled in'."""
 
 
-def unloadable_node_refusal(skipped: Sequence[SkippedNode]) -> str:
+AGENT_WAY_THROUGH = (
+    "If you do mean to drop them, save_dataset replaces the whole dataset and "
+    "removes them deliberately. validate_dataset lists them one by one."
+)
+"""The deliberate drop, named in the vocabulary an MCP caller has."""
+
+BROWSER_WAY_THROUGH = (
+    "The dataset's validation panel lists them one by one, and its version "
+    "history has the state before they stopped loading."
+)
+"""The same facts for someone in the web interface, which has no such call."""
+
+
+def unloadable_node_refusal(
+    skipped: Sequence[SkippedNode], way_through: str = AGENT_WAY_THROUGH
+) -> str:
     """Explain why an edit is refused, and what the caller can do instead.
 
     Every edit rewrites the whole stored payload from the loaded facade, so an
@@ -55,10 +70,13 @@ def unloadable_node_refusal(skipped: Sequence[SkippedNode]) -> str:
     Args:
         skipped: The nodes the load dropped. Must not be empty; the caller
             refuses only when there is something to refuse over.
+        way_through: How this caller drops them deliberately, or finds them.
+            An agent is told which tool to call; a person in the browser has no
+            such call, so telling them to use one would be a dead end.
 
     Returns:
-        The refusal message, naming the count, the entity types, and
-        ``save_dataset`` as the deliberate way through.
+        The refusal message, naming the count, the entity types, and the way
+        through that suits the caller.
     """
     types = sorted({skip.entity_type or "untyped" for skip in skipped})
     return (
@@ -66,9 +84,7 @@ def unloadable_node_refusal(skipped: Sequence[SkippedNode]) -> str:
         "dataset cannot be edited. Those nodes are in storage but are not part of "
         "the dataset as loaded, and every edit rewrites the dataset from what "
         "loaded -- so this edit would delete them. Restore an earlier version, or "
-        "correct the specification so they load, and the edit will go through. "
-        "If you do mean to drop them, save_dataset replaces the whole dataset and "
-        "removes them deliberately. validate_dataset lists them one by one."
+        f"correct the specification so they load, and the edit will go through. {way_through}"
     )
 
 

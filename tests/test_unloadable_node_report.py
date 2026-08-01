@@ -324,3 +324,57 @@ class TestTheWebPanel:
 
         assert "Bogus" in html
         assert "did not load" in html
+
+
+class TestTheBrowserRefusal:
+    """The browser mutation path refuses for the same reason the MCP one does.
+
+    Every web edit goes through ``get_dataset_state_for_mutation`` and is saved
+    by rewriting the dataset from the loaded facade, so editing one cell of a
+    damaged dataset deletes the nodes that did not load -- exactly the MCP
+    defect, on the surface a person uses.
+    """
+
+    async def test_the_refusal_speaks_to_someone_without_the_tools(self) -> None:
+        """An agent is told which call drops them; a person has no such call."""
+        from metaseed import SkippedNode
+
+        from metaseed_hub.ui.helpers.load_report import (
+            AGENT_WAY_THROUGH,
+            BROWSER_WAY_THROUGH,
+            unloadable_node_refusal,
+        )
+
+        skipped = [
+            SkippedNode(
+                entity_type="Study",
+                reason="unknown entity type 'Study'",
+                node={"id": "n1"},
+                descendants_dropped=0,
+            )
+        ]
+
+        for_agent = unloadable_node_refusal(skipped, AGENT_WAY_THROUGH)
+        for_browser = unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH)
+
+        assert "save_dataset" in for_agent
+        assert "save_dataset" not in for_browser, (
+            "the browser has no save_dataset call; naming it is a dead end"
+        )
+        assert "version history" in for_browser
+        for message in (for_agent, for_browser):
+            assert "Study" in message
+            assert "would delete them" in message
+
+    async def test_the_mutation_dependency_collects_what_did_not_load(self) -> None:
+        """The dependency must pass a collector, or the refusal can never fire."""
+        import inspect
+
+        from metaseed_hub.ui import dependencies
+
+        source = inspect.getsource(dependencies.get_dataset_state_for_mutation)
+        assert "on_skip=" in source, (
+            "get_dataset_state_for_mutation must collect skipped nodes; without a "
+            "collector every browser edit silently deletes them"
+        )
+        assert "unloadable_node_refusal" in source
