@@ -145,6 +145,11 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         enum_values: str = Form(""),
         unique_within: str = Form(""),
         reference: str = Form(""),
+        # The DCAT/DCAT-AP property this field supplies on the dataset's
+        # catalogue record (spec_version 0.5). Free text: DCAT-AP profiles
+        # define properties beyond the ones metaseed resolves, so the input
+        # suggests those rather than restricting the field to them.
+        dcat: str = Form(""),
         # spec_version 0.6 markers (#137/#143/#98).
         owns: bool = Form(False),
         is_identifier: bool = Form(False),
@@ -238,6 +243,7 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.parent_ref = form_data.parent_ref.strip() or None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
+        field.dcat = dcat.strip() or None
         # Whole-object replacement, deliberately, and not the merging path
         # ``SpecBuilder.update_field_constraints`` offers: the field form posts
         # every constraint input on every save, so an empty one means "cleared",

@@ -79,6 +79,9 @@
                     Rules
                     <span class="tab-badge">{{ spec.validation_rules|length }}</span>
                 </button>
+                <button class="sidebar-tab" data-tab="checks" onclick="switchSidebarTab('checks')">
+                    Checks
+                </button>
                 <button class="sidebar-tab" data-tab="comments" onclick="switchSidebarTab('comments')">
                     Comments
                 </button>
@@ -104,6 +107,17 @@
                      data-tab="rules"
                      hx-get="/hub/spec-builder/{{ draft_id }}/validation-rules"
                      hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading...
+                </div>
+
+                <!-- Checks: problems and advisories about the specification.
+                     Refetched whenever the tab is clicked, so the report
+                     reflects the edits made since the page loaded. -->
+                <div id="checks-panel" class="sidebar-tab-content"
+                     data-tab="checks"
+                     hx-get="/hub/spec-builder/{{ draft_id }}/checks"
+                     hx-trigger="load, click from:.sidebar-tab[data-tab='checks']"
                      hx-swap="innerHTML">
                     Loading...
                 </div>

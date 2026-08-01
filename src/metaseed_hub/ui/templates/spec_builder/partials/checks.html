@@ -1,0 +1,42 @@
+{# What metaseed reports about the draft. Advisories are rendered outside the
+   summary and in the warning style, never the error style: the specification
+   builds, so nothing here says it is invalid or stops it being published. #}
+<div class="validation-results">
+    {% if problems %}
+    <div class="validation-summary validation-error">
+        <div class="validation-icon">&#10007;</div>
+        <div class="validation-summary-text">
+            <strong>{{ problems|length }} problem{{ 's' if problems|length != 1 }}</strong>
+            <p>The specification does not build until {{ 'they are' if problems|length != 1 else 'it is' }} fixed.</p>
+        </div>
+    </div>
+    <div class="validation-errors">
+        <h4>Problems</h4>
+        <ul class="validation-error-list">
+            {% for problem in problems %}
+            <li>{{ problem }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% else %}
+    <div class="validation-summary validation-success">
+        <div class="validation-icon">&#10003;</div>
+        <div class="validation-summary-text">
+            <strong>The specification is valid</strong>
+            <p>It builds, so datasets can be created from it.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if advisories %}
+    <div class="validation-advisory">
+        <strong>Advice</strong>
+        <p>Not {{ 'defects' if advisories|length != 1 else 'a defect' }}: the specification works as it is.</p>
+        <ul>
+            {% for advisory in advisories %}
+            <li>{{ advisory }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>

@@ -7383,6 +7383,29 @@ html, body {
     font-size: 0.875rem;
 }
 
+/* Advisory findings about a draft specification (Spec Builder Checks panel).
+   Shares the warning styling of .validation-drift, and deliberately not the
+   error styling: the specification builds, so an advisory must not read as a
+   defect or as a reason the draft cannot be published. */
+.validation-advisory {
+    padding: var(--space-md) var(--space-lg);
+    margin-top: var(--space-lg);
+    border-radius: var(--radius-md);
+    background: var(--clr-warning-bg, #fffbeb);
+    border: 1px solid var(--clr-warning, #f59e0b);
+}
+
+.validation-advisory p {
+    margin: var(--space-xs) 0 0;
+    font-size: 0.875rem;
+}
+
+.validation-advisory ul {
+    margin: var(--space-sm) 0 0;
+    padding-left: var(--space-lg);
+    font-size: 0.875rem;
+}
+
 /* Stored entities that did not load. Styled as an error rather than a warning,
    and placed first: unlike drift, this is data the dataset holds but cannot
    show, and saving over it destroys it. */

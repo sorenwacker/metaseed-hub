@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.templating import Jinja2Templates
 
+from .check_routes import register_check_routes
 from .comment_routes import register_comment_routes
 from .draft_routes import register_draft_routes
 from .entity_routes import register_entity_routes
@@ -38,6 +39,7 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     register_entity_routes(router, templates)
     register_field_routes(router, templates)
     register_rule_routes(router, templates)
+    register_check_routes(router, templates)
     register_member_routes(router, templates)
     register_comment_routes(router, templates)
 

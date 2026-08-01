@@ -18,7 +18,7 @@ A specification exists in two states:
 
 ## The draft editor
 
-The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Comments**, and **Sharing** tabs in the sidebar.
+The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar.
 
 ### Entities
 
@@ -36,6 +36,35 @@ Add fields to an entity with **+ Field**. Each field has:
 | Description | Help text |
 | Ontologies | For ontology-constrained fields, the source ontologies |
 
+Under **Markers** the field editor carries the declarative annotations a consumer of the specification reads: the identifier and label markers, the completeness tier, a human-readable label, a unit, an example value, allowed values, the ownership marker for relationship fields, and the DCAT property described below.
+
+#### DCAT property
+
+A dataset can also be described as a [DCAT](https://www.w3.org/TR/vocab-dcat-3/) catalogue record — the discovery-level statement that the dataset exists and where to get it, rather than what is inside it. The record is not written by hand: each field's **DCAT property** marker names the property of the catalogue record that the field's value supplies. Setting a field's DCAT property to `dct:title`, for example, makes that field's value the record's title.
+
+The marker is only read on the specification's **root entity**, because a catalogue record describes the dataset as a whole. The field's own value is what ends up in the record, so the marker belongs on a field that carries dataset-level information (a submission date, a licence, a contact list).
+
+The input suggests the properties metaseed resolves:
+
+| Property | Fills |
+|----------|-------|
+| `dct:title` | The record's title |
+| `dct:description` | The record's description |
+| `dct:identifier` | The record's identifier |
+| `dct:issued` | The publication date |
+| `dct:license` | The licence |
+| `dct:accessRights` | The access rights statement |
+| `dct:publisher` | The publishing organisation |
+| `dct:relation` | Related resources |
+| `dct:source` | Resources this dataset was derived from, such as a repository accession |
+| `dct:conformsTo` | Standards the dataset conforms to |
+| `dcat:contactPoint` | The contact, taken from a contacts field |
+| `dcat:landingPage` | The dataset's landing page |
+| `dcat:keyword` | Keywords |
+| `dcat:theme` | Themes |
+
+The field accepts any value, since DCAT-AP profiles define further properties, but a property outside this list is recorded in the specification without affecting the catalogue record.
+
 ### Relationships
 
 Relationships are expressed through fields whose type references another entity:
@@ -50,6 +79,17 @@ Set the field's **Related Entity** to the target entity. A `list` field also def
 | Investigation has many Persons | `list` | Person |
 | Study has one principal investigator | `entity` | Person |
 | Person belongs to an Organization | `entity` | Organization |
+
+## Checks
+
+The **Checks** tab in the sidebar reports what the draft looks like to metaseed. It separates two kinds of finding, because they call for different responses:
+
+- **Problems** are defects. The specification does not build, so a dataset cannot be created from it until they are fixed — an undefined root entity, a field referring to an entity that is not there, a profile version that is not `MAJOR.MINOR`.
+- **Advisories** are advice. The specification builds and works; something in it is probably not what the author intended. An advisory never makes the draft invalid.
+
+The advisory reported today concerns the **identifier**. Every entity has one: the field whose value identifies a record, used wherever a record has to be named or linked. If no field is marked as the identifier, the first field that is not a reference is used. That inference is silent, so it is reported when the field it lands on is a weak choice — an optional free-text field with no pattern, allowed values, or uniqueness scope, whose name does not say it is an identifier. Such a field can be empty or repeated across records, so records become indistinguishable. Mark the intended field with the **Identifier** marker to settle it.
+
+Neither kind blocks saving or publishing. The tab is a report, not a gate.
 
 ## Saving
 
