@@ -16,6 +16,11 @@ concurrency:
 
 jobs:
   test:
+    # Skip on a version tag: the tag names a commit that was pushed to main
+    # moments earlier and already tested by this same job, so running it again
+    # spends Actions minutes to re-prove an identical tree. Every release was
+    # costing two full runs.
+    if: github.ref_type != 'tag'
     runs-on: ubuntu-latest
     services:
       postgres:
