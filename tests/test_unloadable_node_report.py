@@ -11,6 +11,12 @@ the MCP validation report (agents) and the web validation panel (users). Unlike
 spec drift, an unloadable node makes the report say ``valid: false``: the
 validator only saw the nodes that loaded, so calling the dataset valid would be
 an answer about a subset of it.
+
+Reporting alone does not stop an agent, which reads the tool's return value and
+takes a successful edit as success. So the MCP editing context refuses the edit
+outright while a node is unloadable, and these tests hold that refusal to its
+two halves: it must fire on every mutating tool, and it must not fire on a
+dataset that loads cleanly, which is every normal dataset.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ import json
 from typing import Any
 from unittest.mock import Mock
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -91,29 +98,36 @@ class TestTheIssueRecords:
         assert "1 node(s) below it were dropped" in message
 
 
+async def _dataset_with_an_unloadable_node(name: str, secret: str, server) -> None:
+    """Create a dataset over MCP and give it a payload with one bad node.
+
+    Args:
+        name: The dataset name to create in the caller's workspace.
+        secret: The token secret the creating call acts as.
+        server: The MCP server fixture.
+    """
+    from metaseed_hub.database import db
+
+    create_dataset = await _tool(server, "create_dataset")
+    with _calling_with(secret):
+        await create_dataset(name, "miappe", "1.1")
+
+    async with db.session_factory() as write:
+        found = await write.execute(select(Dataset).where(Dataset.name == name))
+        dataset = found.scalar_one()
+        dataset.data = _tree_with_an_unloadable_node()
+        flag_modified(dataset, "data")
+        await write.commit()
+
+
 class TestTheMcpReport:
     """An agent asking whether a dataset is complete is told what did not load."""
-
-    async def _dataset_with_an_unloadable_node(self, name: str, secret: str, server) -> None:
-        """Create a dataset over MCP and give it a payload with one bad node."""
-        from metaseed_hub.database import db
-
-        create_dataset = await _tool(server, "create_dataset")
-        with _calling_with(secret):
-            await create_dataset(name, "miappe", "1.1")
-
-        async with db.session_factory() as write:
-            found = await write.execute(select(Dataset).where(Dataset.name == name))
-            dataset = found.scalar_one()
-            dataset.data = _tree_with_an_unloadable_node()
-            flag_modified(dataset, "data")
-            await write.commit()
 
     async def test_the_report_carries_the_skipped_node(self, server, session) -> None:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="skip-mcp", email="skip-mcp@example.org"
         )
-        await self._dataset_with_an_unloadable_node("Lossy", secret, server)
+        await _dataset_with_an_unloadable_node("Lossy", secret, server)
         validate = await _tool(server, "validate_dataset")
 
         with _calling_with(secret):
@@ -138,6 +152,139 @@ class TestTheMcpReport:
             report = json.loads(await validate("Clean"))
 
         assert not any(issue["rule"] == SKIPPED_NODE_RULE for issue in report["issues"]), report
+
+
+async def _mutation(server, name: str):
+    """One mutating tool, already bound to the arguments its refusal test needs.
+
+    Args:
+        server: The MCP server fixture.
+        name: The tool to bind.
+
+    Returns:
+        A zero-argument coroutine function that performs the mutation on the
+        dataset named "Damaged".
+    """
+    tool = await _tool(server, name)
+    arguments: dict[str, tuple[Any, ...]] = {
+        "create_entity": ("Damaged", "Investigation", {"identifier": "INV-2"}),
+        "update_entity": ("Damaged", "inv-1", {"identifier": "INV-9"}),
+        "delete_entity": ("Damaged", "inv-1"),
+        "batch_create": ("Damaged", [{"entity_type": "Investigation", "data": {}}]),
+    }
+    return lambda: tool(*arguments[name])
+
+
+class TestTheMcpRefusal:
+    """No mutating tool may be the one that deletes what did not load.
+
+    Every edit rewrites the whole stored payload from the loaded facade, so an
+    edit to an unrelated entity is what destroys the unloadable one. Reporting
+    it afterwards is too late, and reporting it beforehand does not help an
+    agent that never asked. So the edit is refused while the dataset is in that
+    state -- and the refusal has to say enough that the agent can decide, rather
+    than leaving it to retry the same call.
+    """
+
+    async def _damaged(self, server, session, *, slug: str) -> str:
+        """A dataset holding one unloadable node; returns its owner's token."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug=slug, email=f"{slug}@example.org"
+        )
+        await _dataset_with_an_unloadable_node("Damaged", secret, server)
+        return secret
+
+    @pytest.mark.parametrize(
+        "tool_name", ["create_entity", "update_entity", "delete_entity", "batch_create"]
+    )
+    async def test_every_mutating_tool_refuses_and_names_the_loss(
+        self, server, session, tool_name: str
+    ) -> None:
+        secret = await self._damaged(server, session, slug=f"ref-{tool_name[:4]}")
+        mutate = await _mutation(server, tool_name)
+
+        with _calling_with(secret), pytest.raises(ValueError) as raised:
+            await mutate()
+
+        message = str(raised.value)
+        assert "1 stored node" in message, message
+        assert "Bogus" in message, message
+        assert "storage" in message, message
+
+    async def test_the_refusal_names_the_deliberate_way_through(self, server, session) -> None:
+        """An agent told only "no" retries; it has to be told what does work."""
+        secret = await self._damaged(server, session, slug="ref-way")
+        create_entity = await _tool(server, "create_entity")
+
+        with _calling_with(secret), pytest.raises(ValueError) as raised:
+            await create_entity("Damaged", "Investigation", {"identifier": "INV-2"})
+
+        assert "save_dataset" in str(raised.value), str(raised.value)
+
+    async def test_a_damaged_dataset_stays_readable(self, server, session) -> None:
+        """Inspecting the damage must not be blocked by it."""
+        secret = await self._damaged(server, session, slug="ref-read")
+        get_dataset = await _tool(server, "get_dataset")
+        list_entities = await _tool(server, "list_entities")
+        get_entity = await _tool(server, "get_entity")
+        validate = await _tool(server, "validate_dataset")
+
+        with _calling_with(secret):
+            stored = json.loads(await get_dataset("Damaged"))
+            listed = json.loads(await list_entities("Damaged"))
+            entity = json.loads(await get_entity("Damaged", "inv-1"))
+            report = json.loads(await validate("Damaged"))
+
+        # The unloadable node is still in storage, which is the whole point.
+        assert [n["id"] for n in stored["data"]["tree"]] == ["gone-1", "inv-1"]
+        assert [e["id"] for e in listed["entities"]] == ["inv-1"]
+        assert entity["entity_type"] == "Investigation"
+        assert any(issue["rule"] == SKIPPED_NODE_RULE for issue in report["issues"]), report
+
+    async def test_save_dataset_still_replaces_the_whole_dataset(self, server, session) -> None:
+        """The deliberate way through must actually be open, or the refusal traps."""
+        from metaseed_hub.database import db
+
+        secret = await self._damaged(server, session, slug="ref-save")
+        save = await _tool(server, "save_dataset")
+        replacement = {"profile": "miappe", "version": "1.1", "tree": []}
+
+        with _calling_with(secret):
+            result = json.loads(await save("Damaged", replacement))
+
+        assert result["saved"] is True
+        async with db.session_factory() as check:
+            dataset = (
+                await check.execute(select(Dataset).where(Dataset.name == "Damaged"))
+            ).scalar_one()
+        assert dataset.data["tree"] == []
+
+    async def test_a_dataset_that_loads_cleanly_is_never_refused(self, server, session) -> None:
+        """The guard that matters: a normal dataset must edit exactly as before."""
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="ref-clean", email="ref-clean@example.org"
+        )
+        create_dataset = await _tool(server, "create_dataset")
+        create_entity = await _tool(server, "create_entity")
+        update_entity = await _tool(server, "update_entity")
+        delete_entity = await _tool(server, "delete_entity")
+        batch_create = await _tool(server, "batch_create")
+
+        with _calling_with(secret):
+            await create_dataset("Clean", "miappe", "1.1")
+            created = json.loads(
+                await create_entity("Clean", "Investigation", {"identifier": "INV-1"})
+            )
+            await update_entity("Clean", created["id"], {"identifier": "INV-1b"})
+            batched = json.loads(
+                await batch_create(
+                    "Clean", [{"entity_type": "Investigation", "data": {"identifier": "INV-2"}}]
+                )
+            )
+            deleted = json.loads(await delete_entity("Clean", created["id"]))
+
+        assert batched["created"] == 1, batched
+        assert deleted["deleted"] == created["id"], deleted
 
 
 class TestTheWebPanel:

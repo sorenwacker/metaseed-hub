@@ -13,6 +13,12 @@ than one that refuses to open, so each drop is turned into a validation issue
 and reported through the paths that already report dataset problems: the MCP
 validation report and the web validation panel.
 
+Reporting is enough for someone who asked. It is not enough for an agent that
+did not: it edits an unrelated entity, the save rewrites the payload from what
+loaded, and the tool reports success. So the same facts are also shaped into a
+refusal (``unloadable_node_refusal``), which the MCP ``_editing`` context raises
+instead of letting a mutation through.
+
 See `docs/developer/architecture.md`.
 """
 
@@ -21,7 +27,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from metaseed import SkippedNode
 
@@ -35,6 +41,35 @@ SKIPPED_NODE_NEXT_STEP = (
     "specification, before saving over them."
 )
 """Appended to an agent's next step, because these issues cannot be 'filled in'."""
+
+
+def unloadable_node_refusal(skipped: Sequence[SkippedNode]) -> str:
+    """Explain why an edit is refused, and what the caller can do instead.
+
+    Every edit rewrites the whole stored payload from the loaded facade, so an
+    edit to an unrelated entity is what deletes the nodes that did not load.
+    The refusal has to carry enough for a caller to decide: how much is at
+    stake, where it still exists, and which call does the drop deliberately if
+    that is what was wanted.
+
+    Args:
+        skipped: The nodes the load dropped. Must not be empty; the caller
+            refuses only when there is something to refuse over.
+
+    Returns:
+        The refusal message, naming the count, the entity types, and
+        ``save_dataset`` as the deliberate way through.
+    """
+    types = sorted({skip.entity_type or "untyped" for skip in skipped})
+    return (
+        f"{len(skipped)} stored node(s) did not load ({', '.join(types)}), so this "
+        "dataset cannot be edited. Those nodes are in storage but are not part of "
+        "the dataset as loaded, and every edit rewrites the dataset from what "
+        "loaded -- so this edit would delete them. Restore an earlier version, or "
+        "correct the specification so they load, and the edit will go through. "
+        "If you do mean to drop them, save_dataset replaces the whole dataset and "
+        "removes them deliberately. validate_dataset lists them one by one."
+    )
 
 
 def skipped_node_message(skip: SkippedNode) -> str:

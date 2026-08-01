@@ -105,6 +105,7 @@ An agent replaces a whole dataset in one call, and can do it in a loop, so the w
 - **Every overwrite keeps the previous contents** as a version, restorable from the dataset's history in the web interface. A save that changes nothing adds no version, so repeated writes cannot bury the history.
 - **Deleting is soft.** The dataset stops being listed but is not erased.
 - **A dataset larger than 5 MB is refused** rather than stored, so a runaway loop is stopped.
+- **An edit that would drop entities the hub could not read is refused.** If a stored entity does not load — usually because the specification changed and no longer defines its type — it is missing from the dataset the agent sees, and saving over it would delete it. `create_entity`, `update_entity`, `delete_entity` and `batch_create` therefore refuse the whole dataset while that is true, naming how many entities are affected and of which types. `validate_dataset` lists them individually. `save_dataset` still works, because replacing the whole dataset is a deliberate act; use it only once you are content to lose them.
 - **Every write is logged** with the account it acted as.
 
 A token reaches only its own user's datasets. Another person's dataset is not readable, writable, or deletable, and a name that exists in someone else's workspace reads as absent.
