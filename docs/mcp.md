@@ -58,8 +58,8 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_update_entity` | Change an entity's description or ontology term; unset arguments keep their values |
 | `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |
 | `spec_delete_entity` | Remove an entity type |
-| `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values |
-| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them, plus the eight constraints and `clear`; unset arguments keep their values |
+| `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values; the twelve field markers declare what the field means |
+| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them, plus the eight constraints, `clear`, and the twelve field markers; unset arguments keep their values |
 | `spec_delete_field` | Remove a field |
 | `spec_move_field` | Move a field one position up or down |
 | `spec_add_rule` | Add a validation rule |
@@ -68,7 +68,7 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_set_root_entity` | Set the entity a dataset starts from |
 | `spec_set_metadata` | Change the profile-level name, version, display name, description, or ontology |
 | `spec_status` | A summary of the draft: name, version, root, entities, rules |
-| `spec_validate` | What is wrong with the draft |
+| `spec_validate` | What is wrong with the draft, under `problems`, and what merely looks unintended, under `warnings` |
 | `spec_preview_yaml` | The draft as YAML |
 | `list_spec_drafts` | Your drafts |
 | `spec_delete_draft` | Remove one of your own drafts |
@@ -81,7 +81,17 @@ A specification is a tree: every entity except the root must be linked under a p
 
 Because an omitted argument means "unchanged", it cannot express removal. `clear` names the constraints to unset: `clear=["pattern"]` removes the pattern and leaves every other constraint alone. Setting and clearing the same constraint in one call is refused rather than resolved in some arbitrary order — the two requests contradict each other. The field is left untouched when a call is refused, including when a name is not one of the eight.
 
+#### Field markers
+
+A constraint says what values a field may hold; a marker says what the field *is*. Both `spec_add_field` and `spec_update_field` accept the twelve markers metaseed's `FieldSpec` defines: `is_identifier` and `is_label` declare which field identifies the entity and which one labels it in listings, overriding the positional convention that would otherwise pick the first field; `owns` marks a containment relationship; and `codename`, `ontologies`, `unique_within`, `dcat`, `example`, `options`, `unit`, `label`, and `tier` carry the field's metadata. `tier` is one of `required`, `recommended`, or `optional`.
+
+A marker, unlike a numeric constraint, has a representable empty value, so it needs no `clear`: `false`, `""`, and `[]` are the removal request. An unset marker is absent from the specification rather than written as `owns: false`, so a draft that never touched a marker hashes the same as one that toggled it back off. A list marker is replaced whole, not merged. A value the schema refuses — a `tier` that is not one of the three levels, say — is reported and the field is left untouched, as it is when a constraint name is refused.
+
 Adding a nested field with `items` also creates the parent's `identifier` field and a back-reference on the child, so the relationship is complete in both directions without further calls. `spec_delete_draft` removes a draft the caller owns; a draft a dataset is built on is not deleted, because the dataset would lose its specification.
+
+#### Problems and warnings
+
+`spec_validate` reports two lists. `problems` are defects: the draft does not build, and `valid` is false. `warnings` are advisory — an entity with no declared `is_identifier` whose identifier would be inferred onto an optional free-text field, for instance. A warning does not make a draft invalid, so `valid` stays true and `problems` stays empty; it names something worth deciding on before publishing.
 
 Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, so it stays something you do yourself in the web interface.
 

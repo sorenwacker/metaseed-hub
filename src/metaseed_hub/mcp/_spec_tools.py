@@ -69,6 +69,47 @@ def _constraint_values(supplied: dict[str, Any]) -> dict[str, Any]:
     return _clean(supplied)
 
 
+def _markers(supplied: dict[str, Any]) -> dict[str, Any]:
+    """The field markers the caller supplied, normalized as metaseed normalizes them.
+
+    A marker, unlike a numeric constraint, has a representable empty value, so
+    it needs no ``clear`` list: ``False``, ``""`` and ``[]`` are the removal
+    request and are mapped onto None, which keeps an unset marker out of the
+    serialized spec rather than writing ``owns: false``.
+
+    Args:
+        supplied: Every marker this tool exposes, mapped to the argument the
+            caller passed, with None for the ones left unset.
+
+    Returns:
+        The markers to assign, omitted ones dropped and emptied ones None.
+
+    Raises:
+        ValueError: If metaseed defines a marker this tool does not expose --
+            such a marker would be silently undeclarable over MCP -- or if a
+            supplied value is not one the schema accepts. Raised before the
+            tools mutate anything, so a refused call leaves the draft as it was.
+    """
+    from metaseed.specs.builder import (
+        FIELD_MARKER_NAMES,
+        normalize_markers,
+        validate_marker_values,
+    )
+
+    missing = sorted(set(FIELD_MARKER_NAMES) - set(supplied))
+    if missing:
+        raise ValueError(
+            f"This tool does not expose the field marker(s) {', '.join(missing)}, "
+            "which metaseed defines. Edit the field through the web interface "
+            "until the tool is extended."
+        )
+    markers: dict[str, Any] = normalize_markers(supplied)
+    error = validate_marker_values(markers)
+    if error:
+        raise ValueError(error)
+    return markers
+
+
 def _constraints(limits: dict[str, Any]) -> Any | None:
     """A ``Constraints`` over the limits supplied, or None if none were.
 
@@ -346,6 +387,18 @@ def register_spec_tools(  # noqa: C901
         min_items: int | None = None,
         max_items: int | None = None,
         enum: list[str] | None = None,
+        codename: str | None = None,
+        ontologies: list[str] | None = None,
+        unique_within: str | None = None,
+        dcat: str | None = None,
+        owns: bool | None = None,
+        is_identifier: bool | None = None,
+        is_label: bool | None = None,
+        example: str | None = None,
+        options: list[str] | None = None,
+        unit: str | None = None,
+        label: str | None = None,
+        tier: str | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
 
@@ -353,6 +406,12 @@ def register_spec_tools(  # noqa: C901
         entity — is what links the child under this one, and adding it also
         creates the parent's identifier and the child's back-reference. Without
         it the child is an orphan no dataset can reach.
+
+        Beyond the constraints, the field's markers can be declared here.
+        ``is_identifier`` and ``is_label`` say which field identifies the entity
+        and which one labels it, overriding the positional convention that would
+        otherwise pick the first field; the rest describe the field. An unset
+        marker is left out of the specification rather than written as false.
 
         Args:
             draft: The draft's name in the caller's workspace.
@@ -375,7 +434,36 @@ def register_spec_tools(  # noqa: C901
             min_items: The fewest entries a list may hold.
             max_items: The most entries a list may hold.
             enum: The values allowed, where the field is enumerated.
+            codename: A short machine name the field is also known by.
+            ontologies: The ontologies a term for this field may come from.
+            unique_within: The entity type this field's value is unique within.
+            dcat: The DCAT property this field maps onto.
+            owns: Whether the referenced entity is contained by this one.
+            is_identifier: Whether this field identifies the entity.
+            is_label: Whether this field labels the entity in listings.
+            example: An example value, shown to whoever fills the field in.
+            options: Suggested values, which unlike ``enum`` are not enforced.
+            unit: The unit the value is measured in.
+            label: The human-readable name shown for the field.
+            tier: How strongly the field is expected: required, recommended,
+                or optional.
         """
+        markers = _markers(
+            {
+                "codename": codename,
+                "ontologies": ontologies,
+                "unique_within": unique_within,
+                "dcat": dcat,
+                "owns": owns,
+                "is_identifier": is_identifier,
+                "is_label": is_label,
+                "example": example,
+                "options": options,
+                "unit": unit,
+                "label": label,
+                "tier": tier,
+            }
+        )
         constraints = _constraints(
             {
                 "pattern": pattern,
@@ -406,6 +494,10 @@ def register_spec_tools(  # noqa: C901
                             "constraints": constraints,
                         }
                     ),
+                    # On a new field an emptied marker and an omitted one are
+                    # the same request, so the Nones are dropped rather than
+                    # assigned.
+                    **_clean(markers),
                 )
                 problems = builder.validate()
             return json.dumps({"entity": entity, "field": field, "problems": problems})
@@ -430,6 +522,18 @@ def register_spec_tools(  # noqa: C901
         min_items: int | None = None,
         max_items: int | None = None,
         enum: list[str] | None = None,
+        codename: str | None = None,
+        ontologies: list[str] | None = None,
+        unique_within: str | None = None,
+        dcat: str | None = None,
+        owns: bool | None = None,
+        is_identifier: bool | None = None,
+        is_label: bool | None = None,
+        example: str | None = None,
+        options: list[str] | None = None,
+        unit: str | None = None,
+        label: str | None = None,
+        tier: str | None = None,
         clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
@@ -440,6 +544,10 @@ def register_spec_tools(  # noqa: C901
         to unset. Naming a constraint in both ``clear`` and its own argument is
         refused — the two requests contradict each other — and the field is left
         untouched, as it is when a name is not a constraint at all.
+
+        The markers are assigned whole and need no ``clear``: pass ``false``,
+        ``""`` or ``[]`` to unset one, which leaves it out of the specification
+        rather than writing it as false. A list marker is replaced, not merged.
 
         Args:
             draft: The draft's name in the caller's workspace.
@@ -462,10 +570,40 @@ def register_spec_tools(  # noqa: C901
             min_items: The fewest entries a list may hold.
             max_items: The most entries a list may hold.
             enum: The values allowed, where the field is enumerated.
-            clear: Constraint names to remove, e.g. ["pattern"].
+            codename: A short machine name the field is also known by.
+            ontologies: The ontologies a term for this field may come from.
+            unique_within: The entity type this field's value is unique within.
+            dcat: The DCAT property this field maps onto.
+            owns: Whether the referenced entity is contained by this one.
+            is_identifier: Whether this field identifies the entity.
+            is_label: Whether this field labels the entity in listings.
+            example: An example value, shown to whoever fills the field in.
+            options: Suggested values, which unlike ``enum`` are not enforced.
+            unit: The unit the value is measured in.
+            label: The human-readable name shown for the field.
+            tier: How strongly the field is expected: required, recommended,
+                or optional.
+            clear: Constraint names to remove, e.g. ["pattern"]. Constraints
+                only: a marker is unset by passing its own empty value.
         """
         from metaseed.specs.builder import validate_constraint_names
 
+        markers = _markers(
+            {
+                "codename": codename,
+                "ontologies": ontologies,
+                "unique_within": unique_within,
+                "dcat": dcat,
+                "owns": owns,
+                "is_identifier": is_identifier,
+                "is_label": is_label,
+                "example": example,
+                "options": options,
+                "unit": unit,
+                "label": label,
+                "tier": tier,
+            }
+        )
         constraints = _constraint_values(
             {
                 "pattern": pattern,
@@ -479,9 +617,9 @@ def register_spec_tools(  # noqa: C901
             }
         )
         cleared = list(clear or ())
-        # Checked before anything is mutated: update_field below lands first, so
-        # letting the merge reject the name would leave the ordinary attributes
-        # applied and the constraints not.
+        # Checked before anything is mutated, as the marker values above are:
+        # update_field below lands first, so letting the merge reject the name
+        # would leave the ordinary attributes applied and the constraints not.
         name_error = validate_constraint_names(cleared)
         if name_error:
             raise ValueError(name_error)
@@ -500,8 +638,10 @@ def register_spec_tools(  # noqa: C901
                         "parent_ref": parent_ref,
                     }
                 )
-                if attributes:
-                    builder.update_field(entity, field_name, **attributes)
+                if attributes or markers:
+                    # The markers are not cleaned: a normalized None among them
+                    # is an explicit "unset this", not an unsupplied argument.
+                    builder.update_field(entity, field_name, **attributes, **markers)
                 if constraints or cleared:
                     builder.update_field_constraints(
                         entity, field_name, clear=cleared, **constraints
@@ -707,6 +847,11 @@ def register_spec_tools(  # noqa: C901
     async def spec_validate(draft: str) -> str:
         """Report what is wrong or missing in a draft specification.
 
+        ``problems`` are defects: the draft does not build, and ``valid`` is
+        false. ``warnings`` are advisory — an identifier inferred onto an
+        optional free-text field, for one — and are reported separately because
+        a draft that trips one still builds, so it stays valid.
+
         Args:
             draft: The draft's name in the caller's workspace.
         """
@@ -721,10 +866,22 @@ def register_spec_tools(  # noqa: C901
             )
             if state.spec is None:
                 return json.dumps(
-                    {"draft": draft, "problems": ["The draft holds no specification"]}
+                    {
+                        "draft": draft,
+                        "problems": ["The draft holds no specification"],
+                        "warnings": [],
+                    }
                 )
-            problems = SpecBuilder.from_spec(state.spec).validate()
-            return json.dumps({"draft": draft, "valid": not problems, "problems": problems})
+            builder = SpecBuilder.from_spec(state.spec)
+            problems = builder.validate()
+            return json.dumps(
+                {
+                    "draft": draft,
+                    "valid": not problems,
+                    "problems": problems,
+                    "warnings": builder.warnings(),
+                }
+            )
 
     @mcp.tool()
     async def spec_preview_yaml(draft: str) -> str:

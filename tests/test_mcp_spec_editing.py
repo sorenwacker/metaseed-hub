@@ -335,3 +335,176 @@ class TestSpecFieldRelationships:
             )
 
         assert any("NoSuchEntity" in problem for problem in result["problems"])
+
+
+class TestSpecFieldMarkers:
+    """A field must be able to say what it *is*, not only what values it holds.
+
+    The markers metaseed's ``FieldSpec`` carries -- ``is_identifier`` and
+    ``is_label`` above all -- decide which field identifies an entity and which
+    one labels it. They were unreachable over MCP, so a spec built through the
+    hub could not declare them and fell back on the positional convention.
+    """
+
+    async def test_every_marker_survives_the_round_trip(
+        self, server, session: AsyncSession
+    ) -> None:
+        """Set on add, read back from the previewed YAML, so the assertion is
+        about the serialized spec rather than the tool's own echo."""
+        secret = await _drafting(server, session, slug="mrk00001", name="Marked")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        preview = await _tool(server, "spec_preview_yaml")
+        with _calling_with(secret):
+            await add_entity("Marked", "Sample")
+            await add_field(
+                "Marked",
+                "Sample",
+                "sample_id",
+                "string",
+                codename="samp",
+                ontologies=["obi"],
+                unique_within="Study",
+                dcat="dct:identifier",
+                owns=True,
+                is_identifier=True,
+                is_label=True,
+                example="S-001",
+                options=["a", "b"],
+                unit="mm",
+                label="Sample identifier",
+                tier="required",
+            )
+            previewed = json.loads(await preview("Marked"))["yaml"]
+
+        entities = yaml.safe_load(previewed)["entities"]
+        field = next(f for f in entities["Sample"]["fields"] if f["name"] == "sample_id")
+        assert field["codename"] == "samp"
+        assert field["ontologies"] == ["obi"]
+        assert field["unique_within"] == "Study"
+        assert field["dcat"] == "dct:identifier"
+        assert field["owns"] is True
+        assert field["is_identifier"] is True
+        assert field["is_label"] is True
+        assert field["example"] == "S-001"
+        assert field["options"] == ["a", "b"]
+        assert field["unit"] == "mm"
+        assert field["label"] == "Sample identifier"
+        assert field["tier"] == "required"
+
+    async def test_updating_one_marker_leaves_the_others_alone(
+        self, server, session: AsyncSession
+    ) -> None:
+        """An omitted marker means "unchanged", as an omitted constraint does."""
+        secret = await _drafting(server, session, slug="mrk00002", name="MarkedPartly")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        update_field = await _tool(server, "spec_update_field")
+        with _calling_with(secret):
+            await add_entity("MarkedPartly", "Sample")
+            await add_field(
+                "MarkedPartly", "Sample", "name", "string", unit="mm", tier="recommended"
+            )
+            await update_field("MarkedPartly", "Sample", "name", is_label=True)
+
+        field = _field(await _spec_of("MarkedPartly"), "Sample", "name")
+        assert field["is_label"] is True, "the named marker was set"
+        assert field["unit"] == "mm", "the unnamed marker survived"
+        assert field["tier"] == "recommended", "the unnamed marker survived"
+
+    async def test_an_unset_marker_is_absent_rather_than_false(
+        self, server, session: AsyncSession
+    ) -> None:
+        """``owns: false`` in the spec would record that a marker was once
+        toggled, giving an otherwise identical spec a second content hash."""
+        secret = await _drafting(server, session, slug="mrk00003", name="MarkedEmpty")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        update_field = await _tool(server, "spec_update_field")
+        preview = await _tool(server, "spec_preview_yaml")
+        with _calling_with(secret):
+            await add_entity("MarkedEmpty", "Sample")
+            # owns=False on add, and a marker set then emptied on update: both
+            # are "no marker", not "a marker whose value is false or empty".
+            await add_field("MarkedEmpty", "Sample", "name", "string", owns=False, unit="mm")
+            await update_field("MarkedEmpty", "Sample", "name", unit="")
+            previewed = json.loads(await preview("MarkedEmpty"))["yaml"]
+
+        assert "owns" not in previewed
+        assert "unit" not in previewed
+        field = _field(await _spec_of("MarkedEmpty"), "Sample", "name")
+        assert field.get("owns") is None
+        assert field.get("unit") is None
+
+    async def test_a_declared_identifier_is_what_the_built_spec_indexes_by(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The point of the marker: it must beat the positional convention that
+        would otherwise pick the first field."""
+        from metaseed.facade.core import ProfileFacade
+
+        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+        secret = await _drafting(server, session, slug="mrk00004", name="Identified")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("Identified", "Sample")
+            await add_field("Identified", "Sample", "title", "string")
+            await add_field("Identified", "Sample", "accession", "string", is_identifier=True)
+
+        stored = await _spec_of("Identified")
+        spec = SpecBuilderState.from_dict({"spec": stored}).spec
+        assert spec is not None
+        facade = ProfileFacade(spec.name, spec.version, spec=spec)
+        assert facade.require_helper("Sample").identifier_field == "accession"
+
+    async def test_an_invalid_marker_value_is_refused_and_changes_nothing(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The allowed values live in metaseed's schema, so the hub reports the
+        refusal instead of failing on the assignment mid-edit."""
+        secret = await _drafting(server, session, slug="mrk00005", name="MarkedBadly")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        update_field = await _tool(server, "spec_update_field")
+        with _calling_with(secret):
+            await add_entity("MarkedBadly", "Sample")
+            await add_field("MarkedBadly", "Sample", "name", "string", description="kept")
+            with pytest.raises(ValueError, match="tier"):
+                await update_field(
+                    "MarkedBadly", "Sample", "name", description="changed", tier="whenever"
+                )
+
+        field = _field(await _spec_of("MarkedBadly"), "Sample", "name")
+        assert field["description"] == "kept", "the refused call still changed the field"
+        assert field.get("tier") is None
+
+    async def test_an_invalid_marker_value_is_refused_on_add(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The same check on the add path, which mutates too."""
+        secret = await _drafting(server, session, slug="mrk00006", name="MarkedBadlyToo")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        with _calling_with(secret):
+            await add_entity("MarkedBadlyToo", "Sample")
+            with pytest.raises(ValueError, match="tier"):
+                await add_field("MarkedBadlyToo", "Sample", "name", "string", tier="whenever")
+
+        assert (await _spec_of("MarkedBadlyToo"))["entities"]["Sample"]["fields"] == []
+
+
+def test_the_field_tools_offer_every_marker_metaseed_defines() -> None:
+    """Hardcoding the names here would let the hub and metaseed drift apart."""
+    import inspect
+
+    from metaseed.specs.builder import FIELD_MARKER_NAMES
+
+    from metaseed_hub.mcp import create_mcp_server
+
+    server = create_mcp_server()
+    for tool in ("spec_add_field", "spec_update_field"):
+        signature = inspect.signature(server._tool_manager.get_tool(tool).fn)
+        for name in FIELD_MARKER_NAMES:
+            assert name in signature.parameters, f"{tool} cannot set {name}"

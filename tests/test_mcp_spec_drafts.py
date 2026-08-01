@@ -98,6 +98,47 @@ class TestSpecTools:
         assert result["problems"] == SpecBuilder.empty("Empty", "1.0").validate()
         assert result["valid"] is True
 
+    async def test_validation_reports_advisories_separately_from_problems(
+        self, server, session: AsyncSession
+    ) -> None:
+        """An entity whose identifier is only inferred still builds.
+
+        metaseed reports it through ``warnings`` rather than ``validate``, and
+        the hub must keep the two apart: folding an advisory into ``problems``
+        would tell an agent to fix a draft that is not broken, and would flip
+        ``valid`` on a spec that loads and validates datasets fine.
+        """
+        secret = await _drafting(server, session, slug="spec0011", name="Inferred")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        validate = await _tool(server, "spec_validate")
+        with _calling_with(secret):
+            await add_entity("Inferred", "Sample")
+            # Optional free text, nothing declaring it identifies anything: the
+            # identifier is inferred onto it purely by position.
+            await add_field("Inferred", "Sample", "notes", "string")
+            result = json.loads(await validate("Inferred"))
+
+        assert result["problems"] == [], "an advisory is not a defect"
+        assert result["valid"] is True, "a draft that builds stays valid"
+        assert any("is_identifier" in warning for warning in result["warnings"])
+        assert any("Sample" in warning for warning in result["warnings"])
+
+    async def test_a_declared_identifier_draws_no_advisory(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The warning must go away once the draft says what it identifies by."""
+        secret = await _drafting(server, session, slug="spec0012", name="Declared")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_field = await _tool(server, "spec_add_field")
+        validate = await _tool(server, "spec_validate")
+        with _calling_with(secret):
+            await add_entity("Declared", "Sample")
+            await add_field("Declared", "Sample", "notes", "string", is_identifier=True)
+            result = json.loads(await validate("Declared"))
+
+        assert result["warnings"] == []
+
     async def test_a_bad_edit_is_refused_by_metaseed(self, server, session: AsyncSession) -> None:
         """Rejections come from SpecBuilder too, and reach the agent as errors
         rather than being silently swallowed."""
