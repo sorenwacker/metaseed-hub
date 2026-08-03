@@ -148,7 +148,10 @@ async function createEmptySpec() {
         } else if (response.ok) {
             window.location.href = response.url || '/hub/spec-builder';
         } else {
-            alert('Error creating specification');
+            // The server explains refusals (a name already in use); show that
+            // rather than a generic failure the user cannot act on.
+            const reason = (await response.text()).trim();
+            alert(reason || 'Error creating specification');
         }
     } catch (error) {
         alert('Network error: ' + error.message);
@@ -174,7 +177,10 @@ async function createFromTemplate(templateName) {
         } else if (response.ok) {
             window.location.href = response.url || '/hub/spec-builder';
         } else {
-            alert('Error creating specification');
+            // The server explains refusals (a name already in use); show that
+            // rather than a generic failure the user cannot act on.
+            const reason = (await response.text()).trim();
+            alert(reason || 'Error creating specification');
         }
     } catch (error) {
         alert('Network error: ' + error.message);

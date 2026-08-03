@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
@@ -150,14 +151,27 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
 
         draft_name = spec.name or "Untitled"
 
-        draft = await create_new_draft(
-            session,
-            user_id=user_id,
-            tenant_id=tenant_id,
-            name=draft_name,
-            spec=spec,
-            template_source=template_source,
-        )
+        # One draft name per user (uq_spec_drafts_tenant_user_name). Reusing a
+        # name is an ordinary mistake, so name it instead of letting the
+        # IntegrityError surface as "Error creating specification".
+        try:
+            draft = await create_new_draft(
+                session,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                name=draft_name,
+                spec=spec,
+                template_source=template_source,
+            )
+        except IntegrityError:
+            await session.rollback()
+            # Plain text: the create page posts this with fetch and shows the
+            # body, so the reason reaches the user instead of a generic alert.
+            return PlainTextResponse(
+                f"You already have a specification named '{draft_name}'. "
+                "Pick a different name, or open the existing one.",
+                status_code=409,
+            )
 
         return RedirectResponse(url=f"/hub/spec-builder/{draft.id}", status_code=302)
 
