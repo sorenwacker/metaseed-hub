@@ -26,9 +26,11 @@ from metaseed_hub.models import (
 )
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
+    DuplicateAccountEmailError,
     OptionalUser,
     ensure_tenant_and_user,
     handle_auth_required_error,
+    handle_duplicate_account_email,
 )
 from metaseed_hub.ui.explore_routes import create_explore_router
 from metaseed_hub.ui.helpers import (
@@ -156,6 +158,11 @@ def create_hub_app() -> FastAPI:
 
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
+
+    # One address belongs to one account, so an identity provider that reissues
+    # subjects presents a known email under an unknown subject. Reported as a
+    # conflict an admin can resolve instead of an IntegrityError on every page.
+    app.add_exception_handler(DuplicateAccountEmailError, handle_duplicate_account_email)
 
     # A spec-builder save that would overwrite someone else's edit is refused
     # rather than reported as a success. Handled centrally so every editing

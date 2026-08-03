@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies for Hub UI routes."""
 
 import hashlib
+import logging
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -11,13 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, Tenant, User
-from metaseed_hub.ui.helpers import ensure_dataset_facade, validate_csrf_token
+from metaseed_hub.ui.helpers import (
+    ensure_dataset_facade,
+    normalize_email,
+    validate_csrf_token,
+)
 from metaseed_hub.ui.helpers.load_report import BROWSER_WAY_THROUGH, unloadable_node_refusal
 
 if TYPE_CHECKING:
     from metaseed import SkippedNode
 
     from metaseed_hub.ui.metaseed_ui import AppState
+
+logger = logging.getLogger("metaseed_hub")
 
 # Single source of truth for the access token cookie name; cookie writers
 # (ui.routes.auth, ui.app) import it from here so reads and writes cannot
@@ -48,6 +55,23 @@ class AuthRequiredError(Exception):
     def __init__(self, is_htmx: bool = False) -> None:
         self.is_htmx = is_htmx
         super().__init__("Authentication required")
+
+
+class DuplicateAccountEmailError(Exception):
+    """Raised when a new OIDC subject presents an email another account holds.
+
+    One address belongs to one account (``uq_users_email``), which is what lets
+    sharing resolve an invitee by email. An identity provider that reissues
+    subjects -- a rebuilt realm, a re-registered person -- therefore arrives as a
+    known address under an unknown subject. Provisioning refuses it: rebinding
+    the existing account to the new subject would hand over that account's
+    datasets and drafts on the identity provider's say-so, and an admin should
+    decide whether the two are the same person.
+    """
+
+    def __init__(self, email: str) -> None:
+        self.email = email
+        super().__init__(f"Another account already uses {email}")
 
 
 async def get_current_user_from_cookie(request: Request) -> TokenUser | None:
@@ -98,6 +122,25 @@ def handle_auth_required_error(request: Request, exc: Exception) -> Response:
     return RedirectResponse(url="/hub/auth/login", status_code=302)
 
 
+def handle_duplicate_account_email(request: Request, exc: Exception) -> Response:
+    """Report a refused sign-in as a fixable conflict rather than a 500."""
+    email = getattr(exc, "email", "that address")
+    logger.error(
+        "Refused to provision a second account for %s: the address already "
+        "belongs to another account. An administrator must merge or remove one.",
+        email,
+    )
+    return Response(
+        content=(
+            f"Another account already uses {email}. This happens when an identity "
+            "provider issues a new subject for an existing person. Ask an "
+            "administrator to merge or remove the duplicate account."
+        ),
+        status_code=409,
+        media_type="text/plain",
+    )
+
+
 async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
     """Get tenant for user based on keycloak_id.
 
@@ -139,13 +182,22 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
         session.add(tenant)
         await session.flush()
 
-    # Get or create user
+    # Get or create user. The address is stored lowercased so that sharing, which
+    # resolves an invitee by email equality, matches whatever casing the identity
+    # provider sent; uq_users_email relies on the same normalization.
     user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
     db_user = user_result.scalar_one_or_none()
     if not db_user:
+        email = normalize_email(user.email)
+        # Refuse rather than let uq_users_email raise an IntegrityError on every
+        # authenticated page. See DuplicateAccountEmailError for why the existing
+        # account is not rebound to this subject.
+        taken = await session.execute(select(User).where(User.email == email))
+        if taken.scalar_one_or_none() is not None:
+            raise DuplicateAccountEmailError(email)
         db_user = User(
             keycloak_id=user.keycloak_id,
-            email=user.email,
+            email=email,
             display_name=user.name or user.email.split("@")[0],
             tenant_id=tenant.id,
         )

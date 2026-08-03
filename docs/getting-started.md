@@ -14,7 +14,7 @@ Your name and initials appear in the header. Click the avatar to open [Your Prof
 
 ### Your profile
 
-The profile page (avatar → **Your Profile**) shows the account information read from your OIDC token: name, email, subject ID, and any roles. The email shown under **Sharing** is the address collaborators use to share datasets with you.
+The profile page (avatar → **Your Profile**) shows the account information read from your OIDC token: name, email, subject ID, and any roles. The email shown under **Sharing** is the address collaborators use to share datasets with you, and they may type it in any capitalisation. See [how an email is resolved](collaboration.md#how-an-email-is-resolved).
 
 ## Create your first dataset
 

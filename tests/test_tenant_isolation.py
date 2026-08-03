@@ -8,7 +8,12 @@ named in the URL or to the caller's tenant:
 - M5: ``react_to_comment`` must scope the comment to the URL dataset.
 - M10: ``delete_spec_comment`` must enforce ``require_draft_access`` and scope
   the comment to the URL draft.
-- M12: ``add_spec_member`` must scope the invitee lookup to the caller's tenant.
+
+M12 scoped the ``add_spec_member`` invitee lookup to the caller's tenant, which
+broke sharing outright: every account has its own tenant, so no invitee is ever
+in the caller's. The ambiguity M12 guarded against is now prevented by
+``uq_users_email`` instead, and the lookup is covered by
+``tests/test_cross_account_sharing.py``.
 
 The 2026-06-22 follow-ups extend the same theme:
 
@@ -39,7 +44,6 @@ from metaseed_hub.models import (
     DatasetRole,
     SpecComment,
     SpecCommentReaction,
-    SpecDraftMember,
     Tenant,
     User,
 )
@@ -48,7 +52,6 @@ from metaseed_hub.ui.dependencies import require_dataset_owner, tenant_slug_for
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
 from metaseed_hub.ui.routes.dataset import comments as comments_module
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
-from metaseed_hub.ui.spec_builder.routes.member_routes import register_member_routes
 from tests.factories import make_dataset, make_spec_draft, make_tenant, make_user
 
 
@@ -340,39 +343,3 @@ async def test_react_to_spec_comment_scoped_to_url_draft(session: AsyncSession) 
         select(SpecCommentReaction).where(SpecCommentReaction.comment_id == comment.id)
     )
     assert result.first() is None
-
-
-@pytest.mark.asyncio
-async def test_add_spec_member_lookup_scoped_to_tenant(session: AsyncSession) -> None:
-    """A same-email user in another tenant is never resolved as the invitee."""
-    owner_tenant = make_tenant(slug="ownersp3")
-    other_tenant = make_tenant(slug="othersp3")
-    session.add_all([owner_tenant, other_tenant])
-    await session.flush()
-    owner = make_user(tenant=owner_tenant)
-    # Same email exists in both tenants (allowed by uq_users_tenant_email).
-    owner_invitee = make_user(tenant=owner_tenant, email="shared@example.com")
-    other_invitee = make_user(tenant=other_tenant, email="shared@example.com")
-    session.add_all([owner, owner_invitee, other_invitee])
-    await session.flush()
-    draft = make_spec_draft(tenant=owner_tenant, user=owner)
-    session.add(draft)
-    await session.commit()
-
-    add_spec_member = _endpoint(register_member_routes, "POST", "/members")
-
-    # Scoped lookup must resolve the owner-tenant invitee, never raise
-    # MultipleResultsFound, and never add the other-tenant user.
-    await add_spec_member(  # type: ignore[operator]
-        request=Mock(),
-        draft_id=draft.id,
-        session=session,
-        user_ctx=(owner.id, owner_tenant.id),
-        email="shared@example.com",
-    )
-
-    result = await session.execute(
-        select(SpecDraftMember).where(SpecDraftMember.spec_draft_id == draft.id)
-    )
-    members = list(result.scalars().all())
-    assert [m.user_id for m in members] == [owner_invitee.id]
