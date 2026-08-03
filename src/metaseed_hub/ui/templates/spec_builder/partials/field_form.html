@@ -199,22 +199,23 @@
         <details class="field-optional">
             <summary>Markers</summary>
             <div class="field-optional-content">
-                <div class="form-group form-group-checkbox">
-                    <label class="form-checkbox">
-                        <input type="checkbox" name="owns" {% if field.owns %}checked{% endif %}>
-                        Owns (this list/entity field contains the nested entity)
-                    </label>
-                </div>
-                <div class="form-group form-group-checkbox">
-                    <label class="form-checkbox">
+                {# One row of markers, explanation in the tooltip rather than a
+                   parenthetical that pushes the row out of line. #}
+                <div class="form-checkbox-group">
+                    <label class="form-checkbox"
+                           title="This field uniquely identifies the entity (used for node ids and references)">
                         <input type="checkbox" name="is_identifier" {% if field.is_identifier %}checked{% endif %}>
                         Identifier
                     </label>
-                </div>
-                <div class="form-group form-group-checkbox">
-                    <label class="form-checkbox">
+                    <label class="form-checkbox"
+                           title="This field's value is the entity's display label">
                         <input type="checkbox" name="is_label" {% if field.is_label %}checked{% endif %}>
-                        Label field
+                        Label
+                    </label>
+                    <label class="form-checkbox"
+                           title="This list/entity field contains the nested entity as a containment child, not a lookup">
+                        <input type="checkbox" name="owns" {% if field.owns %}checked{% endif %}>
+                        Owns
                     </label>
                 </div>
                 <div class="form-row-2">
