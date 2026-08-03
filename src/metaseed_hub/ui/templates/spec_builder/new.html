@@ -131,7 +131,8 @@ if (importZone) {
 }
 
 async function createEmptySpec() {
-    const name = document.getElementById('spec-name').value || 'Untitled';
+    // Blank stays blank: the server names and numbers an unnamed draft.
+    const name = document.getElementById('spec-name').value;
 
     const formData = new FormData();
     formData.append('name', name);
@@ -159,7 +160,10 @@ async function createEmptySpec() {
 }
 
 async function createFromTemplate(templateName) {
-    const name = document.getElementById('spec-name').value || templateName;
+    // Send only a name the user actually typed. Passing the template name here
+    // made every draft from a template look like a deliberate choice, so using
+    // the same template twice was refused instead of numbered.
+    const name = document.getElementById('spec-name').value;
     const version = document.getElementById('version-' + templateName).value;
 
     const formData = new FormData();

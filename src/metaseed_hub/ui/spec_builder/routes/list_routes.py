@@ -7,6 +7,7 @@ from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
@@ -26,6 +27,36 @@ from metaseed_hub.ui.spec_builder_helpers import (
 from ._common import SessionDep, UserContextDep, create_render_helper
 
 __all__ = ["register_list_routes"]
+
+
+async def _free_draft_name(session: AsyncSession, user_id: str, tenant_id: str, wanted: str) -> str:
+    """Return ``wanted``, or the first ``wanted-N`` this user has not used.
+
+    Draft names are unique per user (``uq_spec_drafts_tenant_user_name``), so a
+    name derived from a template can only be used once without this.
+
+    Args:
+        session: Database session.
+        user_id: Database ``User.id`` of the owner.
+        tenant_id: Tenant the draft belongs to.
+        wanted: The preferred name.
+
+    Returns:
+        A name not currently held by one of this user's drafts.
+    """
+    result = await session.execute(
+        select(SpecDraft.name).where(
+            SpecDraft.user_id == user_id,
+            SpecDraft.tenant_id == tenant_id,
+        )
+    )
+    taken = set(result.scalars().all())
+    if wanted not in taken:
+        return wanted
+    suffix = 2
+    while f"{wanted}-{suffix}" in taken:
+        suffix += 1
+    return f"{wanted}-{suffix}"
 
 
 def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
@@ -150,6 +181,13 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             spec.name = slugify_spec_name(name)
 
         draft_name = spec.name or "Untitled"
+
+        # A blank name means the draft is named after its template, so using the
+        # same template twice would always collide. That is not the user's
+        # choice to defend -- give the second one a suffix. A name they typed is
+        # a decision, so a clash there is reported rather than silently renamed.
+        if not name.strip():
+            draft_name = await _free_draft_name(session, user_id, tenant_id, draft_name)
 
         # One draft name per user (uq_spec_drafts_tenant_user_name). Reusing a
         # name is an ordinary mistake, so name it instead of letting the
