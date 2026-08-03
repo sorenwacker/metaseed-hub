@@ -58,6 +58,7 @@ from metaseed_hub.ui.routes.auth import (
     refresh_access_token,
 )
 from metaseed_hub.ui.spec_builder import create_spec_builder_router
+from metaseed_hub.ui.spec_builder_helpers import spec_label
 
 # Configure logging
 logging.basicConfig(
@@ -198,6 +199,9 @@ def create_hub_app() -> FastAPI:
     # Register template filters
     templates.env.filters["escape_pattern"] = escape_pattern_hyphen
     templates.env.filters["humanize"] = humanize_field_name
+    # A profile's slug alone reads as a typo ("jerm"); show its display
+    # name when that is the same name, differently cased.
+    templates.env.filters["spec_label"] = spec_label
 
     # Initialize templates for route modules
     init_dataset_templates(templates)

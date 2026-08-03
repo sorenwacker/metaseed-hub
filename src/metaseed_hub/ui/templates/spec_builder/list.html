@@ -32,7 +32,7 @@
                 <div class="spec-card-header">
                     <span class="spec-badge draft">Draft</span>
                 </div>
-                <h3 class="spec-name">{{ draft.name or "Untitled" }}</h3>
+                <h3 class="spec-name">{{ draft|spec_label }}</h3>
                 <p class="spec-version">v{{ draft.version }}</p>
                 <div class="spec-meta">
                     <span class="spec-date" title="{{ draft.updated_at }}">
@@ -67,7 +67,7 @@
                 <div class="spec-card-header">
                     <span class="spec-badge published">Published</span>
                 </div>
-                <h3 class="spec-name">{{ spec.name }}</h3>
+                <h3 class="spec-name">{{ spec|spec_label }}</h3>
                 <p class="spec-version">v{{ spec.version }}</p>
                 {% if spec.description %}
                 <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
