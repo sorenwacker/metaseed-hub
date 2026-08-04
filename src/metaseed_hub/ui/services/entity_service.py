@@ -436,7 +436,9 @@ class EntityService:
     def _get_validation_warnings(self, entity_type: str, values: dict[str, Any]) -> list[str]:
         """Get validation warnings for entity data without blocking.
 
-        Attempts to create entity with full validation to capture errors.
+        A missing required field raises nothing (metaseed reports requiredness
+        rather than enforcing it), so those are looked for directly. Everything
+        else is still learned by attempting a fully validated construction.
 
         Args:
             entity_type: Type of entity.
@@ -454,6 +456,9 @@ class EntityService:
         try:
             # Use public API to get model class
             model_class = self._client.get_model(entity_type)
+            for name in model_class.spec_required_fields():
+                if values.get(name) in (None, "", [], {}):
+                    warnings.append(f"{name}: Field required")
             model_class(**values)
         except Exception as e:
             # Extract validation error messages

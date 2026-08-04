@@ -1382,28 +1382,6 @@ body {
     padding-bottom: var(--space-sm);
 }
 
-/* metaseed's style.css sets `.field-edit-form input { width: 100% }`, which also
-   matches a checkbox and outranks `.form-checkbox input` by source order. That
-   stretched each marker box to 140-240px, so its label started at a different
-   offset on every row. Fixed in metaseed; this outranks it on specificity so the
-   hub is not stuck with ragged markers until that release lands. Delete once the
-   metaseed pin is raised past the fix. */
-.field-edit-form input[type="checkbox"],
-.field-edit-form input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    flex: none;
-}
-
-/* Markers sit on one wrapping row so their boxes line up. */
-.form-checkbox-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm) var(--space-lg);
-    align-items: center;
-    padding-bottom: var(--space-sm);
-}
-
 .form-checkbox {
     display: flex;
     align-items: center;

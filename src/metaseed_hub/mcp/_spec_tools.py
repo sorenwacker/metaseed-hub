@@ -419,7 +419,8 @@ def register_spec_tools(  # noqa: C901
             field: The field's name.
             field_type: One of string, integer, float, boolean, date, datetime,
                 uri, ontology_term, list, entity.
-            required: Whether a dataset must supply it.
+            required: Whether a valid dataset must supply it. Reported by
+                validation when absent, not enforced when saving.
             description: What the field records.
             items: For list and entity fields, the child entity type this field
                 nests — the link that makes the child reachable.
@@ -555,7 +556,8 @@ def register_spec_tools(  # noqa: C901
             field_name: The field to change.
             field_type: A new type (string, integer, float, boolean, date,
                 datetime, uri, ontology_term, list, entity).
-            required: Whether a dataset must supply it.
+            required: Whether a valid dataset must supply it. Reported by
+                validation when absent, not enforced when saving.
             description: The new description.
             items: For list and entity fields, the child entity type this
                 field nests — the link that makes the child reachable.

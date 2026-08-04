@@ -21,7 +21,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.3.0",
     "httpx>=0.28.0",
-    "metaseed[dcat]>=0.24.0",
+    "metaseed[dcat]>=0.26.0,<1",
     "mcp>=1.28,<2",
     "types-pyyaml>=6.0.12.20260408",
 ]

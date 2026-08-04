@@ -150,6 +150,12 @@
     window.startAddRelationship = startAddRelationship;
     window.copyYamlToClipboard = copyYamlToClipboard;
 
+    // metaseed's field form submits through updateField, which resolves its URL
+    // via the configured apiUrl above. The hub rendered a forked template that
+    // posted with htmx instead, so this was never exposed.
+    window.updateField = graph.updateField;
+    window.selectEntity = graph.selectEntity;
+
     window.showAddEntityModal = graph.showAddEntityModal;
     window.hideAddEntityModal = graph.hideAddEntityModal;
     window.onEntityAdded = graph.onEntityAdded;

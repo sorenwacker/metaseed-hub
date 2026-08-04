@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import (
@@ -81,3 +82,30 @@ async def server(session: AsyncSession) -> AsyncGenerator[object, None]:
         yield create_mcp_server()
     finally:
         await db.disconnect()
+
+
+def app_templates() -> Any:
+    """Templates loaded the way the running app loads them.
+
+    The app searches the hub's template directory first and falls back to
+    metaseed's, so a hub-only environment cannot render any template the hub
+    deliberately does not own. Tests that render one must use the same loader or
+    they fail on a template the application resolves perfectly well.
+
+    Returns:
+        A Jinja2Templates with the application's ChoiceLoader.
+    """
+    from fastapi.templating import Jinja2Templates
+    from jinja2 import ChoiceLoader, FileSystemLoader
+
+    from metaseed_hub.ui.app import TEMPLATES_DIR
+    from metaseed_hub.ui.metaseed_ui import METASEED_TEMPLATES_DIR
+
+    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+    templates.env.loader = ChoiceLoader(
+        [
+            FileSystemLoader(str(TEMPLATES_DIR)),
+            FileSystemLoader(str(METASEED_TEMPLATES_DIR)),
+        ]
+    )
+    return templates
