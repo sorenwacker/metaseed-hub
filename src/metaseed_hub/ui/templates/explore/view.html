@@ -19,7 +19,7 @@
             <div class="spec-meta">
                 <span class="spec-badge published">Published</span>
             </div>
-            <h1 class="spec-title">{{ spec_record.name }}</h1>
+            <h1 class="spec-title">{{ spec_record|spec_label }}</h1>
             <p class="spec-version">v{{ spec_record.version }}</p>
             {% if spec_record.description %}
             <p class="spec-description">{{ spec_record.description }}</p>

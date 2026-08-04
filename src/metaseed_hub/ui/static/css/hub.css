@@ -4232,7 +4232,10 @@ a.spec-editor-close:hover {
 
 .spec-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    /* 280px left a specification's description in a column a few words wide.
+       360px is about 50 characters a line, which is what prose needs to be
+       readable, and still gives three columns on a normal screen. */
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: var(--space-lg);
 }
 
@@ -4303,6 +4306,13 @@ a.spec-card:hover {
     color: var(--clr-ink-light);
     margin: 0 0 var(--space-md);
     flex: 1;
+    line-height: 1.5;
+    /* Long descriptions are clamped rather than allowed to stretch one card
+       far taller than its neighbours; the full text is on the spec's page. */
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .spec-meta {

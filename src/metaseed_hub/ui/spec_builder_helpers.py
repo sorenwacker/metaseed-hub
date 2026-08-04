@@ -256,23 +256,23 @@ def parse_spec_from_yaml(yaml_content: str) -> ProfileSpec:
 def spec_label(record: Any) -> str:
     """Return the name to show for a specification or draft.
 
-    Profiles carry both a slug (``jerm``) and a display name (``JERM``), and the
-    slug alone reads as a typo. The display name is only trustworthy when it is
-    the same name differently cased: it is copied from the template a draft was
-    cloned from and is not rewritten when the author renames their spec, so a
-    spec called "Test" can still carry "ENA".
+    A profile carries both a slug (``jerm``, ``acdc_metadata_architecture``) and
+    a display name (``JERM``, ``ACDC Omics Metadata Architecture``). The slug is
+    an identifier; showing it makes a specification look mis-titled, so the
+    display name wins wherever one is set.
+
+    A display name is copied from the template a draft was cloned from and is
+    not rewritten when the author renames the draft, so it can be stale. That is
+    a defect in the rename path rather than a reason to show the slug instead.
 
     Args:
         record: A ``Spec`` or ``SpecDraft`` (anything with ``name`` and
             ``spec_data``).
 
     Returns:
-        The display name when it matches the stored name apart from case,
-        otherwise the stored name.
+        The display name when the specification sets one, otherwise its name.
     """
     name = (getattr(record, "name", "") or "").strip()
     data = getattr(record, "spec_data", None) or {}
     display = ((data.get("spec") or {}).get("display_name") or "").strip()
-    if display and display.lower() == name.lower():
-        return display
-    return name or "Untitled"
+    return display or name or "Untitled"
