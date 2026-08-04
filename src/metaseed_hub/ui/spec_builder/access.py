@@ -396,7 +396,15 @@ async def save_state_to_draft(
 
     spec_data = state.to_dict()
 
-    draft.name = state.spec.name or draft.name
+    # A name is a label in a list; another draft holding it must not cost the
+    # user this save. See free_draft_name.
+    draft.name = await free_draft_name(
+        session,
+        user_id=draft.user_id,
+        tenant_id=draft.tenant_id,
+        wanted=state.spec.name or draft.name,
+        exclude_draft_id=draft.id,
+    )
     draft.version = state.spec.version
     draft.spec_data = spec_data
     flag_modified(draft, "spec_data")
@@ -610,3 +618,53 @@ async def workspace_owner(session: AsyncSession, tenant_id: str) -> User | None:
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def free_draft_name(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tenant_id: str,
+    wanted: str,
+    exclude_draft_id: str | None = None,
+) -> str:
+    """Return a draft name ``user_id`` can hold, suffixing ``wanted`` if taken.
+
+    Draft names are unique per user (``uq_spec_drafts_tenant_user_name``), and a
+    draft's row name is rewritten from its spec on every save. Two drafts whose
+    specs share a name therefore collided, and the IntegrityError took down
+    saving, deleting a field, and importing alike -- leaving the draft
+    unsavable. A name is a label in a list; losing someone's edit to a clash
+    between two labels is the wrong trade.
+
+    The suffix is the draft's own id, not a counter, so it is the same on every
+    save. A counter would have to re-derive itself each time and would walk
+    ``-2``, ``-3``, ``-4`` as the draft was saved again.
+
+    Args:
+        session: Database session.
+        user_id: Database ``User.id`` of the owner.
+        tenant_id: Tenant the draft belongs to.
+        wanted: The preferred name.
+        exclude_draft_id: The draft being saved, whose own name is not a clash.
+
+    Returns:
+        ``wanted`` when it is free, otherwise ``wanted-<short id>``.
+    """
+    result = await session.execute(
+        select(SpecDraft.id, SpecDraft.name).where(
+            SpecDraft.user_id == user_id,
+            SpecDraft.tenant_id == tenant_id,
+        )
+    )
+    taken = {name for draft_id, name in result.all() if draft_id != exclude_draft_id}
+    if wanted not in taken:
+        return wanted
+    if exclude_draft_id:
+        return f"{wanted}-{exclude_draft_id.split('-')[0]}"
+    # No draft to key the suffix to yet (a create): fall back to a counter,
+    # which is stable because the row does not exist to be renamed again.
+    suffix = 2
+    while f"{wanted}-{suffix}" in taken:
+        suffix += 1
+    return f"{wanted}-{suffix}"
