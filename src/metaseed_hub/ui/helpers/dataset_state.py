@@ -99,6 +99,11 @@ async def ensure_dataset_facade(
     state.version = dataset.version
 
     client: MetaseedClient | None = None
+    # Why the client could not be built. Reported with the refusal below: on its
+    # own "no client" says a dataset will not open but not what to fix, and the
+    # cause (a profile version that no longer exists, a draft with no spec data)
+    # is exactly what the owner needs to hear.
+    load_failure: str | None = None
 
     # Load spec from database FIRST if dataset uses a user-defined spec
     if dataset.spec_draft_id:
@@ -111,11 +116,13 @@ async def ensure_dataset_facade(
                 state.profile = state.facade.profile
                 logger.debug(f"Loaded draft spec for dataset {dataset.id}: {dataset.profile}")
             else:
+                load_failure = f"its draft specification {dataset.spec_draft_id} holds no spec data"
                 logger.warning(
                     f"No spec data found for dataset {dataset.id} "
                     f"spec_draft_id={dataset.spec_draft_id}"
                 )
         except Exception as e:
+            load_failure = f"its draft specification could not be loaded: {e}"
             logger.error(f"Failed to load spec for dataset {dataset.id}: {e}")
             # Don't re-raise - let downstream code handle missing facade
     elif dataset.spec_id:
@@ -130,8 +137,10 @@ async def ensure_dataset_facade(
                 state.facade = client.facade
                 state.profile = state.facade.profile
             else:
+                load_failure = f"its published specification {dataset.spec_id} holds no spec data"
                 logger.warning(f"No spec data for dataset {dataset.id} spec_id={dataset.spec_id}")
         except Exception as e:
+            load_failure = f"its published specification could not be loaded: {e}"
             logger.error(f"Failed to load published spec for dataset {dataset.id}: {e}")
     else:
         # Built-in profile: create standard client
@@ -139,6 +148,7 @@ async def ensure_dataset_facade(
             client = MetaseedClient(dataset.profile, dataset.version)
             state.facade = client.facade
         except Exception as e:
+            load_failure = f"profile {dataset.profile} {dataset.version} could not be loaded: {e}"
             logger.error(f"Failed to load profile {dataset.profile}: {e}")
 
     # Load entities into the facade's internal store using client.load().
@@ -149,10 +159,14 @@ async def ensure_dataset_facade(
         from metaseed_hub.ui.services.exceptions import DatasetDataLoadError
 
         if client is None:
+            reason = load_failure or "no specification is recorded for it"
             raise DatasetDataLoadError(
-                f"No client for dataset {dataset.id}; cannot load its stored entities",
-                user_message="The schema for this dataset could not be loaded. "
-                "Editing is disabled to protect the stored data.",
+                f"No client for dataset {dataset.id}; cannot load its stored "
+                f"entities because {reason}",
+                user_message=(
+                    f"This dataset's schema could not be loaded because {reason}. "
+                    "Editing is disabled to protect the stored data."
+                ),
             )
 
         def report(skip: "SkippedNode") -> None:
