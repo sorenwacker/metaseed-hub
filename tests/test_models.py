@@ -62,22 +62,22 @@ class TestTenantModel:
 class TestUserModel:
     """Tests for User model constraints."""
 
-    async def test_user_email_unique_per_tenant(self, session: AsyncSession) -> None:
-        """User email should be unique within a tenant but allowed across tenants."""
+    async def test_user_email_unique_across_tenants(self, session: AsyncSession) -> None:
+        """An email identifies one account, in any tenant.
+
+        Sharing resolves an invitee by email across tenants (each account has its
+        own), so a second account holding the same address would make that lookup
+        ambiguous.
+        """
         tenant1 = make_tenant(slug="tenant-1")
         tenant2 = make_tenant(slug="tenant-2")
         session.add_all([tenant1, tenant2])
         await session.flush()
 
-        # Same email in different tenants should work
-        user1 = make_user(tenant=tenant1, email="shared@example.com")
-        user2 = make_user(tenant=tenant2, email="shared@example.com")
-        session.add_all([user1, user2])
+        session.add(make_user(tenant=tenant1, email="shared@example.com"))
         await session.flush()
 
-        # Same email in same tenant should fail
-        user3 = make_user(tenant=tenant1, email="shared@example.com")
-        session.add(user3)
+        session.add(make_user(tenant=tenant2, email="shared@example.com"))
 
         with pytest.raises(IntegrityError):
             await session.flush()

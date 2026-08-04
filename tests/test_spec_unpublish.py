@@ -31,8 +31,10 @@ async def _published(session: AsyncSession, *, slug: str = "acme1234"):
     tenant = make_tenant(slug=slug)
     session.add(tenant)
     await session.flush()
-    author = make_user(tenant=tenant, email="author@example.org")
-    colleague = make_user(tenant=tenant, email="colleague@example.org")
+    # Keyed by slug: an address identifies one account hub-wide, so two calls
+    # here must not hand the same address to two people.
+    author = make_user(tenant=tenant, email=f"author-{slug}@example.org")
+    colleague = make_user(tenant=tenant, email=f"colleague-{slug}@example.org")
     session.add_all([author, colleague])
     await session.flush()
     spec = make_spec(tenant=tenant, created_by=author, spec_data=_spec_data())

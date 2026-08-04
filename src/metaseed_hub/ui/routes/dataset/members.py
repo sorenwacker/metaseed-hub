@@ -18,6 +18,7 @@ from metaseed_hub.ui.dependencies import (
     DbSession,
     require_dataset_owner,
 )
+from metaseed_hub.ui.helpers import normalize_email
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
@@ -64,20 +65,17 @@ async def add_dataset_member(
         return csrf_error_response()
 
     # Only an owner may manage membership (not an ordinary VIEWER/member).
-    dataset = await require_dataset_owner(dataset_id, session, user)
+    await require_dataset_owner(dataset_id, session, user)
 
-    # Find user by email, scoped to the dataset's tenant. User.email is unique
-    # only per tenant (uq_users_tenant_email), so an unscoped lookup could match
-    # a foreign-tenant user or raise MultipleResultsFound across tenants.
-    result = await session.execute(
-        select(User).where(User.email == email, User.tenant_id == dataset.tenant_id)
-    )
+    # Deliberately not tenant-scoped: every account has its own tenant, so an
+    # invitee is always outside the dataset's. uq_users_email makes the address
+    # identify exactly one account, so this cannot match a stranger.
+    result = await session.execute(select(User).where(User.email == normalize_email(email)))
     target_user = result.scalar_one_or_none()
 
     if not target_user:
-        # Return error message - user must log in first
         response = await _get_members_html(request, dataset_id, session)
-        msg = "User not found. They must log in first before you can share."
+        msg = "No account uses that email. Ask them to log in once, then share again."
         response.headers["HX-Trigger"] = f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
         return response
 

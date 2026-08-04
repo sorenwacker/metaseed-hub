@@ -116,6 +116,9 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "field": entity.fields[idx],
                 "field_idx": idx,
                 "field_types": [t.value for t in FieldType],
+                # The template is metaseed's; it names no URL of its own beyond
+                # this one, which is per-draft and /hub-prefixed here.
+                "entity_url": (f"/hub/spec-builder/{ctx.draft.id}/entity/{entity_name}"),
             },
         )
 

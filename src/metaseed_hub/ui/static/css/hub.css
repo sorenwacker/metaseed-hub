@@ -1679,11 +1679,17 @@ body {
     display: flex;
     border-bottom: 1px solid var(--clr-parchment);
     background: white;
+    /* Five tabs do not fit one row of a 280px sidebar; squeezing them ran
+       Comments and Sharing together. They wrap onto a second row instead, which
+       keeps every label readable without taking width from the canvas. */
+    flex-wrap: wrap;
 }
 
 .sidebar-tab {
-    flex: 1;
-    padding: var(--space-sm) var(--space-xs);
+    flex: 1 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
+    padding: var(--space-sm);
     border: none;
     background: transparent;
     font-family: var(--font-body);

@@ -16,6 +16,14 @@ You can change a member's role or remove them from the same tab. Access is scope
 
 Specification drafts have the same **Sharing** tab with the same roles; see [Spec Builder](spec-builder/index.md).
 
+### How an email is resolved
+
+Each person has their own workspace, and sharing reaches across workspaces: the collaborator you name does not have to belong to yours. The address is matched against every account in the hub, not only the accounts in your own workspace.
+
+- The address is matched without regard to capitalisation. `Ada@Example.org` and `ada@example.org` name the same account. Addresses are stored lowercased; the profile page still shows the address exactly as your identity provider reports it.
+- One account exists per address. An address identifies exactly one person, so a share never has to choose between candidates.
+- The collaborator must have signed in to the hub at least once. An account is created on first sign-in, and there is nothing to share with before that. If the hub reports that no account exists for an address, ask the person to log in once and try again.
+
 ## Comments
 
 The **Comments** tab provides threaded discussion on a dataset.

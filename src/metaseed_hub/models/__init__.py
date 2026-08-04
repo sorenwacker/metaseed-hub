@@ -112,7 +112,11 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
         UniqueConstraint("tenant_id", "keycloak_id", name="uq_users_tenant_keycloak_id"),
-        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        # Global, not per-tenant: sharing resolves an invitee by email across
+        # tenants (every account has its own), so an address must identify
+        # exactly one account for that lookup to be unambiguous. Addresses are
+        # stored lowercased, which is what makes this constraint case-folding.
+        UniqueConstraint("email", name="uq_users_email"),
         Index("ix_users_tenant_id", "tenant_id"),
     )
 

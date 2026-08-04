@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.templating import Jinja2Templates
 from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,9 +20,12 @@ from metaseed_hub.models import SpecDraft, Tenant, User
 from metaseed_hub.ui.spec_builder.access import DraftContext, load_state_for_draft
 from metaseed_hub.ui.spec_builder.routes.field_routes import register_field_routes
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+
+# The field form is metaseed's; the hub must load it the way the app does.
+from tests.conftest import app_templates
 from tests.factories import make_spec_draft, make_tenant, make_user
 
-_TEMPLATES = Jinja2Templates(directory="src/metaseed_hub/ui/templates")
+_TEMPLATES = app_templates()
 
 
 def _endpoint(register: Any, path_suffix: str, method: str) -> Any:

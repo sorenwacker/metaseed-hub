@@ -6,6 +6,9 @@ re-exported here so existing ``from metaseed_hub.ui.helpers import ...`` imports
 keep working.
 """
 
+from metaseed_hub.ui.helpers.accounts import (
+    normalize_email,
+)
 from metaseed_hub.ui.helpers.csrf import (
     CSRF_TOKEN_COOKIE,
     _csrf_signature_valid,
@@ -67,6 +70,7 @@ __all__ = [
     "get_tree_data_from_nodes",
     "humanize_field_name",
     "make_json_serializable",
+    "normalize_email",
     "parse_workbook_sheets",
     "read_upload_capped",
     "save_dataset_state",

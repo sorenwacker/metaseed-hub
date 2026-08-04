@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import SpecDraft, SpecDraftMember, SpecDraftRole, User
+from metaseed_hub.ui.helpers import normalize_email
 from metaseed_hub.ui.spec_builder.access import require_draft_owner
 
 from ._common import SessionDep, UserContextDep
@@ -76,21 +77,18 @@ def register_member_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         email: str = Form(...),
     ) -> HTMLResponse:
         """Add a member to a spec draft by email."""
-        current_user_id, tenant_id = user_ctx
+        current_user_id, _tenant_id = user_ctx
         await require_draft_owner(session, draft_id, current_user_id)
 
-        # Find user by email, scoped to the caller's tenant. User.email is unique
-        # only per tenant (uq_users_tenant_email), so an unscoped lookup could
-        # match a foreign-tenant user or raise MultipleResultsFound across tenants.
-        result = await session.execute(
-            select(User).where(User.email == email, User.tenant_id == tenant_id)
-        )
+        # Deliberately not tenant-scoped: every account has its own tenant, so an
+        # invitee is always outside the sharer's. uq_users_email makes the address
+        # identify exactly one account, so this cannot match a stranger.
+        result = await session.execute(select(User).where(User.email == normalize_email(email)))
         target_user = result.scalar_one_or_none()
 
         if not target_user:
-            # Return error message - user must log in first
             response = await _get_spec_members_html(request, draft_id, session, current_user_id)
-            msg = "User not found. They must log in first before you can share."
+            msg = "No account uses that email. Ask them to log in once, then share again."
             response.headers["HX-Trigger"] = (
                 f'{{"showToast": {{"message": "{msg}", "type": "error"}}}}'
             )
