@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.0] - 2026-08-05
+
+### Changed
+- Require metaseed `>=0.29.0`, which brings the SEEK export capability to the
+  hub: provisioning Sample Types and syncing a dataset to a SEEK instance, the
+  browsable "what will be created" preview on the SEEK page, remote data-file
+  sync, per-version provisioning, and the `seek-ready-template` built-in
+  profile. The lockfile is updated so the deploy installs metaseed 0.29.0.
+
 ## [0.4.65] - 2026-06-23
 
 ### Added
