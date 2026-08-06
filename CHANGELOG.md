@@ -11,6 +11,190 @@ All notable changes to this project will be documented in this file.
   sync, per-version provisioning, and the `seek-ready-template` built-in
   profile. The lockfile is updated so the deploy installs metaseed 0.29.0.
 
+## [0.25.0] - 2026-08-04
+
+### Changed
+- Consume the metaseed where the built-in SEEK profile is named `seek`.
+
+### Fixed
+- A dataset that will not open says why, instead of failing silently.
+
+## [0.24.0] – [0.24.1] - 2026-08-04
+
+### Fixed
+- Dataset sharing across accounts, specification creation, and the forked field
+  form. An invitee was looked up within the inviter's tenant, so sharing with a
+  user who had already signed in still claimed they must log in first.
+- A specification is titled by its name rather than the slug it is stored under.
+- A draft stays saveable when another draft holds its spec's name.
+
+### Changed
+- Require the metaseed that stops a half-filled row being refused.
+- Stop re-testing on a tag whose commit was already tested.
+
+## [0.23.0] - 2026-08-01
+
+### Added
+- The DCAT property and spec advice are settable in the browser, not only over
+  MCP.
+
+## [0.22.0] - 2026-08-01
+
+### Added
+- Agents can declare which field identifies an entity, not only its type.
+
+### Fixed
+- A browser edit that would delete unloaded entities is refused, matching the
+  agent path.
+
+## [0.21.0] – [0.21.1] - 2026-08-01
+
+### Fixed
+- Entities that could not be loaded are reported rather than dropped out of
+  sight, and an edit that would delete them is refused.
+
+### Changed
+- Use metaseed's public model attribute; a private one can be renamed in a patch
+  release.
+- MCP tests split by tool family, with the file-size rule gated so they cannot
+  drift.
+
+## [0.20.0] - 2026-07-31
+
+### Added
+- A version bump that hides breaking changes is refused, and datasets are
+  stamped with the spec version they were authored against.
+
+## [0.19.0] - 2026-07-31
+
+### Fixed
+- Hub spec drafts can express entity relationships. The instructions promised an
+  `items=` parameter the tool did not have, so agents could only build flat
+  specs.
+
+## [0.18.0] – [0.18.4] - 2026-07-31
+
+### Added
+- Agents can correct specs, create hierarchies in one call, look up ontology
+  terms over MCP, and bring external YAML specs and cloned profiles in as
+  drafts.
+
+### Changed
+- The hub reuses metaseed's spec-builder core instead of maintaining a fork, and
+  `metaseed.ui` imports are confined to one boundary module with graph and export
+  rebuilt on the public API.
+- The spec builder is called Builder everywhere; three templates had named one
+  destination three ways.
+- The `mcp` dependency the code imports directly is declared, bounded below 2.x.
+
+## [0.17.0] – [0.17.3] - 2026-07-30
+
+### Fixed
+- Dataset load failures are surfaced instead of silently saving empty state.
+- Error output is escaped in HTML fragments; dataset import and editing defects
+  fixed.
+- Malformed spec-builder input is rejected rather than erroring, and spec draft
+  roles are enforced.
+- Reference edges name both connected fields; entity-only edges hid the join
+  columns.
+
+### Changed
+- Datasets load and save through the facade so cache and storage cannot diverge.
+
+## [0.16.0] – [0.16.6] - 2026-07-29
+
+### Added
+- Matomo analytics, self-hosted and cookieless. Only the tracker endpoints
+  (`matomo.php`, `matomo.js`) are exposed publicly — never the installer or admin
+  UI, which is reachable through an SSH tunnel only.
+- Landing-page SEO metadata and `robots.txt`.
+
+### Fixed
+- The privacy page discloses analytics and its fabricated claims were removed;
+  the legal basis is corrected to public task, since a free university tool is
+  not a contract.
+
+## [0.15.0] – [0.15.1] - 2026-07-28
+
+### Added
+- Agents can populate data and build specs, not only replace whole datasets.
+- Per-user authored spec counts in the admin directory.
+
+### Fixed
+- Cancel on the publish dialog cancels.
+
+## [0.14.0] – [0.14.5] - 2026-07-28
+
+### Added
+- MCP served at `/hub/mcp`, so an agent works as one hub user, reachable at the
+  address it is documented as, with what it can destroy bounded.
+- Token authentication for scripts, not only a browser session.
+- What is missing on save is reported from the spec's own rules.
+
+### Fixed
+- A dataset can be created from a published spec at all, and the unpublish
+  form's CSRF token is accepted so the button works.
+
+## [0.13.0] - 2026-07-27
+
+### Changed
+- Consume metaseed 0.19.0, where a PRIDE import is a tree.
+
+### Fixed
+- An import that found nothing is refused rather than reported as success.
+
+## [0.12.0] - 2026-07-27
+
+### Added
+- An empty dataset can be filled from the repository its profile came from.
+
+## [0.11.0] - 2026-07-27
+
+### Changed
+- Consume metaseed 0.18.0 with the `dcat` extra, so the DCAT record is offered.
+
+## [0.10.0] - 2026-07-27
+
+### Added
+- Unhandled errors are recorded and shown in the admin dashboard, along with
+  per-user dataset counts and last sign-in.
+
+### Fixed
+- A spec-draft save that would overwrite a newer edit is refused, and a restore
+  that cannot change anything is no longer offered.
+
+## [0.9.0] - 2026-07-27
+
+### Added
+- Database backups on a timer with tiered retention.
+
+### Changed
+- Datasets serialize via `MetaseedClient`, removing the duplicate serializer, and
+  entity rows write through the facade rather than only the cache.
+
+## [0.8.0] - 2026-07-25
+
+### Added
+- An app-wide CSRF guard, a SAST gate, and self-hosted JS; spec-builder CSRF gaps
+  from a second review closed.
+
+## [0.7.0] - 2026-07-25
+
+### Changed
+- Security review hardening.
+
+## [0.6.0] – [0.6.1] - 2026-07-25
+
+### Added
+- metaseed adapter exports surfaced in the dataset UI (requires metaseed
+  >= 0.16.0), with a browser end-to-end test.
+
+## [0.5.0] - 2026-07-24
+
+The first release after the changelog fell out of maintenance; it carries a
+month of work. See git history between `v0.4.x` and `v0.5.0` for the full
+detail.
+
 ## [0.4.65] - 2026-06-23
 
 ### Added
