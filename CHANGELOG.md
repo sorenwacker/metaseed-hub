@@ -14,186 +14,271 @@ All notable changes to this project will be documented in this file.
 ## [0.25.0] - 2026-08-04
 
 ### Changed
-- Consume the metaseed where the built-in SEEK profile is named `seek`.
+- Take the metaseed where the SEEK profile is called SEEK (#103)
+- Say why a dataset will not open (#102)
 
-### Fixed
-- A dataset that will not open says why, instead of failing silently.
-
-## [0.24.0] – [0.24.1] - 2026-08-04
-
-### Fixed
-- Dataset sharing across accounts, specification creation, and the forked field
-  form. An invitee was looked up within the inviter's tenant, so sharing with a
-  user who had already signed in still claimed they must log in first.
-- A specification is titled by its name rather than the slug it is stored under.
-- A draft stays saveable when another draft holds its spec's name.
+## [0.24.1] - 2026-08-04
 
 ### Changed
-- Require the metaseed that stops a half-filled row being refused.
-- Stop re-testing on a tag whose commit was already tested.
+- Title a specification by its name, not the slug it is stored under (#101)
+
+## [0.24.0] - 2026-08-04
+
+### Changed
+- Require the metaseed that stops a half-filled row being refused (#100)
+- Keep a draft saveable when another one holds its spec's name (#99)
+- Fix dataset sharing, specification creation, and the forked field form (#97)
+- Stop re-testing on the tag the commit was already tested under
 
 ## [0.23.0] - 2026-08-01
 
-### Added
-- The DCAT property and spec advice are settable in the browser, not only over
-  MCP.
+### Changed
+- Let people set the DCAT property and see spec advice in the browser, not only over MCP
 
 ## [0.22.0] - 2026-08-01
 
-### Added
-- Agents can declare which field identifies an entity, not only its type.
+### Changed
+- Let agents declare which field identifies an entity, not only its type
+- Refuse a browser edit that would delete unloaded entities, as the agent path already does
 
-### Fixed
-- A browser edit that would delete unloaded entities is refused, matching the
-  agent path.
-
-## [0.21.0] – [0.21.1] - 2026-08-01
-
-### Fixed
-- Entities that could not be loaded are reported rather than dropped out of
-  sight, and an edit that would delete them is refused.
+## [0.21.1] - 2026-08-01
 
 ### Changed
-- Use metaseed's public model attribute; a private one can be renamed in a patch
-  release.
-- MCP tests split by tool family, with the file-size rule gated so they cannot
-  drift.
+- Refuse an edit that would delete the entities a dataset failed to load
+
+## [0.21.0] - 2026-07-31
+
+### Changed
+- Report the entities that could not be loaded instead of dropping them out of sight
+- Split the MCP tests by tool family and gate the file-size rule that let them drift
+- Use metaseed's public model attribute; a private one can be renamed in a patch release
 
 ## [0.20.0] - 2026-07-31
 
-### Added
-- A version bump that hides breaking changes is refused, and datasets are
-  stamped with the spec version they were authored against.
+### Changed
+- Refuse a version bump that hides breaking changes, and stamp datasets with the spec they were authored against
 
 ## [0.19.0] - 2026-07-31
 
-### Fixed
-- Hub spec drafts can express entity relationships. The instructions promised an
-  `items=` parameter the tool did not have, so agents could only build flat
-  specs.
+### Changed
+- Let hub spec drafts express entity relationships; the instructions promised items= but the tool had no such parameter
 
-## [0.18.0] – [0.18.4] - 2026-07-31
-
-### Added
-- Agents can correct specs, create hierarchies in one call, look up ontology
-  terms over MCP, and bring external YAML specs and cloned profiles in as
-  drafts.
+## [0.18.4] - 2026-07-31
 
 ### Changed
-- The hub reuses metaseed's spec-builder core instead of maintaining a fork, and
-  `metaseed.ui` imports are confined to one boundary module with graph and export
-  rebuilt on the public API.
-- The spec builder is called Builder everywhere; three templates had named one
-  destination three ways.
-- The `mcp` dependency the code imports directly is declared, bounded below 2.x.
+- Call the spec builder Builder everywhere; three templates named one destination three ways
 
-## [0.17.0] – [0.17.3] - 2026-07-30
-
-### Fixed
-- Dataset load failures are surfaced instead of silently saving empty state.
-- Error output is escaped in HTML fragments; dataset import and editing defects
-  fixed.
-- Malformed spec-builder input is rejected rather than erroring, and spec draft
-  roles are enforced.
-- Reference edges name both connected fields; entity-only edges hid the join
-  columns.
+## [0.18.3] - 2026-07-30
 
 ### Changed
-- Datasets load and save through the facade so cache and storage cannot diverge.
+- Declare the mcp dependency the code imports directly, bounded below 2.x
 
-## [0.16.0] – [0.16.6] - 2026-07-29
+## [0.18.2] - 2026-07-30
 
-### Added
-- Matomo analytics, self-hosted and cookieless. Only the tracker endpoints
-  (`matomo.php`, `matomo.js`) are exposed publicly — never the installer or admin
-  UI, which is reachable through an SSH tunnel only.
-- Landing-page SEO metadata and `robots.txt`.
+### Changed
+- Let agents bring external YAML specs and cloned profiles into the hub as drafts
 
-### Fixed
-- The privacy page discloses analytics and its fabricated claims were removed;
-  the legal basis is corrected to public task, since a free university tool is
-  not a contract.
+## [0.18.1] - 2026-07-30
 
-## [0.15.0] – [0.15.1] - 2026-07-28
+### Changed
+- Reuse metaseed's spec-builder core instead of maintaining a fork; hub keeps config only
 
-### Added
-- Agents can populate data and build specs, not only replace whole datasets.
-- Per-user authored spec counts in the admin directory.
+## [0.18.0] - 2026-07-30
 
-### Fixed
-- Cancel on the publish dialog cancels.
+### Changed
+- Confine metaseed.ui imports to one boundary module and rebuild graph/export on the public API (#53 step 4)
+- Answer the recurring MCP questions in one place
+- Let agents correct specs, create hierarchies in one call, and look up ontology terms over MCP
 
-## [0.14.0] – [0.14.5] - 2026-07-28
+## [0.17.3] - 2026-07-30
 
-### Added
-- MCP served at `/hub/mcp`, so an agent works as one hub user, reachable at the
-  address it is documented as, with what it can destroy bounded.
-- Token authentication for scripts, not only a browser session.
-- What is missing on save is reported from the spec's own rules.
+### Changed
+- Load and save datasets through the facade so cache and storage cannot diverge (#53 steps 1-3)
 
-### Fixed
-- A dataset can be created from a published spec at all, and the unpublish
-  form's CSRF token is accepted so the button works.
+## [0.17.2] - 2026-07-30
+
+### Changed
+- Name both connected fields on reference edges; entity-only edges hid the join columns
+
+## [0.17.1] - 2026-07-30
+
+### Changed
+- Share the spec-linkage MCP instructions with metaseed so agents stop building flat specs
+
+## [0.17.0] - 2026-07-30
+
+### Changed
+- Drop vulture whitelist entries for code that no longer exists
+- Escape error output in HTML fragments and fix dataset import and editing defects
+- Enforce spec draft roles and reject malformed spec-builder input instead of erroring
+- Surface dataset load failures instead of silently saving empty state
+- Store and read datasets in tree format over MCP so agent edits cannot clobber web data
+- Prevent websocket broadcast corruption and cross-instance connection id collisions
+- Fix OIDC config precedence and handle identity-provider network failures gracefully
+- Record the codebase review findings and remediation plan
+
+## [0.16.6] - 2026-07-29
+
+### Changed
+- Correct the legal basis to public task; a free university tool is not a contract (#93)
+
+## [0.16.5] - 2026-07-29
+
+### Changed
+- Disclose analytics and fix fabricated claims on the privacy page; add landing-page SEO metadata and robots.txt (#92)
+- Remove the broken Matomo subpath UI; keep tracker public, admin via tunnel only
+- Let Matomo use its own CSP so its login JS is not blocked by the hub's
+- Restrict the Matomo UI to TU Delft networks; keep tracker public
+- Set Matomo site id to 1 now that the site exists
+- Expose only the Matomo tracker endpoints publicly, never the installer or admin (#91)
+
+## [0.16.4] - 2026-07-28
+
+### Changed
+- Self-hosted Matomo analytics: cookieless, same-origin, config-gated (#90)
+
+## [0.16.3] - 2026-07-28
+
+### Changed
+- Fix mobile caching, overflow, tight pages, and two fabricated privacy contacts (#89)
+
+## [0.16.2] - 2026-07-28
+
+### Changed
+- Stop icons filling the width on mobile, which also un-centred the page (#88)
+
+## [0.16.1] - 2026-07-28
+
+### Changed
+- Make the header and overview usable on a phone (#86)
+- Pin the MCP Host allowlist instead of disabling the rebinding check (#87)
+
+## [0.16.0] - 2026-07-28
+
+### Changed
+- Tell an agent about the tools it actually has (#85)
+- Explain what the hub is for, without taking over the dataset list (#84)
+
+## [0.15.1] - 2026-07-28
+
+### Changed
+- Make Cancel on the publish dialog actually cancel (#83)
+
+## [0.15.0] - 2026-07-28
+
+### Changed
+- Count each user's authored specs in the admin directory (#82)
+- Let an agent populate data and build specs, not just replace whole datasets (#81)
+- Correct a comment claiming ValidationResult is truthy when invalid (#80)
+
+## [0.14.5] - 2026-07-28
+
+### Changed
+- Report what is missing when an agent saves, from the spec's own rules (#79)
+
+## [0.14.4] - 2026-07-28
+
+### Changed
+- Let a script authenticate to the API with a token, not only a browser session (#78)
+
+## [0.14.3] - 2026-07-28
+
+### Changed
+- Bound what an agent can destroy through the MCP endpoint (#77)
+
+## [0.14.2] - 2026-07-28
+
+### Changed
+- Make the MCP endpoint reachable at the address it is documented as (#76)
+
+## [0.14.1] - 2026-07-28
+
+### Changed
+- Serve MCP at /hub/mcp so an agent can work as one hub user (#75)
+- Let a dataset be created from a published spec at all (#74)
+- Accept the unpublish form's CSRF token so the button can work (#73)
+
+## [0.14.0] - 2026-07-28
+
+### Changed
+- Make publishing share a spec with every user, as it always claimed to (#72)
+- Stop a spec vanishing from its author when a shared draft is published (#71)
+- Let an admin remove content published or created by mistake (#70)
+- Match pre-commit ruff to the locked version so it stops undoing the lint gate (#69)
+- Run the migrations in the suite so a broken one cannot stay green (#68)
+- Let a spec published by mistake be withdrawn to a private draft (#67)
+- Say what an import failure was, not just that it failed (#66)
 
 ## [0.13.0] - 2026-07-27
 
 ### Changed
-- Consume metaseed 0.19.0, where a PRIDE import is a tree.
-
-### Fixed
-- An import that found nothing is refused rather than reported as success.
+- Consume metaseed 0.19.0, where a PRIDE import is a tree
+- Refuse an import that found nothing instead of reporting success
 
 ## [0.12.0] - 2026-07-27
 
-### Added
-- An empty dataset can be filled from the repository its profile came from.
+### Changed
+- Let a user fill an empty dataset from the repository its profile came from
 
 ## [0.11.0] - 2026-07-27
 
 ### Changed
-- Consume metaseed 0.18.0 with the `dcat` extra, so the DCAT record is offered.
+- Consume metaseed 0.18.0, with the dcat extra so the record is offered
 
 ## [0.10.0] - 2026-07-27
 
-### Added
-- Unhandled errors are recorded and shown in the admin dashboard, along with
-  per-user dataset counts and last sign-in.
-
-### Fixed
-- A spec-draft save that would overwrite a newer edit is refused, and a restore
-  that cannot change anything is no longer offered.
+### Changed
+- Record unhandled errors and show them in the admin dashboard
+- Refuse a spec-draft save that would overwrite a newer edit
+- Reformat entity_routes with the pinned ruff
+- Show per-user dataset counts and last sign-in to admins
+- Stop offering a restore that cannot change anything
 
 ## [0.9.0] - 2026-07-27
 
-### Added
-- Database backups on a timer with tiered retention.
-
 ### Changed
-- Datasets serialize via `MetaseedClient`, removing the duplicate serializer, and
-  entity rows write through the facade rather than only the cache.
+- Back up the database on a timer with tiered retention (#59)
+- Add_entity_node writes through the facade (#53 Phase 3.2)
+- Add-entity rows write through the facade, not just the cache (#53)
+- Revert #54 + add regression: cache-added rows must survive save
+- Revert "Merge pull request #54 from sorenwacker/phase2-serialize-via-client"
+- Serialize datasets via MetaseedClient, removing the duplicate serializer
+- Lock the two dataset serializers to one compatible format (#51)
+- Remove dead params/guards and tighten types from review appendix
+- Clear editing pointers when a spec draft is reset
+- Store role and status enums by value, consistent with reactions
+- Validate dataset name in the REST create/update endpoints
+- Surface malformed constraint input as a form error, not a 500
+- …and 17 further changes; see git history.
 
 ## [0.8.0] - 2026-07-25
 
-### Added
-- An app-wide CSRF guard, a SAST gate, and self-hosted JS; spec-builder CSRF gaps
-  from a second review closed.
+### Changed
+- Security best practices: app-wide CSRF guard, SAST gate, self-hosted JS (#31)
+- Close spec-builder CSRF gaps from the second review (#30)
 
 ## [0.7.0] - 2026-07-25
 
 ### Changed
-- Security review hardening.
+- Security review hardening (#29)
 
-## [0.6.0] – [0.6.1] - 2026-07-25
+## [0.6.1] - 2026-07-25
 
-### Added
-- metaseed adapter exports surfaced in the dataset UI (requires metaseed
-  >= 0.16.0), with a browser end-to-end test.
+### Changed
+- Browser E2E for adapter export + advisory selenium CI job (#28)
+
+## [0.6.0] - 2026-07-25
+
+### Changed
+- Surface metaseed adapter exports in the dataset UI; require metaseed>=0.16.0 (#27)
 
 ## [0.5.0] - 2026-07-24
 
-The first release after the changelog fell out of maintenance; it carries a
-month of work. See git history between `v0.4.x` and `v0.5.0` for the full
-detail.
+### Changed
+- Deps: depend on metaseed from PyPI instead of a git pin (#26)
+- Bump pyasn1 from 0.6.3 to 0.6.4 (#24)
+- Add the Apache 2.0 LICENSE the README already advertises
+- Bump mcp from 1.27.1 to 1.28.1 (#21)
 
 ## [0.4.65] - 2026-06-23
 
@@ -239,6 +324,14 @@ detail.
 - Routed tenant/user provisioning, page rendering, and form coercion through their canonical helpers
 - Removed dead auth, config, and form surface
 
+## [0.4.59] - 2026-06-16
+
+### Changed
+- Remove tenant from admin dashboard as it is not a relevant monitoring axis
+- Request eduperson_entitlement and offline_access scopes so SRAM releases admin group membership
+- Bump cryptography from 48.0.0 to 48.0.1 (#13)
+- Bump pyjwt from 2.12.1 to 2.13.0 (#12)
+
 ## [0.4.58] - 2026-06-15
 
 ### Added
@@ -251,6 +344,11 @@ detail.
 
 ### Changed
 - Updated metaseed to v0.8.1
+
+## [0.4.55] - 2026-06-10
+
+### Changed
+- Add changelog
 
 ## [0.4.53] - 2026-06-10
 
@@ -385,3 +483,425 @@ detail.
 
 ### Changed
 - Initial metaseed integration (v0.2.0-0.2.4)
+## [0.4.49] - 2026-06-08
+
+### Changed
+- Pin metaseed to v0.7.4
+
+## [0.4.48] - 2026-06-08
+
+### Changed
+- Add contract tests for metaseed serialize() JSON output
+- Update metaseed to main branch with JSON serialization fix
+
+## [0.4.47] - 2026-06-08
+
+### Changed
+- Handle Pydantic URL types in JSON serialization
+
+## [0.4.46] - 2026-06-08
+
+### Changed
+- Serialize date objects to ISO strings before JSONB storage
+
+## [0.4.45] - 2026-06-08
+
+### Changed
+- Spec export download and session timeout
+- Bump starlette from 1.0.0 to 1.0.1 (#11)
+
+## [0.4.44] - 2026-06-04
+
+### Changed
+- Hide admin button until SRAM configured
+
+## [0.4.43] - 2026-06-04
+
+### Changed
+- Widen profile page for long SRAM entitlements
+
+## [0.4.42] - 2026-06-04
+
+### Changed
+- Request eduperson_entitlement scope from SRAM
+
+## [0.4.41] - 2026-06-04
+
+### Changed
+- Show version on login page
+
+## [0.4.40] - 2026-06-04
+
+### Changed
+- Add admin_role to Settings for pydantic validation
+
+## [0.4.39] - 2026-06-04
+
+### Changed
+- Add SRAM admin role configuration
+- Update metaseed to v0.7.0
+- Add comment pagination and compact UI improvements
+
+## [0.4.38] - 2026-06-01
+
+### Changed
+- Modal dialog text colors and input styling
+
+## [0.4.37] - 2026-06-01
+
+### Changed
+- Add text color to modal dialog
+- Redirect to home after dataset delete
+- Add field reordering, ontology demo spec, single-select ontology fix
+- Use MetaseedClient.load() in ensure_dataset_facade for graph
+- Migrate to MetaseedClient public API
+
+## [0.4.36] - 2026-05-28
+
+### Changed
+- Remove global dataset_states cache, always load from DB
+
+## [0.4.35] - 2026-05-28
+
+### Changed
+- Upgrade metaseed to v0.3.9
+
+## [0.4.34] - 2026-05-28
+
+### Changed
+- Debug: add logging to add_table_row and check for null facade
+- Skip 'Field required' warning for nested fields with partial data
+- Use cached state for draft specs to preserve in-memory changes
+- Debug: add logging to single entity field save flow
+- Preserve nested entity values when saving main form
+
+## [0.4.33] - 2026-05-28
+
+### Changed
+- Merge single entity field values instead of replacing
+
+## [0.4.32] - 2026-05-28
+
+### Changed
+- Don't auto-fill reference fields with random UUIDs
+
+## [0.4.31] - 2026-05-28
+
+### Changed
+- Ignore tests requiring PostgreSQL
+
+## [0.4.30] - 2026-05-28
+
+### Changed
+- Skip validation on entity save, show warnings instead
+
+## [0.4.29] - 2026-05-28
+
+### Changed
+- Add comprehensive error handling to entity save flow
+
+## [0.4.28] - 2026-05-28
+
+### Changed
+- Always use model_construct to skip validation on entity save
+
+## [0.4.27] - 2026-05-28
+
+### Changed
+- Remove dead code, simplify entity save flow
+
+## [0.4.26] - 2026-05-28
+
+### Changed
+- Allow saving entities without required nested entities
+
+## [0.4.25] - 2026-05-28
+
+### Changed
+- Debug: add logging to deserialize_tree to trace entity loading
+
+## [0.4.24] - 2026-05-28
+
+### Changed
+- Verify entities with validation errors still appear in sidebar
+
+## [0.4.23] - 2026-05-28
+
+### Changed
+- Preserve entities even when validation fails during deserialization
+
+## [0.4.22] - 2026-05-28
+
+### Changed
+- Disable cache for draft specs and improve error handling
+
+## [0.4.21] - 2026-05-28
+
+### Changed
+- Ensure draft specs are loaded for all dataset operations
+- Load draft specs from database for dataset mutations
+
+## [0.4.20] - 2026-05-28
+
+### Changed
+- Serialize spec enums as strings in YAML export
+
+## [0.4.19] - 2026-05-28
+
+### Changed
+- Add YAML copy button, show shared specs in Create Dataset
+
+## [0.4.18] - 2026-05-28
+
+### Changed
+- Use metaseed OntologyService for OLS lookups
+- Add GitHub issues link to footer
+
+## [0.4.17] - 2026-05-28
+
+### Changed
+- Grant dataset access via DatasetMember sharing
+
+## [0.4.16] - 2026-05-28
+
+### Changed
+- Add comprehensive RBAC tests for datasets and specs
+- Show shared datasets on home page, add tests
+
+## [0.4.15] - 2026-05-28
+
+### Changed
+- Add test for home page showing shared specs
+- Add OLS ontology API and fix shared specs visibility
+
+## [0.4.14] - 2026-05-26
+
+### Changed
+- Extract auth dependency and add type aliases
+
+## [0.4.13] - 2026-05-26
+
+### Changed
+- Split spec_builder router.py into focused route modules
+
+## [0.4.12] - 2026-05-26
+
+### Changed
+- Handle None values for description and root_entity in dict_to_spec
+
+## [0.4.11] - 2026-05-26
+
+### Changed
+- Remove stale keycloak_id lookups in spec_builder_list and edit_draft
+- Make user ID handling robust and consistent
+- Owned_drafts query to use users.id not keycloak_id
+
+## [0.4.10] - 2026-05-26
+
+### Changed
+- Add comprehensive spec draft sharing tests
+
+## [0.4.9] - 2026-05-26
+
+### Changed
+- Shared drafts query filter by tenant, add sharing tests
+
+## [0.4.8] - 2026-05-26
+
+### Changed
+- Filter owner query by tenant, show disabled dropdown for owner
+
+## [0.4.7] - 2026-05-26
+
+### Changed
+- Show owner in sharing panel even if User record not found
+
+## [0.4.6] - 2026-05-26
+
+### Changed
+- Include shared drafts in explorer
+
+## [0.4.5] - 2026-05-26
+
+### Changed
+- Use display_name from spec_data in explorer
+
+## [0.4.4] - 2026-05-26
+
+### Changed
+- Show shared spec drafts to members, allow member access
+- Improve sharing UI, add docs link, fix sidebar tabs
+- Upgrade metaseed to v0.3.7
+- Add user to spec_builder render context for navbar avatar
+
+## [0.4.3] - 2026-05-26
+
+### Changed
+- Show user initials in circle avatar in navbar
+
+## [0.4.2] - 2026-05-26
+
+### Changed
+- Add user profile page showing SRAM info
+- Show error when sharing with user who hasn't logged in yet
+- Pin metaseed to v0.3.3
+- Ensure redirect works after dataset delete
+- Add profile/version selection to dataset import
+- Add New Dataset button to empty state
+- Remove Edit Specification button from published spec view
+- Improve delete error handling with toast notifications
+- Manually cascade delete dataset relations
+- Refresh root type buttons on entity create/delete
+- Clear state cache on dataset delete
+
+## [0.4.1] - 2026-05-21
+
+### Changed
+- Add delete button to dataset sidebar
+
+## [0.4.0] - 2026-05-21
+
+### Changed
+- Upgrade metaseed to latest main (0.3.3.dev11)
+- Add state caching tests to prevent data loss regression
+- Use cached state in ensure_dataset_facade to prevent data loss on save
+- Add detailed git-style diff view for version history
+- Use tabs for overview (History, Comments, Sharing)
+- Overview route returns full overview content with version history
+- Move history to overview page with diffs, comments/sharing to collapsibles
+- Add auto-versioning for datasets on save
+- Remove template export feature
+- Add import button to dataset page for updating existing datasets
+- Add Excel template export/import workflow
+- Add threaded comments with reactions to datasets and specs
+- …and 15 further changes; see git history.
+
+## [0.3.11] - 2026-05-12
+
+### Changed
+- Add toast notification styles for save messages
+
+## [0.3.10] - 2026-05-12
+
+### Changed
+- Add YAML spec import and fix explore page spec loading
+
+## [0.3.9] - 2026-05-12
+
+### Changed
+- Show version footer on login page
+
+## [0.3.8] - 2026-05-12
+
+### Changed
+- Add prompt=consent for offline_access scope
+
+## [0.3.7] - 2026-05-12
+
+### Changed
+- Add refresh token support for longer sessions
+- Bump urllib3 from 2.6.3 to 2.7.0 (#6)
+
+## [0.3.6] - 2026-05-11
+
+### Changed
+- Update metaseed to v0.2.4
+- Use ensure_project_facade in all project routes
+- Load spec before deserializing tree
+- Handle SpecBuilderState format in spec_data
+- Support user-defined specs for projects
+- Show actual error messages in explorer
+
+## [0.3.5] - 2026-05-11
+
+### Changed
+- Show user drafts and published specs in explorer
+- Use fixed height viewport for erd-layout pages
+- Make erd-layout fill vertical space with flex
+- Add erd-layout to full-page layout handling
+- Add smoke tests for explorer and static assets
+- Install all extras in CI for dev dependencies
+- Include metaseed CSS for explorer layout styles
+- Correct erd-common.js path in explorer template
+
+## [0.3.4] - 2026-05-08
+
+### Changed
+- Reinstall package on deploy for clean version
+- Fetch tags in deploy script for clean versions
+- Use base.html for chat and explore pages
+- Update metaseed to v0.2.3, removes vulnerable deps
+- Update metaseed to v0.2.2
+- Reduce code duplication in UI routes and helpers
+- Correct health check URL and add version to response
+- Allow systemctl status with flags in sudoers
+
+## [0.3.3] - 2026-05-07
+
+### Changed
+- Add import/export and single entity field support
+
+## [0.3.2] - 2026-05-07
+
+### Changed
+- Pin metaseed to v0.2.0
+
+## [0.3.1] - 2026-05-07
+
+### Changed
+- Improve workspace and project UI styling
+- Force git fetch to handle tag conflicts
+- Improve deploy script robustness and error handling
+- Bump python-multipart from 0.0.26 to 0.0.27 (#5)
+- Bump mako from 1.3.11 to 1.3.12 (#4)
+
+## [0.3.0] - 2026-05-06
+
+### Changed
+- Add workspace members and spec draft integration
+- Add Explorer tool and dark header navigation
+- Add delete button for spec drafts
+- Use window.entities instead of const for spec builder
+- Use calc height for layouts and make version text visible
+- Use height 100% for full-page layouts
+- Make hub-main a flex container for full-page layouts
+- Add version_info to spec builder templates
+- Use flex layout instead of fixed height for full-page layouts
+- Move footer inside hub-layout so it's visible
+- Host vis-network locally instead of CDN
+- Include commit info in version display
+
+## [0.2.0] - 2026-05-04
+
+### Changed
+- Use git reset instead of pull in deploy script
+- Add /version endpoint
+- Add version_info to shared render_template
+- Add CI/CD badges to README
+- Ignore database tests in CI, add live link to README
+- Display package version in footer
+- Update test imports for serialize/deserialize_tree
+- Clean up README
+- Consolidate UI code and add security hardening
+- Remove unused valid_count variable
+- Remove debug logging
+- Use metaseed's build_graph for proper ISA relationship visualization
+- …and 90 further changes; see git history.
+
+## [0.1.0] - 2026-05-01
+
+### Changed
+- UI improvements and infrastructure hardening
+- Look for examples in /app/examples on server
+- Add load example data button and make delete button visible
+- Use alias for csrf_token form field
+- Accept CSRF token from form data in addition to header
+- Remove debug logging
+- Support all OIDC signing algorithms from discovery
+- Debug: add token verification error logging
+- Debug: add token exchange error logging
+- Use OIDC discovery for auth endpoints
+- Use generic OIDC instead of Keycloak-specific auth
+- Ignore app user home files
+- …and 55 further changes; see git history.
+
