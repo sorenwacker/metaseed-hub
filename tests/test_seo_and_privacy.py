@@ -34,7 +34,13 @@ def test_robots_txt_is_served() -> None:
 
     assert resp.status_code == 200
     assert "User-agent:" in resp.text
-    assert "/hub/matomo/" in resp.text  # tracker kept out of the index
+    # The tracker must be kept out of the index at the path it is actually
+    # served from. Derived from the setting rather than pinned as a literal, so
+    # moving the tracker cannot leave robots.txt disallowing a dead path (it
+    # previously named /hub/matomo/, which 404s).
+    from metaseed_hub.config import Settings
+
+    assert f"Disallow: {Settings().matomo_url}" in resp.text
 
 
 def test_privacy_discloses_analytics() -> None:

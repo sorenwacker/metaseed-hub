@@ -136,10 +136,10 @@ def create_app() -> FastAPI:
     @app.get("/robots.txt", include_in_schema=False)
     async def robots() -> PlainTextResponse:
         # The app is behind login, so crawlers only ever reach the landing page.
-        # Keep the analytics tracker and API out of any index.
-        return PlainTextResponse(
-            "User-agent: *\nDisallow: /api/\nDisallow: /hub/matomo/\nAllow: /\n"
-        )
+        # Keep the analytics tracker and API out of any index. The tracker is
+        # served at /matomo/ (nginx proxies matomo.php and matomo.js there), not
+        # under /hub/, so the disallow has to name the path that actually exists.
+        return PlainTextResponse("User-agent: *\nDisallow: /api/\nDisallow: /matomo/\nAllow: /\n")
 
     @app.get("/")
     async def root() -> RedirectResponse:
