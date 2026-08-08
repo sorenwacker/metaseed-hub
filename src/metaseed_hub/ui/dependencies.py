@@ -20,6 +20,8 @@ from metaseed_hub.ui.helpers import (
 from metaseed_hub.ui.helpers.load_report import BROWSER_WAY_THROUGH, unloadable_node_refusal
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from metaseed import SkippedNode
 
     from metaseed_hub.ui.metaseed_ui import AppState
@@ -411,3 +413,46 @@ async def get_dataset_state_for_mutation(
         )
 
     return dataset, state
+
+
+def require_feature(feature: str) -> "Callable[..., Awaitable[TokenUser]]":
+    """Require that the signed-in user has been granted ``feature``.
+
+    Refuses with 404 rather than 403: a feature someone may not use should not
+    advertise that it exists. A 403 tells an unentitled user exactly which
+    capabilities are worth asking about, which for a beta flag is the opposite
+    of the point.
+
+    Args:
+        feature: The feature name, matching a row in ``feature_grants``.
+
+    Returns:
+        A dependency yielding the user, so a route can take it in place of
+        ``require_user`` rather than in addition to it.
+    """
+
+    async def guard(
+        user: Annotated[TokenUser, Depends(require_user)],
+        session: DbSession,
+    ) -> TokenUser:
+        from metaseed_hub.features import has_feature
+
+        if not await has_feature(feature, user.entitlements, session):
+            raise HTTPException(status_code=404)
+        return user
+
+    return guard
+
+
+async def user_features(request: Request, session: AsyncSession) -> set[str]:
+    """Every feature the current visitor may use, for hiding what they cannot reach.
+
+    Returns an empty set for an anonymous visitor rather than raising, because a
+    template asks this to decide whether to draw a link, not to authorize.
+    """
+    from metaseed_hub.features import enabled_features
+
+    user = await get_current_user_from_cookie(request)
+    if user is None:
+        return set()
+    return await enabled_features(user.entitlements, session)

@@ -10,13 +10,11 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
+from metaseed_hub.auth import TokenUser
 from metaseed_hub.entitlements import SRAM_GROUP_PREFIX
-from metaseed_hub.features import (
-    enabled_features,
-    has_feature,
-    require_feature,
-)
+from metaseed_hub.features import enabled_features, has_feature
 from metaseed_hub.models import FeatureGrant
+from metaseed_hub.ui.dependencies import require_feature
 
 TESTERS = f"{SRAM_GROUP_PREFIX}tudelft:metaseed:beta-testers"
 OWNER = f"{SRAM_GROUP_PREFIX}tudelft:metaseed:owner"
@@ -69,15 +67,22 @@ class TestResolvingFeatures:
 
 
 class TestTheRouteGuard:
-    async def test_an_entitled_user_passes(self, session) -> None:
+    """The dependency a route takes in place of ``require_user``."""
+
+    def _user(self, *urns: str) -> TokenUser:
+        return TokenUser(
+            sub="s", email="e@example.org", name="n", roles=[], entitlements=list(urns)
+        )
+
+    async def test_an_entitled_user_passes_through(self, session) -> None:
         await _grant(session, "seek", TESTERS)
         guard = require_feature("seek")
-        assert await guard(_entitlements(TESTERS), session) is not None
+        assert await guard(self._user(TESTERS), session) is not None
 
     async def test_an_unentitled_user_is_refused(self, session) -> None:
         guard = require_feature("seek")
         with pytest.raises(HTTPException) as raised:
-            await guard(_entitlements(TESTERS), session)
+            await guard(self._user(TESTERS), session)
         # 404 rather than 403: a feature someone may not use should not
         # advertise that it exists, which is the point of a beta flag.
         assert raised.value.status_code == 404
@@ -86,4 +91,16 @@ class TestTheRouteGuard:
         await _grant(session, "restore", TESTERS)
         guard = require_feature("seek")
         with pytest.raises(HTTPException):
-            await guard(_entitlements(TESTERS), session)
+            await guard(self._user(TESTERS), session)
+
+    async def test_entitlements_come_from_the_token_not_from_roles(self, session) -> None:
+        # `roles` carries a Keycloak realm role in dev and a SRAM group URN in
+        # production. Reading membership from it would behave differently per
+        # issuer, which is exactly what this design avoids.
+        await _grant(session, "seek", TESTERS)
+        misleading = TokenUser(
+            sub="s", email="e@example.org", name="n", roles=[TESTERS], entitlements=[]
+        )
+        guard = require_feature("seek")
+        with pytest.raises(HTTPException):
+            await guard(misleading, session)
