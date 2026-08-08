@@ -220,3 +220,92 @@ class TestDcatMarker:
         )
 
         assert ctx.spec.entities["Investigation"].fields[0].dcat is None
+
+
+class TestDcatIsGated:
+    """DCAT is a plugin, enabled per identity-provider group.
+
+    No fixture grants it here, so the editor sees a user with no features --
+    the same position a real user is in before anyone adds them to the group.
+    """
+
+    async def test_the_marker_is_not_saved_without_the_feature(self, session: AsyncSession) -> None:
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat="dct:issued"),
+        )
+
+        assert ctx.spec.entities["Investigation"].fields[0].dcat is None
+
+    async def test_the_rest_of_the_field_still_saves(self, session: AsyncSession) -> None:
+        # The gate skips one marker, not the whole edit.
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat="dct:issued", description="still saved"),
+        )
+
+        field = ctx.spec.entities["Investigation"].fields[0]
+        assert field.description == "still saved"
+        assert field.dcat is None
+
+    async def test_an_existing_marker_survives_losing_the_feature(
+        self, session: AsyncSession
+    ) -> None:
+        # Losing access should hide the field, not destroy what it held.
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        ctx.spec.entities["Investigation"].fields[0].dcat = "dct:issued"
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat=""),
+        )
+
+        assert ctx.spec.entities["Investigation"].fields[0].dcat == "dct:issued"
+
+    async def test_granting_it_lets_the_marker_through(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The mirror of the first test: same call, feature granted, saved.
+        async def _granted(*_args: object, **_kwargs: object) -> set[str]:
+            return {"dcat"}
+
+        monkeypatch.setattr(
+            "metaseed_hub.ui.spec_builder.routes.field_routes.user_features",
+            _granted,
+        )
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat="dct:issued"),
+        )
+
+        assert ctx.spec.entities["Investigation"].fields[0].dcat == "dct:issued"
