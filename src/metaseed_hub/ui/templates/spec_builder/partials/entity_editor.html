@@ -5,6 +5,9 @@
     {% if success %}
     <div class="alert alert-success">Saved</div>
     {% endif %}
+    {% if notice %}
+    <div class="alert alert-warning">{{ notice }}</div>
+    {% endif %}
 
     <!-- Entity metadata -->
     <div class="editor-section">

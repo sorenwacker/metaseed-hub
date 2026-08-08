@@ -284,6 +284,42 @@ class TestDcatIsGated:
 
         assert ctx.spec.entities["Investigation"].fields[0].dcat == "dct:issued"
 
+    async def test_the_user_is_told_the_value_was_not_saved(self, session: AsyncSession) -> None:
+        # The input cannot be hidden from the hub, so silence would leave the
+        # user typing into a box that does nothing.
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        response = await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat="dct:issued"),
+        )
+
+        assert "DCAT" in response.body.decode()
+
+    async def test_nothing_is_said_when_no_dcat_value_was_sent(self, session: AsyncSession) -> None:
+        # Someone who never touches the field should not be told about a plugin
+        # they were not trying to use.
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+
+        response = await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(dcat=""),
+        )
+
+        assert "not saved" not in response.body.decode()
+
     async def test_granting_it_lets_the_marker_through(
         self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
