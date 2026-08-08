@@ -399,6 +399,7 @@ def register_spec_tools(  # noqa: C901
         unit: str | None = None,
         label: str | None = None,
         tier: str | None = None,
+        isa_tag: str | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
 
@@ -448,6 +449,7 @@ def register_spec_tools(  # noqa: C901
             label: The human-readable name shown for the field.
             tier: How strongly the field is expected: required, recommended,
                 or optional.
+            isa_tag: The ISA tag the field carries into a SEEK Sample Type.
         """
         markers = _markers(
             {
@@ -463,6 +465,7 @@ def register_spec_tools(  # noqa: C901
                 "unit": unit,
                 "label": label,
                 "tier": tier,
+                "isa_tag": isa_tag,
             }
         )
         constraints = _constraints(
@@ -535,6 +538,7 @@ def register_spec_tools(  # noqa: C901
         unit: str | None = None,
         label: str | None = None,
         tier: str | None = None,
+        isa_tag: str | None = None,
         clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
@@ -604,6 +608,7 @@ def register_spec_tools(  # noqa: C901
                 "unit": unit,
                 "label": label,
                 "tier": tier,
+                "isa_tag": isa_tag,
             }
         )
         constraints = _constraint_values(
