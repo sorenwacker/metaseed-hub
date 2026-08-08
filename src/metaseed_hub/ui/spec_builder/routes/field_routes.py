@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.schema import FieldSpec, FieldType
 
+from metaseed_hub.ui.dependencies import user_features
 from metaseed_hub.ui.spec_builder.forms import FieldFormData
 from metaseed_hub.ui.spec_builder_helpers import validate_field_name
 
@@ -246,7 +247,13 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.parent_ref = form_data.parent_ref.strip() or None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
-        field.dcat = dcat.strip() or None
+        # Gated: DCAT is a plugin, enabled per identity-provider group. The
+        # check is here rather than only on the input, because a hidden control
+        # that still saves is not a gate -- a hand-rolled POST would bypass it.
+        # Leaving the stored value untouched (rather than clearing it) means
+        # losing the grant hides the field without destroying what it held.
+        if "dcat" in await user_features(request, session):
+            field.dcat = dcat.strip() or None
         # Whole-object replacement, deliberately, and not the merging path
         # ``SpecBuilder.update_field_constraints`` offers: the field form posts
         # every constraint input on every save, so an empty one means "cleared",

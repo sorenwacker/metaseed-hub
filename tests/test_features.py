@@ -104,3 +104,35 @@ class TestTheRouteGuard:
         guard = require_feature("seek")
         with pytest.raises(HTTPException):
             await guard(misleading, session)
+
+
+class TestGatingIsEnforcedNotJustHidden:
+    """A hidden control that still saves is not a gate.
+
+    The DCAT input is rendered by a template metaseed and the hub share, so it
+    cannot be hidden from the hub alone. The enforcement therefore has to be on
+    the write, where a hand-rolled POST meets it too.
+    """
+
+    async def test_the_write_path_asks_about_the_feature(self) -> None:
+        import inspect
+
+        from metaseed_hub.ui.spec_builder.routes import field_routes
+
+        source = inspect.getsource(field_routes)
+        assignment = "field.dcat = dcat.strip() or None"
+        assert assignment in source, "the DCAT assignment moved; re-check the gate"
+        guarded = source.split(assignment)[0].rsplit("\n", 3)[-3:]
+        assert any("user_features" in line for line in guarded), (
+            "field.dcat is written without checking the dcat feature first"
+        )
+
+    async def test_losing_the_grant_hides_rather_than_destroys(self) -> None:
+        # The gate skips the write; it does not null the column. Someone who
+        # loses access should not lose the data they already curated.
+        import inspect
+
+        from metaseed_hub.ui.spec_builder.routes import field_routes
+
+        source = inspect.getsource(field_routes)
+        assert "field.dcat = None" not in source
