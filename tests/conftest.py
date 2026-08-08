@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -17,9 +18,9 @@ from metaseed_hub.models import Base
 def _test_database_url() -> str:
     """The database every fixture in this run should touch.
 
-    Overridable so parallel test runs can use separate databases; the session
-    fixture drops and recreates every table, so two runs sharing one database
-    deadlock.
+    Overridable so parallel test runs can use separate databases: the schema is
+    created once per run and every table is emptied between tests, so two runs
+    sharing one database would clear each other's data.
 
     Returns:
         A SQLAlchemy async URL.
@@ -30,32 +31,51 @@ def _test_database_url() -> str:
     )
 
 
+_schema_created = False
+
+
 @pytest_asyncio.fixture
 async def session() -> AsyncGenerator[AsyncSession, None]:
-    """Create a database session with automatic rollback.
+    """A database session, with every table emptied afterwards.
 
-    Creates tables before each test and rolls back after.
+    The schema is built once per run rather than per test. Rebuilding it each
+    time was most of the suite's runtime, and left a worse problem behind: a
+    killed run's connections keep holding locks, so the next run's ``drop_all``
+    blocks rather than failing. That looks like a hang and is hard to place.
+
+    Emptied rather than rolled back, because the ``server`` fixture connects
+    separately and its tools open their own sessions -- a test's data has to be
+    committed to be visible to them.
 
     Yields:
         AsyncSession for database operations.
     """
+    global _schema_created
+
     engine = create_async_engine(_test_database_url(), echo=False)
+    if not _schema_created:
+        async with engine.begin() as conn:
+            # A killed run leaves connections behind that keep holding locks, so
+            # drop_all blocks forever instead of failing. Clear them first: this
+            # is a test database, and anything still attached to it is a corpse.
+            await conn.execute(
+                text(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND pid <> pg_backend_pid()"
+                )
+            )
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+        _schema_created = True
 
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    # Create session
     async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
-
     async with async_session_maker() as session:
         yield session
 
-    # Cleanup
+    tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
+        await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     await engine.dispose()
 
 
