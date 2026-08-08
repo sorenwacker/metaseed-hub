@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi import APIRouter, Request
 from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,7 +121,22 @@ async def _context(
 
 
 class TestDcatMarker:
-    """The DCAT property marker, set and re-read through the field editor."""
+    """The DCAT property marker, set and re-read through the field editor.
+
+    DCAT is a gated plugin, so the editor only writes the marker for a user
+    whose group has been granted it. These tests are about the marker, so they
+    grant it and let tests/test_features.py cover the gate itself.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _granted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def _all_features(*_args: object, **_kwargs: object) -> set[str]:
+            return {"dcat"}
+
+        monkeypatch.setattr(
+            "metaseed_hub.ui.spec_builder.routes.field_routes.user_features",
+            _all_features,
+        )
 
     async def test_setting_the_marker_stores_it_on_the_field(self, session: AsyncSession) -> None:
         draft, tenant, owner = await _owned_draft(session)
