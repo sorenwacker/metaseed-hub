@@ -16,7 +16,10 @@ neither Keycloak nor SRAM models "feature X enabled".
 
 from __future__ import annotations
 
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 #: The prefix every SRAM group entitlement carries. An identity provider may
 #: also send entitlements that have nothing to do with group membership, so the
@@ -40,11 +43,13 @@ class SramGroup(NamedTuple):
     group: str
 
 
-def group_urns(claims: dict[str, Any] | None) -> list[str]:
-    """The SRAM group URNs in ``claims``, in the order the IdP sent them.
+def group_urns(entitlements: Iterable[str] | None) -> list[str]:
+    """The SRAM group URNs among ``entitlements``, in the order given.
 
     Args:
-        claims: Decoded ID-token claims, or ``None`` when unauthenticated.
+        entitlements: The raw ``eduperson_entitlement`` values from a verified
+            token (:attr:`metaseed_hub.auth.TokenUser.entitlements`), or
+            ``None`` when unauthenticated.
 
     Returns:
         Every entitlement carrying :data:`SRAM_GROUP_PREFIX`. Entitlements that
@@ -52,14 +57,12 @@ def group_urns(claims: dict[str, Any] | None) -> list[str]:
         free to send others, and rejecting them would break login for a reason
         that has nothing to do with this feature.
     """
-    if not claims:
+    if not entitlements:
         return []
-    raw = claims.get(ENTITLEMENT_CLAIM) or []
-    if isinstance(raw, str):
-        # A single-valued claim arrives as a string rather than a list.
-        raw = [raw]
     return [
-        value for value in raw if isinstance(value, str) and value.startswith(SRAM_GROUP_PREFIX)
+        value
+        for value in entitlements
+        if isinstance(value, str) and value.startswith(SRAM_GROUP_PREFIX)
     ]
 
 
@@ -80,14 +83,14 @@ def parse_group(urn: str) -> SramGroup | None:
     return SramGroup(urn, organisation, collaboration, group)
 
 
-def groups(claims: dict[str, Any] | None) -> list[SramGroup]:
-    """Every well-formed SRAM group in ``claims``.
+def groups(entitlements: Iterable[str] | None) -> list[SramGroup]:
+    """Every well-formed SRAM group among ``entitlements``.
 
     A URN carrying the prefix but not the three expected parts is dropped, so a
     malformed entitlement cannot become a group that no grant will ever match
     while looking like one in the UI.
     """
-    parsed = (parse_group(urn) for urn in group_urns(claims))
+    parsed = (parse_group(urn) for urn in group_urns(entitlements))
     return [group for group in parsed if group is not None]
 
 
@@ -101,14 +104,14 @@ def collaboration_urn(group: SramGroup) -> str:
     return f"{SRAM_GROUP_PREFIX}{group.organisation}:{group.collaboration}"
 
 
-def entitled_urns(claims: dict[str, Any] | None) -> set[str]:
+def entitled_urns(entitlements: Iterable[str] | None) -> set[str]:
     """Everything a grant may be matched against for this user.
 
     Each group contributes both its own URN and its collaboration's, so a grant
     can be written at either level and matched by plain set membership.
     """
     urns: set[str] = set()
-    for group in groups(claims):
+    for group in groups(entitlements):
         urns.add(group.urn)
         urns.add(collaboration_urn(group))
     return urns

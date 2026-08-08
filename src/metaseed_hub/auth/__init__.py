@@ -1,6 +1,7 @@
 """OIDC authentication integration (supports Keycloak, SRAM, and other providers)."""
 
 from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Annotated, Any
 
 import httpx
@@ -24,11 +25,29 @@ class TokenUser:
     email: str
     name: str
     roles: list[str]
+    # Group membership as the identity provider states it, always from
+    # ``eduperson_entitlement`` and never from ``roles`` -- ``roles`` means a
+    # Keycloak realm role in development and a SRAM group URN in production, so
+    # anything reading it behaves differently per issuer. Read per request from
+    # the verified token rather than stored, so it cannot go stale.
+    entitlements: list[str] = dc_field(default_factory=list)
 
     @property
     def keycloak_id(self) -> str:
         """Alias for backwards compatibility."""
         return self.sub
+
+
+def _entitlement_list(payload: dict[str, Any]) -> list[str]:
+    """``eduperson_entitlement`` as a list, whatever shape the IdP sent.
+
+    A single-valued claim arrives as a bare string rather than a list, and an
+    IdP may omit it entirely.
+    """
+    raw = payload.get("eduperson_entitlement") or []
+    if isinstance(raw, str):
+        return [raw]
+    return [value for value in raw if isinstance(value, str)]
 
 
 class OIDCAuth:
@@ -178,6 +197,7 @@ class OIDCAuth:
                 email=payload.get("email", ""),
                 name=payload.get("name", payload.get("preferred_username", "")),
                 roles=roles,
+                entitlements=_entitlement_list(payload),
             )
 
         except JWTError as e:
