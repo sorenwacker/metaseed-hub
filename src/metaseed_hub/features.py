@@ -11,7 +11,7 @@ template helper can never disagree about what a user may see.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -20,23 +20,24 @@ from metaseed_hub.entitlements import entitled_urns
 from metaseed_hub.models import FeatureGrant
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Iterable
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def enabled_features(claims: dict[str, Any] | None, session: AsyncSession) -> set[str]:
-    """Every feature the holder of ``claims`` may use.
+async def enabled_features(entitlements: Iterable[str] | None, session: AsyncSession) -> set[str]:
+    """Every feature the holder of ``entitlements`` may use.
 
     Args:
-        claims: Decoded ID-token claims, or ``None`` when unauthenticated.
+        entitlements: The raw ``eduperson_entitlement`` values from a verified
+            token (``TokenUser.entitlements``), or ``None`` when unauthenticated.
         session: Database session for reading the grants.
 
     Returns:
         Feature names. Empty when the user is in no group, which is the default
         for everybody: a feature is off until some group is granted it.
     """
-    urns = entitled_urns(claims)
+    urns = entitled_urns(entitlements)
     if not urns:
         # No group can match a grant, and asking the database would be a query
         # whose answer is already known.
@@ -47,14 +48,16 @@ async def enabled_features(claims: dict[str, Any] | None, session: AsyncSession)
     return set(result.scalars().all())
 
 
-async def has_feature(feature: str, claims: dict[str, Any] | None, session: AsyncSession) -> bool:
-    """Whether the holder of ``claims`` may use ``feature``."""
-    return feature in await enabled_features(claims, session)
+async def has_feature(
+    feature: str, entitlements: Iterable[str] | None, session: AsyncSession
+) -> bool:
+    """Whether the holder of ``entitlements`` may use ``feature``."""
+    return feature in await enabled_features(entitlements, session)
 
 
 def require_feature(
     feature: str,
-) -> Callable[[dict[str, Any] | None, AsyncSession], Awaitable[dict[str, Any] | None]]:
+) -> Callable[[Iterable[str] | None, AsyncSession], Awaitable[Iterable[str] | None]]:
     """A dependency admitting only users granted ``feature``.
 
     Refuses with 404 rather than 403: a feature someone may not use should not
@@ -63,9 +66,11 @@ def require_feature(
     opposite of what the flag is for.
     """
 
-    async def guard(claims: dict[str, Any] | None, session: AsyncSession) -> dict[str, Any] | None:
-        if not await has_feature(feature, claims, session):
+    async def guard(
+        entitlements: Iterable[str] | None, session: AsyncSession
+    ) -> Iterable[str] | None:
+        if not await has_feature(feature, entitlements, session):
             raise HTTPException(status_code=404)
-        return claims
+        return entitlements
 
     return guard
