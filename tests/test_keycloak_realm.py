@@ -82,8 +82,10 @@ class TestTheGroups:
 
 
 class TestTheDevUser:
-    def test_the_demo_user_is_in_every_group(self, realm: dict) -> None:
+    def test_the_demo_user_is_in_every_group_except_admin(self, realm: dict) -> None:
         # A fresh dev environment should be able to see every gated feature
-        # without anyone hand-editing Keycloak first.
+        # without anyone hand-editing Keycloak first -- but seeing features and
+        # administering the hub are different privileges, so demo is not admin.
         demo = next(u for u in realm["users"] if u["username"] == "demo")
-        assert set(demo.get("groups", [])) == {f"/{g['name']}" for g in realm["groups"]}
+        expected = {f"/{g['name']}" for g in realm["groups"] if not g["name"].endswith(":admin")}
+        assert set(demo.get("groups", [])) == expected

@@ -32,19 +32,22 @@ def _user(roles: list[str] | None = None, entitlements: list[str] | None = None)
     )
 
 
-class TestRealmRoleAdmin:
-    def test_the_keycloak_admin_role_grants_admin(self) -> None:
-        assert is_admin(_user(roles=["admin"]))
+class TestRealmRolesGrantNothing:
+    def test_the_keycloak_admin_realm_role_does_not_grant_admin(self) -> None:
+        # Realm roles exist only in the dev Keycloak; an admin path through
+        # them would be a door that exists in development and not production.
+        # Dev admin is membership of the admin group, like everywhere else.
+        assert not is_admin(_user(roles=["admin"]))
 
-    def test_an_ordinary_realm_role_does_not(self) -> None:
-        assert not is_admin(_user(roles=["user", "offline_access"]))
+    def test_no_realm_role_does(self) -> None:
+        assert not is_admin(_user(roles=["user", "offline_access", "admin"]))
 
 
 class TestSramGroupAdmin:
     def test_an_admin_group_grants_admin(self) -> None:
         assert is_admin(_user(entitlements=["urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"]))
 
-    def test_it_grants_admin_even_when_realm_roles_are_present(self) -> None:
+    def test_it_grants_admin_whatever_realm_roles_say(self) -> None:
         # The old fallback read entitlements only when roles was empty, so an
         # SRAM admin stopped being one the moment the IdP added any realm role.
         assert is_admin(
@@ -94,10 +97,25 @@ class TestUrnConfiguredAdmin:
     def test_the_configured_group_grants_admin(self) -> None:
         assert is_admin(_user(entitlements=[self.URN]))
 
-    def test_the_bare_realm_role_no_longer_does(self) -> None:
-        # When admin is a specific group, a realm role named "admin" from some
-        # other realm configuration must not be an alternative road in.
+    def test_the_bare_realm_role_does_not(self) -> None:
         assert not is_admin(_user(roles=["admin"]))
 
     def test_the_urn_in_roles_does_not_count(self) -> None:
         assert not is_admin(_user(roles=[self.URN]))
+
+
+class TestTheDevRealmHasAnAdmin:
+    def test_the_admin_group_exists_and_the_admin_user_is_in_it(self) -> None:
+        # With realm roles granting nothing, dev admin must come from the same
+        # place as production admin: the group. Without this, removing the
+        # realm-role path silently leaves the dev realm with no admin at all.
+        import json
+        from pathlib import Path
+
+        realm = json.loads(
+            (Path(__file__).parent.parent / "docker" / "keycloak-realm.json").read_text()
+        )
+        urn = "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+        assert any(g["name"] == urn for g in realm["groups"])
+        admin = next(u for u in realm["users"] if u["username"] == "admin")
+        assert f"/{urn}" in admin.get("groups", [])
