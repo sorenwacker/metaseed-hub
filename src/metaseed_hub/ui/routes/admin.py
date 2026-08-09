@@ -47,24 +47,36 @@ def get_admin_role() -> str:
 
 
 def _has_admin_role(user: TokenUser) -> bool:
-    """Check if user has the admin role in their token.
+    """Whether the token grants admin.
 
-    Checks user.roles which is populated from:
-    - SRAM: eduperson_entitlement claim
-    - Keycloak: realm_access.roles claim
+    ``admin_role`` comes in two forms, checked against two explicit sources:
+
+    - a full URN (contains ``:``): exact match against the user's
+      *entitlements* -- the SRAM group that owns admin. This is how production
+      configures it.
+    - a bare name (the default, ``admin``): exact match against the Keycloak
+      *realm roles*, or an entitlement URN ending ``:name`` / ``#name``.
+
+    Entitlements and roles are never interchangeable: a group URN that ends up
+    in ``roles`` -- a misconfigured mapper, a stale token -- grants nothing.
+    Before this split, both lived in one list filled by a fallback, so what
+    admin meant depended on which claim happened to be empty.
 
     Args:
-        user: Authenticated user with roles from OIDC token.
+        user: Authenticated user with roles and entitlements from the token.
 
     Returns:
-        True if user has admin role, False otherwise.
+        True if the token grants admin access.
     """
     admin_role = get_admin_role()
-    # Check for exact match or suffix match (for URN-style entitlements)
-    for role in user.roles:
-        if role == admin_role or role.endswith(f":{admin_role}") or role.endswith(f"#{admin_role}"):
-            return True
-    return False
+    if ":" in admin_role:
+        return admin_role in user.entitlements
+    if admin_role in user.roles:
+        return True
+    return any(
+        urn.endswith(f":{admin_role}") or urn.endswith(f"#{admin_role}")
+        for urn in user.entitlements
+    )
 
 
 async def require_admin(
