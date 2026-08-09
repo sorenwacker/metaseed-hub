@@ -186,11 +186,11 @@ class OIDCAuth:
                 issuer=issuer,
             )
 
-            # Extract user information (provider-agnostic)
-            # Keycloak uses realm_access.roles, SRAM uses eduperson_entitlement
+            # Roles are Keycloak realm roles and nothing else. Group
+            # membership has its own field below; the old fallback that poured
+            # entitlements into roles made the list mean a different thing per
+            # issuer, and admin checks inherited the ambiguity.
             roles = payload.get("realm_access", {}).get("roles", [])
-            if not roles:
-                roles = payload.get("eduperson_entitlement", [])
 
             return TokenUser(
                 sub=payload.get("sub", ""),
