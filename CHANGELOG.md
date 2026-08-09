@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.27.0] - 2026-08-09
+
+### Added
+- Per-group feature flags. Group membership comes from the identity provider
+  (Keycloak in development, SRAM in production, one claim shape for both);
+  which feature a group may use is hub state in the new `feature_grants`
+  table. `require_feature` gates routes with 404, and the DCAT field marker is
+  the first gated feature: without a grant the value is not saved and the
+  editor says so. No grants ship, so every gated feature starts off.
+- The MCP field tools accept `isa_tag`, with a parity test pinning them to the
+  markers metaseed defines — without it the next metaseed upgrade breaks both
+  tools at runtime.
+
+### Changed
+- Only membership of the SRAM admin group grants admin. Realm roles grant
+  nothing: they exist only in the dev Keycloak, so an admin path through them
+  was a door that existed in development and not in production. `ADMIN_ROLE`
+  names the group, as a full URN or a bare group name.
+- The models module is a package split by aggregate; every name still imports
+  from `metaseed_hub.models`.
+- The test schema is built once per run, dead connections are cleared first,
+  and tables are emptied with ordered DELETE — the suite is faster and a
+  killed run no longer wedges the next one.
+
 ## [0.26.0] - 2026-08-05
 
 ### Changed
