@@ -31,6 +31,9 @@ def _test_database_url() -> str:
     )
 
 
+# Single-process only: each pytest-xdist worker would see its own copy of this
+# flag, rebuild the schema, and race the others. Point workers at separate
+# databases via METASEED_HUB_TEST_DB_URL before parallelising.
 _schema_created = False
 
 
