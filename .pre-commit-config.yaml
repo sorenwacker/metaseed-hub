@@ -27,6 +27,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: duplicate-code
+        name: duplicate code (single source of truth)
+        entry: uv run pylint --disable=all --enable=duplicate-code --min-similarity-lines=8 -j 4 src/metaseed_hub
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
       - id: bandit
         name: bandit
         entry: uv run bandit
