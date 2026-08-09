@@ -49,30 +49,24 @@ def get_admin_role() -> str:
 def _has_admin_role(user: TokenUser) -> bool:
     """Whether the token grants admin.
 
-    ``admin_role`` comes in two forms, checked against two explicit sources:
+    Only membership of the SRAM admin group grants admin -- the same source
+    every other feature uses. Realm roles grant nothing: they exist only in the
+    dev Keycloak, so an admin path through them would be a door that exists in
+    development and not in production.
 
-    - a full URN (contains ``:``): exact match against the user's
-      *entitlements* -- the SRAM group that owns admin. This is how production
-      configures it.
-    - a bare name (the default, ``admin``): exact match against the Keycloak
-      *realm roles*, or an entitlement URN ending ``:name`` / ``#name``.
-
-    Entitlements and roles are never interchangeable: a group URN that ends up
-    in ``roles`` -- a misconfigured mapper, a stale token -- grants nothing.
-    Before this split, both lived in one list filled by a fallback, so what
-    admin meant depended on which claim happened to be empty.
+    ``admin_role`` names the group: either the full URN (exact match), which is
+    how production configures it, or a bare name matched as the URN's group
+    part (``...:admin`` / ``...#admin``).
 
     Args:
-        user: Authenticated user with roles and entitlements from the token.
+        user: Authenticated user with entitlements from the token.
 
     Returns:
-        True if the token grants admin access.
+        True if the user is in the admin group.
     """
     admin_role = get_admin_role()
     if ":" in admin_role:
         return admin_role in user.entitlements
-    if admin_role in user.roles:
-        return True
     return any(
         urn.endswith(f":{admin_role}") or urn.endswith(f"#{admin_role}")
         for urn in user.entitlements

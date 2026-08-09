@@ -151,6 +151,9 @@
       "realmRoles": [
         "user",
         "admin"
+      ],
+      "groups": [
+        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
       ]
     }
   ],
@@ -182,6 +185,10 @@
     {
       "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers",
       "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers"
+    },
+    {
+      "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin",
+      "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
     }
   ]
 }
