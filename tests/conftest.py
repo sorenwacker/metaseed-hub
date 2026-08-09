@@ -73,9 +73,13 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
 
-    tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    # DELETE rather than TRUNCATE: TRUNCATE needs an ACCESS EXCLUSIVE lock on
+    # every table at once and deadlocks against the ``server`` fixture's second
+    # connection pool. DELETE takes ordinary row locks. Children first, so
+    # foreign keys never block the sweep.
     async with engine.begin() as conn:
-        await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(text(f'DELETE FROM "{table.name}"'))
     await engine.dispose()
 
 
