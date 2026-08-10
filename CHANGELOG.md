@@ -7,8 +7,15 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Saving a SEEK connection failed with a not-null violation on `created_at`:
   the model declares a server default, the creating migration did not, and
-  tests build their tables from the model. `alembic check` now compares server
-  defaults and a test runs it, so model and migrations cannot diverge unseen.
+  tests build their tables from the model, which carries it. `feature_grants`
+  had the same defect, dormant until something inserted a grant through the
+  application; both are fixed.
+- `alembic check` covered only twelve hand-listed tables while the application
+  had grown past twenty, so `datasets`, `seek_connections`, `feature_grants`
+  and the rest were never compared. The list now comes from the models, the
+  check compares server defaults, and a test builds a database from the
+  migrations alone and asserts it matches — the only test that does not build
+  its schema from the models, which is why nothing caught this.
 
 ### Added
 - The status names the project pushes will land in, and reports an account in
