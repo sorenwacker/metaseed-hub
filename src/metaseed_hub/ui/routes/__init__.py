@@ -10,11 +10,13 @@ from metaseed_hub.ui.routes.entity import init_templates as init_entity_template
 from metaseed_hub.ui.routes.entity import router as entity_router
 from metaseed_hub.ui.routes.ontology_api import router as ontology_router
 from metaseed_hub.ui.routes.seek import router as seek_router
+from metaseed_hub.ui.routes.sharing import router as sharing_router
 from metaseed_hub.ui.routes.table import router as table_router
 
 __all__ = [
     "admin_router",
     "seek_router",
+    "sharing_router",
     "auth_router",
     "dataset_router",
     "entity_router",

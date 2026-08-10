@@ -143,7 +143,7 @@ async def test_sole_non_owner_member_blocks(session):
     tenant = await _add(session, make_tenant())
     user = await _add(session, make_user(tenant=tenant))
     dataset = await _add(session, make_dataset(tenant=tenant))
-    await _own(session, user, dataset, role=DatasetRole.CURATOR)
+    await _own(session, user, dataset, role=DatasetRole.EDITOR)
 
     blocking = await datasets_needing_new_owner(session, user)
     assert [d.id for d in blocking] == [dataset.id]

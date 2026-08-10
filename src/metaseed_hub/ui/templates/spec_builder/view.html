@@ -54,7 +54,17 @@
                   onsubmit="return confirm('Unpublish this specification?\n\nIt stops being visible to other users of this hub and can no longer be chosen for new datasets.\n\nIt comes back to you as a private draft, so nothing is lost.')">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-warning"
-                        {% if datasets_using %}disabled
+                        <div class="spec-sharing">
+        <h3>Who can edit this specification</h3>
+        {# The same panel as datasets and drafts. Until this existed, handing a
+           published specification to a colleague meant editing the database. #}
+        <div id="members-panel"
+             hx-get="/hub/sharing/spec/{{ spec_record.id }}/members"
+             hx-trigger="load" hx-swap="innerHTML">
+        </div>
+    </div>
+
+    {% if datasets_using %}disabled
                         title="{{ datasets_using|length }} dataset(s) are built on this specification: {{ datasets_using[:5]|join(', ') }}"
                         data-testid="unpublish-blocked"
                         {% else %}title="Withdraw from the organisation, back to a private draft"{% endif %}>Unpublish</button>

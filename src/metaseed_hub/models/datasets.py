@@ -1,7 +1,6 @@
 """Datasets, their versions and who may touch them."""
 
 from datetime import datetime
-from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -16,6 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from metaseed_hub.sharing import Role
 
 from .base import Base, _enum_values
 
@@ -115,12 +116,10 @@ class DatasetVersion(TimestampMixin, Base):
     created_by: Mapped["User | None"] = relationship("User")
 
 
-class DatasetRole(StrEnum):
-    """Role within a dataset."""
-
-    OWNER = "owner"
-    CURATOR = "curator"
-    VIEWER = "viewer"
+#: Roles are one vocabulary across every shared thing; see
+#: :mod:`metaseed_hub.sharing`. The alias keeps the old name readable at call
+#: sites that talk about datasets specifically.
+DatasetRole = Role
 
 
 class DatasetMember(Base):
@@ -142,10 +141,10 @@ class DatasetMember(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    role: Mapped[DatasetRole] = mapped_column(
-        Enum(DatasetRole, values_callable=_enum_values),
+    role: Mapped[Role] = mapped_column(
+        Enum(Role, name="memberrole", values_callable=_enum_values),
         nullable=False,
-        default=DatasetRole.VIEWER,
+        default=Role.VIEWER,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

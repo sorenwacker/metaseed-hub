@@ -145,17 +145,11 @@
                 <!-- Sharing -->
                 <div id="sharing-panel" class="sidebar-tab-content" data-tab="sharing">
                     <div class="sharing-section">
-                        <p class="sharing-hint">Share this spec draft with collaborators.</p>
-                        <div class="member-list" id="member-list">
-                            {% include "partials/spec_draft_members.html" %}
+                        <p class="sharing-hint">Share this specification draft.</p>
+                        <div id="members-panel"
+                             hx-get="/hub/sharing/draft/{{ draft_id }}/members"
+                             hx-trigger="load" hx-swap="innerHTML">
                         </div>
-                        <form class="member-add-form"
-                              hx-post="/hub/spec-builder/{{ draft_id }}/members"
-                              hx-target="#member-list"
-                              hx-swap="innerHTML">
-                            <input type="email" name="email" placeholder="Email address" required class="form-input form-input-sm">
-                            <button type="submit" class="btn btn-sm btn-primary">Add</button>
-                        </form>
                     </div>
                 </div>
             </div>

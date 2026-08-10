@@ -48,38 +48,11 @@
 
     <!-- Sharing Tab -->
     <div class="overview-tab-content" id="tab-sharing">
-        <div class="member-list" id="member-list">
-            {% for member in members %}
-            <div class="member-row">
-                <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
-                <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
-                <select class="member-role-select"
-                        hx-patch="/hub/datasets/{{ dataset.id }}/members/{{ member.user_id }}"
-                        hx-target="#member-list"
-                        hx-swap="innerHTML"
-                        name="role">
-                    <option value="owner" {% if member.role.value == 'owner' %}selected{% endif %}>Owner</option>
-                    <option value="curator" {% if member.role.value == 'curator' %}selected{% endif %}>Curator</option>
-                    <option value="viewer" {% if member.role.value == 'viewer' %}selected{% endif %}>Viewer</option>
-                </select>
-                <button class="btn-icon btn-danger-text"
-                        hx-delete="/hub/datasets/{{ dataset.id }}/members/{{ member.user_id }}"
-                        hx-target="#member-list"
-                        hx-swap="innerHTML"
-                        hx-confirm="Remove {{ member.user.email }}?"
-                        title="Remove">&times;</button>
-            </div>
-            {% else %}
-            <p class="empty-state-inline">Not shared with anyone yet.</p>
-            {% endfor %}
+        {# One panel for every shared thing: partials/members_panel.html #}
+        <div id="members-panel"
+             hx-get="/hub/sharing/dataset/{{ dataset.id }}/members"
+             hx-trigger="load" hx-swap="innerHTML">
         </div>
-        <form class="member-add-form"
-              hx-post="/hub/datasets/{{ dataset.id }}/members"
-              hx-target="#member-list"
-              hx-swap="innerHTML">
-            <input type="email" name="email" placeholder="Add collaborator by email" required class="form-input">
-            <button type="submit" class="btn btn-primary">Add</button>
-        </form>
     </div>
 </div>
 

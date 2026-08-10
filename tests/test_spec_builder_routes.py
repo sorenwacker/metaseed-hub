@@ -22,11 +22,10 @@ from metaseed.specs.schema import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.models import SpecDraft, SpecDraftMember, SpecDraftRole, Tenant, User
+from metaseed_hub.models import SpecDraft, Tenant, User
 from metaseed_hub.ui.spec_builder.access import DraftContext, load_state_for_draft
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
 from metaseed_hub.ui.spec_builder.routes.entity_routes import register_entity_routes
-from metaseed_hub.ui.spec_builder.routes.member_routes import register_member_routes
 from metaseed_hub.ui.spec_builder.routes.rule_routes import register_rule_routes
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from tests.factories import make_spec_draft, make_tenant, make_user
@@ -122,34 +121,6 @@ async def _context(
 
 class TestInvalidEnumInput:
     """Client-controlled enum strings must fail as validation errors."""
-
-    async def test_an_unknown_member_role_returns_400(self, session: AsyncSession) -> None:
-        draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
-        member_user = make_user(tenant=tenant, email="member@example.org")
-        session.add(member_user)
-        await session.flush()
-        session.add(
-            SpecDraftMember(
-                spec_draft_id=draft.id, user_id=member_user.id, role=SpecDraftRole.VIEWER
-            )
-        )
-        await session.commit()
-        endpoint = _endpoint(register_member_routes, "/members/{member_user_id}", "PATCH")
-
-        response = await endpoint(
-            request=_request("PATCH"),
-            draft_id=draft.id,
-            member_user_id=member_user.id,
-            session=session,
-            user_ctx=(owner.id, tenant.id),
-            role="superuser",
-        )
-
-        assert response.status_code == 400
-        await session.refresh(draft)
-        member = await session.get(SpecDraftMember, (draft.id, member_user.id))
-        assert member is not None
-        assert member.role is SpecDraftRole.VIEWER, "the stored role must be unchanged"
 
     async def test_an_unknown_reaction_returns_400(self, session: AsyncSession) -> None:
         draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
