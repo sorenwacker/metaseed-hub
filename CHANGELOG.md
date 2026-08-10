@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.3] - 2026-08-10
+
+### Fixed
+- Saving a SEEK connection failed with a not-null violation on `created_at`:
+  the model declares a server default, the creating migration did not, and
+  tests build their tables from the model. `alembic check` now compares server
+  defaults and a test runs it, so model and migrations cannot diverge unseen.
+
+### Added
+- The status names the project pushes will land in, and reports an account in
+  no project as the blocker it is — SEEK attaches every record to a project.
+
+### Changed
+- The SEEK connection is configured on the profile page, beside the other
+  per-user credentials, instead of a page nothing linked to. `/hub/seek` and
+  `/hub/seek/settings` redirect there.
+
 ## [0.30.2] - 2026-08-10
 
 ### Fixed

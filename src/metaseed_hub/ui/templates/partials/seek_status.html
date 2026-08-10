@@ -1,10 +1,13 @@
 {# The connection's standing, shown wherever the connection is used. #}
 {% if not connection %}
 <span class="seek-status seek-status-none" data-testid="seek-status-none">SEEK: not configured</span>
-{% elif connection.verified_at %}
+{% elif connection.verified_at and not connection.last_error %}
 <span class="seek-status seek-status-ok" data-testid="seek-status-ok">
     SEEK: working &mdash; {{ connection.url }}
-    <span class="form-hint">checked {{ connection.verified_at.strftime('%y%m%d %H:%M') }} UTC</span>
+    <span class="form-hint">
+        checked {{ connection.verified_at.strftime('%y%m%d %H:%M') }} UTC{% if connection.project_hint %};
+        content goes to project {{ connection.project_hint }}{% endif %}
+    </span>
 </span>
 {% else %}
 <span class="seek-status seek-status-bad" data-testid="seek-status-bad">

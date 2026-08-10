@@ -178,8 +178,14 @@ class SpecDraft(TimestampMixin, Base):
         nullable=True,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    version: Mapped[str] = mapped_column(String(50), nullable=False, default="0.1")
-    spec_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # server_default mirrors the creating migration; declaring it keeps
+    # `alembic check --compare-server-default` honest about model vs database.
+    version: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="0.1", server_default="0.1"
+    )
+    spec_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     template_source: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships

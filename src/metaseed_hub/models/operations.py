@@ -54,6 +54,8 @@ class SeekConnection(TimestampMixin, Base):
     # status is kept alongside instead, and shown wherever the connection is.
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The project pushes will land in — SEEK attaches every record to one.
+    project_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class FeatureGrant(TimestampMixin, Base):
