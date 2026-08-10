@@ -62,6 +62,7 @@ class OIDCAuth:
         self._settings = settings
         self._jwks: dict[str, list[dict[str, str]]] | None = None
         self._oidc_config: dict[str, Any] | None = None
+        self._userinfo_cache: dict[str, tuple[float, list[str]]] = {}
 
     async def get_oidc_config(self) -> dict[str, Any]:
         """Fetch OIDC discovery document.
@@ -150,6 +151,45 @@ class OIDCAuth:
             )
         return rsa_key
 
+    async def _userinfo_entitlements(self, token: str) -> list[str]:
+        """Entitlements from the userinfo endpoint, cached for the token's life.
+
+        Returns an empty list rather than raising when the endpoint is
+        unreachable: entitlements gate optional features, and a hiccup there
+        must not turn into a failed login.
+        """
+        import hashlib
+        import time
+
+        key = hashlib.sha256(token.encode()).hexdigest()
+        cached = self._userinfo_cache.get(key)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+
+        try:
+            config = await self.get_oidc_config()
+            endpoint = config.get("userinfo_endpoint")
+            if not endpoint:
+                return []
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=5.0,
+                )
+            if response.status_code != 200:
+                return []
+            entitlements = _entitlement_list(response.json())
+        except Exception:
+            return []
+
+        # Bounded cache: userinfo is one network call per unseen token, and a
+        # token is presented on every request for its whole lifetime.
+        if len(self._userinfo_cache) > 512:
+            self._userinfo_cache.clear()
+        self._userinfo_cache[key] = (time.monotonic() + 300, entitlements)
+        return entitlements
+
     async def verify_token(self, token: str) -> TokenUser:
         """Verify JWT token and extract user information.
 
@@ -192,12 +232,20 @@ class OIDCAuth:
             # issuer, and admin checks inherited the ambiguity.
             roles = payload.get("realm_access", {}).get("roles", [])
 
+            entitlements = _entitlement_list(payload)
+            if not entitlements:
+                # SRAM does not put eduperson_entitlement in the access token —
+                # only the userinfo endpoint carries the full claims. Falling
+                # back (cached per token) keeps one code path for both issuers
+                # instead of a dev-only feature that dies on deployment.
+                entitlements = await self._userinfo_entitlements(token)
+
             return TokenUser(
                 sub=payload.get("sub", ""),
                 email=payload.get("email", ""),
                 name=payload.get("name", payload.get("preferred_username", "")),
                 roles=roles,
-                entitlements=_entitlement_list(payload),
+                entitlements=entitlements,
             )
 
         except JWTError as e:
