@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.28.0] - 2026-08-10
+
+### Changed
+- An adapter export is offered only to a user whose group has its plugin
+  enabled — for the buttons and for a hand-typed URL alike. Adapter keys and
+  feature names are the same six strings, so membership of a plugin's group is
+  what turns its export on. The `beta-testers` group is granted all six.
+- The landing page says integrations are rolled out per group and links the
+  SRAM registration page for beta-tester applications.
+- Duplicated code fails the pre-push hook (`pylint --enable=duplicate-code`),
+  giving the single-source-of-truth rule the gate it lacked.
+
 ## [0.27.0] - 2026-08-09
 
 ### Added
