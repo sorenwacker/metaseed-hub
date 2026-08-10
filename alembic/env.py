@@ -91,6 +91,11 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         include_object=include_object,
+        # A column the model gives a server default but the migration does not
+        # is invisible to the tests — they build tables from the metadata, which
+        # carries the default — and fails on the first insert in production.
+        # That happened to seek_connections.created_at.
+        compare_server_default=True,
     )
 
     with context.begin_transaction():

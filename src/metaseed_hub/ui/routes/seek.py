@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.auth import TokenUser
@@ -99,25 +99,42 @@ def _verification_failure(exc: Exception, url: str) -> str:
     return f"Could not reach SEEK at {host}: {exc}"
 
 
-@router.get("/settings", response_class=HTMLResponse)
-async def seek_settings(request: Request, session: DbSession, user: SeekUser) -> Response:
-    """The connection form. Shows configured-or-not, never the key."""
-    connection = await connection_for_user(session, user)
-    return render_template(
-        request,
-        "seek_settings.html",
-        {
-            "user": user,
-            "connection": connection,
-            "configured_url": connection.url if connection else None,
-            "message": None,
-            "error": None,
-            "nav_active": "seek",
-        },
-    )
+#: Where the connection is edited and its standing shown.
+SETTINGS_URL = "/hub/auth/profile#seek"
 
 
-@router.post("/settings", response_class=HTMLResponse)
+def _record_outcome(
+    connection: SeekConnection, error: str | None, projects: list[tuple[str, str]]
+) -> None:
+    """Write down what the check found.
+
+    ``verified_at`` marks the last time SEEK answered and took the key.
+    ``last_error`` holds anything that would stop a push — including an account
+    in no project, which is a working connection that cannot receive anything
+    yet, because SEEK attaches every record to a project.
+    """
+    connection.verified_at = None if error else datetime.now(UTC)
+    if error:
+        connection.last_error = error
+    elif not projects:
+        connection.last_error = (
+            "The API key works, but your SEEK account is in no project, and "
+            "SEEK attaches every record to one. Join or create a project in "
+            "SEEK, then check again."
+        )
+    else:
+        connection.last_error = None
+    connection.project_hint = projects[0][1] if projects else None
+
+
+@router.get("")
+@router.get("/settings")
+async def seek_settings(user: SeekUser) -> Response:
+    """Send the old settings URLs to the profile section that replaced them."""
+    return RedirectResponse(url=SETTINGS_URL, status_code=302)
+
+
+@router.post("/settings")
 async def seek_settings_save(
     request: Request,
     session: DbSession,
@@ -159,45 +176,18 @@ async def seek_settings_save(
         session.add(connection)
     connection.url = url
     connection.api_key_encrypted = encrypt_secret(api_key)
-    connection.verified_at = None if error else datetime.now(UTC)
-    connection.last_error = error
+    _record_outcome(connection, error, projects)
     await session.commit()
 
-    message = None
-    if error is None:
-        # Projects are listed rather than demanded: reaching SEEK with a valid
-        # key is a working connection, and being in no project is a separate
-        # thing to fix in SEEK — refusing the connection over it sent the owner
-        # looking for a bad key that was never bad.
-        if projects:
-            message = f"Connected. Content will go to project {projects[0][1]}."
-        else:
-            message = (
-                "Connected, and the API key works — but your SEEK account is in "
-                "no project, and SEEK attaches every record to one. Join or "
-                "create a project in SEEK before pushing."
-            )
-
-    return render_template(
-        request,
-        "seek_settings.html",
-        {
-            "user": user,
-            "connection": connection,
-            "configured_url": url,
-            "message": message,
-            "error": error,
-            "nav_active": "seek",
-        },
-    )
+    return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
-@router.post("/settings/check", response_class=HTMLResponse)
-async def seek_settings_check(request: Request, session: DbSession, user: SeekUser) -> Response:
+@router.post("/settings/check")
+async def seek_settings_check(session: DbSession, user: SeekUser) -> Response:
     """Re-run the check against the stored connection, without retyping the key."""
     connection = await connection_for_user(session, user)
-    if connection is None:
-        return await seek_settings(request, session, user)
+    if connection is None:  # nothing stored yet — the form is where to start
+        return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
     error = None
     projects: list[tuple[str, str]] = []
@@ -207,28 +197,10 @@ async def seek_settings_check(request: Request, session: DbSession, user: SeekUs
         logger.info("SEEK re-check failed for %s: %s", urlsplit(connection.url).netloc, exc)
         error = _verification_failure(exc, connection.url)
 
-    connection.verified_at = None if error else datetime.now(UTC)
-    connection.last_error = error
+    _record_outcome(connection, error, projects)
     await session.commit()
 
-    return render_template(
-        request,
-        "seek_settings.html",
-        {
-            "user": user,
-            "connection": connection,
-            "configured_url": connection.url,
-            "message": None
-            if error
-            else (
-                f"Working. Content will go to project {projects[0][1]}."
-                if projects
-                else "Reached SEEK, but your account is in no project."
-            ),
-            "error": error,
-            "nav_active": "seek",
-        },
-    )
+    return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
 @router.post("/datasets/{dataset_id}/push", response_class=HTMLResponse)

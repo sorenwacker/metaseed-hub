@@ -1,8 +1,7 @@
-{% extends "base.html" %}
-{% block title %}SEEK connection{% endblock %}
-{% block content %}
-<div class="container" style="max-width: 40rem">
-    <h1>SEEK connection</h1>
+{# The SEEK connection, on the profile page beside the other per-user
+   credentials. Rendered only for the seek feature. #}
+<div class="profile-section" id="seek">
+    <h2>SEEK connection</h2>
     <p class="card-subtitle">
         Your FAIRDOM-SEEK instance and API key. Records pushed to SEEK are
         created as the key's person, so the connection is yours alone. The key
@@ -20,31 +19,26 @@
         {% endif %}
     </div>
 
-    {% if message %}<div class="alert alert-success" data-testid="seek-settings-ok">{{ message }}</div>{% endif %}
-    {% if error %}
-    <div class="alert alert-error" data-testid="seek-settings-error">
-        {{ error }}
-        <span class="form-hint">Saved anyway, so nothing you typed is lost — the URL is kept above and the key is stored. Fix what the message says, then <strong>Check again</strong>.</span>
-    </div>
-    {% endif %}
-
     <form method="post" action="/hub/seek/settings">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="form-group">
             <label class="form-label" for="seek-url">SEEK URL</label>
             <input class="form-input" id="seek-url" name="url" type="url" required
                    placeholder="https://seek.example.org"
-                   value="{{ configured_url or '' }}" data-testid="seek-url">
+                   value="{{ connection.url if connection else '' }}" data-testid="seek-url">
+            <p class="form-hint">The instance's base URL, reachable from this server.</p>
         </div>
         <div class="form-group">
             <label class="form-label" for="seek-api-key">API key</label>
             <input class="form-input" id="seek-api-key" name="api_key" type="password"
                    required autocomplete="off" data-testid="seek-api-key">
-            <p class="form-hint">Created in SEEK under your profile &rarr; API tokens.</p>
+            <p class="form-hint">
+                Created in SEEK under your profile &rarr; API tokens. Saved whether or
+                not the check succeeds, so a wrong URL never costs you the key.
+            </p>
         </div>
-        <button class="btn btn-primary" type="submit" data-testid="seek-settings-save">
-            Verify and save
+        <button class="btn btn-sm btn-primary" type="submit" data-testid="seek-settings-save">
+            Save and check
         </button>
     </form>
 </div>
-{% endblock %}

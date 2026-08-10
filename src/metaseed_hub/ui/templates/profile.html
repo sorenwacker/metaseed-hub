@@ -106,6 +106,10 @@
             </form>
         </div>
 
+        {% if features and "seek" in features %}
+        {% include "partials/seek_settings_section.html" %}
+        {% endif %}
+
         <div class="profile-section danger-zone">
             <h2>Delete account</h2>
             {% if delete_error == 'confirm' %}
