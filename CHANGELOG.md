@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.1] - 2026-08-10
+
+### Fixed
+- The beta-tester invite on the landing page pointed at the wrong SRAM
+  collaboration, routing every applicant — and their group memberships — into
+  a collaboration the hub's grants never matched.
+
 ## [0.29.0] - 2026-08-10
 
 ### Fixed
