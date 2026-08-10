@@ -99,7 +99,13 @@ def _collect_entities_by_type(facade: ProfileFacade) -> dict[str, list[dict[str,
         entity_type = entity.get("_type")
         if not entity_type:
             continue
-        collect(entity_type, {k: v for k, v in entity.items() if not k.startswith("_")})
+        data = {k: v for k, v in entity.items() if not k.startswith("_")}
+        if entity.get("_parent_unique_id"):
+            # The tree, as a business key. No profile declares parent_ref
+            # fields, so without this column the export cannot be reimported
+            # with its structure intact.
+            data["_parent"] = entity["_parent_unique_id"]
+        collect(entity_type, data)
     return by_type
 
 
@@ -124,7 +130,7 @@ def build_workbook(facade: ProfileFacade) -> Workbook:
 
         sheet = workbook.create_sheet(entity_type)
         nested_fields = set(helper.nested_fields)
-        columns = helper.all_fields
+        columns = [*helper.all_fields, "_parent"]
         sheet.append(columns)
 
         for row_offset, entity_data in enumerate(entities_by_type.get(entity_type, []), start=2):
