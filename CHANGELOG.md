@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.1] - 2026-08-10
+
+### Changed
+- The SEEK panel sits like its neighbours: Push and Settings share a row, the
+  downloadable checkbox reads as one label beneath.
+
 ## [0.30.0] - 2026-08-10
 
 ### Added

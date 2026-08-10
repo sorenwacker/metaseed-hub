@@ -88,22 +88,24 @@
             </div>
             {% endif %}
             {% if features and "seek" in features %}
-            <div class="sidebar-actions-row" data-testid="seek-panel">
-                {# The SEEK plugin, visible only to the seek group while it is
-                   developed behind its feature flag. #}
-                <form hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
-                      hx-target="#seek-result" style="display:inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <label title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">
-                        <input type="checkbox" name="downloadable" value="true" data-testid="seek-downloadable"> downloadable
-                    </label>
+            {# The SEEK plugin, visible only to the seek group while it is
+               developed behind its feature flag. #}
+            <form id="seek-push-form" hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
+                  hx-target="#seek-result">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="sidebar-actions-row" data-testid="seek-panel">
                     <button class="btn btn-sm btn-primary" type="submit"
                             data-testid="btn-seek-push"
                             title="Provision the profile on your SEEK and push this dataset">Push to SEEK</button>
-                </form>
-                <a href="/hub/seek/settings" class="btn btn-sm" data-testid="btn-seek-settings"
-                   title="Your SEEK instance and API key">SEEK settings</a>
-            </div>
+                    <a href="/hub/seek/settings" class="btn btn-sm" data-testid="btn-seek-settings"
+                       title="Your SEEK instance and API key">SEEK settings</a>
+                </div>
+                <label class="form-hint" style="display:block; margin:0.25rem 0 0.5rem"
+                       title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">
+                    <input type="checkbox" name="downloadable" value="true" data-testid="seek-downloadable">
+                    downloadable in SEEK
+                </label>
+            </form>
             <div id="seek-result"></div>
             {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
