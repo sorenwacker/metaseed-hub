@@ -19,6 +19,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from metaseed_hub.sharing import Role
+
 from .base import Base, _enum_values
 
 if TYPE_CHECKING:
@@ -99,12 +101,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
 
 
-class SpecRole(StrEnum):
-    """Role within a spec."""
-
-    OWNER = "owner"
-    CURATOR = "curator"
-    VIEWER = "viewer"
+SpecRole = Role
 
 
 class SpecMember(Base):
@@ -126,10 +123,10 @@ class SpecMember(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    role: Mapped[SpecRole] = mapped_column(
-        Enum(SpecRole, values_callable=_enum_values),
+    role: Mapped[Role] = mapped_column(
+        Enum(Role, name="memberrole", values_callable=_enum_values),
         nullable=False,
-        default=SpecRole.VIEWER,
+        default=Role.VIEWER,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -203,12 +200,7 @@ class SpecDraft(TimestampMixin, Base):
     )
 
 
-class SpecDraftRole(StrEnum):
-    """Role within a spec draft."""
-
-    OWNER = "owner"
-    EDITOR = "editor"
-    VIEWER = "viewer"
+SpecDraftRole = Role
 
 
 class SpecDraftMember(Base):
@@ -230,10 +222,10 @@ class SpecDraftMember(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    role: Mapped[SpecDraftRole] = mapped_column(
-        Enum(SpecDraftRole, values_callable=_enum_values),
+    role: Mapped[Role] = mapped_column(
+        Enum(Role, name="memberrole", values_callable=_enum_values),
         nullable=False,
-        default=SpecDraftRole.VIEWER,
+        default=Role.VIEWER,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

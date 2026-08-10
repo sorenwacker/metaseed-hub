@@ -15,19 +15,12 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from fastapi import APIRouter
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import Response
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import (
-    Dataset,
-    DatasetMember,
-    SpecDraft,
-    SpecDraftMember,
     Tenant,
     User,
 )
@@ -36,43 +29,12 @@ from metaseed_hub.ui.dependencies import (
     ensure_tenant_and_user,
     tenant_slug_for,
 )
-from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
-from metaseed_hub.ui.routes.dataset import members as members_module
-from metaseed_hub.ui.spec_builder.routes.member_routes import register_member_routes
-from tests.factories import make_dataset, make_spec_draft, make_tenant, make_user
+from metaseed_hub.ui.helpers import get_or_create_csrf_token
+from tests.factories import make_tenant, make_user
 
 pytestmark = pytest.mark.asyncio
 
 _CSRF = get_or_create_csrf_token(Mock(cookies={}))
-
-
-def _csrf_request() -> Mock:
-    """A request mock carrying a matching CSRF cookie and header."""
-    request = Mock()
-    request.cookies = {CSRF_TOKEN_COOKIE: _CSRF}
-    request.headers = {"X-CSRF-Token": _CSRF}
-    return request
-
-
-@pytest.fixture(autouse=True)
-def _fake_render(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Render dataset member partials to a stub, as the members tests do."""
-
-    def _render(*, request: object, name: str, context: dict) -> Response:
-        return Response("rendered")
-
-    monkeypatch.setattr(members_module, "render_template", _render)
-
-
-def _add_spec_member_endpoint() -> object:
-    """Resolve the POST ``/members`` spec-draft endpoint from its router."""
-    router = APIRouter()
-    register_member_routes(router, Jinja2Templates(directory="src/metaseed_hub/ui/templates"))
-    for route in router.routes:
-        path = getattr(route, "path", "")
-        if "/members" in path and "POST" in getattr(route, "methods", set()):
-            return route.endpoint  # type: ignore[attr-defined]
-    raise AssertionError("no POST /members route")
 
 
 async def _own_tenant_user(
@@ -89,122 +51,10 @@ async def _own_tenant_user(
     return tenant, user, sub
 
 
-async def _spec_members(session: AsyncSession, draft: SpecDraft) -> list[str]:
-    """The user ids recorded as members of a draft."""
-    result = await session.execute(
-        select(SpecDraftMember).where(SpecDraftMember.spec_draft_id == draft.id)
-    )
-    return [m.user_id for m in result.scalars().all()]
-
-
-async def _dataset_members(session: AsyncSession, dataset: Dataset) -> list[str]:
-    """The user ids recorded as members of a dataset."""
-    result = await session.execute(
-        select(DatasetMember).where(DatasetMember.dataset_id == dataset.id)
-    )
-    return [m.user_id for m in result.scalars().all()]
-
-
-async def test_spec_draft_shares_with_an_account_in_another_tenant(
-    session: AsyncSession,
-) -> None:
-    """The invitee is a separate account, so they are never in the owner's tenant."""
-    owner_tenant, owner, _ = await _own_tenant_user(session)
-    _, invitee, _ = await _own_tenant_user(session, email="invitee-a@example.org")
-    draft = make_spec_draft(tenant=owner_tenant, user=owner)
-    session.add(draft)
-    await session.commit()
-
-    add_spec_member = _add_spec_member_endpoint()
-    await add_spec_member(  # type: ignore[operator]
-        request=Mock(),
-        draft_id=draft.id,
-        session=session,
-        user_ctx=(owner.id, owner_tenant.id),
-        email="invitee-a@example.org",
-    )
-
-    assert await _spec_members(session, draft) == [invitee.id]
-
-
-async def test_spec_draft_share_matches_email_case_insensitively(
-    session: AsyncSession,
-) -> None:
-    """A sharer types the address as they know it, not as the IdP cased it."""
-    owner_tenant, owner, _ = await _own_tenant_user(session)
-    _, invitee, _ = await _own_tenant_user(session, email="invitee-b@example.org")
-    draft = make_spec_draft(tenant=owner_tenant, user=owner)
-    session.add(draft)
-    await session.commit()
-
-    add_spec_member = _add_spec_member_endpoint()
-    await add_spec_member(  # type: ignore[operator]
-        request=Mock(),
-        draft_id=draft.id,
-        session=session,
-        user_ctx=(owner.id, owner_tenant.id),
-        email="  Invitee-B@Example.ORG  ",
-    )
-
-    assert await _spec_members(session, draft) == [invitee.id]
-
-
-async def test_spec_draft_share_reports_an_address_with_no_account(
-    session: AsyncSession,
-) -> None:
-    """An address nobody has signed in with adds nobody and warns the sharer."""
-    owner_tenant, owner, _ = await _own_tenant_user(session)
-    draft = make_spec_draft(tenant=owner_tenant, user=owner)
-    session.add(draft)
-    await session.commit()
-
-    add_spec_member = _add_spec_member_endpoint()
-    response = await add_spec_member(  # type: ignore[operator]
-        request=Mock(),
-        draft_id=draft.id,
-        session=session,
-        user_ctx=(owner.id, owner_tenant.id),
-        email="nobody@example.org",
-    )
-
-    assert await _spec_members(session, draft) == []
-    assert "showToast" in response.headers["HX-Trigger"]
-
-
-async def test_dataset_shares_with_an_account_in_another_tenant(
-    session: AsyncSession,
-) -> None:
-    """The dataset sharing path has the same cross-tenant invitee."""
-    owner_tenant, owner, sub = await _own_tenant_user(session)
-    _, invitee, _ = await _own_tenant_user(session, email="invitee-c@example.org")
-    dataset = make_dataset(tenant=owner_tenant)
-    session.add(dataset)
-    await session.commit()
-    token = TokenUser(sub=sub, email=owner.email, name="O", roles=[])
-
-    await members_module.add_dataset_member(
-        _csrf_request(), dataset.id, session, token, email="invitee-c@example.org"
-    )
-
-    assert await _dataset_members(session, dataset) == [invitee.id]
-
-
-async def test_dataset_share_matches_email_case_insensitively(
-    session: AsyncSession,
-) -> None:
-    """Capitalisation must not decide whether a dataset share resolves."""
-    owner_tenant, owner, sub = await _own_tenant_user(session)
-    _, invitee, _ = await _own_tenant_user(session, email="invitee-d@example.org")
-    dataset = make_dataset(tenant=owner_tenant)
-    session.add(dataset)
-    await session.commit()
-    token = TokenUser(sub=sub, email=owner.email, name="O", roles=[])
-
-    await members_module.add_dataset_member(
-        _csrf_request(), dataset.id, session, token, email="Invitee-D@Example.org"
-    )
-
-    assert await _dataset_members(session, dataset) == [invitee.id]
+# The sharing behaviours that used to be asserted here — sharing across
+# accounts, case-insensitive addresses, an address nobody has signed in with —
+# now live in tests/test_sharing.py, which runs each of them against datasets,
+# drafts and published specifications rather than one kind at a time.
 
 
 async def test_provisioning_stores_the_email_lowercased(session: AsyncSession) -> None:

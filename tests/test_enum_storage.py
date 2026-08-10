@@ -2,7 +2,8 @@
 
 Roles and status previously stored the uppercase member name while reactions
 stored the value. This pins the consistent by-value storage the models now
-declare (and migration 260726_enum_store_by_value applies to existing databases).
+declare (and migration 260726_enum_store_by_value applies to existing
+databases). Roles are one type, memberrole, since 260810_one_role.
 """
 
 import pytest
@@ -10,9 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _EXPECTED = {
-    "datasetrole": ["owner", "curator", "viewer"],
-    "specrole": ["owner", "curator", "viewer"],
-    "specdraftrole": ["owner", "editor", "viewer"],
+    # One role type for every shared thing; see metaseed_hub.sharing.
+    "memberrole": ["owner", "editor", "viewer"],
     "specstatus": ["draft", "published", "archived"],
     "reactiontype": ["like", "dislike"],
 }

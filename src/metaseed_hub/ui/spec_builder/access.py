@@ -152,7 +152,13 @@ async def can_edit_spec(
     if spec.created_by_id == user_id:
         return True
 
-    return False
+    # Whoever the specification has been shared with as owner or editor. Until
+    # published specifications could be shared at all, this was the author and
+    # nobody else, and handing one over meant editing the database.
+    from metaseed_hub.sharing import EDIT_ROLES, resource_for, role_of
+
+    role = await role_of(session, resource_for("spec"), spec.id, user_id)
+    return role in EDIT_ROLES
 
 
 # Roles allowed to modify a draft's specification. VIEWER is read-only.

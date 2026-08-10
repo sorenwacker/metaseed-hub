@@ -1,0 +1,61 @@
+{# Who has access to one shared thing. The same panel serves datasets,
+   specification drafts and published specifications: the rules are the same,
+   so the interface is too. #}
+{% if error %}
+<div class="alert alert-error" data-testid="sharing-error">{{ error }}</div>
+{% endif %}
+
+<div id="member-list" data-testid="member-list">
+    {% for member in members %}
+    <div class="member-row" data-testid="member-{{ member.user.email }}">
+        <span class="member-avatar">{{ (member.user.display_name or member.user.email)[0]|upper }}</span>
+        <span class="member-name">{{ member.user.display_name or member.user.email }}</span>
+        {% if viewer_is_owner %}
+        <select class="member-role-select" name="role"
+                data-testid="role-{{ member.user.email }}"
+                hx-patch="/hub/sharing/{{ kind }}/{{ resource_id }}/members/{{ member.user_id }}"
+                hx-target="#members-panel" hx-swap="innerHTML">
+            {% for role in roles %}
+            <option value="{{ role.value }}" {% if member.role.value == role.value %}selected{% endif %}>
+                {{ role.value|capitalize }}
+            </option>
+            {% endfor %}
+        </select>
+        <button class="btn-icon btn-danger-text"
+                data-testid="remove-{{ member.user.email }}"
+                hx-delete="/hub/sharing/{{ kind }}/{{ resource_id }}/members/{{ member.user_id }}"
+                hx-target="#members-panel" hx-swap="innerHTML"
+                hx-confirm="Remove {{ member.user.email }}?"
+                title="Remove">&times;</button>
+        {% else %}
+        <span class="member-role">{{ member.role.value|capitalize }}</span>
+        {% if member.user_id == viewer_id %}
+        <button class="btn-icon btn-danger-text" data-testid="leave"
+                hx-delete="/hub/sharing/{{ kind }}/{{ resource_id }}/members/{{ member.user_id }}"
+                hx-target="#members-panel" hx-swap="innerHTML"
+                hx-confirm="Leave this {{ kind }}?" title="Leave">Leave</button>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="empty-state-inline">Not shared yet.</p>
+    {% endfor %}
+</div>
+
+{% if viewer_is_owner %}
+<form class="member-add" data-testid="share-form"
+      hx-post="/hub/sharing/{{ kind }}/{{ resource_id }}/members"
+      hx-target="#members-panel" hx-swap="innerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input class="form-input" type="email" name="email" required
+           data-testid="share-email" placeholder="Email on their profile">
+    <select class="form-input" name="role" data-testid="share-role">
+        {% for role in roles %}
+        <option value="{{ role.value }}" {% if role.value == 'viewer' %}selected{% endif %}>
+            {{ role.value|capitalize }}
+        </option>
+        {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-primary" type="submit" data-testid="share-submit">Share</button>
+</form>
+{% endif %}

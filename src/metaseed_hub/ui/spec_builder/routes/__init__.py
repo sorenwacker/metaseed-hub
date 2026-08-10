@@ -14,7 +14,6 @@ from .draft_routes import register_draft_routes
 from .entity_routes import register_entity_routes
 from .field_routes import register_field_routes
 from .list_routes import register_list_routes
-from .member_routes import register_member_routes
 from .rule_routes import register_rule_routes
 
 __all__ = ["create_spec_builder_router"]
@@ -40,7 +39,6 @@ def create_spec_builder_router(templates: Jinja2Templates) -> APIRouter:
     register_field_routes(router, templates)
     register_rule_routes(router, templates)
     register_check_routes(router, templates)
-    register_member_routes(router, templates)
     register_comment_routes(router, templates)
 
     return router

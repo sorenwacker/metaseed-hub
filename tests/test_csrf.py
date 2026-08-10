@@ -1,17 +1,20 @@
 """CSRF-posture tests for the 2026-06-22 review (M3, L2).
 
-The dataset member-management routes and the entity validate POST previously
-skipped the CSRF check their sibling mutating routes enforce. These verify that a
+The member-management routes and the entity validate POST previously skipped
+the CSRF check their sibling mutating routes enforce. These verify that a
 request without a valid CSRF token is rejected with HTTP 403 before any work
-happens. They need no database: the CSRF guard runs first.
+happens — including after sharing became one mechanism, where dropping the
+check while moving the routes would have been a silent regression. They need no
+database: the CSRF guard runs first.
 """
 
 from unittest.mock import Mock
 
 import pytest
+from fastapi import HTTPException
 
 from metaseed_hub.ui.routes import entity as entity_module
-from metaseed_hub.ui.routes.dataset import members as members_module
+from metaseed_hub.ui.routes import sharing as sharing_module
 
 
 def _no_csrf_request() -> Mock:
@@ -25,41 +28,47 @@ def _no_csrf_request() -> Mock:
 @pytest.mark.asyncio
 async def test_add_dataset_member_rejects_missing_csrf() -> None:
     """Adding a member without a CSRF token is rejected."""
-    response = await members_module.add_dataset_member(
-        request=_no_csrf_request(),
-        dataset_id="ds",
-        session=Mock(),
-        user=Mock(),
-        email="a@example.com",
-    )
-    assert response.status_code == 403
+    with pytest.raises(HTTPException) as raised:
+        await sharing_module.add(
+            request=_no_csrf_request(),
+            kind="dataset",
+            resource_id="ds",
+            session=Mock(),
+            user=Mock(),
+            email="a@example.com",
+        )
+    assert raised.value.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_update_member_role_rejects_missing_csrf() -> None:
     """Changing a member role without a CSRF token is rejected."""
-    response = await members_module.update_dataset_member_role(
-        request=_no_csrf_request(),
-        dataset_id="ds",
-        user_id="u",
-        session=Mock(),
-        user=Mock(),
-        role="owner",
-    )
-    assert response.status_code == 403
+    with pytest.raises(HTTPException) as raised:
+        await sharing_module.change_role(
+            request=_no_csrf_request(),
+            kind="dataset",
+            resource_id="ds",
+            member_id="u",
+            session=Mock(),
+            user=Mock(),
+            role="owner",
+        )
+    assert raised.value.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_remove_member_rejects_missing_csrf() -> None:
     """Removing a member without a CSRF token is rejected."""
-    response = await members_module.remove_dataset_member(
-        request=_no_csrf_request(),
-        dataset_id="ds",
-        user_id="u",
-        session=Mock(),
-        user=Mock(),
-    )
-    assert response.status_code == 403
+    with pytest.raises(HTTPException) as raised:
+        await sharing_module.remove(
+            request=_no_csrf_request(),
+            kind="dataset",
+            resource_id="ds",
+            member_id="u",
+            session=Mock(),
+            user=Mock(),
+        )
+    assert raised.value.status_code == 403
 
 
 @pytest.mark.asyncio
