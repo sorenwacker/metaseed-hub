@@ -1,10 +1,10 @@
 """A published specification cannot be withdrawn while datasets are built on it.
 
-acdc_ks 2.0 was withdrawn on 260728. Two datasets in another workspace were
+acdc_ks 2.0 was withdrawn on 260728. Two datasets in another account were
 built on it, and from that moment every page of theirs raised SpecLoadError.
 Nothing warned, because withdrawal only ever looked at the withdrawer's own
-workspace — and datasets bind to a specification by name and version, not by
-foreign key, so even a same-workspace check by id would have found nothing.
+account — and datasets bind to a specification by name and version, not by
+foreign key, so even a same-account check by id would have found nothing.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ async def someone_else(session: AsyncSession):
 
 
 class TestFindingDatasetsAtRisk:
-    async def test_a_dataset_in_another_workspace_counts(
+    async def test_a_dataset_in_another_account_counts(
         self, session, publisher, someone_else
     ) -> None:
         """The datasets that break are usually not the publisher's own."""

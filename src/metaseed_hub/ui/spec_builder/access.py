@@ -51,7 +51,7 @@ class SpecInUseError(Exception):
     load. Datasets bind to a specification by name and version, and published
     specs are visible hub-wide, so the datasets that break are usually other
     people's: acdc_ks 2.0 was withdrawn on 260728 and two datasets in another
-    workspace raised SpecLoadError on every page from then on.
+    account raised SpecLoadError on every page from then on.
     """
 
     def __init__(self, spec_name: str, version: str, datasets: list[str]) -> None:
@@ -561,7 +561,7 @@ async def get_draft_context(
 
 
 async def datasets_using_spec(session: AsyncSession, spec: Spec) -> list[str]:
-    """Names of live datasets built on ``spec``, in any workspace.
+    """Names of live datasets built on ``spec``, in any account.
 
     Datasets bind by profile name and version rather than by foreign key —
     ``spec_id`` is null on datasets created from a published spec — so matching
