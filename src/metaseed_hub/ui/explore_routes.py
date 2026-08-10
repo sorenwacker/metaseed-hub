@@ -110,7 +110,7 @@ async def load_profile_spec(
 
     elif profile_key.startswith("spec:"):
         # A published specification is readable by anyone, which is what
-        # publishing means. Drafts above stay scoped to the caller's workspace:
+        # publishing means. Drafts above stay scoped to the caller's account:
         # those are the private form and must not be reachable by id.
         spec_id = profile_key[5:]
         result = await session.execute(

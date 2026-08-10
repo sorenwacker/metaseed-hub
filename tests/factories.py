@@ -5,13 +5,9 @@ from uuid import uuid4
 
 from metaseed_hub.models import (
     Dataset,
-    Note,
     Spec,
     SpecDraft,
     SpecStatus,
-    Team,
-    TeamMembership,
-    TeamRole,
     Tenant,
     User,
 )
@@ -64,49 +60,6 @@ def make_user(
     )
 
 
-def make_team(
-    *,
-    tenant: Tenant,
-    name: str | None = None,
-) -> Team:
-    """Create a Team instance for testing.
-
-    Args:
-        tenant: Parent tenant for the team.
-        name: Team name. Auto-generated if not provided.
-
-    Returns:
-        Team model instance (not yet persisted).
-    """
-    return Team(
-        tenant_id=tenant.id,
-        name=name or f"Team {uuid4().hex[:8]}",
-    )
-
-
-def make_team_membership(
-    *,
-    user: User,
-    team: Team,
-    role: TeamRole = TeamRole.MEMBER,
-) -> TeamMembership:
-    """Create a TeamMembership instance for testing.
-
-    Args:
-        user: User to add to the team.
-        team: Team to add the user to.
-        role: Role within the team.
-
-    Returns:
-        TeamMembership model instance (not yet persisted).
-    """
-    return TeamMembership(
-        user_id=user.id,
-        team_id=team.id,
-        role=role,
-    )
-
-
 def make_dataset(
     *,
     tenant: Tenant,
@@ -133,35 +86,6 @@ def make_dataset(
         profile=profile,
         version=version,
         data=data or {},
-    )
-
-
-def make_note(
-    *,
-    dataset: Dataset,
-    user: User,
-    entity_type: str = "Investigation",
-    entity_id: str | None = None,
-    content: str = "Test note content",
-) -> Note:
-    """Create a Note instance for testing.
-
-    Args:
-        dataset: Parent dataset for the note.
-        user: User who created the note.
-        entity_type: Type of entity the note is attached to.
-        entity_id: Identifier of the entity. Auto-generated if not provided.
-        content: Note content.
-
-    Returns:
-        Note model instance (not yet persisted).
-    """
-    return Note(
-        dataset_id=dataset.id,
-        user_id=user.id,
-        entity_type=entity_type,
-        entity_id=entity_id or f"entity-{uuid4().hex[:8]}",
-        content=content,
     )
 
 

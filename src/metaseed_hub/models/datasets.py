@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     # Only for annotations: the real links are resolved by name through
     # SQLAlchemy's registry, so no module imports another at runtime and
     # there is nothing to form a cycle.
-    from .comments import Comment, Note
+    from .comments import Comment
     from .identity import Tenant, User
     from .specs import Spec, SpecDraft
 
@@ -74,7 +74,6 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="datasets")
     spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft")
     spec: Mapped["Spec | None"] = relationship("Spec")
-    notes: Mapped[list["Note"]] = relationship("Note", back_populates="dataset")
     members: Mapped[list["DatasetMember"]] = relationship("DatasetMember", back_populates="dataset")
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="dataset", order_by="Comment.created_at"

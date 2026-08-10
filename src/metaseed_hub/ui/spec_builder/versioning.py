@@ -192,11 +192,11 @@ def bump_refusal(old: ProfileSpec, new: ProfileSpec) -> BumpRefusal | None:
 
 
 async def latest_published_spec(session: AsyncSession, *, tenant_id: str, name: str) -> Spec | None:
-    """The newest published specification of a profile name in one workspace.
+    """The newest published specification of a profile name in one account.
 
-    Scoped to the workspace because that is the release lineage: the uniqueness
+    Scoped to the account because that is the release lineage: the uniqueness
     rule on published specs is (tenant, name, version), so a name means one
-    thing per workspace and two workspaces may legitimately publish unrelated
+    thing per account and two accounts may legitimately publish unrelated
     profiles under the same name.
 
     Ordered on the parsed ``(major, minor)`` pair, not the string, so ``1.10``
@@ -205,12 +205,12 @@ async def latest_published_spec(session: AsyncSession, *, tenant_id: str, name: 
 
     Args:
         session: Database session.
-        tenant_id: The workspace to look in.
+        tenant_id: The account to look in.
         name: The profile name, matched case-insensitively.
 
     Returns:
         The latest published spec, or None if the name has never been published
-        in this workspace.
+        in this account.
     """
     from sqlalchemy import func, select
 

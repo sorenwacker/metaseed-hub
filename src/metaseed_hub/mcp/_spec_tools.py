@@ -1,7 +1,7 @@
 """Specification-drafting tools for the hub's MCP endpoint.
 
 Every tool here follows the package's per-call pattern: the caller is resolved
-from its token, the draft is looked up in that user's own workspace, and
+from its token, the draft is looked up in that user's own account, and
 mutations run inside the ``building`` context, which persists the draft after
 the block. The mutations themselves are metaseed's :class:`SpecBuilder`'s,
 already shared with the web UI; the hub adds only loading and saving.
@@ -163,7 +163,7 @@ async def _new_named_draft(
     spec: Any,
     template_source: tuple[str, str] | None = None,
 ) -> SpecDraft:
-    """Create a draft holding ``spec``, under a name free in the caller's workspace.
+    """Create a draft holding ``spec``, under a name free in the caller's account.
 
     The one draft-creation path of this module, shared by spec_create,
     spec_import_yaml, and spec_clone so the name-uniqueness rule cannot drift
@@ -248,7 +248,7 @@ def register_spec_tools(  # noqa: C901
 
         Args:
             yaml_text: The specification as a YAML document.
-            name: The draft's name in your workspace. Left empty, the spec's
+            name: The draft's name in your account. Left empty, the spec's
                 own name is used.
         """
         from metaseed_hub.ui.spec_builder_helpers import parse_spec_from_yaml
@@ -270,7 +270,7 @@ def register_spec_tools(  # noqa: C901
         Args:
             profile: A profile name from list_profiles.
             version: The profile version.
-            name: The draft's name in your workspace. Left empty, the
+            name: The draft's name in your account. Left empty, the
                 profile's own name is used.
         """
         import copy
@@ -293,7 +293,7 @@ def register_spec_tools(  # noqa: C901
         """Add an entity type to a draft specification.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type's name, e.g. "Study".
             description: What the entity represents.
             ontology_term: An ontology term identifying it, where one applies.
@@ -317,7 +317,7 @@ def register_spec_tools(  # noqa: C901
         Arguments left unset keep their current values.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type to change.
             description: The new description.
             ontology_term: The new ontology term.
@@ -338,7 +338,7 @@ def register_spec_tools(  # noqa: C901
         that no longer exists.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             old_name: The entity type's current name.
             new_name: The name to give it.
         """
@@ -357,7 +357,7 @@ def register_spec_tools(  # noqa: C901
         until spec_set_root_entity names a new one.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type to remove.
         """
         async with caller() as (session, user):
@@ -415,7 +415,7 @@ def register_spec_tools(  # noqa: C901
         marker is left out of the specification rather than written as false.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type to add the field to.
             field: The field's name.
             field_type: One of string, integer, float, boolean, date, datetime,
@@ -555,7 +555,7 @@ def register_spec_tools(  # noqa: C901
         rather than writing it as false. A list marker is replaced, not merged.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type holding the field.
             field_name: The field to change.
             field_type: A new type (string, integer, float, boolean, date,
@@ -661,7 +661,7 @@ def register_spec_tools(  # noqa: C901
         """Remove a field from an entity in a draft specification.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type holding the field.
             field_name: The field to remove.
         """
@@ -677,7 +677,7 @@ def register_spec_tools(  # noqa: C901
         """Move a field one position up or down within its entity.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type holding the field.
             field_name: The field to move.
             direction: "up" or "down".
@@ -696,7 +696,7 @@ def register_spec_tools(  # noqa: C901
         """Set which entity a dataset of this profile starts from.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             entity: The entity type to use as the root.
         """
         async with caller() as (session, user):
@@ -722,7 +722,7 @@ def register_spec_tools(  # noqa: C901
         by in these tools.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             name: The new profile name.
             version: The new profile version.
             display_name: The human-readable name shown in listings.
@@ -759,7 +759,7 @@ def register_spec_tools(  # noqa: C901
         """Add a validation rule to a draft specification.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             name: The rule's name.
             type: The rule type, e.g. "min_count" or "required_fields".
             message: What a dataset is told when the rule fails.
@@ -797,7 +797,7 @@ def register_spec_tools(  # noqa: C901
         """Change a validation rule in place. Unset arguments keep their values.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             rule_name: The rule to change.
             message: What a dataset is told when the rule fails.
             applies_to: The entity type the rule checks.
@@ -826,7 +826,7 @@ def register_spec_tools(  # noqa: C901
         """Remove a validation rule from a draft specification.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
             rule_name: The rule to remove.
         """
         async with caller() as (session, user):
@@ -841,7 +841,7 @@ def register_spec_tools(  # noqa: C901
         """Summarize a draft: name, version, root, entities, and rules.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
         """
         from metaseed.specs.builder import SpecBuilder
 
@@ -860,7 +860,7 @@ def register_spec_tools(  # noqa: C901
         a draft that trips one still builds, so it stays valid.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
         """
         from metaseed.specs.builder import SpecBuilder
 
@@ -895,7 +895,7 @@ def register_spec_tools(  # noqa: C901
         """Return a draft specification as YAML, without saving anything.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
         """
         from metaseed.specs.builder import SpecBuilder
 
@@ -914,7 +914,7 @@ def register_spec_tools(  # noqa: C901
         without a specification.
 
         Args:
-            draft: The draft's name in the caller's workspace.
+            draft: The draft's name in the caller's account.
         """
         from metaseed_hub.ui.spec_builder.access import delete_draft
 

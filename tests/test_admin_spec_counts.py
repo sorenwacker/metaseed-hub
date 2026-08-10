@@ -1,7 +1,7 @@
 """The admin directory counts each user's published specifications.
 
-Counted by author, not by workspace. The two differ: publishing a draft shared
-from another workspace puts the specification in *that* workspace while
+Counted by author, not by account. The two differ: publishing a draft shared
+from another account puts the specification in *that* account while
 recording the publisher as its author, so counting by tenant credits the wrong
 person — which is exactly the case that occurred in production.
 """
@@ -45,11 +45,11 @@ async def test_a_user_with_none_is_absent(session: AsyncSession) -> None:
     assert user.id not in await _spec_counts_by_user(session)
 
 
-async def test_the_author_is_credited_not_the_workspace(
+async def test_the_author_is_credited_not_the_account(
     session: AsyncSession,
 ) -> None:
     """The production case: authored by one person, living in another's
-    workspace. Counting by tenant would credit the wrong user."""
+    account. Counting by tenant would credit the wrong user."""
     owner_tenant, owner = await _user(session, slug="cnt00003", email="owner@example.org")
     _author_tenant, author = await _user(session, slug="cnt00004", email="author@example.org")
     session.add(make_spec(tenant=owner_tenant, created_by=author, name="Crossed"))
@@ -58,7 +58,7 @@ async def test_the_author_is_credited_not_the_workspace(
     counts = await _spec_counts_by_user(session)
 
     assert counts.get(author.id) == 1, "the person who wrote it"
-    assert owner.id not in counts, "not the workspace it happens to sit in"
+    assert owner.id not in counts, "not the account it happens to sit in"
 
 
 async def test_a_withdrawn_spec_is_not_counted(session: AsyncSession) -> None:

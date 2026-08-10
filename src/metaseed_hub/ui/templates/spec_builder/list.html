@@ -81,8 +81,8 @@
                         {% else %}Unknown{% endif %}
                         {% set owner = owners.get(spec.tenant_id) if owners else None %}
                         {% if owner and spec.created_by and owner.id != spec.created_by.id %}
-                        <span class="spec-owner" title="A specification published from a shared draft lives in the workspace it was shared from">
-                            (in {{ owner.display_name }}'s workspace)
+                        <span class="spec-owner" title="A specification published from a shared draft lives in the account it was shared from">
+                            (in {{ owner.display_name }}'s account)
                         </span>
                         {% endif %}
                     </span>

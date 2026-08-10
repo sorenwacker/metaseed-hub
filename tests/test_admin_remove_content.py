@@ -1,4 +1,4 @@
-"""An administrator removing a dataset or specification in any workspace.
+"""An administrator removing a dataset or specification in any account.
 
 An admin acts on someone else's data here, so the failures that matter are
 acting on the wrong item and acting irreversibly. Every assertion is about what
@@ -23,7 +23,7 @@ def _spec_data() -> dict:
     return {"spec": ProfileSpec(name="T", version="1.0").model_dump(mode="json")}
 
 
-async def _workspace(session: AsyncSession, *, slug: str, email: str):
+async def _account(session: AsyncSession, *, slug: str, email: str):
     tenant = make_tenant(slug=slug)
     session.add(tenant)
     await session.flush()
@@ -34,7 +34,7 @@ async def _workspace(session: AsyncSession, *, slug: str, email: str):
 
 
 async def _owner_sees_datasets(session: AsyncSession, tenant_id: str) -> list[Dataset]:
-    """Datasets as the owner's workspace lists them."""
+    """Datasets as the owner's account lists them."""
     result = await session.execute(
         select(Dataset).where(Dataset.tenant_id == tenant_id, Dataset.deleted_at.is_(None))
     )
@@ -52,8 +52,8 @@ async def _owner_sees_specs(session: AsyncSession, tenant_id: str) -> list[Spec]
     return list(result.scalars().all())
 
 
-async def test_a_removed_dataset_leaves_its_owners_workspace(session: AsyncSession) -> None:
-    tenant, owner = await _workspace(session, slug="own00001", email="owner@example.org")
+async def test_a_removed_dataset_leaves_its_owners_account(session: AsyncSession) -> None:
+    tenant, owner = await _account(session, slug="own00001", email="owner@example.org")
     dataset = make_dataset(tenant=tenant, name="oops")
     session.add(dataset)
     await session.commit()
@@ -63,8 +63,8 @@ async def test_a_removed_dataset_leaves_its_owners_workspace(session: AsyncSessi
     assert await _owner_sees_datasets(session, tenant.id) == []
 
 
-async def test_a_removed_spec_leaves_its_owners_workspace(session: AsyncSession) -> None:
-    tenant, owner = await _workspace(session, slug="own00002", email="owner2@example.org")
+async def test_a_removed_spec_leaves_its_owners_account(session: AsyncSession) -> None:
+    tenant, owner = await _account(session, slug="own00002", email="owner2@example.org")
     spec = make_spec(tenant=tenant, created_by=owner, spec_data=_spec_data())
     session.add(spec)
     await session.commit()
@@ -76,7 +76,7 @@ async def test_a_removed_spec_leaves_its_owners_workspace(session: AsyncSession)
 
 async def test_the_description_names_the_item_and_its_owner(session: AsyncSession) -> None:
     """The only guard against a mistyped identifier removing the wrong thing."""
-    tenant, _owner = await _workspace(session, slug="own00003", email="alice@example.org")
+    tenant, _owner = await _account(session, slug="own00003", email="alice@example.org")
     dataset = make_dataset(tenant=tenant, name="quarterly-yields")
     session.add(dataset)
     await session.commit()
@@ -89,7 +89,7 @@ async def test_the_description_names_the_item_and_its_owner(session: AsyncSessio
 
 async def test_removal_is_reversible(session: AsyncSession) -> None:
     """Soft, because an admin acting irreversibly on a guessed id is not safe."""
-    tenant, _owner = await _workspace(session, slug="own00004", email="bob@example.org")
+    tenant, _owner = await _account(session, slug="own00004", email="bob@example.org")
     dataset = make_dataset(tenant=tenant, name="restore-me")
     session.add(dataset)
     await session.commit()
@@ -102,7 +102,7 @@ async def test_removal_is_reversible(session: AsyncSession) -> None:
 
 
 async def test_nothing_is_erased(session: AsyncSession) -> None:
-    tenant, _owner = await _workspace(session, slug="own00005", email="c@example.org")
+    tenant, _owner = await _account(session, slug="own00005", email="c@example.org")
     dataset = make_dataset(tenant=tenant, name="kept")
     session.add(dataset)
     await session.commit()
@@ -115,7 +115,7 @@ async def test_nothing_is_erased(session: AsyncSession) -> None:
 
 
 async def test_an_unknown_id_changes_nothing(session: AsyncSession) -> None:
-    tenant, _owner = await _workspace(session, slug="own00006", email="d@example.org")
+    tenant, _owner = await _account(session, slug="own00006", email="d@example.org")
     dataset = make_dataset(tenant=tenant, name="untouched")
     session.add(dataset)
     await session.commit()
@@ -136,7 +136,7 @@ async def test_an_unknown_kind_is_refused(session: AsyncSession) -> None:
 async def test_removing_twice_is_refused(session: AsyncSession) -> None:
     """Reports the truth rather than silently succeeding, so an admin who pasted
     a stale identifier learns it."""
-    tenant, _owner = await _workspace(session, slug="own00007", email="e@example.org")
+    tenant, _owner = await _account(session, slug="own00007", email="e@example.org")
     dataset = make_dataset(tenant=tenant, name="once")
     session.add(dataset)
     await session.commit()
@@ -146,9 +146,9 @@ async def test_removing_twice_is_refused(session: AsyncSession) -> None:
         await set_removed(session, "dataset", dataset.id, removed=True)
 
 
-async def test_removal_does_not_touch_another_workspace(session: AsyncSession) -> None:
-    tenant_a, _a = await _workspace(session, slug="own00008", email="f@example.org")
-    tenant_b, _b = await _workspace(session, slug="own00009", email="g@example.org")
+async def test_removal_does_not_touch_another_account(session: AsyncSession) -> None:
+    tenant_a, _a = await _account(session, slug="own00008", email="f@example.org")
+    tenant_b, _b = await _account(session, slug="own00009", email="g@example.org")
     a = make_dataset(tenant=tenant_a, name="target")
     b = make_dataset(tenant=tenant_b, name="bystander")
     session.add_all([a, b])

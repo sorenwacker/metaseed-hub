@@ -139,7 +139,7 @@ The tree is built in a single pass: `if parent_unique_id and parent_unique_id in
 
 `src/metaseed_hub/mcp/__init__.py:394` — correctness
 
-The duplicate check filters `Dataset.deleted_at.is_(None)`, but `uq_datasets_tenant_name` is a full (non-partial) unique constraint on (tenant_id, name) — confirmed in alembic/versions/260601_remove_workspaces.py. The module's own delete_dataset is soft (`dataset.soft_delete()`), so the natural agent flow delete_dataset("x") -> create_dataset("x", ...) passes the existence check and then fails at commit with an asyncpg IntegrityError instead of the friendly ValueError, leaving the agent with an opaque internal error it cannot act on.
+The duplicate check filters `Dataset.deleted_at.is_(None)`, but `uq_datasets_tenant_name` is a full (non-partial) unique constraint on (tenant_id, name) — confirmed in alembic/versions/260601_remove_accounts.py. The module's own delete_dataset is soft (`dataset.soft_delete()`), so the natural agent flow delete_dataset("x") -> create_dataset("x", ...) passes the existence check and then fails at commit with an asyncpg IntegrityError instead of the friendly ValueError, leaving the agent with an opaque internal error it cannot act on.
 
 **Fix:** Either include soft-deleted rows in the duplicate check (with an error message explaining the name is held by a deleted dataset), or catch IntegrityError around the commit and re-raise as ValueError; longer-term make the unique constraint partial on deleted_at IS NULL.
 

@@ -19,6 +19,7 @@ from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus, Us
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
     SpecInUseError,
+    account_owner,
     can_edit_draft,
     can_edit_spec,
     create_new_draft,
@@ -27,7 +28,6 @@ from metaseed_hub.ui.spec_builder.access import (
     require_owner_role,
     save_state_to_draft,
     unpublish_spec,
-    workspace_owner,
 )
 from metaseed_hub.ui.spec_builder.access import (
     delete_draft as delete_draft_row,
@@ -315,7 +315,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 # nothing stored at all.
                 "spec_short_hash": short_hash(builder.spec) if builder.spec else None,
                 "tenant": spec.tenant,
-                "owner": await workspace_owner(session, spec.tenant_id),
+                "owner": await account_owner(session, spec.tenant_id),
                 "can_edit": await can_edit_spec(session, user_id, spec_id),
             },
         )
@@ -340,7 +340,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         # Anyone may fork a published specification; that is the point of
         # publishing one. No tenant check, and the copy is created below in the
-        # forker's own workspace rather than the original author's.
+        # forker's own account rather than the original author's.
         builder = (
             SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
         )
@@ -348,9 +348,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         if builder.spec is None:
             raise HTTPException(status_code=400, detail="Invalid spec data")
 
-        # The forker's own workspace, not the source spec's: a fork is the
+        # The forker's own account, not the source spec's: a fork is the
         # forker's copy. Taking the source's tenant would put their work in
-        # someone else's workspace, where they could not find it.
+        # someone else's account, where they could not find it.
         draft = await create_new_draft(
             session,
             user_id=user_id,

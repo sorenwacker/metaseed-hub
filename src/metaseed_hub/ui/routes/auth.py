@@ -118,7 +118,7 @@ async def _post_login_landing(session: "AsyncSession", token_user: "TokenUser") 
     slug = tenant_slug_for(token_user.sub)
     tenant = (await session.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
     if tenant is None:
-        return "/hub/home"  # brand new: no workspace yet, so no content
+        return "/hub/home"  # brand new: no account yet, so no content
 
     datasets = await session.scalar(
         select(func.count(Dataset.id)).where(

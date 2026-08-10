@@ -10,13 +10,12 @@ from .base import Base, _enum_values
 from .comments import (
     Comment,
     CommentReaction,
-    Note,
     ReactionType,
     SpecComment,
     SpecCommentReaction,
 )
 from .datasets import Dataset, DatasetMember, DatasetRole, DatasetVersion
-from .identity import Team, TeamMembership, TeamRole, Tenant, User
+from .identity import Tenant, User
 from .mixins import SoftDeleteMixin, TimestampMixin
 from .operations import ApiToken, ErrorEvent, FeatureGrant, SeekConnection
 from .specs import (
@@ -40,7 +39,6 @@ __all__ = [
     "DatasetVersion",
     "ErrorEvent",
     "FeatureGrant",
-    "Note",
     "ReactionType",
     "SeekConnection",
     "SoftDeleteMixin",
@@ -53,9 +51,6 @@ __all__ = [
     "SpecMember",
     "SpecRole",
     "SpecStatus",
-    "Team",
-    "TeamMembership",
-    "TeamRole",
     "Tenant",
     "TimestampMixin",
     "User",

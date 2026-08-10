@@ -9,15 +9,11 @@ from metaseed_hub.models import (
     Spec,
     SpecDraft,
     SpecStatus,
-    TeamMembership,
-    TeamRole,
 )
 
 from .factories import (
     make_spec,
     make_spec_draft,
-    make_team,
-    make_team_membership,
     make_tenant,
     make_user,
 )
@@ -244,80 +240,6 @@ class TestSpecDraftModel:
         await session.refresh(draft)
 
         assert draft.source_spec_id == spec.id
-
-
-class TestTeamBasedAccess:
-    """Tests for team-based access control patterns."""
-
-    async def test_user_team_membership(self, session: AsyncSession) -> None:
-        """User can be member of team in tenant."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        team = make_team(tenant=tenant, name="Research Team")
-        session.add(team)
-        await session.flush()
-
-        user = make_user(tenant=tenant)
-        session.add(user)
-        await session.flush()
-
-        # Add user to team
-        membership = make_team_membership(user=user, team=team, role=TeamRole.MEMBER)
-        session.add(membership)
-        await session.flush()
-
-        # Query teams user belongs to
-        result = await session.execute(
-            select(TeamMembership).where(TeamMembership.user_id == user.id)
-        )
-        memberships = result.scalars().all()
-
-        assert len(memberships) == 1
-        assert memberships[0].team_id == team.id
-
-    async def test_admin_role_in_team(self, session: AsyncSession) -> None:
-        """Admin role in team should be queryable."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        team = make_team(tenant=tenant)
-        session.add(team)
-        await session.flush()
-
-        admin_user = make_user(tenant=tenant, email="admin@test.com")
-        member_user = make_user(tenant=tenant, email="member@test.com")
-        session.add_all([admin_user, member_user])
-        await session.flush()
-
-        admin_membership = make_team_membership(user=admin_user, team=team, role=TeamRole.ADMIN)
-        member_membership = make_team_membership(user=member_user, team=team, role=TeamRole.MEMBER)
-        session.add_all([admin_membership, member_membership])
-        await session.flush()
-
-        # Query to check admin role
-        result = await session.execute(
-            select(TeamMembership).where(
-                TeamMembership.team_id == team.id,
-                TeamMembership.user_id == admin_user.id,
-                TeamMembership.role.in_([TeamRole.ADMIN, TeamRole.OWNER]),
-            )
-        )
-        admin_access = result.scalar_one_or_none()
-        assert admin_access is not None
-
-        # Member should not have admin access
-        result = await session.execute(
-            select(TeamMembership).where(
-                TeamMembership.team_id == team.id,
-                TeamMembership.user_id == member_user.id,
-                TeamMembership.role.in_([TeamRole.ADMIN, TeamRole.OWNER]),
-            )
-        )
-        member_admin_access = result.scalar_one_or_none()
-        assert member_admin_access is None
 
 
 class TestPublishingWorkflow:

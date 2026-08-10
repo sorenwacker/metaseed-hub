@@ -87,7 +87,7 @@ def _stored(spec: ProfileSpec) -> dict[str, Any]:
     return state.to_dict()
 
 
-async def _workspace(session: AsyncSession, slug: str):
+async def _account(session: AsyncSession, slug: str):
     tenant = make_tenant(slug=slug)
     session.add(tenant)
     await session.flush()
@@ -137,7 +137,7 @@ class TestTheBumpGate:
         self, session: AsyncSession
     ) -> None:
         """Making a field required invalidates datasets that omitted it."""
-        tenant, user = await _workspace(session, "gate-refuse")
+        tenant, user = await _account(session, "gate-refuse")
         await _published(session, tenant, user, _spec("1.0"))
         draft = await _draft(session, tenant, user, _spec("1.1", tissue_required=True))
 
@@ -152,7 +152,7 @@ class TestTheBumpGate:
 
     async def test_a_sufficient_major_bump_publishes(self, session: AsyncSession) -> None:
         """The gate refuses a dishonest claim, not a breaking change."""
-        tenant, user = await _workspace(session, "gate-major")
+        tenant, user = await _account(session, "gate-major")
         await _published(session, tenant, user, _spec("1.0"))
         draft = await _draft(session, tenant, user, _spec("2.0", tissue_required=True))
 
@@ -168,7 +168,7 @@ class TestTheBumpGate:
         self, session: AsyncSession
     ) -> None:
         """Nothing breaking, so a MINOR bump is an honest claim."""
-        tenant, user = await _workspace(session, "gate-minor")
+        tenant, user = await _account(session, "gate-minor")
         await _published(session, tenant, user, _spec("1.0"))
         compatible = _spec("1.1")
         compatible.entities["Sample"].fields.append(
@@ -184,7 +184,7 @@ class TestTheBumpGate:
         self, session: AsyncSession
     ) -> None:
         """An unrelated name must not be gated by someone else's history."""
-        tenant, user = await _workspace(session, "gate-newname")
+        tenant, user = await _account(session, "gate-newname")
         await _published(session, tenant, user, _spec("9.9", name="unrelated"))
         draft = await _draft(session, tenant, user, _spec("1.1", tissue_required=True))
 
@@ -196,7 +196,7 @@ class TestTheBumpGate:
         self, session: AsyncSession
     ) -> None:
         """1.10 is after 1.9, so the latest is not the lexicographic maximum."""
-        tenant, user = await _workspace(session, "gate-latest")
+        tenant, user = await _account(session, "gate-latest")
         await _published(session, tenant, user, _spec("1.9", tissue_required=True))
         await _published(session, tenant, user, _spec("1.10"))
         draft = await _draft(session, tenant, user, _spec("1.11", tissue_required=True))
@@ -212,7 +212,7 @@ class TestTheContentHash:
     """A version says how a spec relates to its predecessor; the hash names it."""
 
     async def test_publishing_records_the_content_hash(self, session: AsyncSession) -> None:
-        tenant, user = await _workspace(session, "hash-publish")
+        tenant, user = await _account(session, "hash-publish")
         spec = _spec("1.0")
         draft = await _draft(session, tenant, user, spec)
 
@@ -223,7 +223,7 @@ class TestTheContentHash:
 
     async def test_the_view_page_shows_the_short_hash(self, session: AsyncSession) -> None:
         """Provenance on the page that shows a published spec's identity."""
-        tenant, user = await _workspace(session, "hash-view")
+        tenant, user = await _account(session, "hash-view")
         spec = _spec("1.0")
         row = await _published(session, tenant, user, spec)
 
@@ -241,7 +241,7 @@ class TestMalformedStoredVersions:
     ) -> None:
         from metaseed_hub.ui.spec_builder.versioning import SpecVersionError
 
-        tenant, user = await _workspace(session, "bad-version-spec")
+        tenant, user = await _account(session, "bad-version-spec")
         stored = _stored(_spec("1.0"))
         stored["spec"]["version"] = "1.0.0"
         row = make_spec(
@@ -261,7 +261,7 @@ class TestMalformedStoredVersions:
         from metaseed_hub.ui.spec_builder.access import load_state_for_draft
         from metaseed_hub.ui.spec_builder.versioning import SpecVersionError
 
-        tenant, user = await _workspace(session, "bad-version-draft")
+        tenant, user = await _account(session, "bad-version-draft")
         stored = _stored(_spec("1.0"))
         stored["spec"]["version"] = "draft"
         row = make_spec_draft(

@@ -99,9 +99,9 @@ async def _caller() -> AsyncIterator[tuple[AsyncSession, User]]:
 
 
 async def _owned_dataset(session: AsyncSession, user: User, name: str) -> Dataset:
-    """A dataset in the caller's own workspace, by name.
+    """A dataset in the caller's own account, by name.
 
-    Scoped to the caller's workspace, so a name that exists for somebody else
+    Scoped to the caller's account, so a name that exists for somebody else
     reads as absent rather than reachable.
     """
     result = await session.execute(
@@ -113,7 +113,7 @@ async def _owned_dataset(session: AsyncSession, user: User, name: str) -> Datase
     )
     dataset = result.scalar_one_or_none()
     if dataset is None:
-        raise ValueError(f"No dataset named {name!r} in your workspace")
+        raise ValueError(f"No dataset named {name!r} in your account")
     return dataset
 
 
@@ -346,7 +346,7 @@ async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraf
     )
     draft = result.scalar_one_or_none()
     if draft is None:
-        raise ValueError(f"No specification draft named {name!r} in your workspace")
+        raise ValueError(f"No specification draft named {name!r} in your account")
     return draft
 
 
@@ -519,7 +519,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
     @mcp.tool()
     async def list_datasets() -> str:
-        """List the datasets in the caller's own workspace."""
+        """List the datasets in the caller's own account."""
         async with _caller() as (session, user):
             result = await session.execute(
                 select(Dataset)
@@ -538,7 +538,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         """Return a dataset's stored contents.
 
         Args:
-            name: The dataset's name in the caller's workspace.
+            name: The dataset's name in the caller's account.
         """
         async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
@@ -553,13 +553,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
     @mcp.tool()
     async def create_dataset(name: str, profile: str, version: str) -> str:
-        """Create an empty dataset in the caller's workspace.
+        """Create an empty dataset in the caller's account.
 
         The profile may be a built-in standard or a published specification;
         both appear in list_profiles.
 
         Args:
-            name: A name unique within the workspace.
+            name: A name unique within the account.
             profile: A profile name from list_profiles.
             version: The profile version.
         """
@@ -622,7 +622,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         be restored from the dataset's history in the web interface.
 
         Args:
-            name: The dataset to write to, in the caller's workspace.
+            name: The dataset to write to, in the caller's account.
             data: The full dataset contents, replacing what is stored.
         """
         from sqlalchemy.orm.attributes import flag_modified
@@ -651,7 +651,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
     @mcp.tool()
     async def delete_dataset(name: str) -> str:
-        """Remove a dataset from the caller's workspace.
+        """Remove a dataset from the caller's account.
 
         Soft: the dataset stops being listed but is not erased, so an agent
         cannot destroy someone's work irrecoverably.
@@ -671,7 +671,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         """Check a dataset against its profile and report what is missing.
 
         Args:
-            name: The dataset to validate, in the caller's workspace.
+            name: The dataset to validate, in the caller's account.
         """
         async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)

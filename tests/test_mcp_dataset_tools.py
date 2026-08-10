@@ -59,7 +59,7 @@ async def test_another_users_dataset_is_not_reachable_by_name(
         await get_dataset("bobs-secret")
 
 
-async def test_a_write_lands_in_the_callers_own_workspace(server, session: AsyncSession) -> None:
+async def test_a_write_lands_in_the_callers_own_account(server, session: AsyncSession) -> None:
     tenant, _user, secret, _token = await _user_with_token(
         session, slug="mcp00008", email="writer@example.org"
     )

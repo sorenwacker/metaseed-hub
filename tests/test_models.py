@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .factories import (
     make_dataset,
-    make_team,
     make_tenant,
     make_user,
 )
@@ -135,44 +134,6 @@ class TestUserModel:
 
         assert user.is_deleted is True
         assert user.deleted_at is not None
-
-
-class TestTeamModel:
-    """Tests for Team model constraints."""
-
-    async def test_team_name_unique_per_tenant(self, session: AsyncSession) -> None:
-        """Team name should be unique within a tenant."""
-        tenant1 = make_tenant(slug="tenant-1")
-        tenant2 = make_tenant(slug="tenant-2")
-        session.add_all([tenant1, tenant2])
-        await session.flush()
-
-        # Same name in different tenants should work
-        team1 = make_team(tenant=tenant1, name="Engineering")
-        team2 = make_team(tenant=tenant2, name="Engineering")
-        session.add_all([team1, team2])
-        await session.flush()
-
-        # Same name in same tenant should fail
-        team3 = make_team(tenant=tenant1, name="Engineering")
-        session.add(team3)
-
-        with pytest.raises(IntegrityError):
-            await session.flush()
-
-    async def test_team_has_timestamps(self, session: AsyncSession) -> None:
-        """Team should have created_at and updated_at timestamps."""
-        tenant = make_tenant()
-        session.add(tenant)
-        await session.flush()
-
-        team = make_team(tenant=tenant)
-        session.add(team)
-        await session.flush()
-        await session.refresh(team)
-
-        assert team.created_at is not None
-        assert team.updated_at is not None
 
 
 class TestDatasetModel:

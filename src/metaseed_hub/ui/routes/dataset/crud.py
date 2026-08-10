@@ -148,7 +148,7 @@ async def dataset_new(
                 }
             )
 
-    # Every published spec, from any workspace, offered as a starting point:
+    # Every published spec, from any account, offered as a starting point:
     # publishing is what makes a specification available to other people.
     specs_result = await session.execute(
         select(Spec)
@@ -596,7 +596,7 @@ async def dataset_create(
         profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
         version = draft.version
 
-    # A published specification, chosen from any workspace: publishing is what
+    # A published specification, chosen from any account: publishing is what
     # makes one available to other people, so this is not scoped to the caller.
     # Only PUBLISHED and not withdrawn, so a draft stays unreachable by id.
     spec_id = None

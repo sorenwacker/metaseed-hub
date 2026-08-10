@@ -131,8 +131,8 @@ async def _spec_counts_by_user(session: AsyncSession) -> dict[str, int]:
     """Return ``{user_id: published spec count}`` for every user who wrote one.
 
     Counted by ``created_by_id``, the author, rather than by tenant as datasets
-    are. The two differ: publishing a draft shared from another workspace puts
-    the specification in *that* workspace while recording the publisher as its
+    are. The two differ: publishing a draft shared from another account puts
+    the specification in *that* account while recording the publisher as its
     author, so counting by tenant would credit it to the wrong person.
 
     Withdrawn specifications are excluded, so the column matches what is
@@ -209,9 +209,9 @@ class RemovalError(Exception):
 
 
 async def _describe_owner(session: AsyncSession, tenant_id: str) -> str:
-    """The email of the workspace that owns an item, for the confirmation.
+    """The email of the account that owns an item, for the confirmation.
 
-    A workspace belongs to one person, so naming them is how an administrator
+    A account belongs to one person, so naming them is how an administrator
     sees at a glance that the identifier was the intended one.
     """
     email = await session.scalar(
@@ -227,7 +227,7 @@ async def set_removed(
     *,
     removed: bool,
 ) -> str:
-    """Soft-delete or restore a dataset or spec in any workspace.
+    """Soft-delete or restore a dataset or spec in any account.
 
     Removal is by identifier rather than by browsing: the dashboard reports
     aggregated counts and does not list other people's content, and a tool that
@@ -355,7 +355,7 @@ async def admin_change_content(
     item_id: Annotated[str, Form()],
     csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
 ) -> HTMLResponse:
-    """Remove or restore a dataset or specification in any workspace.
+    """Remove or restore a dataset or specification in any account.
 
     Args:
         request: The request, for CSRF validation.

@@ -16,11 +16,11 @@ The dashboard reports aggregated counts and directory information only; it does 
 
 ### Datasets per user
 
-The **Datasets** column counts the datasets in that user's own workspace, excluding deleted ones. Every user gets a workspace of their own on first sign-in, and that workspace is what owns a dataset, so this is the count of datasets the user created rather than of datasets they can see. A dataset shared with them belongs to the workspace of whoever created it and is counted there.
+The **Datasets** column counts the datasets in that user's own account, excluding deleted ones. Every user gets a account of their own on first sign-in, and that account is what owns a dataset, so this is the count of datasets the user created rather than of datasets they can see. A dataset shared with them belongs to the account of whoever created it and is counted there.
 
 ### Specifications per user
 
-The **Specs** column counts the published specifications that user **authored**, wherever they live. Authorship rather than workspace, because the two can differ: publishing a draft shared from another workspace puts the specification in that workspace while recording the publisher as its author.
+The **Specs** column counts the published specifications that user **authored**, wherever they live. Authorship rather than account, because the two can differ: publishing a draft shared from another account puts the specification in that account while recording the publisher as its author.
 
 Withdrawn and unpublished specifications are excluded, so the column reports what is actually published.
 
@@ -50,9 +50,9 @@ The identifier is the UUID in the URL of the item. For a dataset that is `/hub/d
 
 What removal does:
 
-- The item is soft-deleted. It disappears from its owner's workspace, from the Explorer, and from the profile choices offered for new datasets, exactly as if the owner had deleted it.
+- The item is soft-deleted. It disappears from its owner's account, from the Explorer, and from the profile choices offered for new datasets, exactly as if the owner had deleted it.
 - Nothing is erased. The row stays in the database with the time of removal, so an administrator can still account for what existed.
-- The response names what was removed — the item's name and the email of the workspace that owned it — so a mistyped identifier is visible immediately rather than silently removing the wrong thing.
+- The response names what was removed — the item's name and the email of the account that owned it — so a mistyped identifier is visible immediately rather than silently removing the wrong thing.
 
 A removal can be undone with **Restore**, using the same identifier. This is the reason removal is a soft delete: an identifier is easy to get wrong, and an irreversible admin action on someone else's data is not.
 

@@ -34,14 +34,14 @@ async def _tenant_for(session: AsyncSession, sub: str):
 
 
 async def test_a_brand_new_user_lands_on_the_guide(session: AsyncSession) -> None:
-    """No workspace yet — definitely nothing to show."""
+    """No account yet — definitely nothing to show."""
     where = await _post_login_landing(session, _token_user("new-subject-1"))
 
     assert where == "/hub/home"
 
 
 async def test_a_user_with_no_content_lands_on_the_guide(session: AsyncSession) -> None:
-    """Has a workspace from a prior visit but has created nothing."""
+    """Has a account from a prior visit but has created nothing."""
     await _tenant_for(session, "empty-subject-1")
 
     where = await _post_login_landing(session, _token_user("empty-subject-1"))

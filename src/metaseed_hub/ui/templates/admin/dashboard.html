@@ -147,7 +147,7 @@
                     <th>Email</th>
                     <th>Display Name</th>
                     <th>Registered</th>
-                    <th title="Datasets in this user's own workspace">Datasets</th>
+                    <th title="Datasets in this user's own account">Datasets</th>
                     <th title="Published specifications this user authored, wherever they live">Specs</th>
                     <th title="When the user last completed sign-in, not their last request">Last sign-in</th>
                 </tr>
@@ -175,20 +175,20 @@
     <section class="admin-section">
         <h2>Remove content</h2>
         <p>
-            Remove a dataset or published specification from any workspace, for content
+            Remove a dataset or published specification from any account, for content
             created or published by mistake. Removal is by identifier &mdash; the UUID in the
             item's URL &mdash; because this dashboard reports aggregated counts and does not
             list other people's content.
         </p>
         <p>
-            The result names the item and the workspace that owns it, so a mistyped
+            The result names the item and the account that owns it, so a mistyped
             identifier is visible immediately. Nothing is erased, and <strong>Restore</strong>
             undoes a removal using the same identifier.
         </p>
         <form hx-post="/hub/admin/content/remove"
               hx-target="#admin-content-result"
               hx-swap="innerHTML"
-              onsubmit="return confirm('Remove this item from its owner\'s workspace?')">
+              onsubmit="return confirm('Remove this item from its owner\'s account?')">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
             <label>
                 Type
