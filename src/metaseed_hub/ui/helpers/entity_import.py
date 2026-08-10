@@ -67,17 +67,35 @@ def add_entities_in_order(
         count = len(entities_by_type[entity_type])
         errors.append(f"{entity_type}: not an entity type of this profile ({count} skipped)")
 
+    # Identifier value -> created node id, so a child's ``_parent`` column can
+    # land it under its parent instead of every import flattening the tree.
+    node_by_identifier: dict[str, str] = {}
+
     for entity_type in entity_order:
         for entity_data in entities_by_type.get(entity_type, []):
             try:
+                parent_key = str(entity_data.get("_parent") or "").strip()
                 clean_data = {
                     k: v
                     for k, v in entity_data.items()
                     if v is not None and str(v).strip() and not k.startswith("_")
                 }
                 if clean_data:
-                    add_entity_node(state, entity_type, clean_data)
+                    node = add_entity_node(
+                        state,
+                        entity_type,
+                        clean_data,
+                        parent_id=node_by_identifier.get(parent_key),
+                    )
                     imported += 1
+                    # Only the declared identifier joins the parent map: any
+                    # other value matching by coincidence would file some later
+                    # child under the wrong parent.
+                    helper_for = getattr(facade, entity_type, None)
+                    id_field = getattr(helper_for, "identifier_field", None)
+                    identifier = clean_data.get(id_field) if id_field else None
+                    if isinstance(identifier, str) and identifier:
+                        node_by_identifier.setdefault(identifier, node.id)
             except Exception as e:
                 # One bad payload must not abort the rest of the import.
                 errors.append(f"{entity_type}: {e}")

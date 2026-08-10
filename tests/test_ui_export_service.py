@@ -49,7 +49,9 @@ def test_export_creates_sheet_per_entity_type_with_rows() -> None:
     assert set(facade.entities) <= set(workbook.sheetnames)
     inv_sheet = workbook["Investigation"]
     header = [cell.value for cell in inv_sheet[1]]
-    assert header == getattr(facade, "Investigation").all_fields
+    # The trailing _parent column carries the tree; without it the export
+    # cannot be reimported with its structure intact.
+    assert header == [*getattr(facade, "Investigation").all_fields, "_parent"]
     row = dict(zip(header, [cell.value for cell in inv_sheet[2]], strict=True))
     assert row["unique_id"] == "inv-1"
     assert row["title"] == "Trial"
