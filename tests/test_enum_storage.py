@@ -10,7 +10,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _EXPECTED = {
-    "teamrole": ["owner", "admin", "member"],
     "datasetrole": ["owner", "curator", "viewer"],
     "specrole": ["owner", "curator", "viewer"],
     "specdraftrole": ["owner", "editor", "viewer"],

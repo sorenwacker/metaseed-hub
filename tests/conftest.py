@@ -68,7 +68,13 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
                 )
             )
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            # The whole schema, not drop_all: a table whose model has been
+            # deleted is invisible to the metadata, stays behind, and its
+            # foreign key then blocks dropping the tables that are still
+            # declared. Removing teams and notes turned every test in the run
+            # into an error until the leftovers were dropped by hand.
+            await conn.execute(text("DROP SCHEMA public CASCADE"))
+            await conn.execute(text("CREATE SCHEMA public"))
             await conn.run_sync(Base.metadata.create_all)
         _schema_created = True
 
