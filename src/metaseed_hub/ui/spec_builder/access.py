@@ -13,7 +13,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from metaseed.specs.schema import ProfileSpec
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,29 @@ class LoginRequiredRedirectError(Exception):
     """Raised when user needs to login and should be redirected."""
 
     pass
+
+
+class SpecInUseError(Exception):
+    """A published spec cannot be withdrawn while datasets are built on it.
+
+    Withdrawing soft-deletes the spec, which removes it from every query at
+    once — including the profile lookup that a dataset performs on every page
+    load. Datasets bind to a specification by name and version, and published
+    specs are visible hub-wide, so the datasets that break are usually other
+    people's: acdc_ks 2.0 was withdrawn on 260728 and two datasets in another
+    workspace raised SpecLoadError on every page from then on.
+    """
+
+    def __init__(self, spec_name: str, version: str, datasets: list[str]) -> None:
+        self.datasets = datasets
+        listed = ", ".join(datasets[:5])
+        more = f" and {len(datasets) - 5} more" if len(datasets) > 5 else ""
+        super().__init__(
+            f"{len(datasets)} dataset(s) are built on {spec_name} {version} "
+            f"({listed}{more}). Withdrawing it would break them on every page "
+            "load. Move them to another specification first, or leave this one "
+            "published."
+        )
 
 
 class DraftConflictError(Exception):
@@ -544,6 +567,29 @@ async def get_draft_context(
     )
 
 
+async def datasets_using_spec(session: AsyncSession, spec: Spec) -> list[str]:
+    """Names of live datasets built on ``spec``, in any workspace.
+
+    Datasets bind by profile name and version rather than by foreign key —
+    ``spec_id`` is null on datasets created from a published spec — so matching
+    on the id alone finds nothing. Published specs are hub-wide, so the search
+    deliberately crosses tenants: the datasets at risk are usually not the
+    publisher's own.
+    """
+    from metaseed_hub.models import Dataset
+
+    result = await session.execute(
+        select(Dataset.name).where(
+            Dataset.deleted_at.is_(None),
+            or_(
+                Dataset.spec_id == spec.id,
+                and_(Dataset.profile == spec.name, Dataset.version == spec.version),
+            ),
+        )
+    )
+    return list(result.scalars().all())
+
+
 async def unpublish_spec(
     session: AsyncSession,
     spec: Spec,
@@ -574,7 +620,14 @@ async def unpublish_spec(
     Raises:
         ValueError: If the spec holds no usable specification, in which case
             there is nothing to hand back and the withdrawal is not performed.
+        SpecInUseError: If datasets are built on this specification. The check
+            lives here rather than in the route so every caller is covered —
+            the API and the MCP tools withdraw through this function too.
     """
+    in_use = await datasets_using_spec(session, spec)
+    if in_use:
+        raise SpecInUseError(spec.name, spec.version, in_use)
+
     builder = SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
     if builder.spec is None:
         raise ValueError(f"Spec {spec.id} holds no specification to restore")

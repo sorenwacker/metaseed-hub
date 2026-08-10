@@ -44,16 +44,30 @@
             </div>
             {% endif %}
         </div>
+        {% if unpublish_error %}
+        <div class="alert alert-error" data-testid="unpublish-refused">{{ unpublish_error }}</div>
+        {% endif %}
         <div class="header-right">
             <a href="/hub/spec-builder" class="btn">Back to List</a>
             <form method="post" action="/hub/spec-builder/spec/{{ spec_record.id }}/unpublish"
                   style="display:inline"
                   onsubmit="return confirm('Unpublish this specification?\n\nIt stops being visible to other users of this hub and can no longer be chosen for new datasets.\n\nIt comes back to you as a private draft, so nothing is lost.')">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
-                <button type="submit" class="btn btn-warning" title="Withdraw from the organisation, back to a private draft">Unpublish</button>
+                <button type="submit" class="btn btn-warning"
+                        {% if datasets_using %}disabled
+                        title="{{ datasets_using|length }} dataset(s) are built on this specification: {{ datasets_using[:5]|join(', ') }}"
+                        data-testid="unpublish-blocked"
+                        {% else %}title="Withdraw from the organisation, back to a private draft"{% endif %}>Unpublish</button>
             </form>
         </div>
     </div>
+    {% if datasets_using %}
+    <div class="spec-in-use-note" data-testid="spec-in-use">
+        {{ datasets_using|length }} dataset(s) are built on this specification, so it cannot be
+        withdrawn: {{ datasets_using[:5]|join(', ') }}{% if datasets_using|length > 5 %} and
+        {{ datasets_using|length - 5 }} more{% endif %}.
+    </div>
+    {% endif %}
 
     <div class="spec-view-body">
         <!-- Left sidebar - Entity tree -->
