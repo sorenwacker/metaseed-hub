@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.0] - 2026-08-10
+
+### Fixed
+- Entitlements now arrive from SRAM: the token was the only place the hub
+  looked, and SRAM puts `eduperson_entitlement` only on its userinfo endpoint.
+  A user in a plugin group saw none of its functions; now `verify_token` falls
+  back to userinfo (cached per token), one code path for both issuers.
+- Excel import stops flattening every dataset: the export writes a `_parent`
+  column and the import files each child under the node whose declared
+  identifier it names. Every cell is written as text, so gene names stay names
+  and identifiers keep their leading zeros.
+
+### Changed
+- Require metaseed `>=0.30.0`: Excel import in the shared templates, the
+  optional-fields filter on long forms, the clamped profile picker with the
+  full description in a tooltip, and the reference-driven assay link for SEEK.
+- Rendered-page tests assert the export buttons a user sees match the features
+  their groups grant.
+- After changing `keycloak-realm.json`, drop the dev `keycloak` database and
+  restart: Keycloak imports the realm once and it persists in postgres.
+
 ## [0.28.0] - 2026-08-10
 
 ### Changed
