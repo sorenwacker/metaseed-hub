@@ -19,20 +19,16 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Tables managed by our application
-OUR_TABLES = {
-    "tenants",
-    "teams",
-    "team_memberships",
-    "users",
-    "workspaces",
-    "workspace_teams",
-    "projects",
-    "notes",
-    "chat_messages",
-    "specs",
-    "spec_drafts",
-    "alembic_version",
-}
+#: The tables this application owns.
+#
+# Derived from the models rather than listed by hand: the hand-written list
+# stopped at twelve tables while the application grew past twenty, so every
+# table added since — datasets, seek_connections, feature_grants and the rest —
+# was silently excluded from `alembic check`, which is how a migration missing
+# its server defaults reached production unnoticed. The hub shares its
+# PostgreSQL instance with Keycloak, so a filter is still needed; it just has
+# to follow the models.
+OUR_TABLES = set(target_metadata.tables) | {"alembic_version"}
 
 
 def include_object(

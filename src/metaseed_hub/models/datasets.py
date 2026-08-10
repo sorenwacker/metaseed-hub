@@ -64,7 +64,11 @@ class Dataset(TimestampMixin, SoftDeleteMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     profile: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
-    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # server_default mirrors what the table has carried since the rename from
+    # projects; declaring it keeps the model and the migrations comparable.
+    data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
 
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="datasets")

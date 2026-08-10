@@ -1,4 +1,4 @@
-"""give seek connection timestamps their database defaults
+"""give connection and grant timestamps their database defaults
 
 The model declares ``server_default=func.now()`` (TimestampMixin) but the
 creating migration wrote plain NOT NULL columns, so an insert that omits them —
@@ -26,11 +26,16 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("seek_connections", sa.Column("project_hint", sa.String(255), nullable=True))
-    for column in ("created_at", "updated_at"):
-        op.alter_column("seek_connections", column, server_default=sa.func.now(), nullable=False)
+    # feature_grants carries the same defect: the model gives TimestampMixin's
+    # columns a server default, its creating migration did not, so the first
+    # insert through the ORM would fail exactly as seek_connections did.
+    for table in ("seek_connections", "feature_grants"):
+        for column in ("created_at", "updated_at"):
+            op.alter_column(table, column, server_default=sa.func.now(), nullable=False)
 
 
 def downgrade() -> None:
-    for column in ("created_at", "updated_at"):
-        op.alter_column("seek_connections", column, server_default=None)
+    for table in ("seek_connections", "feature_grants"):
+        for column in ("created_at", "updated_at"):
+            op.alter_column(table, column, server_default=None)
     op.drop_column("seek_connections", "project_hint")
