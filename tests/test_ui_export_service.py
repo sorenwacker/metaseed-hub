@@ -110,3 +110,20 @@ def test_generate_filename_without_entities_falls_back_to_export() -> None:
     filename = generate_filename(facade)
 
     assert filename.endswith("-export.xlsx")
+
+
+class TestEveryCellIsText:
+    """Excel reinterprets what it recognises: gene names become dates,
+    identifiers lose leading zeros. A metadata value must survive the round
+    trip byte for byte, so every data cell is text."""
+
+    def test_data_cells_are_text_formatted_strings(self) -> None:
+        from metaseed_hub.ui.services.export import build_workbook
+
+        facade = _facade_with_tree()
+        wb = build_workbook(facade)
+        ws = wb["Investigation"]
+        cells = [c for row in ws.iter_rows(min_row=2) for c in row]
+        assert cells, "no data rows were written"
+        assert all(c.number_format == "@" for c in cells)
+        assert all(isinstance(c.value, str) for c in cells if c.value not in (None, ""))

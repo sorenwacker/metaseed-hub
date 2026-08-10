@@ -127,15 +127,21 @@ def build_workbook(facade: ProfileFacade) -> Workbook:
         columns = helper.all_fields
         sheet.append(columns)
 
-        for entity_data in entities_by_type.get(entity_type, []):
-            sheet.append(
-                [
-                    _escape_formula(
-                        _format_cell_value(entity_data.get(col, ""), col in nested_fields)
-                    )
-                    for col in columns
-                ]
-            )
+        for row_offset, entity_data in enumerate(entities_by_type.get(entity_type, []), start=2):
+            for col_offset, col in enumerate(columns, start=1):
+                value = _escape_formula(
+                    _format_cell_value(entity_data.get(col, ""), col in nested_fields)
+                )
+                cell = sheet.cell(
+                    row=row_offset,
+                    column=col_offset,
+                    value=str(value) if value != "" else "",
+                )
+                # Every data cell is text. Excel otherwise reinterprets what it
+                # recognises -- gene names become dates, identifiers lose their
+                # leading zeros -- and a metadata value must survive the round
+                # trip byte for byte.
+                cell.number_format = "@"
 
     return workbook
 
