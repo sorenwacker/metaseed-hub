@@ -9,10 +9,23 @@
         is stored encrypted and never shown again.
     </p>
 
+    <div class="seek-status-block">
+        {% include "partials/seek_status.html" %}
+        {% if connection %}
+        <form method="post" action="/hub/seek/settings/check" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-sm" type="submit" data-testid="btn-seek-recheck"
+                    title="Check the stored connection again — no need to retype the key">Check again</button>
+        </form>
+        {% endif %}
+    </div>
+
     {% if message %}<div class="alert alert-success" data-testid="seek-settings-ok">{{ message }}</div>{% endif %}
-    {% if error %}<div class="alert alert-error" data-testid="seek-settings-error">{{ error }}</div>{% endif %}
-    {% if configured_url and not message and not error %}
-    <div class="alert alert-success">Configured for {{ configured_url }}.</div>
+    {% if error %}
+    <div class="alert alert-error" data-testid="seek-settings-error">
+        {{ error }}
+        <span class="form-hint">Saved anyway, so nothing you typed is lost — the URL is kept above and the key is stored. Fix what the message says, then <strong>Check again</strong>.</span>
+    </div>
     {% endif %}
 
     <form method="post" action="/hub/seek/settings">

@@ -102,10 +102,12 @@ class TestTheRoutesAreGated:
 
 
 class TestSettingsSave:
-    async def test_an_unreachable_seek_is_rejected_not_stored(
+    async def test_an_unreachable_seek_is_stored_with_its_error(
         self, dataset, app_db, session
     ) -> None:
-        from sqlalchemy import func, select
+        """Nothing typed is thrown away — a failed check records why instead."""
+        import httpx as _httpx
+        from sqlalchemy import select
 
         from metaseed_hub.models import SeekConnection
 
@@ -120,17 +122,208 @@ class TestSettingsSave:
                 AsyncMock(return_value={"seek"}),
             ),
         ):
-            client = TestClient(app)
-            page = client.get("/hub/seek/settings")
-            csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
-            response = client.post(
-                "/hub/seek/settings",
-                data={
-                    "url": "http://127.0.0.1:1",  # nothing listens here
-                    "api_key": "k",
-                    "csrf_token": csrf,
-                },
-            )
+            async with _httpx.AsyncClient(
+                transport=_httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                page = await client.get("/hub/seek/settings")
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    "/hub/seek/settings",
+                    data={
+                        "url": "http://127.0.0.1:1",  # nothing listens here
+                        "api_key": "k",
+                        "csrf_token": csrf,
+                    },
+                    cookies=page.cookies,
+                )
         assert 'data-testid="seek-settings-error"' in response.text
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        assert stored.verified_at is None
+        assert stored.last_error
+
+
+class TestVerificationSaysWhatFailed:
+    """The first production attempt failed on 'no projects' and read as a bad
+    key. Each cause now has its own message, and a working connection is no
+    longer rejected for being project-less."""
+
+    def test_a_name_that_does_not_resolve_says_so(self) -> None:
+        import socket
+
+        from metaseed_hub.ui.routes.seek import _verification_failure
+
+        message = _verification_failure(
+            socket.gaierror("[Errno -3] Temporary failure in name resolution"),
+            "https://seek.local:3000",
+        )
+        assert "cannot resolve seek.local:3000" in message
+
+    def test_a_refused_connection_is_not_blamed_on_the_key(self) -> None:
+        import httpx
+
+        from metaseed_hub.ui.routes.seek import _verification_failure
+
+        message = _verification_failure(httpx.ConnectError("refused"), "https://seek.example.org")
+        assert "Nothing answered" in message
+        assert "key" not in message.lower()
+
+    def test_a_rejected_key_says_the_key(self) -> None:
+        import httpx
+
+        from metaseed_hub.ui.routes.seek import _verification_failure
+
+        exc = httpx.HTTPStatusError(
+            "401",
+            request=httpx.Request("GET", "https://seek.example.org/projects"),
+            response=httpx.Response(401),
+        )
+        message = _verification_failure(exc, "https://seek.example.org")
+        assert "rejected the API key" in message
+
+    async def _post_settings(self, url: str, factory_effect, session):
+        """POST the settings form through ASGITransport (this path writes, and
+        TestClient's own event loop cannot share the fixture's pool)."""
+        import httpx as _httpx
+
+        app = create_app()
+        with (
+            patch(
+                "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+                AsyncMock(return_value=_user()),
+            ),
+            patch(
+                "metaseed_hub.features.enabled_features",
+                AsyncMock(return_value={"seek"}),
+            ),
+            patch("metaseed.seek.client_from_settings") as factory,
+        ):
+            factory_effect(factory)
+            async with _httpx.AsyncClient(
+                transport=_httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                page = await client.get("/hub/seek/settings")
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                return await client.post(
+                    "/hub/seek/settings",
+                    data={"url": url, "api_key": "k", "csrf_token": csrf},
+                    cookies=page.cookies,
+                )
+
+    async def test_a_projectless_seek_is_saved_with_a_warning(
+        self, dataset, app_db, session
+    ) -> None:
+        """Reaching SEEK with a valid key is a working connection; having no
+        project is a thing to fix in SEEK, not a reason to refuse the key.
+
+        Driven through ASGITransport rather than TestClient: this request
+        writes, and TestClient's own event loop cannot share the fixture's
+        connection pool.
+        """
+        import httpx as _httpx
+        from sqlalchemy import func, select
+
+        from metaseed_hub.models import SeekConnection
+
+        app = create_app()
+        with (
+            patch(
+                "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+                AsyncMock(return_value=_user()),
+            ),
+            patch(
+                "metaseed_hub.features.enabled_features",
+                AsyncMock(return_value={"seek"}),
+            ),
+            patch("metaseed.seek.client_from_settings") as factory,
+        ):
+            factory.return_value.list_projects.return_value = []
+            transport = _httpx.ASGITransport(app=app)
+            async with _httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                page = await client.get("/hub/seek/settings")
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    "/hub/seek/settings",
+                    data={
+                        "url": "https://seek.example.org",
+                        "api_key": "k",
+                        "csrf_token": csrf,
+                    },
+                    cookies=page.cookies,
+                )
+        assert 'data-testid="seek-settings-ok"' in response.text
+        assert "no project" in response.text
         count = await session.scalar(select(func.count()).select_from(SeekConnection))
-        assert count == 0, "a failed verification must not store a connection"
+        assert count == 1, "a reachable SEEK with a valid key must be stored"
+
+
+class TestAFailedCheckKeepsWhatWasTyped(TestVerificationSaysWhatFailed):
+    """Losing the settings to a failed check meant retyping the API key to fix
+    a typo in the URL, and losing a good key to a SEEK that was briefly down."""
+
+    async def test_a_failed_check_still_stores_the_connection(
+        self, dataset, app_db, session
+    ) -> None:
+        import httpx as _httpx
+        from sqlalchemy import select
+
+        from metaseed_hub.models import SeekConnection
+
+        def unreachable(factory):
+            factory.return_value.list_projects.side_effect = _httpx.ConnectError("no")
+
+        response = await self._post_settings("https://seek.example.org", unreachable, session)
+        assert 'data-testid="seek-settings-error"' in response.text
+
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        assert stored.url == "https://seek.example.org"
+        assert stored.api_key_encrypted, "the key must survive a failed check"
+        assert stored.verified_at is None
+        assert "Nothing answered" in (stored.last_error or "")
+
+    async def test_the_form_still_shows_the_url_after_a_failure(
+        self, dataset, app_db, session
+    ) -> None:
+        import httpx as _httpx
+
+        def unreachable(factory):
+            factory.return_value.list_projects.side_effect = _httpx.ConnectError("no")
+
+        response = await self._post_settings("https://seek.example.org", unreachable, session)
+        assert "https://seek.example.org" in response.text
+
+    async def test_the_status_says_working_or_not(self, dataset, app_db, session) -> None:
+        def working(factory):
+            factory.return_value.list_projects.return_value = [("1", "Tulip")]
+
+        ok = await self._post_settings("https://seek.example.org", working, session)
+        assert 'data-testid="seek-status-ok"' in ok.text
+
+        def broken(factory):
+            factory.return_value.list_projects.side_effect = OSError("down")
+
+        bad = await self._post_settings("https://seek.example.org", broken, session)
+        assert 'data-testid="seek-status-bad"' in bad.text
+
+    async def test_the_dataset_panel_shows_the_status_too(self, dataset, app_db, session) -> None:
+        def working(factory):
+            factory.return_value.list_projects.return_value = [("1", "Tulip")]
+
+        import httpx as _httpx
+
+        await self._post_settings("https://seek.example.org", working, session)
+        app = create_app()
+        with (
+            patch(
+                "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+                AsyncMock(return_value=_user()),
+            ),
+            patch(
+                "metaseed_hub.ui.routes.dataset.editor.user_feature_set",
+                AsyncMock(return_value={"seek"}),
+            ),
+        ):
+            async with _httpx.AsyncClient(
+                transport=_httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                html = (await client.get(f"/hub/datasets/{dataset.id}")).text
+        assert 'data-testid="seek-status-ok"' in html

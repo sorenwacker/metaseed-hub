@@ -34,6 +34,7 @@ from metaseed_hub.ui.helpers.load_report import skipped_node_message
 from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
+from metaseed_hub.ui.services.seek_connection import connection_for_user
 
 from ._router import router
 
@@ -139,6 +140,9 @@ async def dataset_editor(
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
             "features": (features := await user_feature_set(user, session)),
+            "connection": (
+                await connection_for_user(session, user) if "seek" in features else None
+            ),
             "export_options": _adapter_export_options(dataset.profile, features),
             # Offered only while the dataset is empty: the importer replaces the
             # whole tree, so it is a way to start, not a way to merge.

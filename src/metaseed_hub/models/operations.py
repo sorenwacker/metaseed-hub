@@ -49,6 +49,12 @@ class SeekConnection(TimestampMixin, Base):
     url: Mapped[str] = mapped_column(String(512), nullable=False)
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # A connection is stored whether or not it works: refusing to save what the
+    # user just typed means retyping the API key to fix a typo in the URL. The
+    # status is kept alongside instead, and shown wherever the connection is.
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
 class FeatureGrant(TimestampMixin, Base):
     """A feature made available to everyone in one identity-provider group.
