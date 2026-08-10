@@ -18,7 +18,7 @@ from .comments import (
 from .datasets import Dataset, DatasetMember, DatasetRole, DatasetVersion
 from .identity import Team, TeamMembership, TeamRole, Tenant, User
 from .mixins import SoftDeleteMixin, TimestampMixin
-from .operations import ApiToken, ErrorEvent, FeatureGrant
+from .operations import ApiToken, ErrorEvent, FeatureGrant, SeekConnection
 from .specs import (
     Spec,
     SpecDraft,
@@ -42,6 +42,7 @@ __all__ = [
     "FeatureGrant",
     "Note",
     "ReactionType",
+    "SeekConnection",
     "SoftDeleteMixin",
     "Spec",
     "SpecComment",

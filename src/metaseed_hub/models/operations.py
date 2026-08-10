@@ -27,6 +27,29 @@ from .base import Base
 from .mixins import TimestampMixin
 
 
+class SeekConnection(TimestampMixin, Base):
+    """One user's connection to a FAIRDOM-SEEK instance.
+
+    Per tenant — and hub tenants are per user — because SEEK creates every
+    record as the API key's person, so sharing a key would publish one
+    person's name on everyone's work. The key is encrypted at rest
+    (:mod:`metaseed_hub.crypto`) and never rendered back into a page.
+    """
+
+    __tablename__ = "seek_connections"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        default=lambda: str(uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("tenants.id"), unique=True, nullable=False
+    )
+    url: Mapped[str] = mapped_column(String(512), nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class FeatureGrant(TimestampMixin, Base):
     """A feature made available to everyone in one identity-provider group.
 

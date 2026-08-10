@@ -1274,6 +1274,10 @@ wheels = [
 dcat = [
     { name = "rdflib" },
 ]
+seek = [
+    { name = "httpx" },
+    { name = "rdflib" },
+]
 
 [[package]]
 name = "metaseed-hub"
@@ -1285,7 +1289,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "mcp" },
-    { name = "metaseed", extra = ["dcat"] },
+    { name = "metaseed", extra = ["dcat", "seek"] },
     { name = "pydantic-settings" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-keycloak" },
@@ -1334,7 +1338,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "metaseed", extras = ["dcat"], specifier = ">=0.30.0,<1" },
+    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.30.0,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
