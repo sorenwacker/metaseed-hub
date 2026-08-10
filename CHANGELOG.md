@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.2] - 2026-08-10
+
+### Fixed
+- A SEEK connection is no longer refused for having no project. Verification
+  lists projects instead of demanding one: reaching SEEK with a valid key is a
+  working connection, and an account in no project is reported as the separate
+  thing it is.
+- Verification failures name their cause — a hostname the server cannot
+  resolve, nothing answering at the port, a rejected key, an answer that is not
+  a SEEK API — instead of one message covering all four. The typed URL survives
+  a failed attempt; the key must be entered again, and the form says so.
+
+## [0.30.2] - 2026-08-10
+
+### Fixed
+- A SEEK connection is no longer refused for having no project. The check lists
+  projects instead of demanding one: reaching SEEK with a valid key is a
+  working connection, and an account in no project is reported as the separate
+  thing it is.
+- A failed check no longer discards the settings. What was typed is stored
+  either way — URL and key — with the outcome recorded, so a typo in the URL no
+  longer costs the API key and a SEEK that is briefly down no longer wipes a
+  working connection.
+- Failures name their cause: a hostname the server cannot resolve, nothing
+  answering at the port, a rejected key, an answer that is not a SEEK API.
+
+### Added
+- The connection's standing is shown on the SEEK settings page and beside the
+  push button on the dataset page: working (with the instance and when it was
+  checked), not working (with the reason), or not configured.
+- Check again re-runs the check against the stored connection, without retyping
+  the API key.
+
 ## [0.30.1] - 2026-08-10
 
 ### Changed

@@ -7437,3 +7437,11 @@ html, body {
     margin: var(--space-xs) 0 0;
     font-size: 0.875rem;
 }
+
+/* SEEK connection status, shown on the settings page and the dataset panel. */
+.seek-status-block { margin: 0.35rem 0 0.6rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.seek-status { font-size: 0.82rem; display: inline-block; }
+.seek-status .form-hint { display: block; margin: 0; font-size: 0.75rem; }
+.seek-status-ok { color: var(--color-success, #2f6f4f); }
+.seek-status-bad { color: var(--color-danger, #a33); }
+.seek-status-none { color: var(--color-text-muted, #777); }

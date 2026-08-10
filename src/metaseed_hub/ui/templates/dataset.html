@@ -106,6 +106,7 @@
                     downloadable in SEEK
                 </label>
             </form>
+            <div class="seek-status-block">{% include "partials/seek_status.html" %}</div>
             <div id="seek-result"></div>
             {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
