@@ -23,10 +23,16 @@ def test_export_options_come_from_the_metaseed_registry() -> None:
     metaseed rather than being restated here."""
     # One PRIDE export: submission.px and its SDRF are parts of one submission,
     # so they arrive together in a single archive.
-    assert {o["key"] for o in _adapter_export_options("pride")} == {"pride", "dcat"}
+    everything = {"dcat", "seek", "ena", "pride", "brapi", "metabolights"}
+    assert {o["key"] for o in _adapter_export_options("pride", features=everything)} == {
+        "pride",
+        "dcat",
+    }
     # A profile with no repository adapter still gets the DCAT catalogue record,
     # which describes a dataset under any profile — but no other profile's exporter.
-    assert {o["key"] for o in _adapter_export_options("darwin-core")} == {"dcat"}
+    assert {o["key"] for o in _adapter_export_options("darwin-core", features=everything)} == {
+        "dcat"
+    }
 
 
 @pytest.mark.asyncio
@@ -48,3 +54,39 @@ async def test_format_not_offered_for_the_profile_is_rejected() -> None:
             # metabolights export exists, but not for a darwin-core dataset.
             await dataset_export_adapter("d1", "metabolights", Mock(), Mock())
     assert exc.value.status_code == 404
+
+
+class TestExportsAreGatedByFeature:
+    """Each adapter export requires the feature named by its key.
+
+    The keys and the feature names are the same six strings, so membership of
+    the plugin's group is what turns its export on -- for the buttons and for a
+    hand-typed URL alike.
+    """
+
+    def test_options_offer_only_the_features_the_user_holds(self) -> None:
+        offered = {o["key"] for o in _adapter_export_options("pride", features={"dcat"})}
+        assert offered == {"dcat"}
+
+    def test_no_features_means_no_export_options(self) -> None:
+        assert _adapter_export_options("pride", features=set()) == []
+
+    @pytest.mark.asyncio
+    async def test_the_route_refuses_a_format_the_user_lacks(self) -> None:
+        # The buttons being hidden is cosmetic; the route is the gate. 404, not
+        # 403: an ungranted feature does not advertise its existence.
+        dataset = Mock(profile="pride", version="1.0", name="d")
+        with (
+            patch(
+                "metaseed_hub.ui.routes.dataset.editor.get_dataset_for_user",
+                new_callable=AsyncMock,
+                return_value=dataset,
+            ),
+            patch(
+                "metaseed_hub.ui.routes.dataset.editor.user_feature_set",
+                AsyncMock(return_value={"dcat"}),
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await dataset_export_adapter("d1", "pride", Mock(), Mock())
+        assert exc.value.status_code == 404
