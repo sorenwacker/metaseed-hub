@@ -1,0 +1,22 @@
+{% if error %}
+<div class="alert alert-error" data-testid="seek-result-error">{{ error }}</div>
+{% elif message %}
+<div class="alert alert-success" data-testid="seek-result-ok">{{ message }}</div>
+{% elif result %}
+<div class="alert alert-success" data-testid="seek-result-ok">
+    Pushed: {{ result.investigations|length }} investigation(s),
+    {{ result.studies|length }} study(ies), {{ result.assays|length }} assay(s),
+    {{ result.samples|length }} sample(s).
+</div>
+{% if result.errors %}
+<div class="alert alert-error" data-testid="seek-result-errors">
+    {{ result.errors|length }} error(s):
+    <ul>{% for node, msg in result.errors[:5] %}<li>{{ msg }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% if result.unlinked %}
+<div class="alert alert-warning" data-testid="seek-result-unlinked">
+    {{ result.unlinked|length }} entity(ies) could not be linked into the ISA tree.
+</div>
+{% endif %}
+{% endif %}

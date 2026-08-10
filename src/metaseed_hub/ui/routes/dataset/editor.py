@@ -138,9 +138,8 @@ async def dataset_editor(
             "root_types": root_types,
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
-            "export_options": _adapter_export_options(
-                dataset.profile, await user_feature_set(user, session)
-            ),
+            "features": (features := await user_feature_set(user, session)),
+            "export_options": _adapter_export_options(dataset.profile, features),
             # Offered only while the dataset is empty: the importer replaces the
             # whole tree, so it is a way to start, not a way to merge.
             "import_option": (

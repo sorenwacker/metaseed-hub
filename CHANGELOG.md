@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.0] - 2026-08-10
+
+### Added
+- The SEEK plugin, behind the `seek` feature flag: a per-user connection to a
+  FAIRDOM-SEEK instance (API key encrypted at rest, verified against SEEK
+  before saving, never rendered back), and a Push to SEEK panel on the dataset
+  page that provisions the profile and syncs the dataset. An optional
+  "downloadable" checkbox maps to the sharing level SEEK's ISA-JSON export
+  requires; unchecked, records stay private to the key's person.
+  Import from SEEK is deliberately absent: the importer derives its profile
+  from the instance, and hub datasets are bound to installed profiles — it
+  arrives when derived specs can be persisted.
+
+### Changed
+- The metaseed dependency includes the `seek` extra.
+
 ## [0.29.1] - 2026-08-10
 
 ### Fixed
