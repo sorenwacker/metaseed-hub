@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -17,9 +18,11 @@ from starlette.responses import Response
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
+    SpecInUseError,
     can_edit_draft,
     can_edit_spec,
     create_new_draft,
+    datasets_using_spec,
     load_state_for_draft,
     require_owner_role,
     save_state_to_draft,
@@ -300,6 +303,11 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {
                 "spec_record": spec,
                 "spec": builder.spec,
+                # Named before the button is pressed, not only after it is
+                # refused: withdrawing a specification other people's datasets
+                # are built on used to break them silently.
+                "datasets_using": await datasets_using_spec(session, spec),
+                "unpublish_error": request.query_params.get("error"),
                 # Recomputed rather than read from the column: the column is
                 # what was recorded at publish time, and showing a stale value
                 # beside the content it is supposed to name would be worse than
@@ -390,6 +398,14 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         try:
             draft = await unpublish_spec(session, spec, user_id)
+        except SpecInUseError as exc:
+            # Back to the page it was pressed on, carrying the reason: this is
+            # an ordinary form post, so an HTTPException would replace the page
+            # with a bare error document.
+            return RedirectResponse(
+                url=f"/hub/spec-builder/spec/{spec_id}?error={quote(str(exc))}",
+                status_code=303,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

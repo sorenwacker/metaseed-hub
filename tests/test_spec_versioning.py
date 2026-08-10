@@ -48,7 +48,17 @@ def _endpoint(path_suffix: str, method: str) -> Any:
 
 
 def _request(method: str = "POST") -> Request:
-    return Request({"type": "http", "method": method, "path": "/", "headers": []})
+    # query_string included because every real ASGI request carries one, and a
+    # route reading request.query_params must not fail only against the double.
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "path": "/",
+            "query_string": b"",
+            "headers": [],
+        }
+    )
 
 
 def _spec(version: str, *, name: str = "cinema", tissue_required: bool = False) -> ProfileSpec:
