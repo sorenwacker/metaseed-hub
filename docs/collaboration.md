@@ -18,7 +18,7 @@ Specification drafts have the same **Sharing** tab with the same roles; see [Spe
 
 ### How an email is resolved
 
-Each person has their own workspace, and sharing reaches across workspaces: the collaborator you name does not have to belong to yours. The address is matched against every account in the hub, not only the accounts in your own workspace.
+Each person has their own account, and sharing reaches across accounts: the collaborator you name does not have to belong to yours. The address is matched against every account in the hub, not only the accounts in your own account.
 
 - The address is matched without regard to capitalisation. `Ada@Example.org` and `ada@example.org` name the same account. Addresses are stored lowercased; the profile page still shows the address exactly as your identity provider reports it.
 - One account exists per address. An address identifies exactly one person, so a share never has to choose between candidates.

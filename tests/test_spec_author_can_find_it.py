@@ -1,14 +1,14 @@
 """An author must be able to find a specification they published.
 
-Reproduces a real incident. A draft shared from one workspace was published by
+Reproduces a real incident. A draft shared from one account was published by
 someone else; ``publish_draft`` writes ``Spec(tenant_id=draft.tenant_id)`` with
 ``created_by_id`` set to whoever published it, so the specification landed in
-the workspace it was shared from. The Specs page filtered on the caller's own
-workspace alone, so the author's work vanished on publish with no message, no
+the account it was shared from. The Specs page filtered on the caller's own
+account alone, so the author's work vanished on publish with no message, no
 error, and nothing to find. It was recoverable only by reading the database.
 
 The page must therefore show a specification to its author wherever it lives,
-and name the workspace it lives in so the split is visible rather than inferred.
+and name the account it lives in so the split is visible rather than inferred.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Spec, SpecStatus
-from metaseed_hub.ui.spec_builder.access import workspace_owner
+from metaseed_hub.ui.spec_builder.access import account_owner
 from tests.factories import make_spec, make_tenant, make_user
 
 
@@ -42,7 +42,7 @@ async def _listed_for(session: AsyncSession, user_id: str, tenant_id: str) -> li
     return list(result.scalars().all())
 
 
-async def _two_workspaces(session: AsyncSession):
+async def _two_accounts(session: AsyncSession):
     """An owner and an author who is not the owner."""
     owner_tenant = make_tenant(slug="owner001")
     author_tenant = make_tenant(slug="author01")
@@ -55,12 +55,12 @@ async def _two_workspaces(session: AsyncSession):
     return owner_tenant, owner, author_tenant, author
 
 
-async def test_the_author_finds_a_spec_published_into_another_workspace(
+async def test_the_author_finds_a_spec_published_into_another_account(
     session: AsyncSession,
 ) -> None:
     """The incident: published, then gone from the author's page entirely."""
-    owner_tenant, _owner, author_tenant, author = await _two_workspaces(session)
-    # As publish_draft writes it: the shared draft's workspace, the author's id.
+    owner_tenant, _owner, author_tenant, author = await _two_accounts(session)
+    # As publish_draft writes it: the shared draft's account, the author's id.
     spec = make_spec(tenant=owner_tenant, created_by=author, name="acdc", spec_data=_spec_data())
     session.add(spec)
     await session.commit()
@@ -71,8 +71,8 @@ async def test_the_author_finds_a_spec_published_into_another_workspace(
 
 
 async def test_the_owner_still_sees_it(session: AsyncSession) -> None:
-    """The workspace it lives in keeps showing it — this is not a move."""
-    owner_tenant, owner, _author_tenant, author = await _two_workspaces(session)
+    """The account it lives in keeps showing it — this is not a move."""
+    owner_tenant, owner, _author_tenant, author = await _two_accounts(session)
     spec = make_spec(tenant=owner_tenant, created_by=author, name="acdc", spec_data=_spec_data())
     session.add(spec)
     await session.commit()
@@ -87,7 +87,7 @@ async def test_everyone_sees_a_published_spec(session: AsyncSession) -> None:
     unconnected to it sees it too. This assertion was previously the opposite:
     publishing used to be observable only to its author, which was never what
     it was meant to do."""
-    owner_tenant, _owner, _author_tenant, author = await _two_workspaces(session)
+    owner_tenant, _owner, _author_tenant, author = await _two_accounts(session)
     spec = make_spec(tenant=owner_tenant, created_by=author, name="acdc", spec_data=_spec_data())
     session.add(spec)
     stranger_tenant = make_tenant(slug="stranger")
@@ -102,11 +102,11 @@ async def test_everyone_sees_a_published_spec(session: AsyncSession) -> None:
     assert [s.name for s in listed] == ["acdc"]
 
 
-async def test_the_workspace_owner_is_identifiable(session: AsyncSession) -> None:
-    """So the page can say whose workspace a spec is in, and who to contact."""
-    owner_tenant, owner, _author_tenant, _author = await _two_workspaces(session)
+async def test_the_account_owner_is_identifiable(session: AsyncSession) -> None:
+    """So the page can say whose account a spec is in, and who to contact."""
+    owner_tenant, owner, _author_tenant, _author = await _two_accounts(session)
 
-    found = await workspace_owner(session, owner_tenant.id)
+    found = await account_owner(session, owner_tenant.id)
 
     assert found is not None
     assert found.id == owner.id
@@ -118,7 +118,7 @@ async def test_a_removed_spec_stays_hidden_from_its_author(
 ) -> None:
     """Widening by authorship must not resurrect withdrawn or admin-removed
     specifications."""
-    owner_tenant, _owner, author_tenant, author = await _two_workspaces(session)
+    owner_tenant, _owner, author_tenant, author = await _two_accounts(session)
     spec = make_spec(tenant=owner_tenant, created_by=author, name="acdc", spec_data=_spec_data())
     session.add(spec)
     await session.commit()

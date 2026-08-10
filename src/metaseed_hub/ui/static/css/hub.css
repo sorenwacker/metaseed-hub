@@ -230,7 +230,7 @@ body {
     background: rgba(255, 255, 255, 0.08);
 }
 
-.header-breadcrumb .nav-workspace {
+.header-breadcrumb .nav-account {
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.6);
     padding: var(--space-xs) var(--space-sm);
@@ -416,14 +416,14 @@ body {
     letter-spacing: -0.02em;
 }
 
-.workspace-grid, .project-grid {
+.account-grid, .project-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: var(--space-md);
 }
 
-/* Workspace header */
-.workspace-header {
+/* Account header */
+.account-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -433,24 +433,24 @@ body {
     border-bottom: 1px solid var(--clr-border);
 }
 
-.workspace-header-main h1 {
+.account-header-main h1 {
     margin-bottom: var(--space-xs);
 }
 
-.workspace-header-main .workspace-description {
+.account-header-main .account-description {
     margin: 0;
     color: var(--clr-ink-light);
     font-size: 0.9375rem;
 }
 
-.workspace-header-actions {
+.account-header-actions {
     display: flex;
     gap: var(--space-sm);
     flex-shrink: 0;
 }
 
-/* Workspace sections */
-.workspace-section {
+/* Account sections */
+.account-section {
     margin-bottom: var(--space-2xl);
 }
 
@@ -615,7 +615,7 @@ body {
     width: 110px;
 }
 
-.workspace-card, .project-card {
+.account-card, .project-card {
     background: white;
     border: 1px solid rgba(26, 58, 47, 0.08);
     border-radius: var(--radius-lg);
@@ -626,13 +626,13 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
-.workspace-card:hover, .project-card:hover {
+.account-card:hover, .project-card:hover {
     border-color: var(--clr-moss);
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
 }
 
-.workspace-card h3, .project-card h3 {
+.account-card h3, .project-card h3 {
     font-family: var(--font-display);
     font-size: 1.0625rem;
     font-weight: 500;
@@ -676,13 +676,13 @@ body {
     color: var(--clr-error);
 }
 
-.workspace-card p, .project-card p {
+.account-card p, .project-card p {
     color: var(--clr-ink-light);
     font-size: 0.875rem;
     margin-bottom: var(--space-md);
 }
 
-.workspace-meta, .project-meta {
+.account-meta, .project-meta {
     font-size: 0.75rem;
     color: var(--clr-ink-light);
     display: flex;
@@ -2415,7 +2415,7 @@ td.row-actions {
 }
 
 /* Empty modal containers should not block clicks */
-#workspace-modal:empty,
+#account-modal:empty,
 #project-modal:empty {
     display: none;
 }
@@ -4283,7 +4283,7 @@ a.spec-card:hover {
     color: var(--clr-success);
 }
 
-.spec-workspace {
+.spec-account {
     font-size: 0.75rem;
     color: var(--clr-ink-light);
 }

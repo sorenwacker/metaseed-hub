@@ -10,7 +10,7 @@ The token is shown once and cannot be recovered — only its hash is stored, so 
 
 A token can be given an expiry, after which it stops working on its own. A token without one lasts until revoked, which is what a token pasted into a config file and forgotten then does indefinitely.
 
-A token acts as **you**. Every tool call is scoped to your own workspace: it can see and change your datasets and nothing else.
+A token acts as **you**. Every tool call is scoped to your own account: it can see and change your datasets and nothing else.
 
 ## Configuring Claude Code
 
@@ -118,7 +118,7 @@ An agent replaces a whole dataset in one call, and can do it in a loop, so the w
 - **An edit that would drop entities the hub could not read is refused.** If a stored entity does not load — usually because the specification changed and no longer defines its type — it is missing from the dataset the agent sees, and saving over it would delete it. `create_entity`, `update_entity`, `delete_entity` and `batch_create` therefore refuse the whole dataset while that is true, naming how many entities are affected and of which types. `validate_dataset` lists them individually. `save_dataset` still works, because replacing the whole dataset is a deliberate act; use it only once you are content to lose them.
 - **Every write is logged** with the account it acted as.
 
-A token reaches only its own user's datasets. Another person's dataset is not readable, writable, or deletable, and a name that exists in someone else's workspace reads as absent.
+A token reaches only its own user's datasets. Another person's dataset is not readable, writable, or deletable, and a name that exists in someone else's account reads as absent.
 
 ## Using a token with the REST API
 

@@ -2,14 +2,14 @@
 
 ## Hub UI Routes
 
-### Workspaces
+### Accounts
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/hub/` | List workspaces |
-| GET | `/hub/workspaces/new` | New workspace form |
-| POST | `/hub/workspaces` | Create workspace |
-| GET | `/hub/workspaces/{id}` | Workspace detail |
+| GET | `/hub/` | List accounts |
+| GET | `/hub/accounts/new` | New account form |
+| POST | `/hub/accounts` | Create account |
+| GET | `/hub/accounts/{id}` | Account detail |
 
 ### Projects
 

@@ -12,9 +12,9 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
 from metaseed_hub.ui.spec_builder.access import (
+    account_owner,
     create_new_draft,
     free_draft_name,
-    workspace_owner,
 )
 from metaseed_hub.ui.spec_builder_helpers import (
     clone_spec,
@@ -73,10 +73,10 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
                 seen_ids.add(draft.id)
                 drafts.append(draft)
 
-        # Every published specification, from every workspace. Publishing is
+        # Every published specification, from every account. Publishing is
         # how a specification is shared with the other people on the platform;
         # a draft is the private form. Scoping this to the caller's own
-        # workspace made publishing a no-op that only its author could observe.
+        # account made publishing a no-op that only its author could observe.
         result = await session.execute(
             select(Spec)
             .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
@@ -88,13 +88,13 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         )
         specs = list(result.scalars().all())
 
-        # Who owns the workspace each spec lives in. Usually the author, but not
+        # Who owns the account each spec lives in. Usually the author, but not
         # when a shared draft was published: then the author cannot find their
-        # own specification unless the page says whose workspace it is in.
+        # own specification unless the page says whose account it is in.
         owners = {}
         for spec in specs:
             if spec.tenant_id not in owners:
-                owners[spec.tenant_id] = await workspace_owner(session, spec.tenant_id)
+                owners[spec.tenant_id] = await account_owner(session, spec.tenant_id)
 
         return await render(
             request,

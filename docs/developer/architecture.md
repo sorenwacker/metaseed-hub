@@ -14,7 +14,7 @@
 
 ```
 Tenant (organization)
-  └── Workspace (container)
+  └── Account (container)
         └── Project (profile: miappe, isa, dissco, dwc)
               └── Entities (Investigation, Study, etc.)
 ```
@@ -26,7 +26,7 @@ Projects store entity data as JSONB:
 ```sql
 CREATE TABLE projects (
     id UUID PRIMARY KEY,
-    workspace_id UUID NOT NULL,
+    account_id UUID NOT NULL,
     name VARCHAR(255) NOT NULL,
     profile VARCHAR(100) NOT NULL,
     version VARCHAR(50) NOT NULL,

@@ -24,9 +24,6 @@ from metaseed_hub.models import (
     SpecDraft,
     SpecDraftMember,
     SpecDraftRole,
-    Team,
-    TeamMembership,
-    TeamRole,
     User,
 )
 
@@ -136,7 +133,15 @@ async def can_edit_spec(
     user_id: str,
     spec_id: str,
 ) -> bool:
-    """Check if user can edit spec (tenant member with ADMIN/OWNER role or author)."""
+    """Whether ``user_id`` may edit — and so also withdraw — a published spec.
+
+    Its author, and nobody else. There was a second branch granting this to
+    admins and owners of a team in the same tenant, but teams were removed from
+    the hub: no interface created one, the table held no rows, and the branch
+    could never be true. Sharing a published specification with another person
+    is not possible today (``spec_members`` has no interface writing to it);
+    when it returns, it belongs here.
+    """
     result = await session.execute(
         select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
     )
@@ -147,19 +152,7 @@ async def can_edit_spec(
     if spec.created_by_id == user_id:
         return True
 
-    # Check if user is admin/owner in a team within the same tenant.
-    # The WHERE clause fully constrains the result to this caller's memberships;
-    # joining User would multiply rows (one per tenant user) and break scalar_one_or_none.
-    result = await session.execute(
-        select(TeamMembership)
-        .join(Team, TeamMembership.team_id == Team.id)
-        .where(
-            Team.tenant_id == spec.tenant_id,
-            TeamMembership.user_id == user_id,
-            TeamMembership.role.in_([TeamRole.ADMIN, TeamRole.OWNER]),
-        )
-    )
-    return result.scalars().first() is not None
+    return False
 
 
 # Roles allowed to modify a draft's specification. VIEWER is read-only.
@@ -180,7 +173,7 @@ async def get_draft_role(
     - The draft owner (``draft.user_id``, a User.id FK) holds ``OWNER``.
     - An explicit ``SpecDraftMember`` row holds its recorded role.
     - Any other user in the draft's tenant holds ``VIEWER``. This tenant-wide
-      grant exists so workspace colleagues can read a draft without being
+      grant exists so account colleagues can read a draft without being
       shared on it; it never confers edit rights.
 
     Args:
@@ -647,22 +640,22 @@ async def unpublish_spec(
     )
 
 
-async def workspace_owner(session: AsyncSession, tenant_id: str) -> User | None:
-    """The person whose workspace holds an item.
+async def account_owner(session: AsyncSession, tenant_id: str) -> User | None:
+    """The person whose account holds an item.
 
-    A workspace belongs to exactly one person, so this is who to approach about
+    An account belongs to exactly one person, so this is who to approach about
     a specification that lives there. It is not always the author: publishing a
-    draft someone shared with you puts the specification in *their* workspace
+    draft someone shared with you puts the specification in *their* account
     while recording you as its author, and without both names on the page that
     is invisible — a spec published this way appears to vanish for its author
     and to appear from nowhere for the owner.
 
     Args:
         session: Database session.
-        tenant_id: The workspace.
+        tenant_id: The account.
 
     Returns:
-        The owning user, or None if the workspace has no live user.
+        The owning user, or None if the account has no live user.
     """
     result = await session.execute(
         select(User)

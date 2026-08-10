@@ -1,4 +1,4 @@
-"""Notes, comments and reactions on datasets and specs."""
+"""Comments and reactions on datasets and specs."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -10,7 +10,6 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
-    String,
     Text,
     func,
 )
@@ -28,36 +27,6 @@ if TYPE_CHECKING:
     from .specs import SpecDraft
 
 from .mixins import TimestampMixin
-
-
-class Note(TimestampMixin, Base):
-    """Notes attached to entities within a dataset."""
-
-    __tablename__ = "notes"
-    __table_args__ = (Index("ix_notes_dataset_entity", "dataset_id", "entity_type", "entity_id"),)
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        primary_key=True,
-        default=lambda: str(uuid4()),
-    )
-    dataset_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("datasets.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    entity_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-
-    # Relationships
-    dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="notes")
-    user: Mapped["User"] = relationship("User", back_populates="notes")
 
 
 class Comment(TimestampMixin, Base):

@@ -59,7 +59,7 @@ async def test_an_api_key_authenticates_as_its_owner(session: AsyncSession) -> N
 
 async def test_an_api_key_never_carries_the_admin_role(session: AsyncSession) -> None:
     """An API key acts for its user's own data. Granting the admin role through
-    one would let a leaked key reach every workspace."""
+    one would let a leaked key reach every account."""
     _user, secret, _token = await _user_with_key(
         session, slug="apikey02", email="nonadmin@example.org"
     )

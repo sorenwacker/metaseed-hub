@@ -20,7 +20,7 @@ from metaseed_hub.ui.routes.admin import _dataset_counts_by_user, record_login
 from tests.factories import make_dataset, make_tenant, make_user
 
 
-async def _workspace(session: AsyncSession, sub: str, email: str) -> User:
+async def _account(session: AsyncSession, sub: str, email: str) -> User:
     """A tenant plus its user, as the hub creates them on first sign-in."""
     tenant = make_tenant(slug=tenant_slug_for(sub))
     session.add(tenant)
@@ -32,8 +32,8 @@ async def _workspace(session: AsyncSession, sub: str, email: str) -> User:
 
 
 async def test_counts_are_attributed_to_the_owning_user(session: AsyncSession) -> None:
-    alice = await _workspace(session, "sub-alice", "alice@example.org")
-    bob = await _workspace(session, "sub-bob", "bob@example.org")
+    alice = await _account(session, "sub-alice", "alice@example.org")
+    bob = await _account(session, "sub-bob", "bob@example.org")
     alice_tenant = await _tenant_of(session, alice)
     for _ in range(3):
         session.add(make_dataset(tenant=alice_tenant))
@@ -55,7 +55,7 @@ async def _tenant_of(session: AsyncSession, user: User):
 async def test_deleted_datasets_are_not_counted(session: AsyncSession) -> None:
     """A soft-deleted dataset is invisible to its owner, so counting it would
     overstate what the user has."""
-    alice = await _workspace(session, "sub-alice-del", "alice@example.org")
+    alice = await _account(session, "sub-alice-del", "alice@example.org")
     tenant = await _tenant_of(session, alice)
     kept = make_dataset(tenant=tenant)
     gone = make_dataset(tenant=tenant)
@@ -73,7 +73,7 @@ async def test_a_user_with_no_datasets_is_absent_rather_than_wrong(
 ) -> None:
     """The template renders 0 for a missing key; the query must not invent a row
     with a count of 1 by joining the wrong way."""
-    user = await _workspace(session, "sub-empty", "empty@example.org")
+    user = await _account(session, "sub-empty", "empty@example.org")
     await session.commit()
 
     counts = await _dataset_counts_by_user(session)
@@ -82,8 +82,8 @@ async def test_a_user_with_no_datasets_is_absent_rather_than_wrong(
 
 
 async def test_record_login_stamps_the_signing_in_user(session: AsyncSession) -> None:
-    alice = await _workspace(session, "sub-login-a", "alice@example.org")
-    bob = await _workspace(session, "sub-login-b", "bob@example.org")
+    alice = await _account(session, "sub-login-a", "alice@example.org")
+    bob = await _account(session, "sub-login-b", "bob@example.org")
     await session.commit()
     assert alice.last_login_at is None
 
@@ -100,7 +100,7 @@ async def test_record_login_stamps_the_signing_in_user(session: AsyncSession) ->
 
 
 async def test_a_second_sign_in_moves_the_timestamp_forward(session: AsyncSession) -> None:
-    user = await _workspace(session, "sub-twice", "twice@example.org")
+    user = await _account(session, "sub-twice", "twice@example.org")
     await session.commit()
     token = TokenUser(sub="sub-twice", email="twice@example.org", name="T", roles=[])
 
@@ -122,7 +122,7 @@ async def test_a_second_sign_in_moves_the_timestamp_forward(session: AsyncSessio
 async def test_record_login_for_an_unknown_subject_is_a_no_op(session: AsyncSession) -> None:
     """The user row is created lazily on the first page, so the callback can run
     before it exists. That must not raise and abort the sign-in."""
-    await _workspace(session, "sub-known", "known@example.org")
+    await _account(session, "sub-known", "known@example.org")
     await session.commit()
 
     await record_login(

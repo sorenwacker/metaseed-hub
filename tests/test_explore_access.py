@@ -62,7 +62,7 @@ async def test_a_published_spec_loads_for_any_tenant(session: AsyncSession) -> N
     """Publishing shares a specification with everyone on the platform.
 
     This assertion was previously the opposite: a published spec was not
-    returned outside its own workspace. That made publishing unobservable to
+    returned outside its own account. That made publishing unobservable to
     anyone but its author, which was never the intent — a draft is the private
     form, and publishing is what makes a specification available to others.
     Drafts remain scoped, which the tests above cover.
@@ -87,7 +87,7 @@ async def test_a_published_spec_loads_for_any_tenant(session: AsyncSession) -> N
 @pytest.mark.asyncio
 async def test_an_unpublished_spec_is_not_loadable_by_id(session: AsyncSession) -> None:
     """Only PUBLISHED status is shared. A spec in any other state stays private
-    even though the lookup is no longer scoped by workspace."""
+    even though the lookup is no longer scoped by account."""
     from metaseed_hub.models import SpecStatus
 
     owner_tenant = make_tenant(slug="owner457")

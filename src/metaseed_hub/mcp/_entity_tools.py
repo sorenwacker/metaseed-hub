@@ -127,7 +127,7 @@ def register_entity_tools(
         caller: Async context manager resolving the current call's token to a
             ``(session, user)`` pair.
         owned_dataset: Coroutine returning a dataset from the caller's own
-            workspace by name.
+            account by name.
         editing: Async context manager yielding a client over a dataset and
             persisting the result, with the snapshot and the refusal.
         loaded_client: Coroutine returning a read-only client over a dataset.
@@ -144,7 +144,7 @@ def register_entity_tools(
         """Add one entity to a dataset, without rewriting the rest.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entity_type: A type from get_profile_schema. Any other is rejected.
             data: Field values, keyed by the field's codename.
             parent_id: The entity this one belongs under, where the profile
@@ -168,7 +168,7 @@ def register_entity_tools(
         reported in its result while the rest of the batch still lands.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entities: One object per entity, each with:
                 entity_type: A type from get_profile_schema.
                 data: Field values, keyed by the field's codename.
@@ -212,7 +212,7 @@ def register_entity_tools(
         """Change field values on one entity, leaving the rest of it alone.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entity_id: The entity to change, from list_entities.
             data: The fields to set. Fields not named keep their values.
         """
@@ -235,7 +235,7 @@ def register_entity_tools(
         """Remove one entity from a dataset.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entity_id: The entity to remove.
         """
         async with caller() as (session, user):
@@ -251,7 +251,7 @@ def register_entity_tools(
         """List a dataset's entities, with their ids and labels.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entity_type: Restrict to one type. Omit for all of them.
         """
         from metaseed_hub.ui.helpers import make_json_serializable
@@ -279,7 +279,7 @@ def register_entity_tools(
         """Return one entity's stored field values.
 
         Args:
-            dataset: The dataset's name in the caller's workspace.
+            dataset: The dataset's name in the caller's account.
             entity_id: The entity to read.
         """
         from metaseed import EntityNotFoundError

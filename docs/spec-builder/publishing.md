@@ -21,7 +21,7 @@ Publishing consumes the draft: the draft is removed and the published specificat
 
 A profile version is `MAJOR.MINOR`. MAJOR means a dataset that validated under the previous version may fail under the new one; MINOR means every dataset valid under the previous version stays valid. Which changes are breaking, and why there is no patch component, is defined by metaseed — see [Profile versioning](https://sorenwacker.github.io/metaseed/api/schema-specs/#profile-versioning).
 
-Publishing is the release event, so this is where the hub checks that the version you declared matches what actually changed. When a draft's profile name matches a specification already published in the same workspace, the hub compares the draft against the **latest published version** of that name and works out the bump the content requires:
+Publishing is the release event, so this is where the hub checks that the version you declared matches what actually changed. When a draft's profile name matches a specification already published in the same account, the hub compares the draft against the **latest published version** of that name and works out the bump the content requires:
 
 - **A sufficient bump is published unchanged.** Declaring 2.0 for a breaking change, or 1.2 for a compatible one, publishes normally. Declaring a larger bump than required is allowed — a MAJOR bump for a purely compatible change is a judgement call, not an error.
 - **An insufficient bump is refused.** Publishing stops, nothing is written, and the draft is left exactly as it was. The message lists the breaking changes it found (for example `Sample.tissue became required`) and names the version to declare instead.
@@ -58,11 +58,11 @@ On a published specification you can:
 A published specification records two people, and they are not always the same:
 
 - The **author** — whoever published it.
-- The **workspace owner** — whose workspace it lives in.
+- The **account owner** — whose account it lives in.
 
-They differ when a draft shared with you is published: the specification stays in the workspace it was shared from, and you are recorded as its author. Both names appear on the specification, each linking to an email address, so anyone can reach the author to report a problem or the owner about the workspace.
+They differ when a draft shared with you is published: the specification stays in the account it was shared from, and you are recorded as its author. Both names appear on the specification, each linking to an email address, so anyone can reach the author to report a problem or the owner about the account.
 
-The Specs page lists every published specification, whoever published it. Forking one creates the copy in **your** workspace, not the original author's.
+The Specs page lists every published specification, whoever published it. Forking one creates the copy in **your** account, not the original author's.
 
 ## Unpublishing
 

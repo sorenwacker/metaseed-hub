@@ -102,7 +102,7 @@ async def _dataset_with_an_unloadable_node(name: str, secret: str, server) -> No
     """Create a dataset over MCP and give it a payload with one bad node.
 
     Args:
-        name: The dataset name to create in the caller's workspace.
+        name: The dataset name to create in the caller's account.
         secret: The token secret the creating call acts as.
         server: The MCP server fixture.
     """

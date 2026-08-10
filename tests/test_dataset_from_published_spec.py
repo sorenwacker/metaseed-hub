@@ -100,11 +100,11 @@ async def test_the_entity_types_resolve(session: AsyncSession) -> None:
     assert "Study" in state.facade.entities
 
 
-async def test_another_workspace_can_use_a_published_spec(
+async def test_another_account_can_use_a_published_spec(
     session: AsyncSession,
 ) -> None:
     """Publishing shares it, so binding is not restricted to the author's
-    workspace."""
+    account."""
     _author_tenant, _author, spec = await _published(session, slug="pubspec3", name="Shared2")
     other = make_tenant(slug="pubspec4")
     session.add(other)

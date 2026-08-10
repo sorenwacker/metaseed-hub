@@ -26,7 +26,7 @@ from metaseed_hub.repositories.account import (
     delete_account,
     specs_needing_new_owner,
 )
-from tests.factories import make_dataset, make_note, make_spec, make_tenant, make_user
+from tests.factories import make_dataset, make_spec, make_tenant, make_user
 
 pytestmark = pytest.mark.asyncio
 
@@ -123,7 +123,6 @@ async def test_deletion_cascades_personal_records(session):
     dataset = await _add(session, make_dataset(tenant=tenant))
     await _own(session, other, dataset)  # co-owner so nothing blocks
     await _own(session, user, dataset, role=DatasetRole.VIEWER)
-    await _add(session, make_note(dataset=dataset, user=user))
     await _add(session, Comment(dataset_id=dataset.id, user_id=user.id, content="hi"))
 
     await delete_account(session, user)
