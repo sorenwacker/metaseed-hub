@@ -308,3 +308,129 @@ def test_the_client_module_imports_without_the_seek_extra() -> None:
     """The seek extra is a hard dependency of these routes; a missing one takes
     the whole hub down at import, not just this feature."""
     assert TestClient is not None
+
+
+class TestTheStoredKeyIsKept:
+    """The key is never rendered back, so the box is always empty. Requiring it
+    on every save meant correcting a URL cost you the key."""
+
+    async def test_a_blank_key_keeps_the_stored_one(self, dataset, app_db, session) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.crypto import decrypt_secret
+        from metaseed_hub.models import SeekConnection
+
+        await _save_settings("https://seek.example.org", _working)
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+            _working(factory)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                await client.post(
+                    "/hub/seek/settings",
+                    data={
+                        "url": "https://seek.example.org/moved",
+                        "api_key": "",
+                        "csrf_token": csrf,
+                    },
+                    cookies=page.cookies,
+                )
+
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        assert stored.url == "https://seek.example.org/moved", "the URL changed"
+        assert decrypt_secret(stored.api_key_encrypted) == "k", "the key survived"
+
+    async def test_a_blank_key_with_nothing_stored_says_so(self, dataset, app_db, session) -> None:
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    "/hub/seek/settings",
+                    data={
+                        "url": "https://seek.example.org",
+                        "api_key": "",
+                        "csrf_token": csrf,
+                    },
+                    cookies=page.cookies,
+                )
+
+        assert response.status_code == 303
+        assert "seek_error" in response.headers["location"]
+
+    async def test_the_form_says_the_key_is_stored(self, dataset, app_db, session) -> None:
+        await _save_settings("https://seek.example.org", _working)
+        html = (await _get(PROFILE, {"seek"})).text
+        assert "leave blank to keep it" in html.lower()
+
+
+class TestChoosingTheProject:
+    """The push took the first project the instance returned, so anyone in more
+    than one had no say in where their records landed."""
+
+    @staticmethod
+    def _two_projects(factory) -> None:
+        factory.return_value.list_projects.return_value = [
+            ("1", "Tulip"),
+            ("7", "Resilience"),
+        ]
+
+    async def test_the_choices_are_offered(self, dataset, app_db, session) -> None:
+        await _save_settings("https://seek.example.org", self._two_projects)
+        html = (await _get(PROFILE, {"seek"})).text
+        assert 'data-testid="seek-project"' in html
+        assert "Resilience" in html and "Tulip" in html
+
+    async def test_choosing_one_is_remembered(self, dataset, app_db, session) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.models import SeekConnection
+
+        await _save_settings("https://seek.example.org", self._two_projects)
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                await client.post(
+                    "/hub/seek/project",
+                    data={"project_id": "7", "csrf_token": csrf},
+                    cookies=page.cookies,
+                )
+
+        session.expire_all()
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        assert stored.project_id == "7"
+        assert stored.project_hint == "Resilience"
+
+    async def test_a_later_check_keeps_the_choice(self, dataset, app_db, session) -> None:
+        """Re-checking the connection must not silently move the target back to
+        the first project."""
+        from sqlalchemy import select
+
+        from metaseed_hub.models import SeekConnection
+
+        await _save_settings("https://seek.example.org", self._two_projects)
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        stored.project_id = "7"
+        stored.project_hint = "Resilience"
+        await session.commit()
+
+        await _save_settings("https://seek.example.org", self._two_projects)
+
+        session.expire_all()
+        stored = (await session.execute(select(SeekConnection))).scalar_one()
+        assert stored.project_id == "7"

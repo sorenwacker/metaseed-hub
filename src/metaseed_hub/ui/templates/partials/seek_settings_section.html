@@ -8,6 +8,10 @@
         is stored encrypted and never shown again.
     </p>
 
+    {% if seek_error %}
+    <div class="alert alert-error" data-testid="seek-settings-error">{{ seek_error }}</div>
+    {% endif %}
+
     <div class="seek-status-block">
         {% include "partials/seek_status.html" %}
         {% if connection %}
@@ -18,6 +22,22 @@
         </form>
         {% endif %}
     </div>
+
+    {% if connection and connection.projects %}
+    <form method="post" action="/hub/seek/project" class="form-group" data-testid="seek-project-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="form-label" for="seek-project">Project</label>
+        <div class="sidebar-actions-row">
+            <select class="form-input" id="seek-project" name="project_id" data-testid="seek-project">
+                {% for pid, title in connection.projects %}
+                <option value="{{ pid }}" {% if pid == connection.project_id %}selected{% endif %}>{{ title }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-sm" type="submit" data-testid="seek-project-save">Use this project</button>
+        </div>
+        <p class="form-hint">SEEK attaches every record to a project; pushes go to this one.</p>
+    </form>
+    {% endif %}
 
     <form method="post" action="/hub/seek/settings">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -31,10 +51,16 @@
         <div class="form-group">
             <label class="form-label" for="seek-api-key">API key</label>
             <input class="form-input" id="seek-api-key" name="api_key" type="password"
-                   required autocomplete="off" data-testid="seek-api-key">
+                   {% if not connection %}required{% endif %}
+                   autocomplete="off" data-testid="seek-api-key"
+                   placeholder="{% if connection %}Stored — leave blank to keep it{% endif %}">
             <p class="form-hint">
-                Created in SEEK under your profile &rarr; API tokens. Saved whether or
-                not the check succeeds, so a wrong URL never costs you the key.
+                Created in SEEK under your profile &rarr; API tokens.
+                {% if connection %}
+                Your key is stored; leave this blank to keep it and change only the URL.
+                {% else %}
+                Saved whether or not the check succeeds, so a wrong URL never costs it.
+                {% endif %}
             </p>
         </div>
         <button class="btn btn-sm btn-primary" type="submit" data-testid="seek-settings-save">
