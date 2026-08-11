@@ -260,8 +260,34 @@
         </div>
         {% endif %}
 
-        {% if nested_fields %}
-        <div class="form-section">
+
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('editor').innerHTML='<div class=editor-placeholder><p>Select an entity or create a new one.</p></div>'">
+                Cancel
+            </button>
+            <button type="button" class="btn btn-secondary"
+                    hx-post="/hub/datasets/{{ dataset_id }}/entities/validate"
+                    hx-include="closest form"
+                    hx-target="#validation-result"
+                    hx-swap="innerHTML">
+                Validate
+            </button>
+            <button type="submit" class="btn btn-primary">
+                {{ "Save Changes" if node_id else "Create " + entity_type }}
+            </button>
+        </div>
+        <div id="validation-result" style="margin-top: var(--space-sm);"></div>
+    </form>
+
+    {# Deliberately outside the form. A child row's inputs are named for the
+       child's fields — title, identifier — so inside the parent's form they
+       were submitted with it, and an empty child cell overwrote the parent's
+       value: a Study saved with its Sources listed came back with no title and
+       "title: Field required". The cells save through their own endpoints
+       (partials/inline_table.html), so they never needed to be in this form. #}
+    {% if nested_fields %}
+    <div class="form-section">
             <h3 class="form-section-title">Related Entities</h3>
             {% if not node_id %}
             <p class="form-help" style="margin-bottom: var(--space-md);">
@@ -282,22 +308,4 @@
         </div>
         {% endif %}
 
-        <div class="form-actions">
-            <button type="button" class="btn btn-secondary"
-                    onclick="document.getElementById('editor').innerHTML='<div class=editor-placeholder><p>Select an entity or create a new one.</p></div>'">
-                Cancel
-            </button>
-            <button type="button" class="btn btn-secondary"
-                    hx-post="/hub/datasets/{{ dataset_id }}/entities/validate"
-                    hx-include="closest form"
-                    hx-target="#validation-result"
-                    hx-swap="innerHTML">
-                Validate
-            </button>
-            <button type="submit" class="btn btn-primary">
-                {{ "Save Changes" if node_id else "Create " + entity_type }}
-            </button>
-        </div>
-        <div id="validation-result" style="margin-top: var(--space-sm);"></div>
-    </form>
 </div>
