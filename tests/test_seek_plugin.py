@@ -434,3 +434,28 @@ class TestChoosingTheProject:
         session.expire_all()
         stored = (await session.execute(select(SeekConnection))).scalar_one()
         assert stored.project_id == "7"
+
+
+class TestTheIsaTemplates:
+    """Sample Types and vocabularies are provisioned by the push; templates are
+    not — only a SEEK administrator can install them, and SEEK's ISA-JSON
+    export reads them. The file could not be obtained from the hub at all."""
+
+    async def test_a_profile_yields_its_templates(self, dataset, app_db) -> None:
+        response = await _get("/hub/seek/templates/seek-ready-template/3.0", {"seek"})
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/json")
+        assert "isa-templates.json" in response.headers["content-disposition"]
+        assert response.json()["data"]
+
+    async def test_an_unknown_profile_is_404(self, dataset, app_db) -> None:
+        response = await _get("/hub/seek/templates/no-such-profile/1.0", {"seek"})
+        assert response.status_code == 404
+
+    async def test_it_needs_the_feature(self, dataset, app_db) -> None:
+        response = await _get("/hub/seek/templates/seek-ready-template/3.0", set())
+        assert response.status_code == 404
+
+    async def test_the_panel_offers_the_download(self, dataset, app_db) -> None:
+        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        assert 'data-testid="btn-seek-templates"' in html
