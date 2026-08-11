@@ -148,6 +148,26 @@ def resource_for(kind: str) -> SharedResource:
     return _resources()[kind]
 
 
+async def may_see_members(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    *,
+    user_id: str,
+    tenant_id: str,
+) -> bool:
+    """Whether this person may see who has access to a resource.
+
+    Being shared with it, or owning the account it lives in. Without this the
+    members list — names and email addresses — was readable by anyone signed in
+    who knew an id, since only the write paths checked anything.
+    """
+    if await role_of(session, resource, resource_id, user_id) is not None:
+        return True
+    thing = await session.get(resource.model, resource_id)
+    return thing is not None and str(thing.tenant_id) == str(tenant_id)
+
+
 async def members_of(
     session: AsyncSession, resource: SharedResource, resource_id: str
 ) -> list[Any]:

@@ -23,6 +23,7 @@ from metaseed_hub.sharing import (
     SharedResource,
     SharingError,
     add_member,
+    may_see_members,
     members_of,
     remove_member,
     resource_for,
@@ -66,6 +67,29 @@ async def _db_user_id(session: DbSession, user: TokenUser) -> str:
     return str(db_user.id)
 
 
+async def _viewer(session: DbSession, user: TokenUser) -> tuple[str, str]:
+    """The asking person's user and account ids."""
+    from metaseed_hub.ui.dependencies import ensure_tenant_and_user
+
+    tenant, db_user = await ensure_tenant_and_user(session, user)
+    return str(db_user.id), str(tenant.id)
+
+
+async def _seen_or_404(
+    session: DbSession, resource: SharedResource, resource_id: str, user: TokenUser
+) -> str:
+    """The viewer's id, once they are allowed to see this resource's members.
+
+    404 rather than 403: a stranger learns nothing about what exists.
+    """
+    viewer_id, tenant_id = await _viewer(session, user)
+    if not await may_see_members(
+        session, resource, resource_id, user_id=viewer_id, tenant_id=tenant_id
+    ):
+        raise HTTPException(status_code=404, detail="Not found")
+    return viewer_id
+
+
 async def _panel(
     request: Request,
     session: DbSession,
@@ -99,7 +123,7 @@ async def list_members(
 ) -> HTMLResponse:
     """Who has access, and the controls for changing that."""
     resource = _resource_or_404(kind)
-    viewer_id = await _db_user_id(session, user)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
     return await _panel(request, session, resource, resource_id, viewer_id)
 
 
@@ -117,7 +141,7 @@ async def add(
     """Give someone access by the address on their profile."""
     _check_csrf(request, csrf_token)
     resource = _resource_or_404(kind)
-    viewer_id = await _db_user_id(session, user)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
     error = None
     try:
         await add_member(
@@ -147,7 +171,7 @@ async def change_role(
     """Change what one member may do."""
     _check_csrf(request, csrf_token)
     resource = _resource_or_404(kind)
-    viewer_id = await _db_user_id(session, user)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
     error = None
     try:
         await set_role(
@@ -176,7 +200,7 @@ async def remove(
     """Take away access — or leave, when removing yourself."""
     _check_csrf(request, csrf_token)
     resource = _resource_or_404(kind)
-    viewer_id = await _db_user_id(session, user)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
     error = None
     try:
         await remove_member(session, resource, resource_id, actor_id=viewer_id, user_id=member_id)
