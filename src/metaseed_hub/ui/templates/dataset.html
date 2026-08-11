@@ -99,6 +99,10 @@
                             title="Provision the profile on your SEEK and push this dataset">Push to SEEK</button>
                     <a href="/hub/auth/profile#seek" class="btn btn-sm" data-testid="btn-seek-settings"
                        title="Your SEEK instance and API key">SEEK settings</a>
+                    <button class="btn btn-sm" type="button" data-testid="btn-seek-check"
+                            hx-post="/hub/seek/datasets/{{ dataset.id }}/check"
+                            hx-target="#seek-result"
+                            title="What this SEEK still needs before a push works">Check SEEK</button>
                     <a href="/hub/seek/templates/{{ dataset.profile }}/{{ dataset.version }}"
                        class="btn btn-sm" data-testid="btn-seek-templates" download
                        title="ISA Templates for this profile — a SEEK administrator installs them under Templates, populate; SEEK's ISA-JSON export needs them">ISA templates</a>
