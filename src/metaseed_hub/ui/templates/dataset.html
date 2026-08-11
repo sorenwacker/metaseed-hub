@@ -99,6 +99,9 @@
                             title="Provision the profile on your SEEK and push this dataset">Push to SEEK</button>
                     <a href="/hub/auth/profile#seek" class="btn btn-sm" data-testid="btn-seek-settings"
                        title="Your SEEK instance and API key">SEEK settings</a>
+                    <a href="/hub/seek/templates/{{ dataset.profile }}/{{ dataset.version }}"
+                       class="btn btn-sm" data-testid="btn-seek-templates" download
+                       title="ISA Templates for this profile — a SEEK administrator installs them under Templates, populate; SEEK's ISA-JSON export needs them">ISA templates</a>
                 </div>
                 <label class="form-hint" style="display:block; margin:0.25rem 0 0.5rem"
                        title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">

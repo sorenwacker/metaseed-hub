@@ -18,6 +18,7 @@ person. The key is encrypted at rest and never rendered back into a page.
 
 from __future__ import annotations
 
+import json
 import logging
 import socket
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ from typing import Annotated, Any
 from urllib.parse import quote, urlsplit
 
 import httpx
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
@@ -234,6 +235,46 @@ async def seek_settings_check(session: DbSession, user: SeekUser) -> Response:
     await session.commit()
 
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
+
+
+@router.get("/templates/{profile}/{version}")
+async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Response:
+    """Download a profile's ISA Templates, for a SEEK administrator to install.
+
+    Sample Types and controlled vocabularies are provisioned by the push
+    itself. Templates are not: only an administrator can install them, under
+    *Templates -> populate*, and SEEK's ISA-JSON exporter reads them to tell an
+    assay data file from an assay material. Without them a pushed dataset is in
+    SEEK but cannot be exported as ISA-JSON, which is the whole point of
+    putting it there.
+    """
+    from metaseed.seek.templates import to_isa_template_json
+    from metaseed.specs.loader import SpecLoader
+
+    try:
+        spec = SpecLoader().load_profile(version, profile)
+    except Exception:
+        # Never echo the requested profile back into the response.
+        raise HTTPException(status_code=404, detail="Unknown profile") from None
+
+    try:
+        document = to_isa_template_json(spec)
+    except Exception as exc:
+        logger.info("ISA templates could not be built for %s: %s", profile, exc)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This profile has no material chain to build templates from — "
+                "it needs entities that describe samples."
+            ),
+        ) from None
+
+    stem = "".join(c for c in f"{profile}-{version}" if c.isalnum() or c in "-_.")
+    return Response(
+        json.dumps(document, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{stem}-isa-templates.json"'},
+    )
 
 
 @router.post("/project")
