@@ -6,7 +6,7 @@ inline on an Investigation) get rows on their own type's sheet in addition to
 the parent's field showing their count.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
 
@@ -180,7 +180,7 @@ def generate_filename(facade: ProfileFacade) -> str:
     Returns:
         Filename for the Excel export.
     """
-    date_str = datetime.now().strftime("%y%m%d")
+    date_str = datetime.now(UTC).strftime("%y%m%d")
     version_str = facade.version.replace(".", "-")
 
     entity_id = "export"
