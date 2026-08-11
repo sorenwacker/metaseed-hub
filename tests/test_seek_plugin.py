@@ -459,3 +459,66 @@ class TestTheIsaTemplates:
     async def test_the_panel_offers_the_download(self, dataset, app_db) -> None:
         html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
         assert 'data-testid="btn-seek-templates"' in html
+
+
+class TestThePanelOnlyAppearsWhereItWorks:
+    """The panel showed on every dataset, including ENA ones, where a push has
+    nothing to hang records on: SEEK builds everything under an Investigation,
+    and only a profile declaring that role has an ISA shape to map."""
+
+    def test_the_seek_ready_template_qualifies(self) -> None:
+        from metaseed_hub.ui.routes.seek import profile_supports_seek
+
+        assert profile_supports_seek("seek-ready-template", "3.0")
+
+    @pytest.mark.parametrize(
+        "profile,version",
+        [("ena", "1.0"), ("pride", "1.0"), ("miappe", "1.2"), ("darwin-core", "1.0")],
+    )
+    def test_a_profile_without_isa_roles_does_not(self, profile: str, version: str) -> None:
+        from metaseed_hub.ui.routes.seek import profile_supports_seek
+
+        assert not profile_supports_seek(profile, version)
+
+    def test_an_unknown_profile_does_not_raise(self) -> None:
+        from metaseed_hub.ui.routes.seek import profile_supports_seek
+
+        assert not profile_supports_seek("no-such-profile", "9.9")
+
+    async def test_an_ena_dataset_shows_no_seek_panel(self, session, app_db) -> None:
+        from metaseed_hub.ui.dependencies import tenant_slug_for
+
+        tenant = make_tenant(slug=tenant_slug_for("kc-1"))
+        session.add(tenant)
+        await session.flush()
+        session.add(make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org"))
+        ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
+        session.add(ena)
+        await session.commit()
+
+        html = (await _get(f"/hub/datasets/{ena.id}", {"seek"})).text
+        assert 'data-testid="seek-panel"' not in html
+        assert 'data-testid="btn-seek-templates"' not in html
+
+    async def test_pushing_one_anyway_says_why(self, session, app_db) -> None:
+        """Someone with the URL, or a stale page, must get the reason rather
+        than a failure from inside the sync."""
+        from metaseed_hub.ui.dependencies import tenant_slug_for
+
+        tenant = make_tenant(slug=tenant_slug_for("kc-1"))
+        session.add(tenant)
+        await session.flush()
+        session.add(make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org"))
+        ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
+        session.add(ena)
+        await session.commit()
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(f"/hub/seek/datasets/{ena.id}/push", data={})
+
+        assert "does not describe an ISA structure" in response.text
