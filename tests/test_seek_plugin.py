@@ -635,3 +635,35 @@ class TestTheReadinessCheck:
     async def test_the_panel_offers_it(self, dataset, app_db) -> None:
         html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
         assert 'data-testid="btn-seek-check"' in html
+
+
+class TestThePushSaysItIsWorking:
+    """A push provisions and creates records over the network. With no sign it
+    had started, the panel looked dead and the button invited a second press."""
+
+    async def test_the_panel_announces_the_wait(self, dataset, app_db) -> None:
+        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        assert "seek-working" in html, "nothing tells the user a push is running"
+        assert "hx-disabled-elt" in html, "the button can be pressed twice"
+
+    def test_a_push_that_created_nothing_says_so(self) -> None:
+        """Reporting 0 investigations, 0 studies as a success read as success."""
+        from types import SimpleNamespace
+
+        from metaseed_hub.ui.render import get_templates
+
+        empty = SimpleNamespace(
+            investigations=[],
+            studies=[],
+            assays=[],
+            samples=[],
+            errors=[],
+            unlinked=[],
+        )
+        html = (
+            get_templates()
+            .get_template("partials/seek_panel_result.html")
+            .render(result=empty, message=None, error=None)
+        )
+        assert 'data-testid="seek-result-nothing"' in html
+        assert 'data-testid="seek-result-ok"' not in html

@@ -3,11 +3,23 @@
 {% elif message %}
 <div class="alert alert-success" data-testid="seek-result-ok">{{ message }}</div>
 {% elif result %}
+{% set created = result.investigations|length + result.studies|length
+                 + result.assays|length + result.samples|length %}
+{% if created %}
 <div class="alert alert-success" data-testid="seek-result-ok">
     Pushed: {{ result.investigations|length }} investigation(s),
     {{ result.studies|length }} study(ies), {{ result.assays|length }} assay(s),
     {{ result.samples|length }} sample(s).
 </div>
+{% else %}
+{# A push that creates nothing is not a success to report quietly: either the
+   dataset is empty or every record was refused, and the errors below say
+   which. #}
+<div class="alert alert-warning" data-testid="seek-result-nothing">
+    Nothing was created in SEEK. {% if not result.errors %}The dataset has no
+    entities to push.{% endif %}
+</div>
+{% endif %}
 {% if result.errors %}
 <div class="alert alert-error" data-testid="seek-result-errors">
     {{ result.errors|length }} error(s):
