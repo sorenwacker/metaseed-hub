@@ -237,6 +237,31 @@ async def seek_settings_check(session: DbSession, user: SeekUser) -> Response:
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
+#: The ISA level a profile must declare before anything can be pushed. SEEK
+#: hangs every record off an Investigation, so a profile without one has no
+#: shape to map onto — which is true of every built-in except the SEEK-ready
+#: template, including ENA and PRIDE.
+REQUIRED_ROLE = "Investigation"
+
+
+def profile_supports_seek(profile: str, version: str) -> bool:
+    """Whether a dataset on this profile can be pushed to SEEK at all.
+
+    Read from the profile's own SEEK role annotations rather than a list of
+    names here, so a specification that declares the roles works without the
+    hub being taught about it.
+    """
+    from metaseed.specs.loader import SpecLoader
+
+    try:
+        spec = SpecLoader().load_profile(version, profile)
+    except Exception:
+        return False
+    return any(
+        entity.seek and entity.seek.role == REQUIRED_ROLE for entity in spec.entities.values()
+    )
+
+
 @router.get("/templates/{profile}/{version}")
 async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Response:
     """Download a profile's ISA Templates, for a SEEK administrator to install.
@@ -313,6 +338,19 @@ async def seek_push(
     stay private to the key's person.
     """
     dataset = await get_dataset_for_user(dataset_id, session, user)
+    # Before the connection: no SEEK account makes an unmappable profile work,
+    # and "configure your connection first" would send someone to fix the wrong
+    # thing.
+    if not profile_supports_seek(dataset.profile, dataset.version):
+        return _panel(
+            request,
+            error=(
+                f"The {dataset.profile} profile does not describe an ISA "
+                "structure, so there is nothing for SEEK to hang these records "
+                "on. Use a profile whose entities declare SEEK roles."
+            ),
+        )
+
     connection = await connection_for_user(session, user)
     if connection is None:
         return _panel(request, error="Configure your SEEK connection first.")

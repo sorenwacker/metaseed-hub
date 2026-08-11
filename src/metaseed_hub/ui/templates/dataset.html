@@ -87,7 +87,7 @@
                 {% endfor %}
             </div>
             {% endif %}
-            {% if features and "seek" in features %}
+            {% if seek_supported %}
             {# The SEEK plugin, visible only to the seek group while it is
                developed behind its feature flag. #}
             <form id="seek-push-form" hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
