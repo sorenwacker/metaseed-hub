@@ -348,6 +348,64 @@ async def seek_choose_project(
     return _back()
 
 
+@router.post("/datasets/{dataset_id}/check", response_class=HTMLResponse)
+async def seek_readiness(
+    request: Request, dataset_id: str, session: DbSession, user: SeekUser
+) -> Response:
+    """Report what this SEEK still needs before a push of this dataset works.
+
+    Three things fail separately and used to fail obscurely: the instance may
+    not have ISA-JSON compliance switched on, the profile's ISA Templates may
+    not be installed, and the connection may simply be unreachable. Naming
+    which one saves reading a push failure backwards.
+    """
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    if not profile_supports_seek(dataset.profile, dataset.version):
+        return _panel(
+            request,
+            error=f"The {dataset.profile} profile does not map onto SEEK.",
+        )
+
+    connection = await connection_for_user(session, user)
+    if connection is None:
+        return _panel(request, error="Configure your SEEK connection first.")
+
+    def work() -> tuple[list[str], list[str]]:
+        from metaseed.seek.templates import template_title
+        from metaseed.specs.loader import SpecLoader
+
+        client = _client_for(connection)
+        installed = set(client.template_ids_by_title())
+        profile = SpecLoader().load_profile(dataset.version, dataset.profile)
+        wanted = [
+            template_title(profile, level) for level in ("study source", "study sample", "assay")
+        ]
+        return [t for t in wanted if t in installed], [t for t in wanted if t not in installed]
+
+    try:
+        present, missing = await run_in_threadpool(work)
+    except Exception as exc:
+        logger.info("SEEK readiness check failed: %s", exc)
+        return _panel(request, error=_push_failure(exc, connection.url))
+
+    if not present and not missing:
+        return _panel(request, message="This SEEK is ready for a push.")
+    if missing:
+        return _panel(
+            request,
+            error=(
+                f"{len(missing)} ISA Template(s) are not installed on this SEEK: "
+                + ", ".join(missing)
+                + ". Download them with the ISA templates button and have a "
+                "SEEK administrator install them at "
+                f"{connection.url}/templates/default_templates. That page "
+                "exists only once 'Compliance with ISA-JSON schemas' is "
+                "enabled, which itself needs Single page, ISA and Samples."
+            ),
+        )
+    return _panel(request, message=f"Ready: {len(present)} template(s) installed.")
+
+
 @router.post("/datasets/{dataset_id}/push", response_class=HTMLResponse)
 async def seek_push(
     request: Request,

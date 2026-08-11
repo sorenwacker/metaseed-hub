@@ -567,3 +567,71 @@ class TestWhenSeekIsDown:
         assert "sample type missing" in _push_failure(
             ValueError("sample type missing"), "https://seek.example.org"
         )
+
+
+class TestTheReadinessCheck:
+    """Three things fail separately and used to fail obscurely: ISA-JSON
+    compliance switched off on the instance, templates not installed, and an
+    unreachable SEEK."""
+
+    async def test_it_names_the_missing_templates(self, dataset, app_db, session) -> None:
+        await _save_settings("https://seek.example.org", _working)
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+            factory.return_value.template_ids_by_title.return_value = {}
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+
+        assert "not installed" in response.text
+        assert "templates/default_templates" in response.text
+        assert "Compliance with ISA-JSON schemas" in response.text
+
+    async def test_it_says_ready_when_they_are_there(self, dataset, app_db, session) -> None:
+        from metaseed.seek.templates import template_title
+        from metaseed.specs.loader import SpecLoader
+
+        await _save_settings("https://seek.example.org", _working)
+        profile = SpecLoader().load_profile("3.0", "seek-ready-template")
+        installed = {
+            template_title(profile, level): str(i)
+            for i, level in enumerate(("study source", "study sample", "assay"), 1)
+        }
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+            factory.return_value.template_ids_by_title.return_value = installed
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+
+        assert "Ready" in response.text
+
+    async def test_a_down_instance_says_so_rather_than_blaming_templates(
+        self, dataset, app_db, session
+    ) -> None:
+        await _save_settings("https://seek.example.org", _working)
+
+        app = create_app()
+        a, b, c = _signed_in({"seek"})
+        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+            factory.return_value.template_ids_by_title.side_effect = httpx.HTTPStatusError(
+                "503",
+                request=httpx.Request("GET", "https://seek.example.org/templates"),
+                response=httpx.Response(503),
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+
+        assert "not serving SEEK" in response.text
+
+    async def test_the_panel_offers_it(self, dataset, app_db) -> None:
+        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        assert 'data-testid="btn-seek-check"' in html
