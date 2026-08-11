@@ -349,3 +349,55 @@ class TestEveryPageLoadsTheOnePanel:
                 if dead in markup and "/hub/sharing/" not in markup:
                     offenders.append(str(path))
         assert not offenders, f"still calling removed routes: {offenders}"
+
+
+class TestAStrangerLearnsNothing:
+    """The write paths checked ownership; the read path checked nothing, so any
+    signed-in person could list the members — names and email addresses — of any
+    dataset, draft or specification whose id they knew."""
+
+    async def test_someone_with_no_access_cannot_list_the_members(self, session, people) -> None:
+        from metaseed_hub.sharing import may_see_members
+
+        (tenant, owner), (other_tenant, stranger), _ = people
+        thing_id = await _make(session, "dataset", tenant, owner)
+
+        assert not await may_see_members(
+            session,
+            resource_for("dataset"),
+            thing_id,
+            user_id=stranger.id,
+            tenant_id=other_tenant.id,
+        )
+
+    async def test_someone_it_is_shared_with_can(self, session, people) -> None:
+        from metaseed_hub.sharing import may_see_members
+
+        (tenant, owner), (other_tenant, second), _ = people
+        resource = resource_for("dataset")
+        thing_id = await _make(session, "dataset", tenant, owner)
+        await add_member(session, resource, thing_id, actor_id=owner.id, email=second.email)
+
+        assert await may_see_members(
+            session, resource, thing_id, user_id=second.id, tenant_id=other_tenant.id
+        )
+
+    async def test_the_account_it_lives_in_can(self, session, people) -> None:
+        """A dataset's own account has no membership row until someone shares
+        it, so ownership of the account has to count."""
+        from metaseed_hub.sharing import may_see_members
+
+        (tenant, owner), (_, second), _ = people
+        resource = resource_for("dataset")
+        thing_id = await _make(session, "dataset", tenant, owner)
+
+        # A colleague of the account with no membership row of their own.
+        colleague = make_user(
+            tenant=tenant, keycloak_id="kc-colleague", email="colleague@example.org"
+        )
+        session.add(colleague)
+        await session.commit()
+
+        assert await may_see_members(
+            session, resource, thing_id, user_id=colleague.id, tenant_id=tenant.id
+        )
