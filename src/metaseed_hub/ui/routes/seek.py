@@ -91,6 +91,15 @@ def _verification_failure(exc: Exception, url: str) -> str:
         code = exc.response.status_code
         if code in (401, 403):
             return "SEEK rejected the API key. Check it was copied whole and has not expired."
+        if code >= 500:
+            # "SEEK rejected GET /isa_tags (503): no available server" read as a
+            # bad request; the instance was simply down, and every endpoint said
+            # the same thing.
+            return (
+                f"{host} is not serving SEEK right now (HTTP {code}). The "
+                "instance or the proxy in front of it is down — nothing to "
+                "change here; try again once it is back."
+            )
         if code == 404:
             return (
                 f"{host} answered, but not as a SEEK API. Give the instance's "
@@ -111,6 +120,22 @@ def _back(error: str | None = None) -> RedirectResponse:
             url=f"/hub/auth/profile?seek_error={quote(error)}#seek", status_code=303
         )
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
+
+
+def _push_failure(exc: Exception, url: str) -> str:
+    """Read a push failure the way the connection check reads one.
+
+    A push meets the same instance and the same network, so the same four
+    causes apply; anything else is reported as SEEK said it.
+    """
+    from httpx import HTTPStatusError
+
+    message = _verification_failure(exc, url)
+    if isinstance(exc, HTTPStatusError) or "not serving SEEK" in message:
+        return message
+    if message.startswith("Could not reach SEEK"):
+        return str(exc)
+    return message
 
 
 def _record_outcome(
@@ -385,7 +410,7 @@ async def seek_push(
         result = await run_in_threadpool(work)
     except Exception as exc:
         logger.info("SEEK push failed: %s", exc)
-        return _panel(request, error=f"Push failed: {exc}")
+        return _panel(request, error=f"Push failed. {_push_failure(exc, connection.url)}")
     return _panel(request, result=result)
 
 
