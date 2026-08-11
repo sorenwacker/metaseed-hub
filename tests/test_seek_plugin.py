@@ -522,3 +522,48 @@ class TestThePanelOnlyAppearsWhereItWorks:
                 response = await client.post(f"/hub/seek/datasets/{ena.id}/push", data={})
 
         assert "does not describe an ISA structure" in response.text
+
+
+class TestWhenSeekIsDown:
+    """ "SEEK rejected GET /isa_tags (503): no available server" read as a bad
+    request. The instance was down — every endpoint said the same — and the
+    message sent the owner looking at the wrong thing."""
+
+    def test_a_5xx_says_the_instance_is_down(self) -> None:
+        from metaseed_hub.ui.routes.seek import _verification_failure
+
+        exc = httpx.HTTPStatusError(
+            "503",
+            request=httpx.Request("GET", "https://seek.example.org/isa_tags"),
+            response=httpx.Response(503, text="no available server"),
+        )
+        message = _verification_failure(exc, "https://seek.example.org")
+        assert "not serving SEEK" in message
+        assert "key" not in message.lower(), "the key is not the problem"
+
+    def test_a_push_failure_reads_the_same_way(self) -> None:
+        from metaseed_hub.ui.routes.seek import _push_failure
+
+        exc = httpx.HTTPStatusError(
+            "503",
+            request=httpx.Request("GET", "https://seek.example.org/isa_tags"),
+            response=httpx.Response(503),
+        )
+        assert "not serving SEEK" in _push_failure(exc, "https://seek.example.org")
+
+    def test_a_rejected_key_still_names_the_key(self) -> None:
+        from metaseed_hub.ui.routes.seek import _push_failure
+
+        exc = httpx.HTTPStatusError(
+            "401",
+            request=httpx.Request("GET", "https://seek.example.org/projects"),
+            response=httpx.Response(401),
+        )
+        assert "API key" in _push_failure(exc, "https://seek.example.org")
+
+    def test_anything_else_is_reported_as_seek_said_it(self) -> None:
+        from metaseed_hub.ui.routes.seek import _push_failure
+
+        assert "sample type missing" in _push_failure(
+            ValueError("sample type missing"), "https://seek.example.org"
+        )
