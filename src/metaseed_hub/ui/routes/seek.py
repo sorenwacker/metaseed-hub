@@ -22,7 +22,7 @@ import logging
 import socket
 from datetime import UTC, datetime
 from typing import Annotated, Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Request
@@ -103,6 +103,15 @@ def _verification_failure(exc: Exception, url: str) -> str:
 SETTINGS_URL = "/hub/auth/profile#seek"
 
 
+def _back(error: str | None = None) -> RedirectResponse:
+    """Back to the settings section, carrying a message the page can show."""
+    if error:
+        return RedirectResponse(
+            url=f"/hub/auth/profile?seek_error={quote(error)}#seek", status_code=303
+        )
+    return RedirectResponse(url=SETTINGS_URL, status_code=303)
+
+
 def _record_outcome(
     connection: SeekConnection, error: str | None, projects: list[tuple[str, str]]
 ) -> None:
@@ -124,7 +133,16 @@ def _record_outcome(
         )
     else:
         connection.last_error = None
-    connection.project_hint = projects[0][1] if projects else None
+    if projects:
+        connection.projects = [[str(pid), str(title)] for pid, title in projects]
+        # Keep the person's choice if it still exists; otherwise fall back to
+        # the first, which is what the push did before anyone could choose.
+        chosen = {str(pid) for pid, _ in projects}
+        if connection.project_id not in chosen:
+            connection.project_id = str(projects[0][0])
+        connection.project_hint = next(
+            title for pid, title in connection.projects if pid == connection.project_id
+        )
 
 
 @router.get("")
@@ -140,7 +158,7 @@ async def seek_settings_save(
     session: DbSession,
     user: SeekUser,
     url: str = Form(...),
-    api_key: str = Form(...),
+    api_key: str = Form(""),
 ) -> Response:
     """Check the connection against SEEK, and store it either way.
 
@@ -153,6 +171,21 @@ async def seek_settings_save(
 
     url = url.strip().rstrip("/")
     api_key = api_key.strip()
+
+    # The key is never rendered back into the page, so the box is always empty
+    # — which meant correcting a URL cost you the key. Blank now means keep the
+    # stored one; only a first connection has to supply it.
+    stored = await connection_for_user(session, user)
+    if not api_key:
+        kept = decrypt_secret(stored.api_key_encrypted) if stored else None
+        api_key = kept or ""
+        if not api_key:
+            return _back(
+                "Enter the API key — there is no stored one to keep."
+                if stored is None
+                else "The stored key cannot be read any more; enter it again."
+            )
+
     error = None
     projects: list[tuple[str, str]] = []
     try:
@@ -203,6 +236,27 @@ async def seek_settings_check(session: DbSession, user: SeekUser) -> Response:
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
+@router.post("/project")
+async def seek_choose_project(
+    session: DbSession, user: SeekUser, project_id: str = Form(...)
+) -> Response:
+    """Set which SEEK project this person's pushes go to."""
+    connection = await connection_for_user(session, user)
+    if connection is None:
+        return _back("Configure your SEEK connection first.")
+
+    known = {pid: title for pid, title in connection.projects}
+    if project_id not in known:
+        # The list comes from the page, which may be stale if projects changed
+        # in SEEK since the last check.
+        return _back("That project is not on your SEEK any more — check again.")
+
+    connection.project_id = project_id
+    connection.project_hint = known[project_id]
+    await session.commit()
+    return _back()
+
+
 @router.post("/datasets/{dataset_id}/push", response_class=HTMLResponse)
 async def seek_push(
     request: Request,
@@ -236,7 +290,8 @@ async def seek_push(
         from metaseed.specs.loader import SpecLoader
 
         client = _client_for(connection)
-        project_id = client.default_project_id()
+        # The person's choice; only fall back when they have never chosen.
+        project_id = connection.project_id or client.default_project_id()
         profile = SpecLoader().load_profile(dataset.version, dataset.profile)
         execute_provisioning_plan(client, build_provisioning_plan(profile), project_id=project_id)
         return sync_dataset_to_seek(

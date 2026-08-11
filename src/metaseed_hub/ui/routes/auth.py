@@ -302,6 +302,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "user": user,
             "nav_active": "profile",
             "features": features,
+            "seek_error": request.query_params.get("seek_error"),
             # The SEEK connection lives here, with the other per-user
             # credentials, rather than on a page of its own that nothing links to.
             "connection": (

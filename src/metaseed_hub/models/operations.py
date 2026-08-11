@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -54,8 +54,16 @@ class SeekConnection(TimestampMixin, Base):
     # status is kept alongside instead, and shown wherever the connection is.
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: The project pushes will land in — SEEK attaches every record to one.
+    #: The project pushes land in, chosen by the person. SEEK attaches every
+    #: record to a project, and taking the first one silently put content in
+    #: whichever project happened to sort first.
+    project_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     project_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: ``[[id, title], ...]`` as of the last successful check, so the choice can
+    #: be offered without calling SEEK on every page load.
+    projects: Mapped[list[list[str]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
 
 
 class FeatureGrant(TimestampMixin, Base):
