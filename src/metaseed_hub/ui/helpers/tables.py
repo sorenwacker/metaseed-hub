@@ -197,6 +197,7 @@ def _build_single_entity_table(
         "column_types": column_types,
         "nested_entity_type": item_type,
         "required_columns": list(required_columns),
+        "reference_fields": _reference_fields(helper),
         "is_single_entity": True,
     }
 
@@ -289,6 +290,22 @@ def _build_entity_list_table(
         "nested_entity_type": item_type,
         "inherited_columns": list(inherited_columns),
         "required_columns": list(required_columns),
+        "reference_fields": _reference_fields(helper),
+    }
+
+
+def _reference_fields(helper: Any) -> dict[str, dict[str, str]]:
+    """Column -> the entity and field it names, for the columns that name one.
+
+    A reference typed by hand is how rows end up attached to nothing. The
+    exported spreadsheet turns these into dropdowns; the tables here get the
+    same lookup, fed by the dataset-scoped route in ui/routes/table.py.
+    """
+    return {
+        field: {"target_entity": target_entity, "target_field": target_field}
+        for field, (target_entity, target_field) in (
+            getattr(helper, "reference_fields", {}) or {}
+        ).items()
     }
 
 

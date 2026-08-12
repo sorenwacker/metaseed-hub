@@ -2,6 +2,154 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- A reference column in an inline table offers the rows it may name, as the
+  exported spreadsheet already does. A reference typed by hand is the commonest
+  way a row ends up attached to nothing. Suggestions come from a
+  dataset-scoped endpoint: values from another dataset would be useless and a
+  disclosure.
+
+## [0.32.0] - 2026-08-12
+
+### Added
+- Exported spreadsheets carry the standard's vocabularies (metaseed 0.32.0,
+  after RightField): a controlled column becomes a dropdown, a column naming
+  another sheet picks from the rows that exist, a repeated identifier is
+  flagged, headings carry their descriptions, and each sheet is a table that
+  absorbs typed rows with their validation. Rules warn rather than block, and
+  conditional formatting keeps marking what was accepted — which is what
+  catches pasted values.
+- A test that fails if the hub re-implements something the library owns.
+
+### Fixed
+- Pushes to SEEK reuse what a previous push created instead of building a
+  second copy of everything (metaseed 0.31.0; production never had it because
+  the hub was pinned to 0.30.0).
+- Importing a workbook no longer reports the export's own hidden sheet as an
+  unknown entity type.
+
+### Changed
+- The workbook is built by the library, from the facade both applications hold.
+  The hub's copy of the builder — correct, and no longer improving — is gone.
+- Fraunces and DM Sans are served by the hub rather than fetched from Google's
+  CDN on every page load. The stylesheet has always named them; nothing loaded
+  them from here.
+- The landing page states what the hub does, and says plainly that this is in
+  heavy development: features change and stored data may need migrating.
+- The privacy page states how long backups keep a deleted account's data (up to
+  6 months) and how long recorded errors are kept (30 days), both gated against
+  the code's own values.
+
+## [0.31.6] - 2026-08-11
+
+### Security
+- The members list of a dataset, draft or specification was readable by any
+  signed-in user who knew the resource's id: the routes that change access
+  checked ownership, the route that reads it checked nothing. Seeing who has
+  access now requires being shared with the resource or owning the account it
+  lives in, and an unrelated request gets 404 rather than 403. Introduced in
+  0.31.0 with the single sharing mechanism.
+
+### Fixed
+- Export filenames were stamped with the server's local date, so a file written
+  at 01:00 CEST was dated a day ahead of the instant it was written. All clock
+  reads are UTC, and a test fails on a naive one.
+
+## [0.31.5] - 2026-08-11
+
+### Fixed
+- Saving an entity that has related items listed could wipe its own fields. The
+  inline child tables sat inside the parent's form, and a child row's inputs
+  carry the child's field names — a Source has a title just as a Study does —
+  so they were submitted with the parent and the last empty cell won.
+
+## [0.31.4] - 2026-08-11
+
+### Added
+- Check SEEK, on a dataset's SEEK panel: reports which of the profile's ISA
+  Templates the instance is missing and where an administrator installs them.
+- A push says it has started and disables its button while it runs.
+
+### Fixed
+- A push against a SEEK that is down said "SEEK rejected GET /isa_tags (503)",
+  which reads as a bad request. Any 5xx now says the instance is not serving
+  SEEK. A push that created nothing says so rather than reporting zero counts
+  as success.
+
+## [0.31.3] - 2026-08-11
+
+### Fixed
+- The SEEK panel appeared on every dataset, including ENA and PRIDE ones, where
+  a push has nothing to hang records on. It now appears only where a push can
+  work, read from the profile's own SEEK roles.
+
+## [0.31.2] - 2026-08-11
+
+### Added
+- A profile's ISA Templates can be downloaded from the dataset's SEEK panel.
+  Only a SEEK administrator can install them, and SEEK's ISA-JSON exporter
+  needs them; the file could not be obtained from the hub at all.
+
+## [0.31.1] - 2026-08-11
+
+### Fixed
+- Correcting the SEEK URL no longer costs the API key: leaving the field blank
+  keeps the stored one.
+- Pushes went to whichever project SEEK returned first. The project is chosen
+  on the profile page, and a later check keeps the choice.
+
+## [0.31.0] - 2026-08-11
+
+### Added
+- Published specifications can be shared. They had a members table and nothing
+  that wrote to it, so handing one to a colleague meant editing the database.
+- An item always keeps an owner: the last one cannot be demoted, removed, or
+  leave.
+
+### Changed
+- Datasets, specification drafts and published specifications share one
+  sharing mechanism, one set of routes and one panel. There were two nearly
+  identical routers, four copies of the members markup — two calling routes
+  that no longer existed — and three role vocabularies.
+- One role vocabulary everywhere: owner, editor, viewer. `curator` becomes
+  `editor` in existing data.
+
+## [0.30.5] - 2026-08-10
+
+### Removed
+- Teams and notes. Both were removed from the hub as features long ago but
+  their models, tables and test fixtures remained, and one dead branch — "an
+  admin or owner of a team in this tenant may edit a specification" — sat in
+  the permission check where it could never be true. Production held zero rows
+  in all three tables.
+
+### Changed
+- "Workspace" no longer appears anywhere. It named a concept the hub does not
+  have, in 61 places across function names, error messages and admin screens.
+  Everything says account, which is what a tenant is: one person's. A test
+  fails if a retired word comes back.
+- The test harness resets the whole schema per run rather than dropping the
+  tables the models still declare: a table whose model has been deleted is
+  invisible to the metadata, stays behind, and its foreign key blocks dropping
+  everything else.
+
+## [0.30.4] - 2026-08-10
+
+### Fixed
+- Withdrawing a published specification no longer breaks the datasets built on
+  it. acdc_ks 2.0 was withdrawn on 260728 and two datasets in another account
+  raised an error on every page from then on: withdrawal soft-deletes the spec,
+  which removes it from the lookup every dataset performs on load. The check
+  lives in `unpublish_spec`, so the API and MCP paths are covered, and it
+  searches hub-wide by name and version — datasets bind that way, and the ones
+  at risk are usually not the publisher's.
+
+### Added
+- The specification page names the datasets built on it and disables Unpublish
+  while any exist, rather than only refusing after the click.
+
 ## [0.30.3] - 2026-08-10
 
 ### Fixed
@@ -25,18 +173,6 @@ All notable changes to this project will be documented in this file.
 - The SEEK connection is configured on the profile page, beside the other
   per-user credentials, instead of a page nothing linked to. `/hub/seek` and
   `/hub/seek/settings` redirect there.
-
-## [0.30.2] - 2026-08-10
-
-### Fixed
-- A SEEK connection is no longer refused for having no project. Verification
-  lists projects instead of demanding one: reaching SEEK with a valid key is a
-  working connection, and an account in no project is reported as the separate
-  thing it is.
-- Verification failures name their cause — a hostname the server cannot
-  resolve, nothing answering at the port, a rejected key, an answer that is not
-  a SEEK API — instead of one message covering all four. The typed URL survives
-  a failed attempt; the key must be entered again, and the form says so.
 
 ## [0.30.2] - 2026-08-10
 

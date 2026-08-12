@@ -5,6 +5,7 @@
 {% set column_types = table_data.column_types or {} %}
 {% set nested_entity_type = table_data.nested_entity_type or field.item_type %}
 {% set is_primitive_list = table_data.is_primitive_list or false %}
+{% set reference_fields = table_data.reference_fields or {} %}
 {% set is_single_entity = table_data.is_single_entity or false %}
 {% set inherited_columns = table_data.inherited_columns or [] %}
 {% set required_columns = table_data.required_columns or [] %}
@@ -64,19 +65,37 @@
                                hx-swap="none">
                         {% elif is_single_entity %}
                         <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
-                               class="cell-input"
+                               class="cell-input{% if reference_fields.get(col) %} lookup-input{% endif %}"
                                name="{{ col }}"
                                value="{{ row.get(col, '') }}"
                                {% if col_type == 'float' %}step="any"{% endif %}
+                               {% set ref = reference_fields.get(col) %}
+                               {% if ref %}
+                               data-lookup="{{ ref.target_entity }}"
+                               data-lookup-field="{{ ref.target_field }}"
+                               data-lookup-url="/hub/datasets/{{ dataset_id }}/lookup/"
+                               autocomplete="off"
+                               placeholder="Tab for options"
+                               title="Names a {{ ref.target_entity }} by its {{ ref.target_field }}"
+                               {% endif %}
                                hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/single/{{ field_name }}"
                                hx-trigger="change, blur"
                                hx-swap="none">
                         {% else %}
                         <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
-                               class="cell-input"
+                               class="cell-input{% if reference_fields.get(col) %} lookup-input{% endif %}"
                                name="{{ col }}"
                                value="{{ row.get(col, '') }}"
                                {% if col_type == 'float' %}step="any"{% endif %}
+                               {% set ref = reference_fields.get(col) %}
+                               {% if ref %}
+                               data-lookup="{{ ref.target_entity }}"
+                               data-lookup-field="{{ ref.target_field }}"
+                               data-lookup-url="/hub/datasets/{{ dataset_id }}/lookup/"
+                               autocomplete="off"
+                               placeholder="Tab for options"
+                               title="Names a {{ ref.target_entity }} by its {{ ref.target_field }}"
+                               {% endif %}
                                hx-post="/hub/datasets/{{ dataset_id }}/table/{{ row._node_id }}/cell"
                                hx-trigger="change, blur"
                                hx-swap="none">

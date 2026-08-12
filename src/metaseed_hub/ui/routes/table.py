@@ -739,3 +739,68 @@ async def delete_single_entity_field(
     response = HTMLResponse(html)
     response.headers["HX-Trigger"] = "entityChanged"
     return response
+
+
+@router.get("/datasets/{dataset_id}/lookup/{entity_type}")
+async def lookup_entities(
+    request: Request,
+    dataset_id: str,
+    entity_type: str,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user: OptionalUser,
+    q: str = "",
+) -> Response:
+    """Values of ``entity_type`` in this dataset, for a reference field.
+
+    A reference names a row that has to exist: a Sample's study, an assay's
+    material. Typed by hand it is the commonest way an import arrives with
+    something attached to nothing, which is why the exported spreadsheet turns
+    these columns into dropdowns. The tables in the application deserve the
+    same, and this is what fills them.
+
+    Scoped to one dataset, and to a user who may read it: values from someone
+    else's dataset would be both useless and a disclosure.
+    """
+    from fastapi.responses import JSONResponse
+
+    from metaseed_hub.ui.dependencies import get_dataset_for_user
+    from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
+
+    if user is None:
+        return JSONResponse({"results": []}, status_code=401)
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
+
+    helper = getattr(facade, entity_type, None)
+    if helper is None:
+        return JSONResponse({"results": []})
+
+    identifier = getattr(helper, "identifier_field", None)
+    label_field = next(
+        (
+            candidate
+            for candidate in ("title", "name", "description")
+            if candidate in getattr(helper, "all_fields", [])
+        ),
+        None,
+    )
+
+    query = q.lower().strip()
+    results: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for node in state.nodes_by_id.values():
+        if node.entity_type != entity_type:
+            continue
+        data = node.instance.model_dump() if hasattr(node.instance, "model_dump") else {}
+        value = str(data.get(identifier, "") or "")
+        if not value or value in seen:
+            continue
+        label = str(data.get(label_field, "") or "") if label_field else ""
+        if query and query not in value.lower() and query not in label.lower():
+            continue
+        seen.add(value)
+        results.append({"value": value, "label": label})
+
+    return JSONResponse({"results": results[:50]})
