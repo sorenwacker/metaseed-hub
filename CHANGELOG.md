@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- Requires metaseed 0.33.0, which holds the term router these lookups ask.
 - Ontology lookups — the term picker, the MCP search, suggestion and term tools
   — ask metaseed's term router rather than OLS directly, so a vocabulary
   configured on the server is offered here too. The hub held its own OLS-only
