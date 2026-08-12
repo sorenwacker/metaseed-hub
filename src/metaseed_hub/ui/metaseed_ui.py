@@ -14,11 +14,17 @@ Re-exported internals:
 - ``METASEED_STATIC_DIR`` / ``METASEED_TEMPLATES_DIR``: the asset directories
   packaged with metaseed's standalone explorer, which the hub mounts and adds
   to its template loader.
+- ``build_workbook_from_facade``: the Excel export. The hub had its own copy of
+  this — the same builder taking a facade where the library's took an
+  ``AppState`` — which stayed correct and stopped improving, so the dropdowns,
+  tables and heading descriptions never reached it. The library now builds from
+  the facade both applications hold, and the copy is gone.
 """
 
 from pathlib import Path
 
 import metaseed.ui
+from metaseed.ui.services.export import build_workbook_from_facade
 from metaseed.ui.state import AppState, TreeNode
 
 _METASEED_UI_DIR = Path(metaseed.ui.__file__).parent
@@ -28,6 +34,7 @@ METASEED_TEMPLATES_DIR = _METASEED_UI_DIR / "templates"
 
 __all__ = [
     "METASEED_STATIC_DIR",
+    "build_workbook_from_facade",
     "METASEED_TEMPLATES_DIR",
     "AppState",
     "TreeNode",

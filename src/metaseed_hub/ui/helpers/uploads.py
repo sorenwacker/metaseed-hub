@@ -5,6 +5,10 @@ from typing import Any
 
 from fastapi import HTTPException, UploadFile
 
+#: Sheets the export writes for its own purposes rather than for data. Matching
+#: on the prefix rather than one name so a later addition needs no change here.
+RESERVED_SHEET_PREFIX = "metaseed "
+
 # Upper bound on an uploaded import file, enforced in the app rather than relying
 # on the reverse proxy alone. A bare ``await file.read()`` loads the whole upload
 # into memory (then parses it), so an unbounded read is a memory-pressure DoS on a
@@ -54,6 +58,11 @@ def parse_workbook_sheets(content: bytes) -> dict[str, list[dict[str, Any]]]:
 
     entities_by_type: dict[str, list[dict[str, Any]]] = {}
     for sheet_name in wb.sheetnames:
+        if sheet_name.startswith(RESERVED_SHEET_PREFIX):
+            # The export's own sheets — the vocabularies behind the dropdowns —
+            # are not entities, and reading them back reports every one as an
+            # unknown entity type.
+            continue
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
         if len(rows) < 2:
