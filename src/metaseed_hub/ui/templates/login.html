@@ -4,21 +4,61 @@
 
 {% block content %}
 <div class="landing">
+    {# Said before sign-in, not after: someone deciding whether to put their
+       work here is owed this while the decision is still theirs. #}
+    <p class="landing-warning" role="note">
+        <strong>In heavy development.</strong> Features change without notice, and
+        stored data may need migrating between versions. Keep your own copy of
+        anything you cannot afford to lose.
+    </p>
+
     <section class="landing-hero">
         <img src="/hub/hub-static/images/metaseed-logo.svg" alt="Metaseed" class="landing-logo">
         <h1 class="landing-headline">Metadata that meets the standard</h1>
         <p class="landing-subhead">
             Describe research data against MIAPPE, ISA, Darwin Core, ENA and more &mdash;
-            validated as you work, and exported in the form a repository expects.
+            or build your own standard when none of them fits. Validated as you work,
+            and exported in the form a repository expects.
         </p>
         <a href="/hub/auth/login" class="btn btn-primary btn-lg landing-cta">Sign in</a>
         <p class="landing-note">Sign in with your institutional account.</p>
+
+        {# What the hub is, in four lines a visitor can check against their own
+           situation before reading anything longer. #}
+        <dl class="landing-facts">
+            <div class="landing-fact">
+                <dt>Standards</dt>
+                <dd>MIAPPE &middot; ISA &middot; Darwin Core &middot; ENA &middot; PRIDE &middot; MetaboLights &middot; DiSSCo</dd>
+            </div>
+            <div class="landing-fact">
+                <dt>Your own</dt>
+                <dd>Build a specification when no standard fits, and publish it here</dd>
+            </div>
+            <div class="landing-fact">
+                <dt>Validation</dt>
+                <dd>Continuous, against the specification itself</dd>
+            </div>
+            <div class="landing-fact">
+                <dt>Deposit</dt>
+                <dd>Export in the shape the archive accepts</dd>
+            </div>
+            <div class="landing-fact">
+                <dt>Access</dt>
+                <dd>Your institutional account, via SRAM</dd>
+            </div>
+        </dl>
     </section>
 
     <section class="overview overview-public">
         {% include "partials/overview.html" %}
     </section>
 
-    <p class="version-info landing-version">v{{ version_info.version }}</p>
+    <footer class="landing-foot">
+        <span class="version-info">v{{ version_info.version }}</span>
+        <span class="landing-foot-links">
+            <a href="/hub/privacy">Privacy</a>
+            <a href="/hub/aup">Acceptable use</a>
+        </span>
+    </footer>
 </div>
 {% endblock %}

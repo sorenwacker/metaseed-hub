@@ -1,3 +1,25 @@
+/* The typefaces this stylesheet has always named. Until these rules existed
+   nothing loaded them, so every page fell back to Georgia and the system sans:
+   the design was specified and never arrived. Self-hosted rather than from a
+   font CDN — the hub sets a strict Content-Security-Policy, an external host
+   would see every visitor, and typography that depends on a third party
+   silently degrades when that party is unreachable. Variable fonts, so weight
+   and Fraunces' optical size are continuous. Both are SIL Open Font License;
+   see static/fonts/LICENSE.md. */
+@font-face {
+    font-family: 'Fraunces';
+    src: url('/hub/hub-static/fonts/fraunces-variable.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'DM Sans';
+    src: url('/hub/hub-static/fonts/dm-sans-variable.woff2') format('woff2-variations');
+    font-weight: 100 1000;
+    font-display: swap;
+}
+
 /* Metaseed Hub Styles - Botanical Theme */
 
 /* Import Google Fonts */
@@ -6976,10 +6998,17 @@ a.start-option-card:hover {
     margin-bottom: var(--space-xl);
 }
 
+/* The display face the rest of the site already uses for titles: a landing
+   headline set in the body sans has nothing to distinguish it from a
+   paragraph. */
 .landing-headline {
     margin: 0 0 var(--space-md);
-    font-size: clamp(1.9rem, 4vw, 2.75rem);
-    line-height: 1.15;
+    font-family: var(--font-display);
+    font-size: clamp(2.1rem, 4.4vw, 3.1rem);
+    font-weight: 600;
+    font-variation-settings: "opsz" 96;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
     color: var(--clr-forest);
 }
 
@@ -7000,6 +7029,117 @@ a.start-option-card:hover {
     margin: var(--space-md) 0 0;
     font-size: 0.875rem;
     color: var(--clr-ink-light);
+}
+
+/* Four facts, set as a specimen label is: field name, hairline, value. Enough
+   for a visitor to decide whether this is their problem before they read the
+   cards below. */
+/* A warning, not an alarm: it has to be read, not dismissed, so it sits in the
+   page rather than floating over it. */
+.landing-warning {
+    max-width: 44rem;
+    margin: 0 auto var(--space-xl);
+    padding: 0.7rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--clr-warning) 45%, transparent);
+    border-left-width: 3px;
+    border-radius: var(--radius-sm);
+    background: var(--clr-warning-bg);
+    color: var(--clr-ink);
+    font-size: 0.875rem;
+    line-height: 1.55;
+    text-align: left;
+}
+
+.landing-warning strong {
+    color: var(--clr-warning);
+}
+
+/* The same fact, quietly, on every page inside the app. */
+.dev-chip {
+    align-self: center;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--clr-warning) 60%, transparent);
+    border-radius: 999px;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--clr-warning) 80%, var(--clr-ivory));
+    white-space: nowrap;
+    cursor: help;
+}
+
+@media (max-width: 40rem) {
+    .dev-chip {
+        display: none;
+    }
+}
+
+.landing-facts {
+    width: 100%;
+    max-width: 40rem;
+    margin: var(--space-2xl) auto 0;
+    text-align: left;
+    border-top: 1px solid color-mix(in srgb, var(--clr-forest) 16%, transparent);
+}
+
+.landing-fact {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 8rem) 1fr;
+    gap: var(--space-md);
+    padding: 0.75rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--clr-forest) 16%, transparent);
+}
+
+.landing-fact dt {
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--clr-ink-light);
+    padding-top: 0.15rem;
+}
+
+.landing-fact dd {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--clr-ink);
+}
+
+.landing-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-top: var(--space-2xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid color-mix(in srgb, var(--clr-forest) 16%, transparent);
+    font-size: 0.8rem;
+    color: var(--clr-ink-light);
+}
+
+.landing-foot-links {
+    display: flex;
+    gap: var(--space-lg);
+}
+
+.landing-foot-links a {
+    color: var(--clr-ink-light);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 160ms ease, color 160ms ease;
+}
+
+.landing-foot-links a:hover {
+    color: var(--clr-forest);
+    border-bottom-color: var(--clr-accent);
+}
+
+@media (max-width: 40rem) {
+    .landing-fact {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
 }
 
 .landing-version {

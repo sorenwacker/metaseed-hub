@@ -83,6 +83,7 @@
                 <li>Project data: Retained until you delete it. When you delete your account, datasets you solely own must first be reassigned to a new owner or deleted; datasets shared with colleagues remain with their other owners.</li>
                 <li>Server logs: standard web-server access logs are kept briefly under normal log rotation; recorded application errors are removed automatically after 30 days</li>
                 <li>Analytics: anonymous, aggregated usage statistics, kept for reporting</li>
+                <li>Backups: the database is dumped regularly and kept on a tiered schedule &mdash; the 3 most recent dumps, plus the newest of each of the last 7 days, 4 weeks and 6 months. Deleting your account removes your data from the live system at once, but copies remain inside these dumps until they age out, so it takes up to <strong>6 months</strong> for your data to be off the system entirely. Backups are restored only to recover from failure or data loss, never to look something up.</li>
             </ul>
         </section>
 
