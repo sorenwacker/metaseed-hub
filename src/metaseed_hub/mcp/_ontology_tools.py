@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from metaseed.services import get_ontology_service
 from metaseed.services.ontology import OntologyServiceError
+from metaseed.services.terms import get_term_source
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,10 +67,12 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
 
     @mcp.tool()
     async def search_ontology(query: str, ontology: str | None = None, rows: int = 10) -> str:
-        """Search OLS4 for ontology terms matching a query.
+        """Search the configured ontology sources for terms matching a query.
 
-        Searches term labels, synonyms, and descriptions. Use this to find a
-        term for a concept you can name but cannot yet identify.
+        Searches term labels and, where the source offers it, synonyms and
+        descriptions. Use this to find a term for a concept you can name but
+        cannot yet identify. OLS is one source; vocabularies configured locally
+        are searched first.
 
         Args:
             query: What to search for, e.g. "drought" or "plant height".
@@ -81,17 +84,17 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
         async with caller():
             pass  # Authentication only; a lookup touches nobody's data.
 
-        results = await get_ontology_service().search(query, ontology=ontology, rows=rows)
+        hits = await get_term_source().search(query, ontology, rows)
         reported = []
-        for r in results:
+        for hit in hits:
             item: dict[str, Any] = {
-                "id": r.term_id,
-                "label": r.label,
-                "ontology": r.ontology,
-                "iri": r.iri,
+                "id": hit.id,
+                "label": hit.label,
+                "ontology": hit.ontology,
+                "source": hit.source,
             }
-            if r.description:
-                item["description"] = r.description
+            if hit.description:
+                item["description"] = hit.description
             reported.append(item)
         return json.dumps(
             {
@@ -114,7 +117,7 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
             pass  # Authentication only; a lookup touches nobody's data.
 
         try:
-            term = await get_ontology_service().get_term(term_id)
+            term = await get_term_source().get_term(term_id)
         except OntologyServiceError as e:
             raise ValueError(f"The ontology service could not be reached: {e}") from e
         if term is None:
@@ -123,16 +126,22 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
                 "find one with search_ontology."
             )
 
+        # What a term carries depends on which source answered: a local
+        # vocabulary has an id and a label, OLS adds an IRI and synonyms.
         result: dict[str, Any] = {
-            "id": term.term_id,
-            "label": term.label,
-            "ontology": term.ontology,
-            "iri": term.iri,
+            "id": getattr(term, "term_id", None) or getattr(term, "id", term_id),
+            "label": getattr(term, "label", ""),
         }
-        if term.description:
-            result["definition"] = term.description
-        if term.synonyms:
-            result["synonyms"] = term.synonyms
+        for name, key in (
+            ("ontology", "ontology"),
+            ("iri", "iri"),
+            ("description", "definition"),
+            ("synonyms", "synonyms"),
+            ("source", "source"),
+        ):
+            value = getattr(term, name, None)
+            if value:
+                result[key] = value
         return json.dumps(result)
 
     @mcp.tool()
@@ -180,6 +189,9 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
         async with caller():
             pass  # Authentication only; a lookup touches nobody's data.
 
-        results = await get_ontology_service().search(query, ontology=ontology, rows=10)
-        suggestions = [{"id": r.term_id, "label": r.label, "ontology": r.ontology} for r in results]
+        hits = await get_term_source().search(query, ontology, 10)
+        suggestions = [
+            {"id": hit.id, "label": hit.label, "ontology": hit.ontology, "source": hit.source}
+            for hit in hits
+        ]
         return json.dumps({"query": query, "ontology": ontology, "suggestions": suggestions})

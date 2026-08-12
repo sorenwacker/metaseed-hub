@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Ontology lookups — the term picker, the MCP search, suggestion and term tools
+  — ask metaseed's term router rather than OLS directly, so a vocabulary
+  configured on the server is offered here too. The hub held its own OLS-only
+  copies of these calls, which meant a local vocabulary would have been
+  invisible in the hub while the standalone application offered it. Results say
+  which source answered. `tests/test_term_sources_are_adapters.py` fails when a
+  lookup goes back to OLS directly; the catalogue listing and the cache
+  statistics still name OLS, because both are questions about OLS itself.
+
 ### Added
 - A reference column in an inline table offers the rows it may name, as the
   exported spreadsheet already does. A reference typed by hand is the commonest
