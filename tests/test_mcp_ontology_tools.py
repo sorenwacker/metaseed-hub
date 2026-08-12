@@ -1,7 +1,8 @@
 """The ontology lookup tools exposed over MCP.
 
-Lookups are mocked at the service layer the hub already uses (metaseed's
-OntologyService), so no test reaches EMBL-EBI.
+Lookups are mocked at the port the hub asks — metaseed's term router — so no
+test reaches EMBL-EBI, and the tools are exercised the way they actually
+resolve: through whichever sources are configured, of which OLS is one.
 """
 
 from __future__ import annotations
@@ -10,27 +11,28 @@ import json
 from unittest.mock import patch
 
 import pytest
-from metaseed.services.ontology import OntologySearchResult, OntologyTerm
+from metaseed.services.ontology import OntologyTerm
+from metaseed.services.terms import TermHit
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.mcp import NotAuthenticatedError
 from tests.mcp_helpers import _calling_with, _tool, _user_with_token
 
 
-class _FakeOntologyService:
-    """Stands in for metaseed's OntologyService, so no test reaches OLS4."""
+class _FakeRouter:
+    """Stands in for the term router, so no test reaches a real source."""
 
     def __init__(
         self,
-        results: list[OntologySearchResult] | None = None,
+        results: list[TermHit] | None = None,
         term: OntologyTerm | None = None,
     ) -> None:
         self._results = results or []
         self._term = term
         self.calls: list[tuple] = []
 
-    async def search(self, query, ontology=None, rows=10, exact=False):
-        self.calls.append(("search", query, ontology, rows))
+    async def search(self, query, ontology=None, limit=20):
+        self.calls.append(("search", query, ontology, limit))
         return list(self._results)
 
     async def get_term(self, term_id):
@@ -38,13 +40,13 @@ class _FakeOntologyService:
         return self._term
 
 
-def _drought() -> OntologySearchResult:
-    return OntologySearchResult(
-        term_id="PECO:0007404",
+def _drought() -> TermHit:
+    return TermHit(
+        id="PECO:0007404",
         label="drought environment",
         description="An environment lacking water.",
         ontology="PECO",
-        iri="http://purl.obolibrary.org/obo/PECO_0007404",
+        source="OntologyService",
     )
 
 
@@ -60,11 +62,11 @@ class TestOntologyTools:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="ont00001", email="ont00001@example.org"
         )
-        fake = _FakeOntologyService(results=[_drought()])
+        fake = _FakeRouter(results=[_drought()])
 
         search = await _tool(server, "search_ontology")
         with (
-            patch("metaseed_hub.mcp._ontology_tools.get_ontology_service", return_value=fake),
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
             _calling_with(secret),
         ):
             result = json.loads(await search("drought", ontology="peco", rows=5))
@@ -77,11 +79,11 @@ class TestOntologyTools:
 
     async def test_a_lookup_still_requires_a_token(self, server, session: AsyncSession) -> None:
         """Authentication-only is not authentication-optional."""
-        fake = _FakeOntologyService(results=[_drought()])
+        fake = _FakeRouter(results=[_drought()])
 
         search = await _tool(server, "search_ontology")
         with (
-            patch("metaseed_hub.mcp._ontology_tools.get_ontology_service", return_value=fake),
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
             _calling_with(None),
             pytest.raises(NotAuthenticatedError),
         ):
@@ -91,7 +93,7 @@ class TestOntologyTools:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="ont00002", email="ont00002@example.org"
         )
-        fake = _FakeOntologyService(
+        fake = _FakeRouter(
             term=OntologyTerm(
                 term_id="PATO:0000015",
                 label="color",
@@ -104,7 +106,7 @@ class TestOntologyTools:
 
         get_term = await _tool(server, "get_ontology_term")
         with (
-            patch("metaseed_hub.mcp._ontology_tools.get_ontology_service", return_value=fake),
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
             _calling_with(secret),
         ):
             result = json.loads(await get_term("PATO:0000015"))
@@ -120,11 +122,11 @@ class TestOntologyTools:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="ont00003", email="ont00003@example.org"
         )
-        fake = _FakeOntologyService(term=None)
+        fake = _FakeRouter(term=None)
 
         get_term = await _tool(server, "get_ontology_term")
         with (
-            patch("metaseed_hub.mcp._ontology_tools.get_ontology_service", return_value=fake),
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
             _calling_with(secret),
             pytest.raises(ValueError, match="No ontology term"),
         ):
@@ -134,17 +136,22 @@ class TestOntologyTools:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="ont00004", email="ont00004@example.org"
         )
-        fake = _FakeOntologyService(results=[_drought()])
+        fake = _FakeRouter(results=[_drought()])
 
         suggest = await _tool(server, "suggest_ontology_term")
         with (
-            patch("metaseed_hub.mcp._ontology_tools.get_ontology_service", return_value=fake),
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
             _calling_with(secret),
         ):
             result = json.loads(await suggest("drou"))
 
         assert result["suggestions"] == [
-            {"id": "PECO:0007404", "label": "drought environment", "ontology": "PECO"}
+            {
+                "id": "PECO:0007404",
+                "label": "drought environment",
+                "ontology": "PECO",
+                "source": "OntologyService",
+            }
         ]
 
     async def test_the_ontology_catalog_can_be_listed(self, server, session: AsyncSession) -> None:

@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from metaseed.services import get_ontology_service
+from metaseed.services.terms import get_term_source
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.ui.dependencies import get_current_user_from_cookie
@@ -59,31 +59,21 @@ async def search_ontology_terms(
         JSON with matching terms including id, label, ontology, and description.
     """
     rows = min(max(1, rows), 100)
-    service = get_ontology_service()
 
     try:
-        results = await service.search(q, ontology=ontology, rows=rows)
+        hits = await get_term_source().search(q, ontology, rows)
         return JSONResponse(
             content={
                 "query": q,
                 "ontology": ontology,
-                "total_found": len(results),
-                "results": [
-                    {
-                        "value": r.term_id,
-                        "label": r.label,
-                        "ontology": r.ontology,
-                        "iri": r.iri,
-                        "description": r.description,
-                    }
-                    for r in results
-                ],
+                "total_found": len(hits),
+                "results": [hit.to_dict() for hit in hits],
             }
         )
     except Exception as e:
-        logger.warning("OLS search failed: %s", e)
+        logger.warning("Term search failed: %s", e)
         return JSONResponse(
-            content={"error": "Failed to search OLS4"},
+            content={"error": "Failed to search for terms"},
             status_code=502,
         )
 
@@ -104,26 +94,25 @@ async def suggest_ontology_terms(
     Returns:
         JSON with suggested terms including id, label, and ontology.
     """
-    service = get_ontology_service()
-
     try:
-        results = await service.search(q, ontology=ontology, rows=10)
+        hits = await get_term_source().search(q, ontology, 10)
         return JSONResponse(
             content={
                 "query": q,
                 "ontology": ontology,
                 "suggestions": [
                     {
-                        "id": r.term_id,
-                        "label": r.label,
-                        "ontology": r.ontology,
+                        "id": hit.id,
+                        "label": hit.label,
+                        "ontology": hit.ontology,
+                        "source": hit.source,
                     }
-                    for r in results
+                    for hit in hits
                 ],
             }
         )
     except Exception as e:
-        logger.warning("OLS suggest failed: %s", e)
+        logger.warning("Term suggestions failed: %s", e)
         return JSONResponse(
             content={"error": "Failed to get suggestions"},
             status_code=502,
@@ -140,33 +129,32 @@ async def get_ontology_term(term_id: str) -> JSONResponse:
     Returns:
         JSON with term details including label, definition, synonyms, etc.
     """
-    service = get_ontology_service()
-
     try:
-        term = await service.get_term(term_id)
+        term = await get_term_source().get_term(term_id)
         if term is None:
             return JSONResponse(
                 content={"error": f"Term not found: {term_id}"},
                 status_code=404,
             )
 
-        result = {
-            "id": term.id,
-            "label": term.label,
-            "ontology": term.ontology,
-            "iri": term.iri,
-            "is_obsolete": term.is_obsolete,
+        # Fields vary by source: a local vocabulary has an id and a label, OLS
+        # adds an IRI, synonyms and obsolescence. Report what the answering
+        # source actually holds rather than inventing empty fields for the rest.
+        result: dict[str, object] = {
+            "id": getattr(term, "id", term_id),
+            "label": getattr(term, "label", ""),
         }
-
-        if term.definition:
-            result["definition"] = term.definition
-
-        if term.synonyms:
-            result["synonyms"] = term.synonyms
+        for name in ("ontology", "iri", "is_obsolete", "definition", "synonyms"):
+            value = getattr(term, name, None)
+            if value not in (None, "", []):
+                result[name] = value
+        source = getattr(term, "source", "")
+        if source:
+            result["source"] = source
 
         return JSONResponse(content=result)
     except Exception as e:
-        logger.warning("OLS get_term failed: %s", e)
+        logger.warning("Term lookup failed: %s", e)
         return JSONResponse(
             content={"error": f"Failed to get term: {term_id}"},
             status_code=502,
@@ -180,6 +168,8 @@ async def get_cache_stats() -> JSONResponse:
     Returns:
         JSON with cache hit/miss counts and size.
     """
-    service = get_ontology_service()
-    stats = service.get_cache_stats()
-    return JSONResponse(content=stats)
+    from metaseed.services import get_ontology_service
+
+    # Cache statistics are about the OLS adapter specifically: it is the source
+    # that caches, because it is the one that goes over the network.
+    return JSONResponse(content=get_ontology_service().get_cache_stats())
