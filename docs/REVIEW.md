@@ -21,6 +21,8 @@ All green at the commit reviewed (`930ac92`, tag v0.33.0, metaseed 0.34.0):
 
 By category: correctness 24, consistency 7, design 6, dead-code 3, typing 1, docstring 1.
 
+**Remediation status:** the security and account-lifecycle findings shipped in **0.33.1** (9 findings); the silent-data-loss, draft-lifecycle, and ontology-outage findings shipped in **0.34.0** (9 findings). Each is marked in place. The remaining medium/low findings and the appendix are tracked as backlog.
+
 The eight high findings cluster into three stories, and none of them is a crash — each is the hub doing something *quietly* wrong for a multi-user product:
 
 1. **Authorization and account lifecycle.** Dataset VIEWER members can edit and delete shared datasets — `EDIT_ROLES` exists and is enforced nowhere on the content-mutation paths. Account deletion is blocked forever by items the UI no longer shows (soft-deleted datasets, withdrawn specs), while GDPR erasure leaves the per-user Tenant row and the encrypted SEEK API key behind. A soft-deleted user's access token still authenticates.
@@ -35,6 +37,8 @@ Recurring themes below high severity: the **fork rule strained twice** (EntitySe
 
 #### `repositories/account.py:70` — Soft-deleted datasets and withdrawn specs permanently block account deletion
 
+**Status: fixed in 0.33.1.**
+
 datasets_needing_new_owner and specs_needing_new_owner never filter deleted_at. The UI, REST API, and MCP all delete datasets via dataset.soft_delete() (ui/routes/dataset/crud.py:703, api/datasets.py:232, mcp/__init__.py:665), and unpublishing a spec is spec.soft_delete() (ui/spec_builder/access.py:637) - the DatasetMember/SpecMember rows survive in both cases. A user who is sole owner of a dataset they already deleted, or of a spec they withdrew, is then blocked by AccountDeletionBlockedError over an item the UI no longer shows (every list query filters deleted_at IS NULL), so they are told to 'reassign or delete' something they cannot see or act on. Account deletion becomes impossible through the UI. tests/test_account_deletion.py has no soft-delete case (grep for soft_delete/deleted_at in that file returns nothing).
 
 *Verifier:* Confirmed from code. repositories/account.py filters neither the membership queries nor the session.get(Dataset/Spec, ...) fetches by deleted_at, and no global SQLAlchemy soft-delete filter (with_loader_criteria/do_orm_execute) exists, so soft-deleted datasets/specs are returned as blockers. All three dataset delete paths (ui/routes/dataset/crud.py:703, api/datasets.py:232, mcp/__init__.py:665) and spec withdrawal (ui/spec_builder/access.py:637) only call soft_delete(), leaving DatasetMember/SpecMember rows in place; no purge job removes them later. The user cannot resolve the block: UI dataset access requires deleted_at IS NULL (ui/dependencies.py:277) so the item is invisible, remove_member raises LastOwnerError for a sole owner, restore is admin-only, and there is no user-facing hard delete. The blocked route (ui/routes/auth.py:419-422) just redirects with error=owned_datasets. The module docstring's own escape hatch ("reassign or delete it") is broken because the only available delete is soft. tests/test_account_deletion.py has no soft_delete/deleted_at coverage, as claimed. Severity high stands: GDPR account erasure is permanently blocked by the ordinary sequence of deleting one's own solely-owned dataset (or withdrawing a spec) before deleting the account.
@@ -42,6 +46,8 @@ datasets_needing_new_owner and specs_needing_new_owner never filter deleted_at. 
 **Fix:** Exclude soft-deleted rows: after session.get(Dataset, ...), skip when dataset.deleted_at is not None (same for Spec), or join the parent table with deleted_at IS NULL in the membership query. Add a red-first test: sole-owned soft-deleted dataset must not block delete_account.
 
 #### `repositories/account.py:140` — GDPR erasure leaves the per-user Tenant row and SeekConnection (encrypted SEEK API key) behind
+
+**Status: fixed in 0.33.1.**
 
 The module docstring claims deleting the user row 'removes all personal data by cascade', but delete_account only deletes the User. Hub tenants are per user: ensure_tenant_and_user (ui/dependencies.py:180) creates the tenant with name=user.name or the email local part, so the tenant row itself carries personal data and survives. SeekConnection is keyed by tenant_id, not user_id (models/operations.py:46), and its own docstring says it is one user's connection holding their encrypted SEEK API key, URL, and last_error - none of which is removed on account deletion. tests/test_account_deletion.py never touches SeekConnection or tenant cleanup.
 
@@ -51,6 +57,8 @@ The module docstring claims deleting the user row 'removes all personal data by 
 
 #### `ui/dependencies.py:361` — Dataset VIEWER members can edit and delete shared datasets
 
+**Status: fixed in 0.33.1.**
+
 Every dataset content mutation authorizes via get_dataset_for_user, which grants access to ANY DatasetMember regardless of role. No dataset mutation route checks Role.VIEWER vs EDITOR: get_dataset_state_for_mutation (used by all table.py cell/row edits), entity.py create/update/delete, crud.py dataset_delete, editor.py dataset_import_into_existing, versions.py restore_dataset_version. sharing.py defines EDIT_ROLES = frozenset({Role.OWNER, Role.EDITOR}) with the comment 'Roles that may change the content of a resource', and the sharing panel offers VIEWER for datasets, but EDIT_ROLES is only enforced for spec drafts (spec_builder/access.py require_edit_role gates every mutating method) and published specs. A user shared on a dataset as viewer can therefore rewrite or soft-delete it. require_dataset_owner only gates membership management, not content.
 
 *Verifier:* Confirmed by reading the code. get_dataset_for_user (src/metaseed_hub/ui/dependencies.py ~254-305) returns the dataset for any DatasetMember with no role filter; get_dataset_state_for_mutation (line ~361) adds only auth+CSRF and is used by all table.py cell/row mutation routes. entity.py create/delete, crud.py dataset_delete (line 674, soft-delete), import-source, load-example, editor.py mutations, and versions.py restore_dataset_version (line 280) all authorize solely via get_dataset_for_user. Role.VIEWER is offered for datasets in the sharing panel (ui/routes/sharing.py, roles=list(Role), default VIEWER), and EDIT_ROLES from sharing.py ("Roles that may change the content of a resource") is enforced only in ui/spec_builder/access.py for spec drafts. No role check exists anywhere in the dataset content mutation path (grep for role/viewer in EntityService and dataset routes returns nothing), and tests only cover require_dataset_owner denying viewers membership-management, not content mutation. A viewer-role member can therefore edit and soft-delete a shared dataset server-side. High severity is correct for this authorization bypass.
@@ -58,6 +66,8 @@ Every dataset content mutation authorizes via get_dataset_for_user, which grants
 **Fix:** Add a role check to the dataset mutation path mirroring spec_builder's require_edit_role: in get_dataset_state_for_mutation and each mutating dataset route, resolve the member's role and refuse VIEWER with 403; add a gate test like tests/test_spec_builder_roles.py for datasets.
 
 #### `ui/helpers/tables.py:241` — Truncated display values are rendered into editable inputs and saved back, corrupting data
+
+**Status: fixed in 0.34.0.**
 
 _build_entity_list_table truncates cell values for display: `if isinstance(val, str) and len(val) > 50: val = val[:47] + "..."`. But templates/partials/inline_table.html renders that same row value into an editable `<input ... value="{{ row.get(col, '') }}" hx-post=".../table/{{ row._node_id }}/cell" hx-trigger="change, blur">`. The /cell route (ui/routes/table.py:416 update_table_cell) writes whatever the form posts into the entity and calls save_dataset_state. So a user who focuses a cell holding a >50-char value and tabs away (blur fires even without a change) persists the truncated "..."-suffixed string over the real stored value. Note _build_single_entity_table does NOT truncate, so the two table builders are also inconsistent.
 
@@ -67,6 +77,8 @@ _build_entity_list_table truncates cell values for display: `if isinstance(val, 
 
 #### `ui/routes/dataset/editor.py:762` — Import/example mutation routes bypass the unloadable-node refusal and silently delete skipped nodes
 
+**Status: fixed in 0.34.0.**
+
 ensure_dataset_facade ALWAYS loads permissively (it passes its internal `report` callback to client.load even when the caller supplies no on_skip), so nodes the profile cannot place are dropped from the facade. get_dataset_state_for_mutation exists to refuse saves in that case ('covers every browser mutation at once'), but three mutation routes load-then-save without it: dataset_import_into_existing (editor.py:762 loads, :768 saves), dataset_load_example (crud.py:775), and dataset_import_source (crud.py:464 — worse, a dataset whose stored nodes ALL failed to load presents as empty, passes the 'only while empty' guard, and the import overwrites them). save_dataset_state serializes the facade, so the skipped nodes are removed from storage with no report — exactly the data-loss scenario helpers/load_report.py documents.
 
 *Verifier:* Confirmed from code. ensure_dataset_facade (helpers/dataset_state.py) always passes an internal report callback to client.load, and metaseed's serialization.py load_node skips (returns) rather than raises when on_skip is set, so unloadable stored nodes are silently absent from the facade. get_dataset_state_for_mutation (dependencies.py:361-417) exists precisely to raise 409 via unloadable_node_refusal before any browser mutation saves, and table.py routes use it. The three named routes bypass it: dataset_import_into_existing (editor.py, loads without on_skip then save_dataset_state), dataset_load_example (crud.py ~775, same), and dataset_import_source (crud.py ~464), whose empty-dataset guard checks state.nodes_by_id — rebuilt from facade._instances, so a dataset whose stored nodes all failed to load looks empty, passes the guard, and the importer's facade replaces the stored payload on save. save_dataset_state writes serialize_tree(state) over dataset.data, removing the skipped nodes, with only a generic success notification returned. Mitigation: a DatasetVersion row preserves the prior payload, so recovery is possible via version history — but the loss is silent and the user is told the operation succeeded, which is the exact silent-shrink scenario load_report.py documents the refusal mechanism as preventing. High severity stands.
@@ -74,6 +86,8 @@ ensure_dataset_facade ALWAYS loads permissively (it passes its internal `report`
 **Fix:** In these three routes, collect skips (on_skip=skipped.append) and raise 409 with unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH) before saving, or route them through get_dataset_state_for_mutation.
 
 #### `ui/routes/table.py:519` — Primitive-list rows keep stale indices after a delete, so edits hit the wrong item
+
+**Status: fixed in 0.34.0.**
 
 delete_primitive_list_item pops the item at idx and the UI removes only that row (hx-swap="delete" in partials/inline_table.html line 111); the remaining rows keep their original {row._idx} in their hx-post/hx-delete URLs and nothing re-renders the table (entityChanged only reloads the tree sections in dataset.html, not the open editor). With list [a,b,c]: delete row 0, then editing the row for b (idx 1) runs `if idx < len(current_list): current_list[idx] = new_value` and overwrites c; editing the row for c (idx 2) fails the bound check and the edit is silently dropped while still returning 200 with HX-Trigger entityChanged. Additionally idx is an unconstrained int path param: idx=-1 passes `idx < len(current_list)` and edits/pops the last element, and idx <= -len raises IndexError -> unhandled 500 (update_primitive_list_item line 517-519 and delete_primitive_list_item lines 566-568).
 
@@ -83,6 +97,8 @@ delete_primitive_list_item pops the item at idx and the UI removes only that row
 
 #### `ui/spec_builder/routes/draft_routes.py:235` — Publishing a draft orphans datasets built on it
 
+**Status: fixed in 0.34.0.**
+
 publish_draft ends with `await session.delete(draft)`. Dataset.spec_draft_id is ForeignKey(ondelete="SET NULL"), so any dataset created from the draft loses its specification; on next load ensure_dataset_facade falls through to the built-in-profile branch, fails to resolve the user-spec profile name, and editing is disabled ('no specification is recorded for it'). delete_draft refuses deletion in exactly this situation via delete_draft_row's dependents check, but publish performs the same deletion with no check and nothing rebinds the datasets to the new Spec row (dataset.spec_id stays NULL).
 
 *Verifier:* Confirmed from the code. publish_draft (draft_routes.py:235) unconditionally deletes the draft after creating the Spec row; Dataset.spec_draft_id is ForeignKey(ondelete="SET NULL") (models/datasets.py:53-56); the only writes to Dataset.spec_draft_id/spec_id occur at dataset creation (crud.py:575-624, spec_id stays None for draft-built datasets), so nothing rebinds dependents to the new Spec. ensure_dataset_facade (dataset_state.py:108-170) resolves the schema only via spec_draft_id, then spec_id, then the built-in-profile constructor; with both ids NULL a user-defined profile name fails to load and a dataset with stored entities raises DatasetDataLoadError ("Editing is disabled to protect the stored data"). entity_service.py mirrors this and also never resolves published specs by name, so no path rescues the dataset. delete_draft (access.py:480-510) refuses deletion in exactly this dependent-datasets situation, documenting the hazard the publish path ignores — an oversight, not a design choice. Severity high stands: a routine action (publishing) renders dependent datasets uneditable with no UI recovery.
@@ -90,6 +106,8 @@ publish_draft ends with `await session.delete(draft)`. Dataset.spec_draft_id is 
 **Fix:** On publish, either rebind dependent datasets (set spec_id to the new Spec and clear spec_draft_id) in the same transaction, or refuse publish while datasets depend on the draft, mirroring delete_draft.
 
 #### `ui/spec_builder/routes/draft_routes.py:440` — update_profile_metadata saves an unvalidated version, bricking the draft
+
+**Status: fixed in 0.34.0.**
 
 `ctx.spec.version = version.strip() or "0.1"` assigns the raw form value. ProfileSpec's `_version_must_be_major_minor` validator only runs on construction/model_validate; the model has no `validate_assignment` (model_config is `ConfigDict(extra="forbid")` only), so an invalid value like `v1.0` or `draft` is accepted and persisted by `save_state_to_draft` via `model_dump`. Verified at runtime: assignment succeeds, and `ProfileSpec.model_validate` on the dumped dict then raises ValidationError. Every subsequent `load_state_for_draft` -> `dict_to_spec` raises `SpecVersionError`, and `handle_spec_version_error` tells the user to 'Correct it under Profile Settings in the draft editor' — but the draft editor itself goes through `load_state_for_draft` and can never open again. The remedy in the error page is unreachable for drafts corrupted through this route; versioning.py's whole 'way back' design assumes bad versions only come from rows that predate the rule, yet this route creates new ones.
 
@@ -117,6 +135,8 @@ Lines 131-132 call `op.drop_constraint(None, "spec_drafts", type_="foreignkey")`
 
 #### `api/datasets.py:14` — API layer imports tenancy helpers from the UI layer
 
+**Status: fixed in 0.33.1.**
+
 `from metaseed_hub.ui.dependencies import get_tenant_for_user, verify_tenant_access` makes the REST API depend on the UI package, and main.py's websocket route similarly imports `get_dataset_for_user` from ui.dependencies. Tenant resolution (`tenant_slug_for`, `get_tenant_for_user`, `verify_tenant_access`, `get_dataset_for_user`) is shared authorization logic, not a UI concern; ui.dependencies also carries cookie/CSRF/HTMX machinery the API must never touch. The project rule is that boundaries are enforced with gate tests, and an api->ui import direction is exactly the kind of edge a gate test would forbid.
 
 *Verifier:* Confirmed from the code: api/datasets.py:14 imports get_tenant_for_user and verify_tenant_access from metaseed_hub.ui.dependencies, and main.py:168 imports get_dataset_for_user from the same UI module for the websocket route. ui/dependencies.py is genuinely a UI module (ACCESS_TOKEN_COOKIE cookie name, validate_csrf_token, RedirectResponse, HTMX-aware AuthRequiredError), while the tenancy helpers it defines (tenant_slug_for:37, get_tenant_for_user:146, verify_tenant_access:216, get_dataset_for_user:254) are framework-neutral session/user logic — shared authorization, not a UI concern. No gate test forbids api->ui imports, even though the repo already uses boundary gate tests elsewhere (tests/test_no_forked_templates.py) and the project rules require enforced boundaries. Not a runtime bug, but a real layering violation; medium design severity is appropriate.
@@ -125,6 +145,8 @@ Lines 131-132 call `op.drop_constraint(None, "spec_drafts", type_="foreignkey")`
 
 #### `api/datasets.py:19` — REST API ignores DatasetMember sharing that the UI and websocket honor
 
+**Status: fixed in 0.33.1.**
+
 `_get_owned_dataset` scopes get/patch/delete strictly to `Dataset.tenant_id == tenant.id`. The UI path (`get_dataset_for_user` in ui/dependencies.py) and the websocket room authorization in main.py additionally grant access via `DatasetMember` rows. A user who was invited to a dataset can open it in the browser and join its collaboration room, but the same user's personal-access-token API calls get 404 for it, and `list_datasets` never shows it. If this restriction is deliberate (PATs act only on owned data), nothing in the docstrings or module docs says so; as written it reads as a divergence between two access models for the same resource.
 
 *Verifier:* Confirmed from the code. api/datasets.py:19-55 (_get_owned_dataset) scopes get/patch/delete to Dataset.tenant_id == tenant.id with no DatasetMember check, and list_datasets (lines 88-114) uses verify_tenant_access which rejects any tenant but the caller's own, so shared datasets are invisible to the REST API. Meanwhile ui/dependencies.py:254-305 (get_dataset_for_user) grants access via DatasetMember rows and is used by all UI dataset routes, and main.py:168-185 authorizes websocket rooms through the same helper with a comment claiming it mirrors "the HTTP routes". No test pins the owner-only REST decision (test_api_datasets.py has no sharing test; test_cross_account_sharing.py covers only email provisioning), and no endpoint or module docstring documents it. The MCP layer is also tenant-owner-only (mcp/__init__.py:110, 527, 576), so the split may be a deliberate PAT-surfaces-are-owner-only policy, but nothing documents or tests that. Minor imprecision: _get_owned_dataset's docstring does say "owned by the caller's tenant", so the restriction is stated at the helper level, though not the deliberateness of excluding sharing. Severity medium is right: invited collaborators can edit a dataset in the browser but get 404 via personal-access-token API calls — a real functional divergence, restrictive rather than a security hole.
@@ -132,6 +154,8 @@ Lines 131-132 call `op.drop_constraint(None, "spec_drafts", type_="foreignkey")`
 **Fix:** Either route the API through the shared `get_dataset_for_user` helper (mapping 403 to 404 if non-disclosure is wanted), or document explicitly that the REST API is owner-only and add a test pinning that decision.
 
 #### `auth/__init__.py:217` — Token verification accepts symmetric algorithms advertised by the IdP
+
+**Status: fixed in 0.33.1.**
 
 verify_token passes `supported_algs = oidc_config.get("id_token_signing_alg_values_supported", [...])` straight into `jwt.decode(token, rsa_key, algorithms=supported_algs, ...)`. Keycloak's discovery document lists HS256/HS384/HS512 in that field, so the allowed-algorithm list at runtime includes symmetric HMAC algorithms while the key supplied is an RSA/EC JWK. The classic key-confusion attack (sign an HS256 token using the public key bytes as the HMAC secret) is currently blocked only because python-jose's HMACKey rejects a dict-shaped key -- an implementation detail of the dependency, not a property of this code. Additionally, `id_token_signing_alg_values_supported` describes ID tokens, and this code verifies access tokens; the hardcoded fallback list (asymmetric only) is safer than the discovery-derived list actually used.
 
@@ -157,6 +181,8 @@ Published specs are looked up hub-wide (deliberately not tenant-scoped), but the
 
 #### `mcp/__init__.py:639` — save_dataset bypasses the canonical write-path invariants (no spec-hash stamp, no tree envelope)
 
+**Status: fixed in 0.34.0.**
+
 The `_editing` context writes `stamp_spec_hash(make_json_serializable(client.serialize(format="tree")), ...)` and its comment states the tree format is the hub's canonical storage ('readers such as the version diff view consume data["tree"]. A flat write here would make those readers see an empty dataset') and that stamping makes 'an agent's write and a person's ... indistinguishable to the drift check'. But the save_dataset tool stores the caller's payload verbatim: `dataset.data = data` with no stamp_spec_hash and no shape check. Consequences: (1) a full replace via save_dataset drops the provenance stamp, so spec_drift_message silently reports nothing ('unknown provenance') for every dataset last written this way; (2) an agent can store a flat `{"entities": [...]}` payload that validates fine through the facade but renders empty in tree-consuming web readers. tests/test_dataset_spec_hash.py::TestStamping is documented as 'Every write path records the hash; nothing else has to remember to', yet it only covers the entity-edit path — this write path does not record it.
 
 *Verifier:* Confirmed from code. mcp/__init__.py:639 stores the caller's payload verbatim (dataset.data = data) with no stamp_spec_hash and no shape normalization, while the only stamping write paths are _editing (mcp/__init__.py:318) and the web save (ui/helpers/dataset_state.py:224). spec_hash.py:142-144 shows spec_drift_message returns None for unstamped envelopes, so datasets last written via save_dataset get no drift reporting. ui/routes/dataset/versions.py:49-50,96-97 read data.get("tree", []) directly, so a flat {"entities": [...]} payload stored by save_dataset renders as empty in the version diff view even though it validates through the facade (which handles legacy flat format). tests/test_dataset_spec_hash.py:74-75 claims "Every write path records the hash" but only covers save_dataset_state, not this tool. Severity medium is correct: no data loss (pre-write snapshot exists, main view loads via the facade), but a documented-and-tested invariant is violated by one write path and a real UI reader degrades.
@@ -164,6 +190,8 @@ The `_editing` context writes `stamp_spec_hash(make_json_serializable(client.ser
 **Fix:** In save_dataset, stamp the payload with `stamp_spec_hash(data, await dataset_spec_hash(session, dataset))` before storing, and either normalize the payload through the facade (load + serialize(format="tree")) or at least reject payloads that carry neither 'tree' nor a loadable legacy shape. Extend the stamping test to cover save_dataset.
 
 #### `mcp/_ontology_tools.py:121` — OLS outage reported as 'term does not exist'; the outage catch is unreachable
+
+**Status: fixed in 0.34.0.**
 
 get_ontology_term wraps get_term_source().get_term(term_id) in `except OntologyServiceError`, but get_term_source() returns metaseed's TermRouter, whose get_term_sync catches every per-source exception (`except Exception: ... continue`, metaseed/src/metaseed/services/terms.py lines 156-172) and returns None. An OLS outage therefore never raises here; it surfaces as `term is None`, and the tool answers `raise ValueError(f"No ontology term {term_id!r}...")` — affirmatively asserting the term does not exist while the service was merely down. This violates the project rule that an outside-service outage must report 'not checked', never a failure. The `except OntologyServiceError` branch is effectively dead code that suggests the outage case is handled when it is not. search_ontology and suggest_ontology_term have the milder form of the same masking (outage indistinguishable from zero results).
 
@@ -180,6 +208,8 @@ spec_add_rule and spec_update_rule declare `applies_to: str | None = None`, but 
 **Fix:** Widen the parameter to `applies_to: list[str] | str | None = None` in both tools (and document the list form), or add a parity check on parameter annotations against the model's field types.
 
 #### `tokens.py:106` — authenticate_token authenticates soft-deleted users
+
+**Status: fixed in 0.33.1.**
 
 authenticate_token ends with `return await session.get(User, token.user_id)` with no check of User.deleted_at. The User model carries SoftDeleteMixin, and every other user lookup in the hub treats a soft-deleted user as nonexistent (sharing.account_for_email filters `User.deleted_at.is_(None)`, admin routes filter it everywhere). A soft-deleted user's personal access token therefore still authenticates and reaches their tenant's data via the MCP endpoint and the API bearer path (auth/__init__.py:305, mcp/__init__.py:96), neither of which re-checks deleted_at. No current admin route soft-deletes users, so this is latent, but the mixin plus soft_delete()/restore() exist and the inconsistency will become a live credential-revocation hole the moment user removal ships.
 
@@ -204,6 +234,8 @@ add_entities_in_order attaches each row with `parent_id=node_by_identifier.get(p
 **Fix:** Record an error (or at least a warning in the returned list) when a non-empty _parent does not resolve, and process types in hierarchy (topological) order or do a second pass to re-attach rows whose parents were created later.
 
 #### `ui/routes/auth.py:347` — Personal access token secret is round-tripped through a URL query parameter
+
+**Status: fixed in 0.33.1.**
 
 auth_create_token redirects with the freshly minted secret in the URL: `return RedirectResponse(url=f"/hub/auth/profile?token={secret}", status_code=303)`, and auth_profile reads it back via `request.query_params.get("token")`. The comment says it is "not stored anywhere", but a query string is: it lands in server/proxy access logs, in the browser history, and can leak via the Referer header from the profile page. For a bearer credential that authenticates the MCP endpoint this undermines the care taken elsewhere (key encrypted at rest in seek.py, token shown only once).
 
@@ -261,6 +293,8 @@ Grep across src/ finds no caller of `require_draft_owner`; only tests/test_secur
 
 #### `ui/spec_builder/routes/draft_routes.py:220` — Republishing identical content 500s on the unique index
 
+**Status: fixed in 0.34.0.**
+
 bump_refusal returns None when required_bump is 'none' ('republishing it cannot invalidate anything, so there is nothing to refuse'), so publishing a draft whose content and version equal an already-published spec proceeds to `session.add(spec)` and commit, violating the partial unique index uq_specs_tenant_name_version. The IntegrityError is unhandled — the user gets a 500 instead of a message, unlike create_new_spec in list_routes.py which catches IntegrityError and returns a 409 with an explanation.
 
 *Verifier:* Confirmed from code. bump_refusal (versioning.py:172-176) returns None when required_bump is 'none' (identical content per compare.py:836-838), so publish_draft (draft_routes.py:204-236) proceeds to session.add(spec)/commit with the same (tenant_id, name, version) as the still-live published row. uq_specs_tenant_name_version (models/specs.py:56-63) is a unique partial index where deleted_at IS NULL, and latest_published_spec only returns rows with deleted_at NULL, so the insert violates it. No IntegrityError handling exists in draft_routes.py and no app-wide handler covers it (app.py registers only AuthRequiredError, DuplicateAccountEmailError, DraftConflictError, SpecVersionError), so the user gets a 500. Reachable from the UI: create_draft_from_spec (the edit-published-spec flow) copies name and version into a draft in the user's own tenant; publishing it unchanged triggers the collision. list_routes.py:176-184 shows the codebase's established pattern of catching IntegrityError and returning 409, which this path lacks. Severity medium is correct: user-facing 500 in a plausible flow, but the transaction rolls back atomically so no data is lost or corrupted.
@@ -268,6 +302,8 @@ bump_refusal returns None when required_bump is 'none' ('republishing it cannot 
 **Fix:** Catch IntegrityError around the publish commit (rollback and render save_result.html with a 'this name and version is already published' error), or check for an existing (tenant, name, version) row before inserting.
 
 #### `ui/spec_builder/routes/draft_routes.py:233` — publish_draft can 500 on the (tenant, name, version) unique index
+
+**Status: fixed in 0.34.0.**
 
 Spec has partial unique index `uq_specs_tenant_name_version` (deleted_at IS NULL). `bump_refusal` deliberately returns None when `required_bump` is "none" (identical content), so republishing an unchanged spec under an already-published version — or declaring a version equal to an older published release with content identical to the latest — reaches `session.add(spec)`/commit and raises an unhandled IntegrityError, surfacing as a 500. `create_new_spec` in list_routes.py catches the analogous IntegrityError for drafts; the publish path does not.
 
@@ -300,6 +336,8 @@ The class docstring says the manager uses "Redis pub/sub for scaling", and messa
 **Fix:** Keep presence in Redis (e.g. a hash/set per project with connection TTLs) so get_presence reflects all instances, or document that presence is only correct in single-instance deployments.
 
 #### `websocket/__init__.py:339` — Clients can forge system message types incl. presence updates
+
+**Status: fixed in 0.33.1.**
 
 `handle_connection` broadcasts client JSON verbatim after stamping `sender_id`/`sender_name`/`timestamp`. Nothing prevents a room member from sending `{"type": "presence", "action": "leave", "user_id": "<victim>", "presence": [...]}` -- the same envelope shape the server itself emits in join_room/leave_room -- so any member can spoof presence changes (or any other server-originated message type the frontend trusts) for everyone in the room. All recipients are authorized room members, so this is integrity rather than confidentiality, but the server gives clients no way to distinguish authentic presence events from forged ones.
 

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.34.0] - 260813
 
 ### Fixed
 - `get_ontology_term` (MCP) no longer reports an outage as nonexistence. The

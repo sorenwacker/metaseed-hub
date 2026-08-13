@@ -5,7 +5,7 @@ These replaced ``metaseed.ui.services.graph``/``metaseed.ui.services.export``
 API and must produce the same shapes the templates and download route consume.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from metaseed import MetaseedClient
 from openpyxl import load_workbook
@@ -102,7 +102,9 @@ def test_generate_filename_uses_date_profile_version_and_root_id() -> None:
 
     filename = generate_filename(facade)
 
-    date_str = datetime.now().strftime("%y%m%d")
+    # UTC, as the implementation stamps it: local "today" is a different date
+    # for a few hours around midnight, which is exactly when this flaked.
+    date_str = datetime.now(UTC).strftime("%y%m%d")
     assert filename == f"{date_str}-miappe-1-1-inv-1.xlsx"
 
 
