@@ -15,6 +15,7 @@ from metaseed_hub.models import (
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
+    get_dataset_for_editor,
     get_dataset_for_user,
 )
 from metaseed_hub.ui.render import render_template
@@ -277,7 +278,7 @@ async def restore_dataset_version(
     except Exception:
         return csrf_error_response()
 
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
 
     # Get the version to restore
     result = await session.execute(

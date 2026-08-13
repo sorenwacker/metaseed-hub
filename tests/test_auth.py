@@ -85,3 +85,40 @@ def test_standalone_verify_token_accepts_no_settings() -> None:
     params = list(inspect.signature(auth_module.verify_token).parameters)
 
     assert params == ["token"]
+
+
+class TestAllowedSigningAlgorithms:
+    """The IdP's discovery document must not choose our verification algorithms.
+
+    `id_token_signing_alg_values_supported` is attacker-adjacent input: a
+    compromised or misconfigured IdP advertising `HS256` would make PyJWT
+    verify tokens *symmetrically* against the public RSA key — a public value —
+    so anyone could mint valid tokens. The allowed list is ours, asymmetric
+    only, whatever the discovery document says.
+    """
+
+    def test_the_allowed_list_is_fixed_and_asymmetric(self) -> None:
+        from metaseed_hub.auth import ALLOWED_SIGNING_ALGORITHMS
+
+        assert set(ALLOWED_SIGNING_ALGORITHMS) == {
+            "RS256",
+            "RS384",
+            "RS512",
+            "ES256",
+            "ES384",
+            "ES512",
+            "PS256",
+            "PS384",
+            "PS512",
+        }
+        assert not any(a.startswith("HS") for a in ALLOWED_SIGNING_ALGORITHMS)
+
+    def test_verification_does_not_read_algorithms_from_discovery(self) -> None:
+        """The decode call must pass our constant, not the discovery list."""
+        import inspect
+
+        from metaseed_hub import auth as auth_module
+
+        source = inspect.getsource(auth_module.OIDCAuth.verify_token)
+        assert "ALLOWED_SIGNING_ALGORITHMS" in source
+        assert "id_token_signing_alg_values_supported" not in source

@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.33.1] - 2026-08-13
+
+Security release, from the 260813 codebase review (`docs/REVIEW.md`). Every fix
+was proven by a failing test first.
+
+### Fixed
+- A member's role now decides what they may do. The sharing panel has offered
+  VIEWER since sharing shipped, and nothing on the content-mutation paths read
+  it: any member could edit or delete a shared dataset. Content mutations —
+  every table, cell and row edit, entity create/delete, imports, example
+  loading, version restore — authorize through the edit roles; deleting the
+  dataset itself requires an owner; reads and comments stay open to every
+  member.
+- The REST API honours dataset sharing. It answered tenant-owned datasets only,
+  so a dataset shared with you was editable in the browser and a 404 over the
+  same account's API token. Access control now lives in one non-UI module
+  (`metaseed_hub.access`) that the UI, REST API and MCP layers all import — the
+  API had been importing its tenancy checks from the UI layer. A stranger's
+  probe still reads 404, never 403: existence is not disclosed across tenants.
+- A freshly minted access token no longer rides in a redirect URL, where it
+  landed in the server access log and browser history. It travels in a
+  one-shot encrypted cookie the profile page reads once and expires.
+- A soft-deleted user's access token authenticates as nobody. Every other
+  lookup treats such a user as nonexistent; authentication was the one
+  credential path that outlived the account.
+- Token verification accepts only asymmetric JWT algorithms. The allowed list
+  came from the IdP's own discovery document, so an issuer advertising HS256
+  would have had tokens verified symmetrically against the public RSA key — a
+  public value.
+- A websocket client can no longer forge server message types: a frame
+  claiming `presence` is dropped before broadcast instead of being relayed as
+  the room's member list.
+- Account deletion is no longer blocked by items the user cannot see. A
+  dataset they had already deleted, or a spec they had withdrawn, still
+  counted as "needs a new owner" while every list view filtered it out — with
+  soft delete the only delete available, the account was unremovable.
+- Erasure now takes the per-user tenant row (named after the person) and the
+  SeekConnection holding their encrypted SEEK API key. The module docstring
+  claimed the cascade removed all personal data; neither hangs off the user
+  row. A tenant still holding co-owned work that survives the user is scrubbed
+  to an opaque name rather than deleted.
+
 ## [0.33.0] - 2026-08-13
 
 ### Added

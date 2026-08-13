@@ -120,7 +120,7 @@ class TestAuthorizationDependencies:
         user.keycloak_id = "user12345678"
 
         with patch(
-            "metaseed_hub.ui.dependencies.get_tenant_for_user",
+            "metaseed_hub.access.get_tenant_for_user",
             return_value=user_tenant,
         ):
             with pytest.raises(HTTPException) as exc_info:

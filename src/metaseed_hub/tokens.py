@@ -90,7 +90,10 @@ async def authenticate_token(session: AsyncSession, secret: str) -> User | None:
     """Return the user a token acts as, or None.
 
     Records the use, so a token nobody presents is visible as such and can be
-    cleaned up. A revoked token authenticates as nobody.
+    cleaned up. A revoked token authenticates as nobody, and so does a token
+    whose user has been soft-deleted: every other lookup in the hub treats such
+    a user as nonexistent, and authentication must not be the one credential
+    path that outlives the account.
     """
     if not secret:
         return None
@@ -100,10 +103,14 @@ async def authenticate_token(session: AsyncSession, secret: str) -> User | None:
     if token is None or not token.is_active:
         return None
 
+    user = await session.get(User, token.user_id)
+    if user is None or user.deleted_at is not None:
+        return None
+
     token.last_used_at = datetime.now(UTC)
     await session.commit()
 
-    return await session.get(User, token.user_id)
+    return user
 
 
 async def revoke_token(session: AsyncSession, token: ApiToken) -> None:

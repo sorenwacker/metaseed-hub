@@ -491,3 +491,58 @@ def test_connection_connected_at_is_utc_aware() -> None:
     """Presence ``connected_at`` values are timezone-aware UTC."""
     connection = Connection(websocket=FakeWebSocket(), user_id="u1", user_name="U1")  # type: ignore[arg-type]
     assert connection.connected_at.tzinfo == UTC
+
+
+class _ScriptedWebSocket(FakeWebSocket):
+    """A FakeWebSocket that also plays incoming frames, then disconnects."""
+
+    def __init__(self, incoming: list[str]) -> None:
+        super().__init__()
+        self._incoming = list(incoming)
+
+    async def receive_text(self) -> str:
+        if self._incoming:
+            return self._incoming.pop(0)
+        raise WebSocketDisconnect(code=1000)
+
+    def sent_messages(self) -> list[dict]:
+        return [json.loads(t) for t in self.sent]
+
+
+@pytest.mark.asyncio
+async def test_a_client_cannot_forge_a_server_message_type() -> None:
+    """`presence` frames are how clients learn who is in the room, and the
+    server is the only party who may say so. A client frame claiming a
+    reserved type is dropped before broadcast — relayed, it would let any
+    room member fake the presence list every other client renders."""
+    manager = WebSocketManager()
+    ws = _ScriptedWebSocket(
+        incoming=[json.dumps({"type": "presence", "users": [{"name": "ghost"}]})]
+    )
+    peer = FakeWebSocket()
+    room = manager._get_or_create_room("proj-forge")
+    room.add_connection("peer-conn", Connection(websocket=peer, user_id="p", user_name="P"))
+
+    await manager.handle_connection(ws, "proj-forge", "mallory", "Mallory")
+
+    forged = [
+        json.loads(t)
+        for t in peer.sent
+        if json.loads(t).get("type") == "presence" and json.loads(t).get("sender_id") == "mallory"
+    ]
+    assert forged == []
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_client_message_still_broadcasts() -> None:
+    manager = WebSocketManager()
+    ws = _ScriptedWebSocket(incoming=[json.dumps({"type": "chat", "text": "hi"})])
+    peer = FakeWebSocket()
+    room = manager._get_or_create_room("proj-chat")
+    room.add_connection("peer-conn", Connection(websocket=peer, user_id="p", user_name="P"))
+
+    await manager.handle_connection(ws, "proj-chat", "alice", "Alice")
+
+    chats = [json.loads(t) for t in peer.sent if json.loads(t).get("type") == "chat"]
+    assert len(chats) == 1
+    assert chats[0]["sender_id"] == "alice"

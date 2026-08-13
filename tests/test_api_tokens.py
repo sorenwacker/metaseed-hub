@@ -168,3 +168,23 @@ async def test_an_expiry_is_recorded_when_asked_for(session: AsyncSession) -> No
 
     assert token.expires_at is not None
     assert token.expires_at > datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_a_soft_deleted_users_token_authenticates_as_nobody(
+    session: AsyncSession,
+) -> None:
+    """Every other user lookup treats a soft-deleted user as nonexistent;
+    authentication was the one that did not, so a removed user's personal
+    access token kept reaching their tenant's data over MCP and the API."""
+    tenant = make_tenant(slug="softdeltok")
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant)
+    session.add(user)
+    await session.flush()
+    secret, _token = await issue_token(session, user, name="cli")
+    user.soft_delete()
+    await session.commit()
+
+    assert await authenticate_token(session, secret) is None

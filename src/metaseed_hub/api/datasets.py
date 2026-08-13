@@ -1,5 +1,6 @@
 """Dataset CRUD API endpoints."""
 
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,51 +9,65 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from metaseed_hub.access import (
+    get_dataset_for_editor,
+    get_dataset_for_user,
+    require_dataset_owner,
+    verify_tenant_access,
+)
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
-from metaseed_hub.ui.dependencies import get_tenant_for_user, verify_tenant_access
 
 router = APIRouter()
 
 
-async def _get_owned_dataset(dataset_id: str, session: AsyncSession, user: TokenUser) -> Dataset:
-    """Fetch a non-deleted dataset owned by the caller's tenant.
+async def _shared(
+    access_helper: "Callable[[str, AsyncSession, TokenUser], Awaitable[Dataset]]",
+    dataset_id: str,
+    session: AsyncSession,
+    user: TokenUser,
+) -> Dataset:
+    """Resolve a dataset through the shared access ladder, without disclosure.
+
+    The API answered tenant-owned datasets only, ignoring the ``DatasetMember``
+    sharing the UI and websocket honour — so a dataset a colleague shared was
+    editable in the browser and a 404 over the same account's token. Access now
+    goes through :mod:`metaseed_hub.access`, the one answer every layer gives.
+
+    The ladder raises 403 for "exists, not yours", which across tenants would
+    disclose that the id exists. This API's contract is that it does not, so a
+    refusal to a non-member is folded into 404. A member refused for their
+    *role* (a viewer PATCHing) already knows the dataset exists, and keeps the
+    403 that tells them why.
 
     Args:
+        access_helper: One rung of the ladder (for_user / for_editor / owner).
         dataset_id: Dataset identifier.
         session: Database session.
         user: Authenticated user.
 
     Returns:
-        The dataset if it exists, is not soft-deleted, and belongs to the
-        caller's tenant.
+        The dataset, if the rung admits this caller.
 
     Raises:
-        HTTPException: 404 if no such dataset is visible to the caller. A 404
-            (rather than 403) is used so dataset existence is not disclosed
-            across tenants.
+        HTTPException: 404 for missing or not visible; 403 for a member whose
+            role does not reach the rung.
     """
-    tenant = await get_tenant_for_user(session, user)
-    if tenant is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
-    result = await session.execute(
-        select(Dataset).where(
-            Dataset.id == dataset_id,
-            Dataset.tenant_id == tenant.id,
-            Dataset.deleted_at.is_(None),
-        )
-    )
-    dataset = result.scalar_one_or_none()
-    if dataset is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found",
-        )
-    return dataset
+    try:
+        return await access_helper(dataset_id, session, user)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            # Distinguish "no access at all" (hide) from "member, wrong role"
+            # (explain): only the latter passes the viewer rung.
+            try:
+                await get_dataset_for_user(dataset_id, session, user)
+            except HTTPException:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found"
+                ) from exc
+            raise
+        raise
 
 
 class DatasetCreate(BaseModel):
@@ -173,7 +188,7 @@ async def get_dataset(
     Raises:
         HTTPException: If dataset not found.
     """
-    return await _get_owned_dataset(dataset_id, session, _user)
+    return await _shared(get_dataset_for_user, dataset_id, session, _user)
 
 
 @router.patch("/{dataset_id}", response_model=DatasetResponse)
@@ -197,7 +212,7 @@ async def update_dataset(
     Raises:
         HTTPException: If dataset not found.
     """
-    dataset = await _get_owned_dataset(dataset_id, session, _user)
+    dataset = await _shared(get_dataset_for_editor, dataset_id, session, _user)
 
     if dataset_data.name is not None:
         name_error = AsyncDatasetRepository.validate_name(dataset_data.name)
@@ -228,6 +243,6 @@ async def delete_dataset(
     Raises:
         HTTPException: If dataset not found.
     """
-    dataset = await _get_owned_dataset(dataset_id, session, _user)
+    dataset = await _shared(require_dataset_owner, dataset_id, session, _user)
     dataset.soft_delete()
     await session.commit()

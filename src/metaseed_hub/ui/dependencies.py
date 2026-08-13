@@ -1,6 +1,5 @@
 """Shared FastAPI dependencies for Hub UI routes."""
 
-import hashlib
 import logging
 from typing import TYPE_CHECKING, Annotated
 
@@ -9,9 +8,27 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from metaseed_hub.access import (
+    get_dataset_for_editor as get_dataset_for_editor,
+)
+from metaseed_hub.access import (
+    get_dataset_for_user as get_dataset_for_user,
+)
+from metaseed_hub.access import (
+    get_tenant_for_user as get_tenant_for_user,
+)
+from metaseed_hub.access import (
+    require_dataset_owner as require_dataset_owner,
+)
+from metaseed_hub.access import (
+    tenant_slug_for as tenant_slug_for,
+)
+from metaseed_hub.access import (
+    verify_tenant_access as verify_tenant_access,
+)
 from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, Tenant, User
+from metaseed_hub.models import Dataset, Tenant, User
 from metaseed_hub.ui.helpers import (
     ensure_dataset_facade,
     normalize_email,
@@ -32,23 +49,6 @@ logger = logging.getLogger("metaseed_hub")
 # (ui.routes.auth, ui.app) import it from here so reads and writes cannot
 # silently diverge.
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
-
-
-def tenant_slug_for(keycloak_id: str) -> str:
-    """Return the tenant slug for an OIDC subject.
-
-    The slug is a 32-hex-character (128-bit) SHA-256 prefix of the full subject.
-    It must derive from the *entire* ``keycloak_id``: a shorter truncation of the
-    subject makes the tenant boundary collision-prone, and a collision would map
-    two distinct users into one tenant with full access to each other's data.
-
-    Args:
-        keycloak_id: The OIDC subject (``sub``) of the authenticated user.
-
-    Returns:
-        A deterministic 32-character hex slug.
-    """
-    return hashlib.sha256(keycloak_id.encode()).hexdigest()[:32]
 
 
 class AuthRequiredError(Exception):
@@ -143,21 +143,6 @@ def handle_duplicate_account_email(request: Request, exc: Exception) -> Response
     )
 
 
-async def get_tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
-    """Get tenant for user based on keycloak_id.
-
-    Args:
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Tenant for the user, or None if not found.
-    """
-    slug = tenant_slug_for(user.keycloak_id)
-    result = await session.execute(select(Tenant).where(Tenant.slug == slug))
-    return result.scalar_one_or_none()
-
-
 async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tuple[Tenant, User]:
     """Get or create tenant and user for authenticated user.
 
@@ -213,145 +198,6 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
     return tenant, db_user
 
 
-async def verify_tenant_access(
-    tenant_id: str,
-    session: AsyncSession,
-    user: TokenUser,
-) -> Tenant:
-    """Verify user has access to tenant and return it.
-
-    A user has access to a tenant if their keycloak_id matches the tenant slug.
-
-    Args:
-        tenant_id: ID of the tenant to verify.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Tenant if user has access.
-
-    Raises:
-        HTTPException: 404 if tenant not found, 403 if access denied.
-    """
-    result = await session.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-
-    # Get user's tenant
-    user_tenant = await get_tenant_for_user(session, user)
-    if not user_tenant:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    # Verify tenant matches user's tenant
-    if tenant.id != user_tenant.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    return tenant
-
-
-async def get_dataset_for_user(
-    dataset_id: str,
-    session: AsyncSession,
-    user: TokenUser,
-) -> Dataset:
-    """Get dataset if user has access through tenant or sharing.
-
-    A user has access to a dataset if:
-    1. Their tenant owns the dataset, OR
-    2. They have been granted access via DatasetMember
-
-    Args:
-        dataset_id: ID of the dataset to retrieve.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Dataset if user has access.
-
-    Raises:
-        HTTPException: 404 if dataset not found, 403 if access denied.
-    """
-    result = await session.execute(
-        select(Dataset).where(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-    )
-    dataset = result.scalar_one_or_none()
-
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-
-    # First, try tenant access (owner)
-    try:
-        await verify_tenant_access(dataset.tenant_id, session, user)
-        return dataset
-    except HTTPException:
-        pass  # Not tenant owner, check DatasetMember
-
-    # Check if user has access via DatasetMember
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
-
-    if db_user:
-        member_result = await session.execute(
-            select(DatasetMember).where(
-                DatasetMember.dataset_id == dataset_id,
-                DatasetMember.user_id == db_user.id,
-            )
-        )
-        if member_result.scalar_one_or_none():
-            return dataset
-
-    raise HTTPException(status_code=403, detail="Access denied")
-
-
-async def require_dataset_owner(
-    dataset_id: str,
-    session: AsyncSession,
-    user: TokenUser,
-) -> Dataset:
-    """Get dataset only if the user owns it (tenant owner or OWNER member).
-
-    Membership-management mutations must be restricted to owners. An ordinary
-    member (including a VIEWER) can read a dataset via get_dataset_for_user but
-    must not add, remove, or re-role members.
-
-    Args:
-        dataset_id: ID of the dataset to retrieve.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Dataset if the user is an owner.
-
-    Raises:
-        HTTPException: 404 if dataset not found, 403 if the user is not an owner.
-    """
-    dataset = await get_dataset_for_user(dataset_id, session, user)
-
-    # Tenant owners are always dataset owners.
-    try:
-        await verify_tenant_access(dataset.tenant_id, session, user)
-        return dataset
-    except HTTPException:
-        pass  # Not tenant owner, require an OWNER-role membership.
-
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
-    if db_user:
-        owner_result = await session.execute(
-            select(DatasetMember).where(
-                DatasetMember.dataset_id == dataset_id,
-                DatasetMember.user_id == db_user.id,
-                DatasetMember.role == DatasetRole.OWNER,
-            )
-        )
-        if owner_result.scalar_one_or_none():
-            return dataset
-
-    raise HTTPException(status_code=403, detail="Owner access required")
-
-
 # Type aliases for cleaner route signatures
 CurrentUser = Annotated[TokenUser, Depends(require_user)]
 OptionalUser = Annotated[TokenUser | None, Depends(get_current_user_from_cookie)]
@@ -393,11 +239,12 @@ async def get_dataset_state_for_mutation(
             detail="CSRF validation failed",
         )
 
-    # Load the dataset through the shared access helper so mutations enforce the
-    # same tenant/membership scoping and soft-delete filter as reads. Without
-    # this, any authenticated user could mutate any dataset by id, and a
-    # soft-deleted dataset would remain mutable.
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    # Load the dataset through the editor-scoped helper so mutations enforce
+    # tenant/membership scoping, the soft-delete filter, AND the member's role.
+    # Every browser table/cell/row edit funnels through here, so this one line
+    # is what makes VIEWER mean view (the sharing panel has offered the role
+    # since sharing shipped; nothing on the content paths read it).
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
 
     # Get or create AppState for the dataset
     # Use ensure_dataset_facade to properly load specs from database for draft specs.

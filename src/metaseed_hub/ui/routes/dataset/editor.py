@@ -19,6 +19,7 @@ from metaseed_hub.models import (
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
+    get_dataset_for_editor,
     get_dataset_for_user,
 )
 from metaseed_hub.ui.helpers import (
@@ -707,7 +708,7 @@ async def dataset_import_into_existing(
     except Exception:
         return csrf_error_response()
 
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
 
     # Read file content (capped to avoid reading an unbounded upload into memory)
     try:

@@ -183,3 +183,63 @@ async def test_co_owned_spec_allows_deletion_and_survives(session):
 
     assert await session.get(User, leaving.id) is None
     assert await session.get(Spec, spec.id) is not None  # survives under co-owner
+
+
+@pytest.mark.asyncio
+async def test_a_dataset_the_user_already_deleted_does_not_block(session):
+    """Every list view filters soft-deleted datasets out, so a blocker among
+    them is one the user is told to reassign but cannot see — deleting your
+    own solely-owned dataset and then your account was impossible."""
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    dataset = await _add(session, make_dataset(tenant=tenant))
+    await _own(session, user, dataset)
+    dataset.soft_delete()
+    await session.commit()
+
+    assert await datasets_needing_new_owner(session, user) == []
+    await delete_account(session, user)
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_a_spec_the_user_withdrew_does_not_block(session):
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    spec = await _add(session, make_spec(tenant=tenant, created_by=user))
+    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=SpecRole.OWNER))
+    spec.soft_delete()
+    await session.commit()
+
+    assert await specs_needing_new_owner(session, user) == []
+
+
+@pytest.mark.asyncio
+async def test_erasure_takes_the_tenant_and_seek_connection_with_it(session):
+    """Hub tenants are per user and named after them, and the SeekConnection
+    holds their encrypted SEEK API key — both are personal data the module
+    docstring claimed the cascade removed. It did not."""
+    from metaseed_hub.models import SeekConnection, Tenant
+
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    session.add(
+        SeekConnection(
+            tenant_id=tenant.id,
+            url="https://seek.example",
+            api_key_encrypted="sealed",
+        )
+    )
+    await session.commit()
+    tenant_id = tenant.id
+
+    await delete_account(session, user)
+    await session.commit()
+
+    assert await session.get(Tenant, tenant_id) is None
+    remaining = (
+        (await session.execute(select(SeekConnection).where(SeekConnection.tenant_id == tenant_id)))
+        .scalars()
+        .all()
+    )
+    assert remaining == []

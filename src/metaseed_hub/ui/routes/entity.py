@@ -7,7 +7,12 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import escape
 
-from metaseed_hub.ui.dependencies import CurrentUser, DbSession, get_dataset_for_user
+from metaseed_hub.ui.dependencies import (
+    CurrentUser,
+    DbSession,
+    get_dataset_for_editor,
+    get_dataset_for_user,
+)
 from metaseed_hub.ui.forms import extract_entity_values
 from metaseed_hub.ui.helpers import build_entity_form_context
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -91,7 +96,7 @@ async def dataset_entity_create(
     if not entity_type:
         return HTMLResponse("<div class='error'>Missing entity type</div>")
 
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
     service = EntityService(session, dataset, user)
 
     try:
@@ -272,7 +277,7 @@ async def dataset_entity_delete(
     except Exception:
         return csrf_error_response()
 
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
 
     service = EntityService(session, dataset, user)
     try:

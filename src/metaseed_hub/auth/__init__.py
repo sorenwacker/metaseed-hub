@@ -16,6 +16,26 @@ from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token
 
 security = HTTPBearer()
 
+ALLOWED_SIGNING_ALGORITHMS: tuple[str, ...] = (
+    "RS256",
+    "RS384",
+    "RS512",
+    "ES256",
+    "ES384",
+    "ES512",
+    "PS256",
+    "PS384",
+    "PS512",
+)
+"""The JWT algorithms token verification accepts. Ours, not the IdP's.
+
+The discovery document's ``id_token_signing_alg_values_supported`` is the
+issuer describing itself, and it was passed straight into ``jwt.decode`` — so
+an IdP advertising ``HS256`` would have verification treat the public RSA key,
+a public value, as a shared secret, letting anyone mint valid tokens. The
+allowed set is fixed and asymmetric only.
+"""
+
 
 @dataclass
 class TokenUser:
@@ -211,17 +231,15 @@ class OIDCAuth:
 
             rsa_key = await self._get_signing_key(kid)
 
-            # Verify and decode the token
+            # Verify and decode the token. The algorithm list is OURS
+            # (asymmetric only), never the discovery document's — see
+            # ALLOWED_SIGNING_ALGORITHMS for why trusting the issuer's own
+            # list would let it downgrade verification to symmetric.
             issuer = oidc_config.get("issuer", self._settings.effective_issuer)
-            # Support all common signing algorithms
-            supported_algs = oidc_config.get(
-                "id_token_signing_alg_values_supported",
-                ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"],
-            )
             payload = jwt.decode(
                 token,
                 rsa_key,
-                algorithms=supported_algs,
+                algorithms=list(ALLOWED_SIGNING_ALGORITHMS),
                 audience=self._settings.effective_client_id,
                 issuer=issuer,
             )

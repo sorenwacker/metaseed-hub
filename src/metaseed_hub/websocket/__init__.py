@@ -53,6 +53,16 @@ class Room:
         ]
 
 
+SERVER_MESSAGE_TYPES: frozenset[str] = frozenset({"presence"})
+"""Message types only the server may originate.
+
+``presence`` frames are how clients learn who is in the room; a client frame
+claiming the type would be relayed with a stamped ``sender_id`` but still
+rendered as the room's presence list by every other client. Reserved types are
+dropped before broadcast rather than trusted because they arrived on a socket.
+"""
+
+
 class WebSocketManager:
     """Manages WebSocket connections with Redis pub/sub for scaling."""
 
@@ -334,6 +344,16 @@ class WebSocketManager:
             while True:
                 data = await websocket.receive_text()
                 message = json.loads(data)
+
+                if message.get("type") in SERVER_MESSAGE_TYPES:
+                    # A client claiming a server-originated type is forging
+                    # state the other clients render. Dropped, not relayed.
+                    logger.warning(
+                        "dropping client frame claiming server type %r from %s",
+                        message.get("type"),
+                        user_id,
+                    )
+                    continue
 
                 # Add sender information
                 message["sender_id"] = user_id

@@ -295,7 +295,14 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
     blocking_datasets = await datasets_needing_new_owner(session, db_user)
     blocking_specs = await specs_needing_new_owner(session, db_user)
 
-    return render_template(
+    # The one-shot cookie set by auth_create_token. Expiry is the cookie's
+    # max_age; a decrypt failure (rotated SECRET_KEY) just shows no token.
+    from metaseed_hub.crypto import decrypt_secret
+
+    stored = request.cookies.get(NEW_TOKEN_COOKIE)
+    new_token = decrypt_secret(stored) if stored else None
+
+    response = render_template(
         request=request,
         name="profile.html",
         context={
@@ -313,10 +320,24 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "specs_needing_new_owner": blocking_specs,
             "delete_error": request.query_params.get("error"),
             "api_tokens": await active_tokens(session, db_user),
-            # Shown once, immediately after minting, and never retrievable again.
-            "new_token": request.query_params.get("token"),
+            # Shown once, immediately after minting, and never retrievable
+            # again: read from the one-shot cookie and expired below.
+            "new_token": new_token,
         },
     )
+    response.delete_cookie(NEW_TOKEN_COOKIE, path="/hub/auth/profile")
+    return response
+
+
+NEW_TOKEN_COOKIE = "hub_new_token"
+"""One-shot cookie carrying a freshly minted token secret to the profile page.
+
+A redirect query parameter would put the live credential into the access log
+and the browser history. The cookie is Fernet-encrypted, its ``max_age`` is a
+minute, and the profile page deletes it on first read.
+"""
+
+NEW_TOKEN_TTL_SECONDS = 60
 
 
 @router.post("/profile/tokens")
@@ -343,8 +364,20 @@ async def auth_create_token(
     _, db_user = await ensure_tenant_and_user(session, user)
     secret, _token = await issue_token(session, db_user, name=name.strip() or "token")
 
-    # Carried back once so the page can show it; it is not stored anywhere.
-    return RedirectResponse(url=f"/hub/auth/profile?token={secret}", status_code=303)
+    # Carried back once so the page can show it — in a short-lived encrypted
+    # cookie, never in the URL, which lands in access logs and history.
+    from metaseed_hub.crypto import encrypt_secret
+
+    response = RedirectResponse(url="/hub/auth/profile", status_code=303)
+    response.set_cookie(
+        NEW_TOKEN_COOKIE,
+        encrypt_secret(secret),
+        max_age=NEW_TOKEN_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        path="/hub/auth/profile",
+    )
+    return response
 
 
 @router.post("/profile/tokens/{token_id}/revoke")

@@ -24,7 +24,8 @@ from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
     ensure_tenant_and_user,
-    get_dataset_for_user,
+    get_dataset_for_editor,
+    require_dataset_owner,
 )
 from metaseed_hub.ui.helpers import (
     add_entities_in_order,
@@ -460,7 +461,7 @@ async def dataset_import_source(
     except Exception:
         return csrf_error_response()
 
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
     state = await ensure_dataset_facade(dataset, session)
     if state.nodes_by_id:
         return HTMLResponse(
@@ -686,7 +687,7 @@ async def dataset_delete(
 
     try:
         # Verify user has access to this dataset
-        dataset = await get_dataset_for_user(dataset_id, session, user)
+        dataset = await require_dataset_owner(dataset_id, session, user)
     except Exception as e:
         logger.error(f"Failed to get dataset {dataset_id}: {e}")
         response = Response(status_code=200)
@@ -740,7 +741,7 @@ async def dataset_load_example(
         return csrf_error_response()
 
     # Verify user has access to this dataset
-    dataset = await get_dataset_for_user(dataset_id, session, user)
+    dataset = await get_dataset_for_editor(dataset_id, session, user)
 
     # Find example YAML file
     examples_dir = Path(metaseed.__file__).parent / "examples"
