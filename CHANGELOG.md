@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The spec tools can set `within`, the field marker that scopes a column to one
+  branch of an ontology (metaseed #229). The hub's own gate refused to run at
+  all while metaseed defined a marker these tools did not expose, which is how
+  this was caught rather than shipped.
+
 ### Changed
 - Requires metaseed 0.33.0, which holds the term router these lookups ask.
 - Ontology lookups — the term picker, the MCP search, suggestion and term tools

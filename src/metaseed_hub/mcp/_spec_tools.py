@@ -400,6 +400,7 @@ def register_spec_tools(  # noqa: C901
         label: str | None = None,
         tier: str | None = None,
         isa_tag: str | None = None,
+        within: str | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
 
@@ -450,6 +451,9 @@ def register_spec_tools(  # noqa: C901
             tier: How strongly the field is expected: required, recommended,
                 or optional.
             isa_tag: The ISA tag the field carries into a SEEK Sample Type.
+            within: An ontology term whose descendants are the values this
+                field takes, e.g. "CO_715:0000006". Scopes a column to one
+                branch rather than a whole ontology.
         """
         markers = _markers(
             {
@@ -466,6 +470,7 @@ def register_spec_tools(  # noqa: C901
                 "label": label,
                 "tier": tier,
                 "isa_tag": isa_tag,
+                "within": within,
             }
         )
         constraints = _constraints(
@@ -539,6 +544,7 @@ def register_spec_tools(  # noqa: C901
         label: str | None = None,
         tier: str | None = None,
         isa_tag: str | None = None,
+        within: str | None = None,
         clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
@@ -609,6 +615,7 @@ def register_spec_tools(  # noqa: C901
                 "label": label,
                 "tier": tier,
                 "isa_tag": isa_tag,
+                "within": within,
             }
         )
         constraints = _constraint_values(
