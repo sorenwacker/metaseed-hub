@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.models import Dataset, DatasetVersion
+from metaseed_hub.models import Dataset, DatasetVersion, User
 from metaseed_hub.ui.helpers.tree import serialize_tree
 from metaseed_hub.ui.metaseed_ui import AppState
 
@@ -197,11 +197,48 @@ async def ensure_dataset_facade(
     return state
 
 
+async def ensure_dataset_facade_for_write(dataset: Dataset, session: AsyncSession) -> AppState:
+    """The load path for a route that will save what it loaded.
+
+    Saving serializes the loaded facade, so a node the permissive load dropped
+    is deleted from storage by the very next save. Reads may tolerate that;
+    a route that writes may not, and this raises the same 409 refusal that
+    ``get_dataset_state_for_mutation`` gives every cell edit — three import
+    routes reached around that dependency and silently deleted whatever had
+    not loaded.
+
+    Args:
+        dataset: Dataset model with profile, version, and optional spec ids.
+        session: Database session for loading spec drafts.
+
+    Returns:
+        AppState with facade ready to use, holding every stored node.
+
+    Raises:
+        HTTPException: 409 naming the unloadable nodes and the way through.
+    """
+    from fastapi import HTTPException
+
+    from metaseed_hub.ui.helpers.load_report import (
+        BROWSER_WAY_THROUGH,
+        unloadable_node_refusal,
+    )
+
+    skipped: list[SkippedNode] = []
+    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
+    if skipped:
+        raise HTTPException(
+            status_code=409,
+            detail=unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH),
+        )
+    return state
+
+
 async def save_dataset_state(
     session: AsyncSession,
     dataset: Dataset,
     state: AppState,
-    user: "TokenUser | None" = None,
+    user: "TokenUser | User | None" = None,
 ) -> None:
     """Save AppState entity tree to database and create a version.
 
@@ -209,14 +246,15 @@ async def save_dataset_state(
         session: Database session.
         dataset: Dataset model to update.
         state: AppState with entity tree to save.
-        user: The acting user; when given, the created version records them as
-            author (``created_by_id``). Optional so background/non-request
-            callers can still persist without authorship.
+        user: The acting user — a request's ``TokenUser`` or the MCP layer's
+            database ``User``; only ``keycloak_id`` is read, which both carry.
+            When given, the created version records them as author
+            (``created_by_id``). Optional so background/non-request callers
+            can still persist without authorship.
     """
     from sqlalchemy import func, select
     from sqlalchemy.orm.attributes import flag_modified
 
-    from metaseed_hub.models import User
     from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
     # Stamped here rather than inside serialize_tree: the hash comes from the

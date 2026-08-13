@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Three import routes no longer bypass the unloadable-node refusal. Importing
+  into a dataset, loading an example into one, and importing from a source
+  all loaded permissively and then saved — so any stored node the profile
+  could not place was silently deleted by the very operation that looked like
+  it was only adding. They now refuse with the node named, exactly as every
+  cell edit already did.
+- A long cell value is no longer truncated into the editable input. The table
+  cut values over 50 characters for display and rendered the cut string into
+  an input whose blur saves — reading a dataset could corrupt it. The full
+  value feeds the input; the stylesheet clips it visually.
+- Deleting a primitive-list row re-renders the table. The other rows kept
+  their original indices in every edit and delete URL, so the next edit
+  overwrote the wrong item and an edit past the new end was silently dropped.
+- MCP `save_dataset` writes through the canonical path: the stored form
+  carries the tree envelope and the spec-hash stamp the drift check reads,
+  the previous state becomes a version exactly as a browser save would, and a
+  payload whose entities cannot be read or placed is refused with the reason
+  — it used to be stored raw and quietly lost on the next load. A legacy raw
+  blob is snapshotted before its first canonical migration, so nothing
+  pre-envelope becomes unrecoverable.
+
 ## [0.33.1] - 2026-08-13
 
 Security release, from the 260813 codebase review (`docs/REVIEW.md`). Every fix

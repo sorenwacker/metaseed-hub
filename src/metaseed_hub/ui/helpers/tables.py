@@ -236,11 +236,11 @@ def _build_entity_list_table(
         if hasattr(child.instance, "model_dump"):
             data = child.instance.model_dump(exclude_none=True)
             for col in display_columns:
-                val = data.get(col, "")
-                # Truncate long values for display
-                if isinstance(val, str) and len(val) > 50:
-                    val = val[:47] + "..."
-                row_data[col] = val
+                # The full value, always: these rows feed editable inputs whose
+                # blur handler saves whatever they hold, so a display-truncated
+                # value ("...") would be written back over the stored one.
+                # Truncation is the template's job (CSS text-overflow).
+                row_data[col] = data.get(col, "")
         rows.append(row_data)
 
     # If no children found, check if instance has this field as primitive data

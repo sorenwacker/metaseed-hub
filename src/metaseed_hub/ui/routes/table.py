@@ -16,8 +16,9 @@ from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
-from metaseed_hub.ui.helpers import save_dataset_state
+from metaseed_hub.ui.helpers import build_inline_tables, save_dataset_state
 from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
+from metaseed_hub.ui.render import render_template
 
 router = APIRouter(tags=["table"])
 
@@ -530,6 +531,46 @@ async def update_primitive_list_item(
     return HTMLResponse(status_code=200, headers={"HX-Trigger": "entityChanged"})
 
 
+def _inline_table_fragment(
+    request: Request,
+    state: AppState,
+    dataset_id: str,
+    node_id: str,
+    field_name: str,
+) -> Response:
+    """The one inline table, re-rendered from current state.
+
+    A row delete used to remove only its own ``<tr>`` (``hx-swap="delete"``)
+    while the remaining rows kept their original ``_idx`` in every hx URL — so
+    the next edit wrote to the wrong item, and an edit past the new end was
+    silently dropped. Rows are positional; after a structural change the whole
+    table is the smallest thing that is still correct.
+    """
+    node = state.nodes_by_id[node_id]
+    facade = state.get_or_create_facade()
+    helper = getattr(facade, node.entity_type)
+    info = helper.field_info(field_name)
+    field = {
+        "name": field_name,
+        "type": info.get("type", "string"),
+        "item_type": info.get("items"),
+        "is_nested": True,
+    }
+    inline_tables = build_inline_tables(state, node_id, [field])
+    response = render_template(
+        request=request,
+        name="partials/inline_table.html",
+        context={
+            "field": field,
+            "inline_tables": inline_tables,
+            "dataset_id": dataset_id,
+            "node_id": node_id,
+        },
+    )
+    response.headers["HX-Trigger"] = "entityChanged"
+    return response
+
+
 @router.delete(
     "/datasets/{dataset_id}/table/{node_id}/primitive/{field_name}/{idx}",
     response_class=HTMLResponse,
@@ -543,8 +584,8 @@ async def delete_primitive_list_item(
     dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
     user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> HTMLResponse:
-    """Delete a primitive list item."""
+) -> Response:
+    """Delete a primitive list item, returning the re-rendered table."""
     dataset, state = dataset_state
 
     if node_id not in state.nodes_by_id:
@@ -576,9 +617,8 @@ async def delete_primitive_list_item(
     # Save to database
     await save_dataset_state(session, dataset, state, user)
 
-    response = HTMLResponse(status_code=200)
-    response.headers["HX-Trigger"] = "entityChanged"
-    return response
+    # The whole table, not a row removal: the surviving rows' indices shifted.
+    return _inline_table_fragment(request, state, dataset_id, node_id, field_name)
 
 
 @router.post(

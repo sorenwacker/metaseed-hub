@@ -626,21 +626,64 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             name: The dataset to write to, in the caller's account.
             data: The full dataset contents, replacing what is stored.
         """
-        from sqlalchemy.orm.attributes import flag_modified
-
         size = len(json.dumps(data).encode())
         if size > MAX_DATASET_BYTES:
             raise ValueError(f"That dataset is {size} bytes; the limit is {MAX_DATASET_BYTES}.")
 
         async with _caller() as (session, user):
             dataset = await _owned_dataset(session, user, name)
-            if data != dataset.data:
+
+            # Through the canonical write path, not straight into the row: the
+            # payload is loaded into a facade and saved by save_dataset_state,
+            # so the stored form carries the tree envelope and the spec-hash
+            # stamp the drift check reads, and the previous contents become a
+            # version exactly as a browser save would. Writing the raw payload
+            # skipped all three.
+            from metaseed_hub.ui.helpers.dataset_state import (
+                ensure_dataset_facade,
+                save_dataset_state,
+            )
+
+            previous = dataset.data
+            dataset.data = data  # in memory only, for the load below
+            skipped: list[Any] = []
+            try:
+                state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
+            finally:
+                dataset.data = previous
+            if skipped:
+                # Stored, these nodes would vanish on the next load-and-save.
+                # An agent reads the return value, so it is told now.
+                names = ", ".join(
+                    f"{getattr(s, 'entity_type', '?')} ({getattr(s, 'reason', '?')})"
+                    for s in skipped[:5]
+                )
+                raise ValueError(
+                    f"{len(skipped)} node(s) in that payload cannot be placed in "
+                    f"{dataset.profile}/{dataset.version} and would be lost: {names}. "
+                    "Nothing was saved."
+                )
+            if data and (data.get("tree") or data.get("entities")) and not state.nodes_by_id:
+                # The payload claims entities and none of them loaded. Storing
+                # it would keep an empty tree while the agent believes it saved
+                # data — the silent loss this path exists to refuse.
+                raise ValueError(
+                    "That payload's entities could not be read. Send either the "
+                    "'tree' envelope this tool returns from get_dataset, or a "
+                    "flat 'entities' list where every entry carries a '_type'. "
+                    "Nothing was saved."
+                )
+
+            # The MCP caller is already a database User; save_dataset_state only
+            # reads .keycloak_id off it, which both user shapes carry.
+            # A legacy raw payload (no envelope) is about to be migrated to the
+            # canonical form, and nothing has ever versioned it: snapshot it
+            # first or the overwrite is unrecoverable. Canonically-stored data
+            # needs no snapshot — save_dataset_state versions each new state.
+            if dataset.data and "tree" not in dataset.data and data != dataset.data:
                 await _snapshot(session, dataset, user)
-            dataset.data = data
-            # JSONB is mutable in place; without this the assignment can be
-            # missed and the write silently does nothing.
-            flag_modified(dataset, "data")
-            await session.commit()
+
+            await save_dataset_state(session, dataset, state, user)
             logger.info("mcp: %s saved dataset %r (%d bytes)", user.email, name, size)
 
             # Validated after the write, not before: a partially complete

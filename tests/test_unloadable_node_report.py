@@ -378,3 +378,72 @@ class TestTheBrowserRefusal:
             "collector every browser edit silently deletes them"
         )
         assert "unloadable_node_refusal" in source
+
+
+class TestImportRoutesRefuseToo:
+    """Three browser routes loaded-then-saved without the refusal, so importing
+    into a damaged dataset silently deleted the nodes that did not load —
+    the exact loss `get_dataset_state_for_mutation` exists to prevent, reached
+    around it."""
+
+    async def _damaged_dataset(self, session: AsyncSession) -> tuple[Dataset, TokenUser]:
+        tenant = make_tenant(slug="importdmg")
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant, keycloak_id="importdmg-kc")
+        session.add(user)
+        await session.flush()
+        dataset = make_dataset(tenant=tenant, name="damaged")
+        dataset.data = _tree_with_an_unloadable_node()
+        flag_modified(dataset, "data")
+        session.add(dataset)
+        await session.commit()
+        token = TokenUser(sub="importdmg-kc", email=user.email, name="U", roles=[])
+        return dataset, token
+
+    @pytest.mark.asyncio
+    async def test_the_write_load_path_refuses_a_damaged_dataset(
+        self, session: AsyncSession
+    ) -> None:
+        from fastapi import HTTPException
+
+        from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
+
+        dataset, _token = await self._damaged_dataset(session)
+
+        with pytest.raises(HTTPException) as caught:
+            await ensure_dataset_facade_for_write(dataset, session)
+
+        assert caught.value.status_code == 409
+        assert "Bogus" in str(caught.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_a_clean_dataset_passes_the_write_load_path(self, session: AsyncSession) -> None:
+        from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
+
+        tenant = make_tenant(slug="importok")
+        session.add(tenant)
+        await session.flush()
+        dataset = make_dataset(tenant=tenant, name="clean")
+        session.add(dataset)
+        await session.commit()
+
+        state = await ensure_dataset_facade_for_write(dataset, session)
+
+        assert state is not None
+
+    def test_every_import_route_loads_through_the_refusing_path(self) -> None:
+        """The three routes the review caught, held to it structurally: a
+        load-then-save route calling the permissive loader is the bug."""
+        import inspect
+
+        from metaseed_hub.ui.routes.dataset import crud, editor
+
+        for fn in (
+            editor.dataset_import_into_existing,
+            crud.dataset_import_source,
+            crud.dataset_load_example,
+        ):
+            source = inspect.getsource(fn)
+            assert "ensure_dataset_facade_for_write(" in source, fn.__name__
+            assert "ensure_dataset_facade(dataset, session)" not in source, fn.__name__

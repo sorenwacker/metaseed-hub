@@ -19,6 +19,7 @@ from metaseed_hub.ui.helpers.csrf import (
 )
 from metaseed_hub.ui.helpers.dataset_state import (
     ensure_dataset_facade,
+    ensure_dataset_facade_for_write,
     save_dataset_state,
 )
 from metaseed_hub.ui.helpers.entity_import import (
@@ -63,6 +64,7 @@ __all__ = [
     "build_inline_tables",
     "create_nested_nodes",
     "ensure_dataset_facade",
+    "ensure_dataset_facade_for_write",
     "escape_pattern_hyphen",
     "get_or_create_csrf_token",
     "group_entities_by_type",

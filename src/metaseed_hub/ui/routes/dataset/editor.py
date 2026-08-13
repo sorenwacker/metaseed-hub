@@ -25,6 +25,7 @@ from metaseed_hub.ui.dependencies import (
 from metaseed_hub.ui.helpers import (
     add_entities_in_order,
     ensure_dataset_facade,
+    ensure_dataset_facade_for_write,
     get_tree_data_from_nodes,
     group_entities_by_type,
     parse_workbook_sheets,
@@ -759,8 +760,16 @@ async def dataset_import_into_existing(
             status_code=400,
         )
 
-    # Get dataset state and add entities
-    state = await ensure_dataset_facade(dataset, session)
+    # Get dataset state and add entities. The write-path loader refuses when a
+    # stored node did not load: this route saves below, and saving a partial
+    # load is what deletes the nodes that were skipped.
+    try:
+        state = await ensure_dataset_facade_for_write(dataset, session)
+    except HTTPException as exc:
+        return HTMLResponse(
+            f"<div class='notification error'>{html.escape(str(exc.detail))}</div>",
+            status_code=exc.status_code,
+        )
     facade = state.get_or_create_facade()
 
     imported_count, errors = add_entities_in_order(state, facade, entities_by_type, root_entity)

@@ -32,6 +32,7 @@ from metaseed_hub.ui.helpers import (
     add_entity_node,
     create_nested_nodes,
     ensure_dataset_facade,
+    ensure_dataset_facade_for_write,
     group_entities_by_type,
     parse_workbook_sheets,
     read_upload_capped,
@@ -462,7 +463,7 @@ async def dataset_import_source(
         return csrf_error_response()
 
     dataset = await get_dataset_for_editor(dataset_id, session, user)
-    state = await ensure_dataset_facade(dataset, session)
+    state = await ensure_dataset_facade_for_write(dataset, session)
     if state.nodes_by_id:
         return HTMLResponse(
             "<div class='notification error'>This dataset already has entities. "
@@ -773,7 +774,7 @@ async def dataset_load_example(
     # Load example into dataset state (append, don't replace). The facade must
     # hold the already-stored entities before the example is appended, or a
     # facade-based save would drop them.
-    state = await ensure_dataset_facade(dataset, session)
+    state = await ensure_dataset_facade_for_write(dataset, session)
     facade = state.get_or_create_facade()
 
     try:

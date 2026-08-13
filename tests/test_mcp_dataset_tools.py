@@ -68,7 +68,7 @@ async def test_a_write_lands_in_the_callers_own_account(server, session: AsyncSe
     save = await _tool(server, "save_dataset")
     with _calling_with(secret):
         await create("from-an-agent", "miappe", "1.1")
-        await save("from-an-agent", {"entities": [{"type": "Investigation"}]})
+        await save("from-an-agent", {"entities": [{"_type": "Investigation", "title": "T"}]})
 
     # Read back through the same factory the tools use, not the fixture's
     # session: the write happened in its own session, which is the behaviour
@@ -82,7 +82,7 @@ async def test_a_write_lands_in_the_callers_own_account(server, session: AsyncSe
             await check.execute(select(Dataset).where(Dataset.name == "from-an-agent"))
         ).scalar_one()
         assert stored.tenant_id == tenant.id
-        assert stored.data == {"entities": [{"type": "Investigation"}]}
+        assert "tree" in stored.data, "stored canonically, not as the raw payload"
 
 
 async def test_a_duplicate_name_is_refused(server, session: AsyncSession) -> None:
@@ -117,7 +117,7 @@ class TestHardening:
         tenant, _user, secret, _token = await _user_with_token(
             session, slug="hard0001", email="h1@example.org"
         )
-        original = {"entities": [{"type": "Investigation", "title": "keep me"}]}
+        original = {"entities": [{"_type": "Investigation", "title": "keep me"}]}
         session.add(make_dataset(tenant=tenant, name="overwritten", data=original))
         await session.commit()
 
@@ -127,8 +127,15 @@ class TestHardening:
 
         async with db.session_factory() as check:
             versions = (await check.execute(select(DatasetVersion))).scalars().all()
-        assert len(versions) == 1, "the previous contents must be recoverable"
-        assert versions[0].data == original
+        # The canonical write path versions the new state; recoverability means
+        # some version still holds what was there before the overwrite.
+        assert versions, "the previous contents must be recoverable"
+        titles = [
+            e.get("data", {}).get("title") or e.get("title")
+            for v in versions
+            for e in (v.data.get("tree") or v.data.get("entities") or [])
+        ]
+        assert "keep me" in titles
 
     async def test_an_unchanged_save_does_not_pile_up_versions(
         self, server, session: AsyncSession
@@ -143,18 +150,33 @@ class TestHardening:
         tenant, _user, secret, _token = await _user_with_token(
             session, slug="hard0002", email="h2@example.org"
         )
-        data = {"entities": [{"type": "Investigation"}]}
+        data = {"entities": [{"_type": "Investigation", "title": "same"}]}
         session.add(make_dataset(tenant=tenant, name="idempotent", data=data))
         await session.commit()
 
         save = await _tool(server, "save_dataset")
         with _calling_with(secret):
             await save("idempotent", data)
-            await save("idempotent", data)
+        # What the canonical store now holds is what an agent working
+        # incrementally would resend: the tree from get_dataset.
+        async with db.session_factory() as check:
+            stored = (
+                (await check.execute(select(Dataset).where(Dataset.name == "idempotent")))
+                .scalars()
+                .one()
+            )
+            canonical = dict(stored.data)
+            after_first = len((await check.execute(select(DatasetVersion))).scalars().all())
+        with _calling_with(secret):
+            await save("idempotent", canonical)
+            await save("idempotent", canonical)
 
         async with db.session_factory() as check:
             versions = (await check.execute(select(DatasetVersion))).scalars().all()
-        assert versions == []
+        # Resending the stored tree unchanged adds nothing. (A raw entities
+        # list mints fresh node ids on every load, so only the canonical form
+        # can be recognised as unchanged.)
+        assert len(versions) == after_first
 
     async def test_an_oversized_dataset_is_refused(self, server, session: AsyncSession) -> None:
         """A runaway loop should be stopped, not stored."""
@@ -325,3 +347,85 @@ class TestCreateDatasetNames:
         create = await _tool(server, "create_dataset")
         with _calling_with(secret), pytest.raises(ValueError, match="no version"):
             await create("doomed", "miappe", "9.9")
+
+
+class TestSaveGoesThroughTheCanonicalWritePath:
+    """save_dataset wrote the raw payload straight into the row: no spec-hash
+    stamp, no tree envelope, and a node the profile cannot place stored
+    silently — every invariant the browser's save path keeps, skipped. The
+    payload is now loaded through the same facade and saved through
+    save_dataset_state, and a payload with unloadable nodes is refused with
+    the node named rather than stored and lost on the next load."""
+
+    async def test_the_stored_form_is_the_canonical_envelope(
+        self, server, session: AsyncSession
+    ) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import Dataset
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="canon001", email="c1@example.org"
+        )
+        session.add(make_dataset(tenant=tenant, name="canonical", data={}))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            await save(
+                "canonical",
+                {"entities": [{"_type": "Investigation", "title": "T"}]},
+            )
+
+        async with db.session_factory() as check:
+            row = (
+                (await check.execute(select(Dataset).where(Dataset.name == "canonical")))
+                .scalars()
+                .one()
+            )
+        assert "tree" in row.data, "the canonical envelope, not the raw payload"
+        assert "_spec_hash" in row.data or "spec_hash" in str(row.data), (
+            "the spec hash the drift check reads"
+        )
+
+    async def test_a_payload_with_an_unloadable_node_is_refused(
+        self, server, session: AsyncSession
+    ) -> None:
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import Dataset
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="canon002", email="c2@example.org"
+        )
+        original = {"entities": [{"type": "Investigation", "title": "keep"}]}
+        session.add(make_dataset(tenant=tenant, name="guarded", data=original))
+        await session.commit()
+
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            with pytest.raises(Exception, match="Bogus"):
+                await save(
+                    "guarded",
+                    {
+                        "tree": [
+                            {
+                                "id": "x-1",
+                                "entity_type": "Bogus",
+                                "label": "no such type",
+                                "data": {},
+                                "children": [],
+                            }
+                        ]
+                    },
+                )
+
+        async with db.session_factory() as check:
+            row = (
+                (await check.execute(select(Dataset).where(Dataset.name == "guarded")))
+                .scalars()
+                .one()
+            )
+        assert row.data == original, "a refused save must change nothing"

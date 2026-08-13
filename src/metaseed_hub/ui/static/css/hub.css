@@ -2229,6 +2229,18 @@ textarea {
     min-width: 80px;
 }
 
+/* Long values are clipped visually, never in the data: the row feeds editable
+   inputs whose blur saves whatever they hold, so a truncated value would be
+   written back over the stored one. */
+.cell-clip {
+    display: inline-block;
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
 .editable-cell .cell-display {
     display: block;
     padding: var(--space-sm) var(--space-md);
