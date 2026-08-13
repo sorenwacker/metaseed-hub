@@ -4,14 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-08-13
+
 ### Added
 - The spec tools can set `within`, the field marker that scopes a column to one
   branch of an ontology (metaseed #229). The hub's own gate refused to run at
   all while metaseed defined a marker these tools did not expose, which is how
   this was caught rather than shipped.
+- The spec tools can set `reference_scope`, which says whether a reference must
+  resolve inside the dataset or may name a record held elsewhere — a GBIF taxon,
+  a museum catalogue record (metaseed 0.34.0).
+- The rule tools take every attribute of the rule format, gated by a test
+  against metaseed the way the field markers already are. They took six, so a
+  caller could declare a cardinality rule's type but not its bounds, a
+  uniqueness rule but not its scope. That now includes `where`, `when` and
+  `require`, the predicates that let a rule depend on what a field holds
+  (metaseed #211). Exposing them took `_spec_tools.py` past the thousand-line
+  limit, so rule authoring now lives in its own `_rule_tools.py`.
 
 ### Changed
-- Requires metaseed 0.33.0, which holds the term router these lookups ask.
+- Requires metaseed 0.34.0.
 - Ontology lookups — the term picker, the MCP search, suggestion and term tools
   — ask metaseed's term router rather than OLS directly, so a vocabulary
   configured on the server is offered here too. The hub held its own OLS-only

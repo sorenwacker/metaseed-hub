@@ -35,6 +35,7 @@ from metaseed_hub.database import db
 from metaseed_hub.mcp._entity_tools import register_entity_tools
 from metaseed_hub.mcp._ontology_tools import register_ontology_tools
 from metaseed_hub.mcp._profile_tools import register_profile_tools
+from metaseed_hub.mcp._rule_tools import register_rule_tools
 from metaseed_hub.mcp._spec_tools import register_spec_tools
 from metaseed_hub.models import (
     Dataset,
@@ -770,6 +771,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         building=_building,
         profile_spec=_profile_spec,
     )
+    register_rule_tools(mcp, caller=_caller, owned_draft=_owned_draft, building=_building)
     register_profile_tools(mcp, caller=_caller, profile_spec=_profile_spec)
     register_ontology_tools(mcp, caller=_caller)
 

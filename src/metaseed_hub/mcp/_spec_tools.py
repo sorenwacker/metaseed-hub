@@ -390,6 +390,7 @@ def register_spec_tools(  # noqa: C901
         codename: str | None = None,
         ontologies: list[str] | None = None,
         unique_within: str | None = None,
+        reference_scope: str | None = None,
         dcat: str | None = None,
         owns: bool | None = None,
         is_identifier: bool | None = None,
@@ -440,6 +441,9 @@ def register_spec_tools(  # noqa: C901
             codename: A short machine name the field is also known by.
             ontologies: The ontologies a term for this field may come from.
             unique_within: The entity type this field's value is unique within.
+            reference_scope: Whether this field's reference must resolve in
+                the dataset (the default) or may name a record held
+                elsewhere ("external"), such as a GBIF taxon.
             dcat: The DCAT property this field maps onto.
             owns: Whether the referenced entity is contained by this one.
             is_identifier: Whether this field identifies the entity.
@@ -460,6 +464,7 @@ def register_spec_tools(  # noqa: C901
                 "codename": codename,
                 "ontologies": ontologies,
                 "unique_within": unique_within,
+                "reference_scope": reference_scope,
                 "dcat": dcat,
                 "owns": owns,
                 "is_identifier": is_identifier,
@@ -534,6 +539,7 @@ def register_spec_tools(  # noqa: C901
         codename: str | None = None,
         ontologies: list[str] | None = None,
         unique_within: str | None = None,
+        reference_scope: str | None = None,
         dcat: str | None = None,
         owns: bool | None = None,
         is_identifier: bool | None = None,
@@ -585,6 +591,9 @@ def register_spec_tools(  # noqa: C901
             codename: A short machine name the field is also known by.
             ontologies: The ontologies a term for this field may come from.
             unique_within: The entity type this field's value is unique within.
+            reference_scope: Whether this field's reference must resolve in
+                the dataset (the default) or may name a record held
+                elsewhere ("external"), such as a GBIF taxon.
             dcat: The DCAT property this field maps onto.
             owns: Whether the referenced entity is contained by this one.
             is_identifier: Whether this field identifies the entity.
@@ -605,6 +614,7 @@ def register_spec_tools(  # noqa: C901
                 "codename": codename,
                 "ontologies": ontologies,
                 "unique_within": unique_within,
+                "reference_scope": reference_scope,
                 "dcat": dcat,
                 "owns": owns,
                 "is_identifier": is_identifier,
@@ -752,96 +762,6 @@ def register_spec_tools(  # noqa: C901
                 )
                 problems = builder.validate()
             return json.dumps({"draft": draft, "problems": problems})
-
-    @mcp.tool()
-    async def spec_add_rule(
-        draft: str,
-        name: str,
-        type: str | None = None,
-        message: str | None = None,
-        applies_to: str | None = None,
-        field: str | None = None,
-        reference: str | None = None,
-    ) -> str:
-        """Add a validation rule to a draft specification.
-
-        Args:
-            draft: The draft's name in the caller's account.
-            name: The rule's name.
-            type: The rule type, e.g. "min_count" or "required_fields".
-            message: What a dataset is told when the rule fails.
-            applies_to: The entity type the rule checks.
-            field: The field the rule checks, where one applies.
-            reference: The reference the rule checks, where one applies.
-        """
-        async with caller() as (session, user):
-            row = await owned_draft(session, user, draft)
-            async with building(session, row, user) as builder:
-                builder.add_rule(
-                    name,
-                    **_clean(
-                        {
-                            "type": type,
-                            "message": message,
-                            "applies_to": applies_to,
-                            "field": field,
-                            "reference": reference,
-                        }
-                    ),
-                )
-                problems = builder.validate()
-            return json.dumps({"rule": name, "problems": problems})
-
-    @mcp.tool()
-    async def spec_update_rule(
-        draft: str,
-        rule_name: str,
-        message: str | None = None,
-        applies_to: str | None = None,
-        field: str | None = None,
-        reference: str | None = None,
-    ) -> str:
-        """Change a validation rule in place. Unset arguments keep their values.
-
-        Args:
-            draft: The draft's name in the caller's account.
-            rule_name: The rule to change.
-            message: What a dataset is told when the rule fails.
-            applies_to: The entity type the rule checks.
-            field: The field the rule checks, where one applies.
-            reference: The reference the rule checks, where one applies.
-        """
-        async with caller() as (session, user):
-            row = await owned_draft(session, user, draft)
-            async with building(session, row, user) as builder:
-                builder.update_rule(
-                    rule_name,
-                    **_clean(
-                        {
-                            "message": message,
-                            "applies_to": applies_to,
-                            "field": field,
-                            "reference": reference,
-                        }
-                    ),
-                )
-                problems = builder.validate()
-            return json.dumps({"rule": rule_name, "problems": problems})
-
-    @mcp.tool()
-    async def spec_delete_rule(draft: str, rule_name: str) -> str:
-        """Remove a validation rule from a draft specification.
-
-        Args:
-            draft: The draft's name in the caller's account.
-            rule_name: The rule to remove.
-        """
-        async with caller() as (session, user):
-            row = await owned_draft(session, user, draft)
-            async with building(session, row, user) as builder:
-                builder.delete_rule(rule_name)
-                problems = builder.validate()
-            return json.dumps({"deleted": rule_name, "problems": problems})
 
     @mcp.tool()
     async def spec_status(draft: str) -> str:

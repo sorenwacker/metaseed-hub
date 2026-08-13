@@ -75,3 +75,13 @@ role  # noqa: F821
 entity_id  # noqa: F821
 content  # noqa: F821
 roles  # noqa: F821
+
+# MCP rule-tool parameters read through locals() by _rule_attributes, which is
+# how the tools are gated against metaseed's RULE_ATTRIBUTE_NAMES rather than
+# listing every attribute a third time.
+when  # noqa: F821
+require  # noqa: F821
+lat_field  # noqa: F821
+lon_field  # noqa: F821
+start_field  # noqa: F821
+end_field  # noqa: F821
