@@ -2,6 +2,9 @@
     {% if success %}
     <div class="form-success auto-hide">Saved</div>
     {% endif %}
+    {% if error %}
+    <div class="form-error" data-testid="metadata-error">{{ error }}</div>
+    {% endif %}
 
     <div class="form-row-2">
         <div class="form-group compact">

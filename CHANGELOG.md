@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Publishing a draft no longer orphans the datasets built on it. Publish
+  deleted the draft, the datasets' `spec_draft_id` went NULL with it, and each
+  one lost its specification — editing disabled — while `delete_draft` refuses
+  in exactly that situation. Publish is the moment a draft becomes the spec,
+  so the datasets are rebound to the new Spec row before the draft goes.
+- A malformed version typed into profile metadata is refused in the form
+  instead of persisted. Pydantic validates `version` on construction, not on
+  assignment, so `v1.0` was stored — and every later load of the draft raised,
+  bricking it.
+- Publishing a name/version that already exists reports the collision as a
+  form message instead of a 500 from the unique index.
+
+### Fixed
 - Three import routes no longer bypass the unloadable-node refusal. Importing
   into a dataset, loading an example into one, and importing from a source
   all loaded permissively and then saved — so any stored node the profile

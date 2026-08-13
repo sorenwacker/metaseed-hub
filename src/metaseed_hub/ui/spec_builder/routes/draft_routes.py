@@ -12,10 +12,11 @@ from fastapi.templating import Jinja2Templates
 from metaseed.specs import content_hash, short_hash
 from metaseed.specs.schema import FieldType
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
-from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus, User
+from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.spec_builder.access import (
     SpecInUseError,
@@ -231,6 +232,44 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             created_by_id=user_id,
         )
         session.add(spec)
+        # The unique (tenant, name, version) index turns a double publish into
+        # an IntegrityError; flushing here keeps it a form message, not a 500.
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/save_result.html",
+                {
+                    "error": (
+                        f"A published specification named "
+                        f"'{builder.spec.name}' {builder.spec.version} already "
+                        f"exists in this account. Bump the version to release "
+                        f"again."
+                    )
+                },
+            )
+
+        # Publish is the moment the draft becomes the spec, so the datasets
+        # built on the draft follow it into release. Deleting the draft sets
+        # their spec_draft_id NULL (the FK's ondelete); without this rebind
+        # they were left with no specification at all and their editors were
+        # disabled -- delete_draft refuses in exactly that situation, and
+        # publish performed the same deletion unchecked.
+        dependents = (
+            (
+                await session.execute(
+                    select(Dataset).where(
+                        Dataset.spec_draft_id == draft.id, Dataset.deleted_at.is_(None)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for dataset in dependents:
+            dataset.spec_id = spec.id
 
         await session.delete(draft)
         await session.commit()
@@ -436,8 +475,26 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         root_entity: str = Form(""),
     ) -> HTMLResponse:
         """Update profile metadata."""
+        # Pydantic validates `version` on construction, not on assignment, so
+        # a raw form value like "v1.0" would be persisted — and every later
+        # load of the draft would raise, bricking it. Refused here instead.
+        from metaseed.specs.versioning import check_profile_version
+
+        cleaned_version = version.strip() or "0.1"
+        version_problem = check_profile_version(cleaned_version)
+        if version_problem is not None:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/profile_metadata_form.html",
+                {
+                    "spec": ctx.spec,
+                    "draft_id": ctx.draft.id,
+                    "error": f"Version not saved: {version_problem}",
+                },
+            )
+
         ctx.spec.name = slugify_spec_name(name)
-        ctx.spec.version = version.strip() or "0.1"
+        ctx.spec.version = cleaned_version
         ctx.spec.display_name = display_name.strip() or None
         ctx.spec.description = description.strip()
         ctx.spec.ontology = ontology.strip() or None

@@ -20,7 +20,15 @@ from metaseed.specs.schema import EntityDefSpec, ProfileSpec
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecDraftRole, Tenant, User
+from metaseed_hub.models import (
+    Dataset,
+    Spec,
+    SpecDraft,
+    SpecDraftMember,
+    SpecDraftRole,
+    Tenant,
+    User,
+)
 from metaseed_hub.ui.spec_builder import access
 from metaseed_hub.ui.spec_builder.access import (
     get_draft_context,
@@ -30,7 +38,7 @@ from metaseed_hub.ui.spec_builder.access import (
 )
 from metaseed_hub.ui.spec_builder.routes.draft_routes import register_draft_routes
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
-from tests.factories import make_spec, make_spec_draft, make_tenant, make_user
+from tests.factories import make_dataset, make_spec, make_spec_draft, make_tenant, make_user
 
 
 def _spec() -> ProfileSpec:
@@ -289,3 +297,145 @@ class TestForkPublishing:
         assert len(published) == 1, "the fork must publish into the forker's own tenant"
         await session.refresh(source)
         assert source.deleted_at is None, "publishing a fork must not touch the source spec"
+
+
+class TestPublishKeepsDatasetsBound:
+    """Publishing deleted the draft, and `Dataset.spec_draft_id` is SET NULL —
+    so every dataset built on the draft lost its specification the moment the
+    spec was released, and its editor was disabled with 'no specification is
+    recorded for it'. `delete_draft` refuses in exactly this situation; publish
+    performed the same deletion unchecked. Publish is the moment the draft
+    *becomes* the spec, so the datasets are rebound to the new Spec row."""
+
+    async def test_a_dataset_on_the_draft_is_rebound_to_the_published_spec(
+        self, session: AsyncSession
+    ) -> None:
+        draft, tenant, owner, _members = await _shared_draft(session)
+        dataset = make_dataset(tenant=tenant, name="built-on-draft")
+        dataset.spec_draft_id = draft.id
+        session.add(dataset)
+        await session.commit()
+        dataset_id = dataset.id
+
+        endpoint = _draft_endpoint("/publish", "POST")
+        await endpoint(
+            request=_request("POST"),
+            draft_id=draft.id,
+            session=session,
+            user_ctx=(owner.id, tenant.id),
+        )
+
+        spec = (await session.execute(select(Spec))).scalars().one()
+        bound = await session.get(Dataset, dataset_id)
+        assert bound is not None
+        assert bound.spec_id == spec.id, "the dataset follows the draft into release"
+
+    async def test_publishing_the_same_content_twice_reports_not_500s(
+        self, session: AsyncSession
+    ) -> None:
+        """The (tenant, name, version) unique index turned a double publish
+        into an unhandled IntegrityError."""
+        draft, tenant, owner, _members = await _shared_draft(session)
+        endpoint = _draft_endpoint("/publish", "POST")
+        await endpoint(
+            request=_request("POST"),
+            draft_id=draft.id,
+            session=session,
+            user_ctx=(owner.id, tenant.id),
+        )
+
+        # A second draft in the same tenant, same name and version.
+        draft2 = make_spec_draft(
+            tenant=tenant,
+            user=owner,
+            name="demo-second",
+            spec_data=SpecBuilderState(spec=_spec()).to_dict(),
+        )
+        session.add(draft2)
+        await session.commit()
+        response = await endpoint(
+            request=_request("POST"),
+            draft_id=draft2.id,
+            session=session,
+            user_ctx=(owner.id, tenant.id),
+        )
+
+        body = response.body.decode()
+        assert "already" in body.lower() or "exists" in body.lower()
+
+
+class TestMetadataVersionIsValidated:
+    """`ctx.spec.version = version` assigned the raw form value: ProfileSpec
+    validates `version` on construction, not on assignment, so `v1.0` or
+    `draft` was persisted — and every later load of the draft raised
+    SpecVersionError, bricking it. The route now refuses the value in the form
+    instead of storing it."""
+
+    async def _ctx(self, session: AsyncSession):
+        from metaseed_hub.ui.spec_builder.access import DraftContext, load_state_for_draft
+
+        tenant = make_tenant()
+        session.add(tenant)
+        await session.flush()
+        owner = make_user(tenant=tenant, email="meta-owner@example.org")
+        session.add(owner)
+        await session.flush()
+        draft = make_spec_draft(
+            tenant=tenant,
+            user=owner,
+            name="meta",
+            spec_data=SpecBuilderState(spec=_spec()).to_dict(),
+        )
+        session.add(draft)
+        await session.commit()
+        builder, loaded = await load_state_for_draft(session, draft.id, owner.id)
+        return (
+            DraftContext(builder=builder, draft=loaded, user_id=owner.id, tenant_id=tenant.id),
+            draft.id,
+        )
+
+    async def test_a_malformed_version_is_refused_and_not_stored(
+        self, session: AsyncSession
+    ) -> None:
+        from metaseed_hub.ui.spec_builder.access import load_state_for_draft
+
+        ctx, draft_id = await self._ctx(session)
+        endpoint = _draft_endpoint("/profile-metadata", "POST")
+
+        response = await endpoint(
+            request=_request("POST"),
+            ctx=ctx,
+            session=session,
+            name="meta",
+            version="v1.0",
+            display_name="",
+            description="",
+            ontology="",
+            root_entity="Study",
+        )
+
+        assert "version" in response.body.decode().lower()
+        builder, _ = await load_state_for_draft(session, draft_id, ctx.user_id)
+        assert builder.spec is not None, "the draft must still load"
+        assert builder.spec.version != "v1.0"
+
+    async def test_a_wellformed_version_is_stored(self, session: AsyncSession) -> None:
+        from metaseed_hub.ui.spec_builder.access import load_state_for_draft
+
+        ctx, draft_id = await self._ctx(session)
+        endpoint = _draft_endpoint("/profile-metadata", "POST")
+
+        await endpoint(
+            request=_request("POST"),
+            ctx=ctx,
+            session=session,
+            name="meta",
+            version="2.1",
+            display_name="",
+            description="",
+            ontology="",
+            root_entity="Study",
+        )
+
+        builder, _ = await load_state_for_draft(session, draft_id, ctx.user_id)
+        assert builder.spec.version == "2.1"
