@@ -116,11 +116,27 @@ def register_ontology_tools(mcp: FastMCP, *, caller: Caller) -> None:
         async with caller():
             pass  # Authentication only; a lookup touches nobody's data.
 
+        source = get_term_source()
         try:
-            term = await get_term_source().get_term(term_id)
+            term = await source.get_term(term_id)
         except OntologyServiceError as e:
             raise ValueError(f"The ontology service could not be reached: {e}") from e
         if term is None:
+            # The router swallows a failing source and answers None — the same
+            # answer as a genuinely missing term. Before calling the term
+            # nonexistent, ask whether any source could actually see its
+            # ontology: an outage must read as "could not check", never as
+            # "does not exist".
+            from metaseed.services.term_check import ontology_of
+
+            prefix = ontology_of(term_id)
+            carried = source.has_ontology_sync(prefix) if prefix else None
+            if carried is not True:
+                raise ValueError(
+                    f"{term_id!r} could not be checked: no configured source "
+                    f"could answer for its ontology just now. This says nothing "
+                    f"about whether the term exists."
+                )
             raise ValueError(
                 f"No ontology term {term_id!r}. Term ids look like 'PATO:0000015'; "
                 "find one with search_ontology."

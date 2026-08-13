@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- `get_ontology_term` (MCP) no longer reports an outage as nonexistence. The
+  term router answers None both for a missing term and for a source that
+  failed; the tool now asks whether any source could actually see the
+  ontology before calling the term missing — the same three-outcome rule the
+  rest of the checks follow, broken at this boundary too.
+
+### Fixed
 - Publishing a draft no longer orphans the datasets built on it. Publish
   deleted the draft, the datasets' `spec_draft_id` went NULL with it, and each
   one lost its specification — editing disabled — while `delete_draft` refuses

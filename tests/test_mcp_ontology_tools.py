@@ -122,7 +122,13 @@ class TestOntologyTools:
         _t, _u, secret, _token = await _user_with_token(
             session, slug="ont00003", email="ont00003@example.org"
         )
-        fake = _FakeRouter(term=None)
+
+        class _CarriedRouter(_FakeRouter):
+            def has_ontology_sync(self, ontology_id: str):
+                # The source carries the ontology and looked: absence is real.
+                return True
+
+        fake = _CarriedRouter(term=None)
 
         get_term = await _tool(server, "get_ontology_term")
         with (
@@ -206,3 +212,51 @@ class TestOntologyTools:
             pytest.raises(ValueError, match="could not be reached"),
         ):
             await listing()
+
+
+class TestAnOutageIsNotNonexistence:
+    """The router swallows a failing source and answers None — the same answer
+    as a genuinely missing term. `get_ontology_term` turned that None into
+    "No ontology term", so an OLS outage told the agent the term does not
+    exist. The tool now asks whether anyone could actually see the ontology
+    before calling the term missing."""
+
+    async def test_nobody_could_say_reads_as_could_not_check(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="ont00007", email="ont00007@example.org"
+        )
+
+        class _DownRouter(_FakeRouter):
+            def has_ontology_sync(self, ontology_id: str):
+                return None  # no source could answer: outage or uncarried
+
+        fake = _DownRouter(term=None)
+        get_term = await _tool(server, "get_ontology_term")
+        with (
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
+            _calling_with(secret),
+            pytest.raises(ValueError, match="could not be checked"),
+        ):
+            await get_term("PATO:0000015")
+
+    async def test_a_carried_ontology_without_the_term_is_still_missing(
+        self, server, session: AsyncSession
+    ) -> None:
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="ont00008", email="ont00008@example.org"
+        )
+
+        class _CarriedRouter(_FakeRouter):
+            def has_ontology_sync(self, ontology_id: str):
+                return True
+
+        fake = _CarriedRouter(term=None)
+        get_term = await _tool(server, "get_ontology_term")
+        with (
+            patch("metaseed_hub.mcp._ontology_tools.get_term_source", return_value=fake),
+            _calling_with(secret),
+            pytest.raises(ValueError, match="No ontology term"),
+        ):
+            await get_term("PATO:9999999")
