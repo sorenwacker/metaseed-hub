@@ -78,7 +78,7 @@ def register_rule_tools(
         type: str | None = None,
         description: str | None = None,
         message: str | None = None,
-        applies_to: str | None = None,
+        applies_to: str | list[str] | None = None,
         field: str | None = None,
         condition: str | None = None,
         pattern: str | None = None,
@@ -106,7 +106,7 @@ def register_rule_tools(
                 cardinality, uniqueness or reference.
             description: What the rule checks.
             message: What a dataset is told when the rule fails.
-            applies_to: The entity type the rule checks.
+            applies_to: The entity type(s) the rule checks — one name or a list.
             field: The field the rule checks, where one applies.
             condition: A boolean expression over field names, for a
                 conditional rule. Tests presence only; use when/require to
@@ -145,7 +145,7 @@ def register_rule_tools(
         type: str | None = None,
         description: str | None = None,
         message: str | None = None,
-        applies_to: str | None = None,
+        applies_to: str | list[str] | None = None,
         field: str | None = None,
         condition: str | None = None,
         pattern: str | None = None,
@@ -174,7 +174,7 @@ def register_rule_tools(
             type: The rule type.
             description: What the rule checks.
             message: What a dataset is told when the rule fails.
-            applies_to: The entity type the rule checks.
+            applies_to: The entity type(s) the rule checks — one name or a list.
             field: The field the rule checks, where one applies.
             condition: A boolean expression over field names.
             pattern: A regular expression the field must match.

@@ -508,3 +508,41 @@ def test_the_field_tools_offer_every_marker_metaseed_defines() -> None:
         signature = inspect.signature(server._tool_manager.get_tool(tool).fn)
         for name in FIELD_MARKER_NAMES:
             assert name in signature.parameters, f"{tool} cannot set {name}"
+
+
+class TestMultiEntityRulesAreAuthorable:
+    """applies_to accepts a list, as the spec schema always has.
+
+    The tool narrowed it to str, so a rule scoped to several entities —
+    `applies_to: list[str] | str` in metaseed's schema — was unauthorable
+    over MCP: the caller had to write one copy of the rule per entity.
+    """
+
+    @pytest.mark.parametrize("tool_name", ["spec_add_rule", "spec_update_rule"])
+    async def test_the_declared_schema_admits_a_list(self, server, tool_name) -> None:
+        """The direct-call harness bypasses transport validation; a real MCP
+        client obeys the declared schema, so the annotation is the contract."""
+        import inspect
+
+        fn = await _tool(server, tool_name)
+        annotation = inspect.signature(fn).parameters["applies_to"].annotation
+        assert "list" in str(annotation), annotation
+
+    async def test_a_rule_can_apply_to_two_entities(self, server, session: AsyncSession) -> None:
+        secret = await _drafting(server, session, slug="fix00030", name="Multi")
+        add_entity = await _tool(server, "spec_add_entity")
+        add_rule = await _tool(server, "spec_add_rule")
+        with _calling_with(secret):
+            await add_entity("Multi", "Study")
+            await add_entity("Multi", "Sample")
+            await add_rule(
+                "Multi",
+                "shared_pattern",
+                type="pattern",
+                field="name",
+                pattern="^[a-z]+$",
+                applies_to=["Study", "Sample"],
+                message="lowercase names",
+            )
+            spec = await _spec_of("Multi")
+            assert spec["validation_rules"][0]["applies_to"] == ["Study", "Sample"]
