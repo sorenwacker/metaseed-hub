@@ -224,8 +224,20 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
                 },
             )
 
+        # A specification is a small YAML document; reading an arbitrary
+        # upload unbounded handed memory to whatever the client sent.
+        max_spec_bytes = 2 * 1024 * 1024
         try:
-            content = await spec_file.read()
+            content = await spec_file.read(max_spec_bytes + 1)
+            if len(content) > max_spec_bytes:
+                return await render(
+                    request,
+                    "spec_builder/import.html",
+                    {
+                        "tenant_id": tenant_id,
+                        "error": "Specification file exceeds 2 MB",
+                    },
+                )
             yaml_content = content.decode("utf-8")
             spec = parse_spec_from_yaml(yaml_content)
         except UnicodeDecodeError:
@@ -264,7 +276,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
 
         return RedirectResponse(url=f"/hub/spec-builder/{draft.id}", status_code=302)
 
-    @router.get("/clone/{profile}/{version}", response_model=None)
+    @router.post("/clone/{profile}/{version}", response_model=None)
     async def clone_template(
         request: Request,
         profile: str,

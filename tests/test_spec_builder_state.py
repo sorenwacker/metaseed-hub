@@ -144,3 +144,22 @@ def test_reset_to_empty_clears_editing_pointers() -> None:
     assert dumped["editing_entity"] is None
     assert dumped["editing_field_idx"] is None
     assert dumped["editing_rule_idx"] is None
+
+
+def test_clone_is_not_reachable_by_get() -> None:
+    """Cloning creates a draft — a state change no GET may perform.
+
+    A crawler, browser prefetch, or link preview following the old GET link
+    minted drafts the user never asked for.
+    """
+    from fastapi import APIRouter
+    from fastapi.templating import Jinja2Templates
+
+    from metaseed_hub.ui.spec_builder.routes.list_routes import register_list_routes
+
+    router = APIRouter()
+    register_list_routes(router, Jinja2Templates(directory="src/metaseed_hub/ui/templates"))
+    clone_routes = [route for route in router.routes if "/clone/" in getattr(route, "path", "")]
+    assert clone_routes, "the clone route exists"
+    for route in clone_routes:
+        assert route.methods == {"POST"}, route.methods

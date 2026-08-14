@@ -34,10 +34,10 @@
                     </div>
                     <div class="template-versions">
                         {% for version in template.versions %}
-                        <a href="/hub/spec-builder/clone/{{ template.name }}/{{ version }}"
-                           class="btn btn-sm">
-                            v{{ version }}
-                        </a>
+                        <form method="post" style="display:inline"
+                              action="/hub/spec-builder/clone/{{ template.name }}/{{ version }}">
+                            <button type="submit" class="btn btn-sm">v{{ version }}</button>
+                        </form>
                         {% endfor %}
                     </div>
                 </div>
