@@ -377,28 +377,51 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     await session.commit()
 
 
-async def _published_spec(session: AsyncSession, profile: str, version: str) -> Spec | None:
+async def _published_spec(
+    session: AsyncSession,
+    profile: str,
+    version: str,
+    prefer_tenant: str | None = None,
+) -> Spec | None:
     """The published specification a profile name and version refer to, if any.
 
     Publishing shares a specification with every user of the hub, so the lookup
     is deliberately not scoped to the caller's tenant. Matched case-insensitively
     because datasets store the lowercased profile name while list_profiles
     reports the name as published.
+
+    When two tenants published the same name and version, ``.first()`` on an
+    unordered query handed the caller whichever row the database returned —
+    possibly another tenant's specification. The caller's own tenant wins the
+    collision; across other tenants the oldest publication wins, so the answer
+    is at least deterministic.
     """
-    from sqlalchemy import func
+    from sqlalchemy import case, func
+    from sqlalchemy.sql.elements import ColumnElement
+
+    ordering: list[ColumnElement[Any]] = [Spec.created_at.asc(), Spec.id.asc()]
+    if prefer_tenant is not None:
+        ordering.insert(0, case((Spec.tenant_id == prefer_tenant, 0), else_=1))
 
     result = await session.execute(
-        select(Spec).where(
+        select(Spec)
+        .where(
             func.lower(Spec.name) == profile.lower(),
             Spec.version == version,
             Spec.status == SpecStatus.PUBLISHED,
             Spec.deleted_at.is_(None),
         )
+        .order_by(*ordering)
     )
     return result.scalars().first()
 
 
-async def _profile_spec(session: AsyncSession, profile: str, version: str) -> Any:
+async def _profile_spec(
+    session: AsyncSession,
+    profile: str,
+    version: str,
+    prefer_tenant: str | None = None,
+) -> Any:
     """The ``ProfileSpec`` behind a profile name: built-in first, then published.
 
     Raises:
@@ -416,7 +439,7 @@ async def _profile_spec(session: AsyncSession, profile: str, version: str) -> An
             )
         return loader.load_profile(version=version, profile=profile.lower())
 
-    published = await _published_spec(session, profile, version)
+    published = await _published_spec(session, profile, version, prefer_tenant)
     if published is None:
         raise ValueError(
             f"No profile named {profile!r} with version {version!r}. "
@@ -588,10 +611,12 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             spec_id: str | None = None
             if profile.lower() in SpecLoader().list_profiles():
                 # Validates the profile and version; loading is the check.
-                await _profile_spec(session, profile, version)
+                await _profile_spec(session, profile, version, prefer_tenant=user.tenant_id)
                 profile = profile.lower()
             else:
-                published = await _published_spec(session, profile, version)
+                published = await _published_spec(
+                    session, profile, version, prefer_tenant=user.tenant_id
+                )
                 if published is None:
                     raise ValueError(
                         f"No profile named {profile!r} with version {version!r}. "
@@ -761,7 +786,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             version: The profile version.
         """
         async with _caller() as (session, _user):
-            spec = await _profile_spec(session, profile, version)
+            spec = await _profile_spec(session, profile, version, prefer_tenant=_user.tenant_id)
             return json.dumps(
                 {
                     "name": spec.name,

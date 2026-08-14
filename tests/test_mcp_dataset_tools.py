@@ -429,3 +429,35 @@ class TestSaveGoesThroughTheCanonicalWritePath:
                 .one()
             )
         assert row.data == original, "a refused save must change nothing"
+
+
+async def test_a_name_collision_prefers_the_callers_own_published_spec(
+    server, session: AsyncSession
+) -> None:
+    """Two tenants publishing the same name+version must not race on .first().
+
+    _published_spec spans tenants on purpose (publishing shares), but with a
+    collision the row picked was whatever the database returned first — the
+    caller could get another tenant's specification. The caller's own tenant
+    wins; across other tenants the oldest publication wins, deterministically.
+    """
+    from metaseed_hub.mcp import _published_spec
+    from tests.factories import make_spec
+
+    tenant_a, user_a, _sa, _ta = await _user_with_token(
+        session, slug="mcp00040", email="col-a@example.org"
+    )
+    tenant_b, user_b, _sb, _tb = await _user_with_token(
+        session, slug="mcp00041", email="col-b@example.org"
+    )
+    mine = make_spec(tenant=tenant_a, created_by=user_a, name="shared-name", version="1.0")
+    theirs = make_spec(tenant=tenant_b, created_by=user_b, name="shared-name", version="1.0")
+    # Inserted THEIRS first so a naive .first() favors it.
+    session.add(theirs)
+    await session.commit()
+    session.add(mine)
+    await session.commit()
+
+    picked = await _published_spec(session, "shared-name", "1.0", prefer_tenant=tenant_a.id)
+    assert picked is not None
+    assert picked.tenant_id == tenant_a.id
