@@ -332,7 +332,11 @@ async def get_current_user(
             email=user.email,
             name=user.display_name or user.email,
             # Personal access tokens carry no roles: they act for the user's own
-            # data, and must not confer the admin role an OIDC token can.
+            # data, and must not confer the admin role an OIDC token can. They
+            # also carry no entitlements — those come from the IdP's userinfo
+            # endpoint, which only an OIDC token can ask — so features gated on
+            # an entitlement are browser-session-only by construction, not by
+            # accident.
             roles=[],
         )
 
