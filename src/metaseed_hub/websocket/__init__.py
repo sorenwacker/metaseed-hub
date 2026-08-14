@@ -64,7 +64,14 @@ dropped before broadcast rather than trusted because they arrived on a socket.
 
 
 class WebSocketManager:
-    """Manages WebSocket connections with Redis pub/sub for scaling."""
+    """Manages WebSocket connections, with Redis pub/sub fanning out messages.
+
+    Scaling caveat stated deliberately: MESSAGES cross instances via pub/sub,
+    but PRESENCE lists are per-instance (each process only knows its own
+    connections), so a multi-instance deployment shows partial presence.
+    Today's deployment is single-instance; making presence global would move
+    the rooms' membership into Redis, which is recorded as backlog.
+    """
 
     # Blocking read timeout for the listener's get_message call. The listener
     # holds _pubsub_lock for the duration of each read, so every join/leave
