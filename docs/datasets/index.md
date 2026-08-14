@@ -55,3 +55,8 @@ and every response carries a `Link: rel="describedby"` header — the three
 signals FAIR harvesters such as F-UJI read. Reachability follows the
 deployment's authentication: harvesting needs whatever visibility the
 operator grants the dataset URL.
+
+An opt-in FAIRness regression check runs F-UJI against a reachable dataset
+URL (`tests/test_fuji_fairness.py`; set `FUJI_URL` and `FUJI_TARGET`). It
+asserts the FsF score does not regress below a baseline, which is how a
+change that quietly removes a harvestability signal gets noticed.

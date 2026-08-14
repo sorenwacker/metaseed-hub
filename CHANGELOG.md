@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
   and responses carry a `rel="describedby"` Link — the signals FAIR
   assessors read. Reachability follows the deployment's authentication.
 
+- An opt-in F-UJI FAIRness regression check (metaseed#31):
+  `tests/test_fuji_fairness.py` scores a reachable dataset URL through a
+  running F-UJI service (`FUJI_URL`/`FUJI_TARGET`) and fails when the FsF
+  score regresses below the baseline. Skipped without the environment, so
+  the core suite stays hermetic.
+
 ### Removed
 - The FeatureGrant mechanism. It gated the SEEK panel and settings, the DCAT
   column in the spec builder, and the whole adapter export menu behind
