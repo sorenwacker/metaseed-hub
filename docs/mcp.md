@@ -12,6 +12,8 @@ A token can be given an expiry, after which it stops working on its own. A token
 
 A token acts as **you**. Every tool call is scoped to your own account: it can see and change your datasets and nothing else.
 
+The endpoint also accepts an **OIDC bearer** — the access token your signed-in hub session already holds — for clients that can obtain one. A personal access token is the durable, non-interactive credential; the OIDC bearer expires with your session.
+
 ## Configuring Claude Code
 
 ```bash

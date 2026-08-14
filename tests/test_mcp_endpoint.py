@@ -140,3 +140,43 @@ class TestOverHTTP:
             )
 
         assert response.status_code == 404
+
+
+async def test_an_oidc_bearer_authenticates_the_mcp_caller(
+    server, session: AsyncSession, monkeypatch
+) -> None:
+    """The interactive login token works on the MCP endpoint too (hub#38).
+
+    A personal access token is the non-interactive credential; an OIDC bearer
+    is the one a user's session already holds. The endpoint accepted only the
+    msh_ prefix, so pointing an MCP client at the hub with a session token —
+    the issue's third adapter — was refused.
+    """
+    from unittest.mock import AsyncMock
+
+    from metaseed_hub.auth import TokenUser
+    from tests.factories import make_tenant, make_user
+
+    tenant = make_tenant(slug="oidc0001")
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant, keycloak_id="kc-oidc-1", email="oidc@example.org")
+    session.add(user)
+    await session.commit()
+
+    monkeypatch.setattr(
+        "metaseed_hub.mcp.verify_oidc_token",
+        AsyncMock(
+            return_value=TokenUser(
+                sub="kc-oidc-1",
+                email="oidc@example.org",
+                name="O",
+                roles=[],
+                entitlements=[],
+            )
+        ),
+    )
+
+    whoami = await _tool(server, "whoami")
+    with _calling_with("eyJhbGciOiJSUzI1NiJ9.fake.jwt"):
+        assert json.loads(await whoami())["email"] == "oidc@example.org"

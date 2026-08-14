@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- The MCP endpoint accepts an OIDC bearer beside personal access tokens
+  (metaseed-hub#38's third auth adapter): a hub session's access token
+  authenticates an MCP client as its holder, decided by prefix so a hub
+  token is never sent to the IdP.
 - A dataset page is harvestable (metaseed#30): it embeds the dataset's DCAT
   record as JSON-LD, the dataset URL answers content negotiation
   (`Accept: application/ld+json` / `text/turtle` returns the record itself),

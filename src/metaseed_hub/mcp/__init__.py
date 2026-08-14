@@ -31,6 +31,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from metaseed.agent.mcp.server import SPEC_BUILDING_INSTRUCTIONS
 from sqlalchemy import select
 
+from metaseed_hub.auth import verify_token as verify_oidc_token
 from metaseed_hub.database import db
 from metaseed_hub.mcp._entity_tools import register_entity_tools
 from metaseed_hub.mcp._ontology_tools import register_ontology_tools
@@ -45,7 +46,7 @@ from metaseed_hub.models import (
     SpecStatus,
     User,
 )
-from metaseed_hub.tokens import authenticate_token, token_from_header
+from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token, token_from_header
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -93,9 +94,32 @@ async def _caller() -> AsyncIterator[tuple[AsyncSession, User]]:
         raise NotAuthenticatedError("No bearer token. Send Authorization: Bearer msh_...")
 
     async with db.session_factory() as session:
-        user = await authenticate_token(session, secret)
-        if user is None:
-            raise NotAuthenticatedError("That token is not valid, or has been revoked.")
+        # Two credentials, decided by prefix, mirroring the REST API: a hub
+        # personal access token (the non-interactive credential), or an OIDC
+        # bearer from the interactive login — so a user can point an MCP
+        # client at the hub with the session token they already hold. A hub
+        # token is never sent to the IdP, and an OIDC failure is never
+        # blamed on what is plainly a hub token.
+        if secret.startswith(TOKEN_PREFIX):
+            user = await authenticate_token(session, secret)
+            if user is None:
+                raise NotAuthenticatedError("That token is not valid, or has been revoked.")
+        else:
+            try:
+                token_user = await verify_oidc_token(secret)
+            except Exception as exc:
+                raise NotAuthenticatedError(
+                    "That bearer is neither a hub token (msh_...) nor a valid OIDC access token."
+                ) from exc
+            result = await session.execute(
+                select(User).where(User.keycloak_id == token_user.sub, User.deleted_at.is_(None))
+            )
+            user = result.scalar_one_or_none()
+            if user is None:
+                raise NotAuthenticatedError(
+                    "The OIDC token verified, but no hub account exists for "
+                    "it yet; sign in to the hub once first."
+                )
         yield session, user
 
 
