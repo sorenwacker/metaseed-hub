@@ -135,12 +135,9 @@ async def can_edit_spec(
 ) -> bool:
     """Whether ``user_id`` may edit — and so also withdraw — a published spec.
 
-    Its author, and nobody else. There was a second branch granting this to
-    admins and owners of a team in the same tenant, but teams were removed from
-    the hub: no interface created one, the table held no rows, and the branch
-    could never be true. Sharing a published specification with another person
-    is not possible today (``spec_members`` has no interface writing to it);
-    when it returns, it belongs here.
+    Its author, or anyone the specification has been shared with in an
+    edit-capable role. (An earlier team-admin branch was removed with teams;
+    the shared-role branch below replaced it when spec sharing arrived.)
     """
     result = await session.execute(
         select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
@@ -267,36 +264,6 @@ async def require_owner_role(session: AsyncSession, draft: SpecDraft, user_id: s
     """
     if await get_draft_role(session, draft, user_id) is not SpecDraftRole.OWNER:
         raise HTTPException(status_code=403, detail="Only a draft owner may do this")
-
-
-async def require_draft_owner(
-    session: AsyncSession,
-    draft_id: str,
-    user_id: str,
-) -> SpecDraft:
-    """Load a draft, requiring the caller to be its owner.
-
-    Used to gate membership management, which only the draft owner may perform.
-
-    Args:
-        session: Database session.
-        draft_id: Draft identifier.
-        user_id: Database User.id (not keycloak_id) of the caller.
-
-    Returns:
-        The draft owned by the caller.
-
-    Raises:
-        HTTPException: 404 if the draft does not exist, 403 if the caller does
-            not own it.
-    """
-    result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
-    draft = result.scalar_one_or_none()
-    if draft is None:
-        raise HTTPException(status_code=404, detail="Draft not found")
-    if draft.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    return draft
 
 
 async def require_draft_access(

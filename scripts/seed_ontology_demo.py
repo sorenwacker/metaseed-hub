@@ -43,14 +43,14 @@ ONTOLOGY_DEMO_SPEC = {
                     "type": "ontology_term",
                     "required": True,
                     "description": "The organism this sample comes from (NCBI Taxonomy).",
-                    "ontology_term": "ncbitaxon",
+                    "ontologies": ["ncbitaxon"],
                 },
                 {
                     "name": "tissue",
                     "type": "ontology_term",
                     "required": False,
                     "description": "Plant tissue or organ type (Plant Ontology).",
-                    "ontology_term": "po",
+                    "ontologies": ["po"],
                 },
                 {
                     "name": "chemical_treatment",
@@ -64,7 +64,7 @@ ONTOLOGY_DEMO_SPEC = {
                     "type": "ontology_term",
                     "required": False,
                     "description": "Environmental conditions (ENVO).",
-                    "ontology_term": "envo",
+                    "ontologies": ["envo"],
                 },
                 {
                     "name": "phenotype",

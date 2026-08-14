@@ -60,13 +60,6 @@ def _resource_or_404(kind: str) -> SharedResource:
         raise HTTPException(status_code=404, detail="No such thing to share") from None
 
 
-async def _db_user_id(session: DbSession, user: TokenUser) -> str:
-    from metaseed_hub.ui.dependencies import ensure_tenant_and_user
-
-    _, db_user = await ensure_tenant_and_user(session, user)
-    return str(db_user.id)
-
-
 async def _viewer(session: DbSession, user: TokenUser) -> tuple[str, str]:
     """The asking person's user and account ids."""
     from metaseed_hub.ui.dependencies import ensure_tenant_and_user
