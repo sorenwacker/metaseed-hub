@@ -133,25 +133,17 @@ def _get_default_values(
         if info.get("type") in ("list", "entity") and info.get("items"):
             continue
 
-        # Generate appropriate defaults based on type
-        field_type = info.get("type", "string")
+        # Only what is genuinely derivable is pre-filled: a fresh identifier
+        # (the row needs an identity to be addressable) and the reference to
+        # the parent it was created under. Fabricated placeholders ("New
+        # Title", 0, False) persisted as real values with validation skipped
+        # — data the user never entered, saved as if they had.
         if fname in ("unique_id", "id", "identifier"):
             default_values[fname] = str(uuid.uuid4())[:8]
         elif fname.endswith("_id"):
-            # Check if this references the parent type - only auto-fill if it does
             ref_type = fname[:-3]  # Remove "_id" suffix
             if ref_type == parent_type_lower and parent_identifier:
                 default_values[fname] = str(parent_identifier)
-            # Otherwise leave empty for user to fill in
-        elif field_type == "integer":
-            default_values[fname] = 0
-        elif field_type == "float":
-            default_values[fname] = 0.0
-        elif field_type == "boolean":
-            default_values[fname] = False
-        else:
-            # String or other - use field name as placeholder
-            default_values[fname] = f"New {fname.replace('_', ' ').title()}"
 
     return default_values
 
@@ -445,8 +437,15 @@ async def update_table_cell(
         current_values = node.instance.model_dump(exclude_none=True)
 
     # Update with new values from form
+    valid_fields = set(helper.all_fields)
     for field_name, raw_value in form_data.items():
         if field_name.startswith("_"):
+            continue
+        if field_name not in valid_fields:
+            # A caller-controlled name the entity does not have: skipping it
+            # matches the valid-field gate; field_info would KeyError -> 500.
+            continue
+        if not isinstance(raw_value, str):
             continue
         if raw_value is None:
             continue
