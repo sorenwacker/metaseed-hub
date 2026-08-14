@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Entity routes ride the single load path: `EntityService.ensure_state`
+  delegates to `ensure_dataset_facade_for_write`, deleting its duplicated
+  spec resolution and strict load. A dataset with an unplaceable stored node
+  now gets the same 409 refusal from every mutating route, and a writer on
+  an empty dataset with a broken spec is refused with the reason instead of
+  receiving a silent, unusable state (`require_client`).
+- Presence is global. Room membership lives in a per-room Redis sorted set
+  scored by heartbeats: every instance stamps its connections in every 30
+  seconds, reads the whole set back, and a process that stops refreshing
+  ages out after three missed beats. Without Redis, presence falls back to
+  the local room, which is then also the whole truth.
+
 ## [0.35.0] - 260814
 
 ### Fixed

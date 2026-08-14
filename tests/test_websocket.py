@@ -61,13 +61,41 @@ class NeverSubscribedPubSub:
 
 
 class FakeRedis:
-    """Records publishes to Redis channels."""
+    """Records publishes to Redis channels and holds the presence sets."""
 
     def __init__(self) -> None:
         self.published: list[tuple[str, str]] = []
+        self.zsets: dict[str, dict[str, float]] = {}
 
     async def publish(self, channel: str, payload: str) -> None:
         self.published.append((channel, payload))
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        self.zsets.setdefault(key, {}).update(mapping)
+        return len(mapping)
+
+    async def zrem(self, key: str, *members: str) -> int:
+        zset = self.zsets.get(key, {})
+        removed = 0
+        for member in members:
+            if member in zset:
+                del zset[member]
+                removed += 1
+        return removed
+
+    async def zremrangebyscore(self, key: str, low: float | str, high: float | str) -> int:
+        zset = self.zsets.get(key, {})
+        low_v = float("-inf") if low == "-inf" else float(low)
+        high_v = float("inf") if high == "+inf" else float(high)
+        stale = [m for m, score in zset.items() if low_v <= score <= high_v]
+        for member in stale:
+            del zset[member]
+        return len(stale)
+
+    async def zrange(self, key: str, start: int, end: int) -> list[str]:
+        ordered = sorted(self.zsets.get(key, {}).items(), key=lambda kv: kv[1])
+        members = [m for m, _ in ordered]
+        return members if end == -1 else members[start : end + 1]
 
 
 def _add_connection(manager: WebSocketManager, project_id: str, conn_id: str) -> FakeWebSocket:
@@ -546,3 +574,68 @@ async def test_an_ordinary_client_message_still_broadcasts() -> None:
     chats = [json.loads(t) for t in peer.sent if json.loads(t).get("type") == "chat"]
     assert len(chats) == 1
     assert chats[0]["sender_id"] == "alice"
+
+
+class FakeRedisWithSets(FakeRedis):
+    """Alias kept for readability where the presence sets are the point."""
+
+
+class TestPresenceIsGlobal:
+    """Presence spans instances: room membership lives in Redis.
+
+    Each process only knows its own sockets, so per-instance presence showed
+    a partial room the moment a second instance served the same dataset. The
+    membership is now a per-room sorted set scored by heartbeat, shared by
+    every instance and aged out for a process that stops refreshing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_user_on_another_instance_is_present(self) -> None:
+        redis = FakeRedisWithSets()
+        instance_a = WebSocketManager()
+        instance_a._redis = redis  # type: ignore[assignment]
+        instance_b = WebSocketManager()
+        instance_b._redis = redis  # type: ignore[assignment]
+
+        ws = FakeWebSocket()
+        await instance_a.join_room("proj-1", "conn-a", ws, "user-a", "Alice")
+
+        presence = await instance_b.get_presence("proj-1")
+        assert [p["user_name"] for p in presence] == ["Alice"]
+
+    @pytest.mark.asyncio
+    async def test_a_crashed_instances_users_age_out(self) -> None:
+        redis = FakeRedisWithSets()
+        manager = WebSocketManager()
+        manager._redis = redis  # type: ignore[assignment]
+
+        ws = FakeWebSocket()
+        await manager.join_room("proj-1", "conn-a", ws, "user-a", "Alice")
+        # Simulate the writing instance dying: its entry stops being
+        # refreshed. Age the score past the cutoff by hand.
+        key = next(iter(redis.zsets))
+        for member in redis.zsets[key]:
+            redis.zsets[key][member] = 0.0
+
+        assert await manager.get_presence("proj-1") == []
+
+    @pytest.mark.asyncio
+    async def test_without_redis_presence_is_the_local_room(self) -> None:
+        manager = WebSocketManager()
+        ws = FakeWebSocket()
+        await manager.join_room("proj-1", "conn-a", ws, "user-a", "Alice")
+
+        presence = await manager.get_presence("proj-1")
+        assert [p["user_name"] for p in presence] == ["Alice"]
+
+    @pytest.mark.asyncio
+    async def test_leaving_removes_the_member_everywhere(self) -> None:
+        redis = FakeRedisWithSets()
+        manager = WebSocketManager()
+        manager._redis = redis  # type: ignore[assignment]
+
+        ws = FakeWebSocket()
+        await manager.join_room("proj-1", "conn-a", ws, "user-a", "Alice")
+        await manager.leave_room("proj-1", "conn-a")
+
+        assert await manager.get_presence("proj-1") == []

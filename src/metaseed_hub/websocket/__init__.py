@@ -54,6 +54,13 @@ class Room:
 
 
 SERVER_MESSAGE_TYPES: frozenset[str] = frozenset({"presence"})
+
+#: How often each instance re-stamps its connections into the shared presence
+#: set. An entry older than three beats is a process that stopped refreshing —
+#: crashed or partitioned — and its users age out of presence without any
+#: cleanup handshake.
+PRESENCE_HEARTBEAT_SECONDS = 30
+PRESENCE_STALE_AFTER_SECONDS = PRESENCE_HEARTBEAT_SECONDS * 3
 """Message types only the server may originate.
 
 ``presence`` frames are how clients learn who is in the room; a client frame
@@ -64,13 +71,14 @@ dropped before broadcast rather than trusted because they arrived on a socket.
 
 
 class WebSocketManager:
-    """Manages WebSocket connections, with Redis pub/sub fanning out messages.
+    """Manages WebSocket connections, with Redis carrying the shared state.
 
-    Scaling caveat stated deliberately: MESSAGES cross instances via pub/sub,
-    but PRESENCE lists are per-instance (each process only knows its own
-    connections), so a multi-instance deployment shows partial presence.
-    Today's deployment is single-instance; making presence global would move
-    the rooms' membership into Redis, which is recorded as backlog.
+    MESSAGES cross instances via pub/sub. PRESENCE is a per-room Redis sorted
+    set scored by a heartbeat timestamp: every instance stamps its own
+    connections in, reads the whole set back, and a process that stops
+    refreshing ages out after three missed beats. Without Redis (single
+    process), presence falls back to the local connection list, which is then
+    also the whole truth.
     """
 
     # Blocking read timeout for the listener's get_message call. The listener
@@ -86,6 +94,7 @@ class WebSocketManager:
         self._redis: redis.Redis | None = None
         self._pubsub: redis.client.PubSub | None = None
         self._listener_task: asyncio.Task[None] | None = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
         # Serializes access to the shared PubSub connection. The listener's
         # get_message read and the per-room subscribe/unsubscribe writes run on
         # the same connection; without this lock they interleave and corrupt the
@@ -103,6 +112,7 @@ class WebSocketManager:
         self._redis = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         self._pubsub = self._redis.pubsub()
         self._listener_task = asyncio.create_task(self._listen())
+        self._heartbeat_task = asyncio.create_task(self._presence_heartbeat())
 
     async def _listen(self) -> None:
         """Consume published messages and deliver them to local connections.
@@ -183,6 +193,12 @@ class WebSocketManager:
 
     async def disconnect_redis(self) -> None:
         """Disconnect from Redis."""
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try:
+                await self._heartbeat_task
+            except asyncio.CancelledError:
+                pass
         if self._listener_task:
             self._listener_task.cancel()
             try:
@@ -193,6 +209,83 @@ class WebSocketManager:
             await self._pubsub.aclose()  # type: ignore[no-untyped-call]
         if self._redis:
             await self._redis.aclose()
+
+    def _presence_key(self, project_id: str) -> str:
+        """Redis key of the room's shared presence set."""
+        return f"project:{project_id}:presence"
+
+    @staticmethod
+    def _presence_member(connection_id: str, connection: Connection) -> str:
+        """The stable JSON identity of one connection in the shared set.
+
+        ``sort_keys`` matters: the heartbeat re-adds the SAME member with a
+        fresh score, and member equality is byte equality.
+        """
+        return json.dumps(
+            {
+                "connection_id": connection_id,
+                "user_id": connection.user_id,
+                "user_name": connection.user_name,
+                "connected_at": connection.connected_at.isoformat(),
+            },
+            sort_keys=True,
+        )
+
+    async def get_presence(self, project_id: str) -> list[dict[str, Any]]:
+        """Everyone in the room, across every instance.
+
+        Reads the shared sorted set after dropping entries older than three
+        heartbeats. Without Redis the local room is the whole truth.
+        """
+        if self._redis is None:
+            room = self._rooms.get(project_id)
+            return room.get_presence() if room else []
+
+        key = self._presence_key(project_id)
+        now = datetime.now(UTC).timestamp()
+        await self._redis.zremrangebyscore(key, "-inf", now - PRESENCE_STALE_AFTER_SECONDS)
+        members = await self._redis.zrange(key, 0, -1)
+        presence = []
+        for raw in members:
+            try:
+                entry = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            presence.append(
+                {
+                    "user_id": entry.get("user_id"),
+                    "user_name": entry.get("user_name"),
+                    "connected_at": entry.get("connected_at"),
+                }
+            )
+        return presence
+
+    async def _stamp_presence(self, project_id: str, room: Room) -> None:
+        """Write this instance's connections into the shared set, fresh-scored."""
+        if self._redis is None or not room.connections:
+            return
+        now = datetime.now(UTC).timestamp()
+        mapping = {
+            self._presence_member(connection_id, connection): now
+            for connection_id, connection in room.connections.items()
+        }
+        await self._redis.zadd(self._presence_key(project_id), mapping)
+
+    async def _presence_heartbeat(self) -> None:
+        """Re-stamp every local connection so this instance's entries stay live.
+
+        Runs until cancelled; an instance that dies simply stops, and its
+        entries age out at the read side.
+        """
+        while True:
+            try:
+                await asyncio.sleep(PRESENCE_HEARTBEAT_SECONDS)
+                for project_id, room in list(self._rooms.items()):
+                    await self._stamp_presence(project_id, room)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Presence heartbeat error")
 
     def _get_or_create_room(self, project_id: str) -> Room:
         """Get or create a room for a project."""
@@ -231,6 +324,15 @@ class WebSocketManager:
         )
         room.add_connection(connection_id, connection)
 
+        # Into the SHARED set before the broadcast, so the presence payload
+        # every instance renders already includes the newcomer.
+        if self._redis is not None:
+            now = datetime.now(UTC).timestamp()
+            await self._redis.zadd(
+                self._presence_key(project_id),
+                {self._presence_member(connection_id, connection): now},
+            )
+
         # Subscribe to Redis channel for this project
         if self._pubsub:
             channel = self._get_channel_name(project_id)
@@ -245,7 +347,7 @@ class WebSocketManager:
                 "action": "join",
                 "user_id": user_id,
                 "user_name": user_name,
-                "presence": room.get_presence(),
+                "presence": await self.get_presence(project_id),
             },
         )
 
@@ -263,6 +365,12 @@ class WebSocketManager:
         connection = room.remove_connection(connection_id)
 
         if connection:
+            # Out of the SHARED set before the broadcast, mirroring join.
+            if self._redis is not None:
+                await self._redis.zrem(
+                    self._presence_key(project_id),
+                    self._presence_member(connection_id, connection),
+                )
             # Broadcast presence update
             await self.broadcast_to_room(
                 project_id,
@@ -271,7 +379,7 @@ class WebSocketManager:
                     "action": "leave",
                     "user_id": connection.user_id,
                     "user_name": connection.user_name,
-                    "presence": room.get_presence(),
+                    "presence": await self.get_presence(project_id),
                 },
             )
 

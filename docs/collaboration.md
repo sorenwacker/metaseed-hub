@@ -40,3 +40,14 @@ The **Comments** tab provides threaded discussion on a dataset.
 - Delete a comment you authored.
 
 Specification drafts have their own **Comments** tab that works the same way.
+
+## Presence
+
+Who is in a dataset room is kept in Redis, not per process: each instance
+writes its own connections into a per-room sorted set scored by a heartbeat
+timestamp, and reads the whole set back when presence is rendered. An
+instance that dies stops refreshing its entries, and they age out after
+three missed heartbeats — so a crashed process's users disappear from
+presence without any cleanup handshake. Without Redis (single-process
+development), presence falls back to the process's own connection list,
+which is then also the whole truth.
