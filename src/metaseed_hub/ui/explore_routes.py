@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
 from metaseed.specs.merge import DiffVisualizer, SpecComparator
 from metaseed.specs.schema import ProfileSpec
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
@@ -70,7 +70,11 @@ class HubSpecLoader(SpecLoader):  # type: ignore[misc]
 
 
 async def load_profile_spec(
-    session: AsyncSession, profile_key: str, version: str, tenant_id: str | None
+    session: AsyncSession,
+    profile_key: str,
+    version: str,
+    tenant_id: str | None,
+    user_id: str | None = None,
 ) -> tuple[str, ProfileSpec] | None:
     """Load a profile spec from built-in or database.
 
@@ -92,14 +96,26 @@ async def load_profile_spec(
     from metaseed_hub.models import Spec, SpecDraft, SpecStatus
 
     if profile_key.startswith("draft:"):
-        if tenant_id is None:
+        if tenant_id is None and user_id is None:
             return None
         draft_id = profile_key[6:]
-        result = await session.execute(
-            select(SpecDraft).where(
-                SpecDraft.id == draft_id,
-                SpecDraft.tenant_id == tenant_id,
+        # The caller's own tenant, OR a draft shared with them: the catalog
+        # offers drafts via SpecDraftMember across tenants, and offering a
+        # draft the loader then refuses left the picker lying.
+        from metaseed_hub.models import SpecDraftMember
+
+        conditions = []
+        if tenant_id is not None:
+            conditions.append(SpecDraft.tenant_id == tenant_id)
+        if user_id is not None:
+            member = (
+                select(SpecDraftMember.spec_draft_id)
+                .where(SpecDraftMember.user_id == user_id)
+                .scalar_subquery()
             )
+            conditions.append(SpecDraft.id.in_(member))
+        result = await session.execute(
+            select(SpecDraft).where(SpecDraft.id == draft_id, or_(*conditions))
         )
         draft = result.scalar_one_or_none()
         if draft and draft.spec_data:
@@ -141,6 +157,7 @@ async def load_profiles_for_comparison(
     session: AsyncSession,
     profile_specs: list[str],
     tenant_id: str | None,
+    user_id: str | None = None,
 ) -> tuple[dict[str, ProfileSpec], list[tuple[str, str]]]:
     """Load profiles from various sources for comparison.
 
@@ -166,11 +183,22 @@ async def load_profiles_for_comparison(
             profile_tuples.append((profile_key, version))
 
             if profile_key.startswith("draft:") or profile_key.startswith("spec:"):
-                loaded = await load_profile_spec(session, profile_key, version, tenant_id)
+                loaded = await load_profile_spec(
+                    session, profile_key, version, tenant_id, user_id=user_id
+                )
                 if loaded:
                     db_specs[f"{profile_key}/{version}"] = loaded[1]
 
     return db_specs, profile_tuples
+
+
+async def _db_user_id_of(session: AsyncSession, user: Any) -> str | None:
+    """The database User.id behind a session user, or None before onboarding."""
+    from metaseed_hub.models import User
+
+    result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
+    db_user = result.scalar_one_or_none()
+    return db_user.id if db_user else None
 
 
 async def _build_explore_catalog(
@@ -355,7 +383,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
 
         tenant = await get_tenant_for_user(session, user)
         db_specs, profile_tuples = await load_profiles_for_comparison(
-            session, [str(s) for s in profile_specs], tenant.id if tenant else None
+            session,
+            [str(s) for s in profile_specs],
+            tenant.id if tenant else None,
+            user_id=await _db_user_id_of(session, user),
         )
 
         if len(profile_tuples) < 1:
@@ -413,7 +444,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
 
         tenant = await get_tenant_for_user(session, user)
         db_specs, profile_tuples = await load_profiles_for_comparison(
-            session, profile_specs, tenant.id if tenant else None
+            session,
+            profile_specs,
+            tenant.id if tenant else None,
+            user_id=await _db_user_id_of(session, user),
         )
 
         try:

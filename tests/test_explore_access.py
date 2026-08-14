@@ -177,3 +177,36 @@ async def test_no_tenant_blocks_database_specs(session: AsyncSession) -> None:
     loaded = await load_profile_spec(session, f"draft:{draft.id}", "1.0", None)
 
     assert loaded is None
+
+
+@pytest.mark.asyncio
+async def test_a_shared_draft_loads_for_its_member(session: AsyncSession) -> None:
+    """The catalog offers drafts shared via SpecDraftMember; loading must too.
+
+    _build_explore_catalog lists drafts the user is a member of across
+    tenants, but load_profile_spec accepted only the caller's own tenant —
+    so a shared draft appeared in the picker and then refused to compare.
+    """
+    from metaseed_hub.models import SpecDraftMember, SpecDraftRole
+
+    owner_tenant = make_tenant(slug="shr00001")
+    member_tenant = make_tenant(slug="shr00002")
+    session.add_all([owner_tenant, member_tenant])
+    await session.flush()
+    owner = make_user(tenant=owner_tenant)
+    member = make_user(tenant=member_tenant, email="member@example.org")
+    session.add_all([owner, member])
+    await session.flush()
+    draft = make_spec_draft(tenant=owner_tenant, user=owner, spec_data=_spec_data())
+    session.add(draft)
+    await session.flush()
+    session.add(
+        SpecDraftMember(spec_draft_id=draft.id, user_id=member.id, role=SpecDraftRole.VIEWER)
+    )
+    await session.commit()
+
+    loaded = await load_profile_spec(
+        session, f"draft:{draft.id}", "1.0", member_tenant.id, user_id=member.id
+    )
+
+    assert loaded is not None
