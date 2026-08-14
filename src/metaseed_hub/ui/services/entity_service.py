@@ -13,21 +13,19 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from metaseed import MetaseedClient, ProfileNotFoundError
+from metaseed import MetaseedClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from metaseed_hub.auth import TokenUser
 
-from metaseed_hub.models import Dataset, Spec, SpecDraft
+from metaseed_hub.models import Dataset
 from metaseed_hub.ui.helpers import save_dataset_state
 
 from .exceptions import (
-    DatasetDataLoadError,
     EntityServiceError,
     EntityTypeNotFoundError,
     FacadeLoadError,
-    SpecNotFoundError,
 )
 
 logger = logging.getLogger("metaseed_hub")
@@ -115,181 +113,25 @@ class EntityService:
             FacadeLoadError: If client creation fails for any reason.
             DatasetDataLoadError: If stored entity data cannot be deserialized.
         """
-        from metaseed_hub.ui.metaseed_ui import AppState
+        from metaseed.api.client import MetaseedClient
+
+        from metaseed_hub.ui.helpers.dataset_state import (
+            ensure_dataset_facade_for_write,
+        )
 
         if self._state is not None:
             return self._state
 
-        # Create state and configure profile/version
-        state = AppState()
-        state.profile = self._dataset.profile
-        state.version = self._dataset.version
-
-        # Load client (from draft spec, published spec, or built-in profile)
-        if self._dataset.spec_draft_id:
-            await self._load_client_for_draft_spec()
-        elif self._dataset.spec_id:
-            await self._load_client_for_published_spec()
-        else:
-            self._load_builtin_client()
-
-        # Inject facade into state for compatibility with existing code
-        if self._client:
-            state.facade = self._client.facade
-
-        # Deserialize existing tree data using client.load()
-        if self._dataset.data:
-            self._load_tree_data(self._dataset.data)
-            # Invalidate AppState cache to rebuild from client
-            state.invalidate_cache()
-
+        # THE single load path (its docstring's words), write-flavoured: every
+        # entity route mutates and then saves, so an unplaceable stored node
+        # gets the same 409 refusal every cell edit gets, instead of this
+        # service's former strict load failing with a different error. The
+        # duplicated draft/published/builtin resolution and envelope
+        # unwrapping lived here too, and fixes had to land twice.
+        state = await ensure_dataset_facade_for_write(self._dataset, self._session)
+        self._client = MetaseedClient.from_facade(state.facade)
         self._state = state
         return state
-
-    def _load_builtin_client(self) -> None:
-        """Load MetaseedClient for a built-in profile.
-
-        Raises:
-            FacadeLoadError: If profile not found or client creation fails.
-        """
-        try:
-            self._client = MetaseedClient(
-                self._dataset.profile,
-                self._dataset.version,
-            )
-            logger.debug(f"Loaded built-in profile: {self._dataset.profile}")
-        except ProfileNotFoundError as e:
-            raise FacadeLoadError(
-                f"Profile not found: {e}",
-                user_message=f"Could not load profile '{self._dataset.profile}'. "
-                "Please check that this profile exists.",
-            ) from e
-        except Exception as e:
-            raise FacadeLoadError(
-                f"Failed to create client: {e}",
-                user_message=f"Could not load profile '{self._dataset.profile}': {e}",
-            ) from e
-
-    async def _load_client_for_draft_spec(self) -> None:
-        """Load MetaseedClient from database spec draft.
-
-        Uses MetaseedClient.from_spec() for clean API access.
-
-        Raises:
-            SpecNotFoundError: If spec draft cannot be found or has no data.
-            FacadeLoadError: If spec validation or client creation fails.
-        """
-        spec_draft = await self._session.get(SpecDraft, self._dataset.spec_draft_id)
-
-        if spec_draft is None:
-            raise SpecNotFoundError(
-                f"Spec draft {self._dataset.spec_draft_id} not found",
-                user_message="The specification for this dataset could not be found. "
-                "It may have been deleted.",
-            )
-
-        if not spec_draft.spec_data:
-            raise SpecNotFoundError(
-                f"Spec draft {self._dataset.spec_draft_id} has no spec_data",
-                user_message="The specification for this dataset is empty. "
-                "Please update the specification before adding entities.",
-            )
-
-        # Extract spec data (may be nested under "spec" key for SpecBuilderState format)
-        raw_data = spec_draft.spec_data
-        if isinstance(raw_data, dict) and "spec" in raw_data:
-            raw_data = raw_data["spec"]
-
-        try:
-            self._client = MetaseedClient.from_spec(raw_data)
-            logger.debug(f"Loaded draft spec for dataset {self._dataset.id}")
-        except Exception as e:
-            logger.error(f"Failed to create client from draft spec: {e}")
-            raise FacadeLoadError(
-                f"Failed to create client: {e}",
-                user_message="Could not initialize the profile. "
-                "Please check the specification is complete.",
-            ) from e
-
-    async def _load_client_for_published_spec(self) -> None:
-        """Load MetaseedClient from a published spec.
-
-        Datasets created from a published specification reference it via
-        spec_id. The spec row is loaded even if the spec has since been
-        withdrawn: the foreign key is SET NULL rather than CASCADE, so an
-        existing row always describes the schema the dataset was built
-        against. Mirrors ensure_dataset_facade in ui/helpers/dataset_state.py.
-
-        Raises:
-            SpecNotFoundError: If the published spec cannot be found or has no data.
-            FacadeLoadError: If spec validation or client creation fails.
-        """
-        published = await self._session.get(Spec, self._dataset.spec_id)
-
-        if published is None:
-            raise SpecNotFoundError(
-                f"Published spec {self._dataset.spec_id} not found",
-                user_message="The specification for this dataset could not be found. "
-                "It may have been deleted.",
-            )
-
-        if not published.spec_data:
-            raise SpecNotFoundError(
-                f"Published spec {self._dataset.spec_id} has no spec_data",
-                user_message="The specification for this dataset is empty. "
-                "Please update the specification before adding entities.",
-            )
-
-        # Extract spec data (may be nested under "spec" key for SpecBuilderState format)
-        raw_data = published.spec_data
-        if isinstance(raw_data, dict) and "spec" in raw_data:
-            raw_data = raw_data["spec"]
-
-        try:
-            self._client = MetaseedClient.from_spec(raw_data)
-            logger.debug(f"Loaded published spec for dataset {self._dataset.id}")
-        except Exception as e:
-            logger.error(f"Failed to create client from published spec: {e}")
-            raise FacadeLoadError(
-                f"Failed to create client: {e}",
-                user_message="Could not initialize the profile. "
-                "Please check the specification is complete.",
-            ) from e
-
-    def _load_tree_data(self, data: dict[str, Any]) -> None:
-        """Load tree data into client using public API.
-
-        Uses client.load() which auto-detects tree vs flat format.
-
-        Args:
-            data: Dictionary loaded from database JSONB.
-
-        Raises:
-            DatasetDataLoadError: If the client is missing or the stored data
-                cannot be deserialized. Failures must propagate: treating them
-                as an empty dataset would let the next save overwrite the
-                stored entity tree.
-        """
-        if not data:
-            return
-
-        if self._client is None:
-            raise DatasetDataLoadError(
-                "Cannot load tree: client is None",
-                user_message="Internal error: client not initialized.",
-            )
-
-        try:
-            # client.load() auto-detects tree vs flat format
-            count = self._client.load(data)
-            logger.debug(f"Loaded {count} entities from database")
-        except Exception as e:
-            logger.error(f"Failed to load tree data: {e}")
-            raise DatasetDataLoadError(
-                f"Failed to load tree data: {e}",
-                user_message="The stored entities for this dataset could not be loaded. "
-                "Editing is disabled to protect the stored data.",
-            ) from e
 
     def get_helper(self, entity_type: str) -> Any:
         """Get the helper for an entity type.

@@ -56,6 +56,7 @@ async def ensure_dataset_facade(
     dataset: Dataset,
     session: AsyncSession,
     on_skip: "Callable[[SkippedNode], None] | None" = None,
+    require_client: bool = False,
 ) -> AppState:
     """Load a dataset into an AppState whose facade holds the stored entities.
 
@@ -155,7 +156,13 @@ async def ensure_dataset_facade(
     # A failure here must raise, not fall through to an empty state: mutation
     # routes save the facade's contents, so an empty state would overwrite the
     # stored entity tree on the next save.
-    if _has_stored_entities(dataset.data):
+    # ``require_client``: a WRITER cannot operate facade-less — it would have
+    # nothing to create entities against — while a viewer may open the dataset
+    # to be told why it is broken. The client demand extends to writers of
+    # EMPTY datasets too; the entity load below stays gated on stored
+    # entities, since a metadata-only payload holds nothing to load.
+    holds_entities = _has_stored_entities(dataset.data)
+    if holds_entities or require_client:
         from metaseed_hub.ui.services.exceptions import DatasetDataLoadError
 
         if client is None:
@@ -168,6 +175,9 @@ async def ensure_dataset_facade(
                     "Editing is disabled to protect the stored data."
                 ),
             )
+
+    if holds_entities:
+        assert client is not None  # guaranteed by the refusal above
 
         def report(skip: "SkippedNode") -> None:
             """Log a dropped node, then hand it to the caller if one is listening."""
@@ -225,7 +235,9 @@ async def ensure_dataset_facade_for_write(dataset: Dataset, session: AsyncSessio
     )
 
     skipped: list[SkippedNode] = []
-    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
+    state = await ensure_dataset_facade(
+        dataset, session, on_skip=skipped.append, require_client=True
+    )
     if skipped:
         raise HTTPException(
             status_code=409,

@@ -22,8 +22,6 @@ from metaseed_hub.models import (
 from metaseed_hub.ui.services import (
     DatasetDataLoadError,
     EntityService,
-    FacadeLoadError,
-    SpecNotFoundError,
 )
 
 INVESTIGATION_SPEC_DATA = {
@@ -212,7 +210,7 @@ class TestEntityServiceWithDraftSpec:
         service = EntityService(session, dataset)
 
         # This should fail since profile "temp" doesn't exist as built-in
-        with pytest.raises((SpecNotFoundError, FacadeLoadError)):
+        with pytest.raises(DatasetDataLoadError):
             await service.ensure_state()
 
     @pytest.mark.asyncio
@@ -255,10 +253,10 @@ class TestEntityServiceWithDraftSpec:
 
         service = EntityService(session, dataset)
 
-        with pytest.raises(SpecNotFoundError) as exc_info:
+        with pytest.raises(DatasetDataLoadError) as exc_info:
             await service.ensure_state()
 
-        assert "empty" in exc_info.value.user_message.lower()
+        assert "holds no spec data" in exc_info.value.user_message.lower()
 
     @pytest.mark.asyncio
     async def test_invalid_spec_structure_returns_clear_error(self, session: AsyncSession) -> None:
@@ -305,11 +303,11 @@ class TestEntityServiceWithDraftSpec:
 
         service = EntityService(session, dataset)
 
-        with pytest.raises(FacadeLoadError) as exc_info:
+        with pytest.raises(DatasetDataLoadError) as exc_info:
             await service.ensure_state()
 
         # Error message mentions profile initialization failure
-        assert "could not initialize" in exc_info.value.user_message.lower()
+        assert "could not be loaded" in exc_info.value.user_message.lower()
 
     @pytest.mark.asyncio
     async def test_unknown_entity_type_returns_clear_error(self, session: AsyncSession) -> None:
@@ -717,10 +715,10 @@ class TestEntityServiceWithPublishedSpec:
 
         service = EntityService(session, dataset)
 
-        with pytest.raises(SpecNotFoundError) as exc_info:
+        with pytest.raises(DatasetDataLoadError) as exc_info:
             await service.ensure_state()
 
-        assert "could not be found" in exc_info.value.user_message.lower()
+        assert "could not be loaded" in exc_info.value.user_message.lower()
 
     @pytest.mark.asyncio
     async def test_empty_published_spec_data_returns_clear_error(
@@ -731,10 +729,10 @@ class TestEntityServiceWithPublishedSpec:
 
         service = EntityService(session, dataset)
 
-        with pytest.raises(SpecNotFoundError) as exc_info:
+        with pytest.raises(DatasetDataLoadError) as exc_info:
             await service.ensure_state()
 
-        assert "empty" in exc_info.value.user_message.lower()
+        assert "holds no spec data" in exc_info.value.user_message.lower()
 
 
 class TestEntityServiceTreeLoadFailure:
@@ -893,3 +891,49 @@ class TestEntityServiceSaveDelegation:
         assert calls[0][0] is session
         assert calls[0][1] is dataset
         assert calls[0][2] is service.state
+
+
+class TestEntityServiceUsesTheSingleLoadPath:
+    """ensure_state delegates to the canonical write-path load.
+
+    EntityService reimplemented ensure_dataset_facade — same spec resolution,
+    same envelope unwrapping, fixes landing twice — and loaded STRICTLY, so a
+    dataset with one unplaceable stored node opened in the editor (permissive
+    path) but failed every entity route with a different error. One load
+    path now: mutating routes get the same 409 refusal every cell edit gets.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unloadable_node_is_the_same_409_every_writer_gets(
+        self, session: AsyncSession
+    ) -> None:
+        from fastapi import HTTPException
+
+        from tests.factories import make_dataset, make_tenant
+
+        tenant = make_tenant(slug="esload01")
+        session.add(tenant)
+        await session.flush()
+        dataset = make_dataset(tenant=tenant, name="lossy")
+        dataset.profile = "miappe"
+        dataset.version = "1.1"
+        dataset.data = {
+            "profile": "miappe",
+            "version": "1.1",
+            "tree": [
+                {
+                    "id": "gone-1",
+                    "entity_type": "Bogus",
+                    "label": "older spec",
+                    "data": {"identifier": "B-1"},
+                    "children": [],
+                },
+            ],
+        }
+        session.add(dataset)
+        await session.commit()
+
+        service = EntityService(session, dataset)
+        with pytest.raises(HTTPException) as excinfo:
+            await service.ensure_state()
+        assert excinfo.value.status_code == 409
