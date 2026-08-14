@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- A published-spec name collision across tenants resolves to the caller's own
+  tenant, then the oldest publication — `.first()` on an unordered query
+  handed back whichever row the database returned.
+- The explore picker only offers what the loader will accept: a draft shared
+  via `SpecDraftMember` now loads for its member instead of being offered and
+  then refused.
+- An import row whose `_parent` matches nothing is reported instead of being
+  silently re-rooted.
+- A new table row carries only its identity and its parent reference; the
+  fabricated placeholders ("New Title", 0, False) that persisted with
+  validation skipped are gone, and an unknown field name can no longer 500
+  the row editor.
+- A rule can apply to several entities over MCP (`applies_to` accepts a list,
+  as the spec schema always has).
+- Cloning a template is a POST — a state-changing GET minted drafts for
+  crawlers and prefetchers — and the spec YAML upload is bounded at 2 MB.
+- Both previously unrunnable alembic downgrades run: every constraint the
+  migrations touch is named (gated by a scan test), and the tenant_id
+  restoration backfills from the owning workspace before adding NOT NULL.
+- Docstrings state what the code does: `can_edit_spec` (author or shared edit
+  role), the websocket manager (messages scale via pub/sub, presence is
+  per-instance), and PAT sessions (no roles, no entitlements — by
+  construction). The ontology demo spec uses the `ontologies` key the picker
+  actually filters on.
+
+### Removed
+- Dead helpers kept alive only by their own tests: `_db_user_id` and
+  `require_draft_owner` (`require_owner_role` is the live mechanism).
+
 ## [0.34.0] - 260813
 
 ### Fixed
