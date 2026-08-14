@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- A dataset page is harvestable (metaseed#30): it embeds the dataset's DCAT
+  record as JSON-LD, the dataset URL answers content negotiation
+  (`Accept: application/ld+json` / `text/turtle` returns the record itself),
+  and responses carry a `rel="describedby"` Link — the signals FAIR
+  assessors read. Reachability follows the deployment's authentication.
+
 ### Removed
 - The FeatureGrant mechanism. It gated the SEEK panel and settings, the DCAT
   column in the spec builder, and the whole adapter export menu behind

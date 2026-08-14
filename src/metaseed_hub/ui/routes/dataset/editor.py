@@ -79,6 +79,25 @@ async def _build_dataset_context(
     }
 
 
+def _dcat_documents(state: Any, identifier: str) -> dict[str, str] | None:
+    """The dataset's DCAT card as {"dcat.jsonld": ..., "dcat.ttl": ...}.
+
+    Harvesters read metadata from the landing page (embedded JSON-LD,
+    content negotiation), never from a downloadable file — so the page and
+    the negotiated representations serve the same card the export writes.
+    None when the dataset derives no card (no entities).
+    """
+    from metaseed import MetaseedClient
+    from metaseed.dcat.export import to_dcat
+
+    client = MetaseedClient.from_facade(state.get_or_create_facade())
+    try:
+        return to_dcat(client, identifier=identifier) or None
+    except Exception:  # a card failure must not take the page down
+        logger.exception("DCAT card for %s failed", identifier)
+        return None
+
+
 @router.get("/{dataset_id}", response_class=HTMLResponse)
 async def dataset_editor(
     request: Request,
@@ -86,7 +105,13 @@ async def dataset_editor(
     session: DbSession,
     user: CurrentUser,
 ) -> Response:
-    """Dataset editor - wraps metaseed UI with hub chrome."""
+    """Dataset editor - wraps metaseed UI with hub chrome.
+
+    Also the dataset's DCAT surface: ``Accept: application/ld+json`` or
+    ``text/turtle`` answers the catalog record itself, the HTML page embeds
+    the same record as JSON-LD, and every response carries a
+    ``rel="describedby"`` Link — the three signals FAIR harvesters read.
+    """
     # Verify user has access to this dataset
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
@@ -105,6 +130,24 @@ async def dataset_editor(
     try:
         ctx = await _build_dataset_context(dataset, session)
         root_types = ctx["state"].get_root_entity_types()
+        dcat_documents = _dcat_documents(ctx["state"], dataset.name)
+
+        # Content negotiation: a harvester asking for RDF gets the record
+        # itself, not an HTML page it cannot read.
+        accept = request.headers.get("accept", "")
+        describedby = f'<{request.url.path}>; rel="describedby"; type="application/ld+json"'
+        if dcat_documents and "application/ld+json" in accept:
+            return Response(
+                content=dcat_documents["dcat.jsonld"],
+                media_type="application/ld+json",
+                headers={"Link": describedby},
+            )
+        if dcat_documents and "text/turtle" in accept:
+            return Response(
+                content=dcat_documents["dcat.ttl"],
+                media_type="text/turtle",
+                headers={"Link": describedby},
+            )
     except Exception as e:
         # Profile doesn't exist or is invalid - show error page
         logger.warning(f"Failed to load dataset {dataset_id}: {e}")
@@ -128,7 +171,7 @@ async def dataset_editor(
             },
         )
 
-    return render_template(
+    response = render_template(
         request=request,
         name="dataset.html",
         context={
@@ -149,8 +192,11 @@ async def dataset_editor(
                 _source_import_option(dataset.profile) if not ctx["tree_data"] else None
             ),
             "nav_active": "home",
+            "dcat_jsonld": dcat_documents["dcat.jsonld"] if dcat_documents else None,
         },
     )
+    response.headers["Link"] = describedby
+    return response
 
 
 @router.get("/{dataset_id}/tree", response_class=HTMLResponse)

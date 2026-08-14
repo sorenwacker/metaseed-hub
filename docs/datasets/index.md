@@ -45,3 +45,13 @@ See:
 ## Deleting a dataset
 
 Click **Delete** (the red button) in the dataset sidebar and confirm. A deleted dataset is removed from your list and excluded from all queries. Deletion is a soft delete: see [Versions and history](versions.md#soft-delete) for what this means.
+
+## FAIR exposure
+
+A dataset page is also its catalog record. The page embeds the dataset's
+DCAT description as JSON-LD, the dataset URL answers content negotiation
+(`Accept: application/ld+json` or `text/turtle` returns the record itself),
+and every response carries a `Link: rel="describedby"` header — the three
+signals FAIR harvesters such as F-UJI read. Reachability follows the
+deployment's authentication: harvesting needs whatever visibility the
+operator grants the dataset URL.
