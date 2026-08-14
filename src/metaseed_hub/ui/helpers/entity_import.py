@@ -75,6 +75,16 @@ def add_entities_in_order(
         for entity_data in entities_by_type.get(entity_type, []):
             try:
                 parent_key = str(entity_data.get("_parent") or "").strip()
+                parent_node_id = node_by_identifier.get(parent_key)
+                if parent_key and parent_node_id is None:
+                    # The child still imports (losing it would be worse), but
+                    # a _parent naming nothing must be said out loud: quietly
+                    # re-rooting the child changed the tree's shape while the
+                    # import reported success.
+                    errors.append(
+                        f"{entity_type}: _parent {parent_key!r} matches no "
+                        "imported entity; the row was imported at the root"
+                    )
                 clean_data = {
                     k: v
                     for k, v in entity_data.items()
@@ -85,7 +95,7 @@ def add_entities_in_order(
                         state,
                         entity_type,
                         clean_data,
-                        parent_id=node_by_identifier.get(parent_key),
+                        parent_id=parent_node_id,
                     )
                     imported += 1
                     # Only the declared identifier joins the parent map: any
