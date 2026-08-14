@@ -17,7 +17,6 @@ from sqlalchemy import (
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -64,39 +63,6 @@ class SeekConnection(TimestampMixin, Base):
     projects: Mapped[list[list[str]]] = mapped_column(
         JSONB, nullable=False, server_default="[]", default=list
     )
-
-
-class FeatureGrant(TimestampMixin, Base):
-    """A feature made available to everyone in one identity-provider group.
-
-    Group membership itself is never stored -- it comes from the IdP on every
-    login (see :mod:`metaseed_hub.entitlements`). This table holds only the
-    policy the IdP cannot express: which feature a group may use.
-
-    There is deliberately no user foreign key. A person is entitled because of a
-    group they are in, so "only me" is a group of one rather than a second
-    mechanism that would then need its own UI, tests and audit trail.
-
-    ``group_urn`` matches either a group or a whole collaboration, since
-    :func:`metaseed_hub.entitlements.entitled_urns` offers both for a user and
-    they are compared by plain equality.
-    """
-
-    __tablename__ = "feature_grants"
-    __table_args__ = (
-        # A grant is a fact, not a quantity: granting twice must not mean twice.
-        UniqueConstraint("feature", "group_urn", name="uq_feature_grants_feature_group"),
-        Index("ix_feature_grants_group_urn", "group_urn"),
-    )
-
-    id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        primary_key=True,
-        default=lambda: str(uuid4()),
-    )
-    feature: Mapped[str] = mapped_column(String(100), nullable=False)
-    group_urn: Mapped[str] = mapped_column(String(512), nullable=False)
-    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class ApiToken(Base):

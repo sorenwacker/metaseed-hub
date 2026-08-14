@@ -7,10 +7,8 @@ from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from metaseed import SkippedNode
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import (
     Dataset,
     DatasetMember,
@@ -142,14 +140,9 @@ async def dataset_editor(
             "root_types": root_types,
             "tree_data": ctx["tree_data"],
             "entity_descriptions": ctx["entity_descriptions"],
-            "features": (features := await user_feature_set(user, session)),
-            "seek_supported": (
-                "seek" in features and profile_supports_seek(dataset.profile, dataset.version)
-            ),
-            "connection": (
-                await connection_for_user(session, user) if "seek" in features else None
-            ),
-            "export_options": _adapter_export_options(dataset.profile, features),
+            "seek_supported": profile_supports_seek(dataset.profile, dataset.version),
+            "connection": await connection_for_user(session, user),
+            "export_options": _adapter_export_options(dataset.profile),
             # Offered only while the dataset is empty: the importer replaces the
             # whole tree, so it is a way to start, not a way to merge.
             "import_option": (
@@ -583,26 +576,19 @@ def _source_import_option(profile: str) -> dict[str, str] | None:
     }
 
 
-async def user_feature_set(user: TokenUser, session: AsyncSession) -> set[str]:
-    """The features this user's group memberships grant."""
-    from metaseed_hub.features import enabled_features
-
-    return await enabled_features(user.entitlements, session)
-
-
-def _adapter_export_options(profile: str, features: set[str]) -> list[dict[str, str]]:
+def _adapter_export_options(profile: str) -> list[dict[str, str]]:
     """[{key, label}] adapter exports offered for a profile, from the registry.
 
-    Filtered to the features the user holds: adapter keys and feature names are
-    the same six strings, so membership of a plugin's group is what makes its
-    export appear.
+    The registry is the whole answer: adapters are plugins available to every
+    signed-in user, like the metaseed UI offers them. The per-group
+    FeatureGrant filter that sat here hid EVERY export from every user,
+    because nothing ever wrote a grant row.
     """
     from metaseed import adapters
 
     return [
         {"key": action.key, "label": action.label}
         for action in adapters.actions_for_profile(profile, kind="export")
-        if action.key in features
     ]
 
 
@@ -638,14 +624,10 @@ async def dataset_export_adapter(
             detail=f"{fmt} export is not available for the {dataset.profile} profile.",
         )
 
-    # The buttons being filtered is cosmetic; this is the gate. 404 rather than
-    # 403, so an ungranted feature does not advertise its existence.
-    if fmt not in await user_feature_set(user, session):
-        raise HTTPException(status_code=404)
-
     state = await ensure_dataset_facade(dataset, session)
-    client = MetaseedClient.__new__(MetaseedClient)
-    client._facade = state.get_or_create_facade()
+    # from_facade, not __new__ plus a private attribute — the same fork the
+    # metaseed review retired from metaseed's own routes.
+    client = MetaseedClient.from_facade(state.get_or_create_facade())
 
     try:
         export_fn = action.resolve()

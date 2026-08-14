@@ -36,7 +36,7 @@ from metaseed_hub.models import SeekConnection
 from metaseed_hub.ui.dependencies import (
     DbSession,
     get_dataset_for_user,
-    require_feature,
+    require_user,
 )
 from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
 from metaseed_hub.ui.render import render_template
@@ -46,7 +46,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/seek", tags=["seek"])
 
-SeekUser = Annotated[TokenUser, Depends(require_feature("seek"))]
+# SEEK is an adapter: reachable to every signed-in user, usable only once
+# they configure their own SEEK connection (the API key IS the gate).
+SeekUser = Annotated[TokenUser, Depends(require_user)]
 
 
 def _client_for(connection: SeekConnection) -> Any:

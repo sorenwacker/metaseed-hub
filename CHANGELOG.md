@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- The FeatureGrant mechanism. It gated the SEEK panel and settings, the DCAT
+  column in the spec builder, and the whole adapter export menu behind
+  per-group grants — and no interface ever wrote a grant row, so everything
+  it guarded was hidden from every user since it shipped. Adapters (SEEK,
+  DCAT, ENA, …) are plugins available to every signed-in user, as metaseed's
+  registry offers them; SEEK's real gate is the per-user connection itself.
+  The `feature_grants` table is dropped (with an exact-mirror downgrade).
+
 ### Changed
 - Entity routes ride the single load path: `EntityService.ensure_state`
   delegates to `ensure_dataset_facade_for_write`, deleting its duplicated

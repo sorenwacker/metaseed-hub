@@ -1,7 +1,10 @@
-"""The hub SEEK plugin, gated behind the seek feature.
+"""The hub SEEK plugin, available to every signed-in user.
 
-The connection is edited on the profile page, beside the other per-user
-credentials; ``/hub/seek/settings`` redirects there. Requests that write are
+SEEK is an adapter like ENA and DCAT; the per-group FeatureGrant gate that
+hid it (from everyone — nothing ever wrote a grant row) is gone. The real
+gate is the connection itself: without a configured SEEK API key there is
+nothing to push with. The connection is edited on the profile page, beside
+the other per-user credentials; ``/hub/seek/settings`` redirects there. Requests that write are
 driven through ``ASGITransport`` rather than ``TestClient``, whose own event
 loop cannot share the fixture's connection pool.
 """
@@ -12,7 +15,6 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,39 +56,27 @@ async def dataset(session: AsyncSession):
     return ds
 
 
-def _signed_in(features: set[str]):
-    """Patch authentication and the feature set for one request."""
-    return (
-        patch(
-            "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
-            AsyncMock(return_value=_user()),
-        ),
-        patch(
-            "metaseed_hub.ui.routes.dataset.editor.user_feature_set",
-            AsyncMock(return_value=features),
-        ),
-        patch(
-            "metaseed_hub.features.enabled_features",
-            AsyncMock(return_value=features),
-        ),
+def _signed_in():
+    """Patch authentication for one request."""
+    return patch(
+        "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+        AsyncMock(return_value=_user()),
     )
 
 
-async def _get(path: str, features: set[str]) -> httpx.Response:
+async def _get(path: str) -> httpx.Response:
     app = create_app()
-    a, b, c = _signed_in(features)
-    with a, b, c:
+    with _signed_in():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             return await client.get(path)
 
 
-async def _save_settings(url: str, seek_behaviour, features: set[str] | None = None):
+async def _save_settings(url: str, seek_behaviour):
     """POST the connection form, with SEEK's client faked by ``seek_behaviour``."""
     app = create_app()
-    a, b, c = _signed_in(features or {"seek"})
-    with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+    with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
         seek_behaviour(factory)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -117,38 +107,27 @@ class TestCrypto:
 
 
 class TestTheFormLivesOnTheProfilePage:
-    async def test_the_seek_group_gets_the_section(self, dataset, app_db) -> None:
-        html = (await _get(PROFILE, {"seek"})).text
+    async def test_every_signed_in_user_gets_the_section(self, dataset, app_db) -> None:
+        html = (await _get(PROFILE)).text
         assert 'id="seek"' in html
         assert 'data-testid="seek-api-key"' in html
 
-    async def test_without_the_grant_there_is_no_section(self, dataset, app_db) -> None:
-        html = (await _get(PROFILE, set())).text
-        assert 'data-testid="seek-api-key"' not in html
-
     async def test_the_old_settings_url_leads_there(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/settings", {"seek"})
+        response = await _get("/hub/seek/settings")
         assert response.status_code == 302
         assert response.headers["location"] == f"{PROFILE}#seek"
 
     async def test_the_bare_seek_url_leads_there_too(self, dataset, app_db) -> None:
         """/hub/seek was a 404 that read as 'the feature is gone'."""
-        response = await _get("/hub/seek", {"seek"})
+        response = await _get("/hub/seek")
         assert response.status_code == 302
 
-    async def test_settings_is_404_without_the_feature(self, dataset, app_db) -> None:
-        assert (await _get("/hub/seek/settings", set())).status_code == 404
 
-
-class TestThePanelIsGated:
-    async def test_the_seek_group_sees_the_panel(self, dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+class TestThePanelIsForEverySignedInUser:
+    async def test_the_panel_shows_on_a_seek_ready_dataset(self, dataset, app_db) -> None:
+        html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert 'data-testid="seek-panel"' in html
         assert 'data-testid="btn-seek-push"' in html
-
-    async def test_without_the_grant_the_panel_does_not_exist(self, dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{dataset.id}", set())).text
-        assert 'data-testid="seek-panel"' not in html
 
 
 class TestSaving:
@@ -197,7 +176,7 @@ class TestSaving:
     async def test_the_key_is_never_rendered_back(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", _working)
         stored = (await session.execute(select(SeekConnection))).scalar_one()
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert stored.api_key_encrypted not in html
         assert ">k<" not in html
 
@@ -205,23 +184,23 @@ class TestSaving:
 class TestTheStatusIsShown:
     async def test_a_working_connection_reads_as_working(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", _working)
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert 'data-testid="seek-status-ok"' in html
         assert "https://seek.example.org" in html
 
     async def test_a_broken_connection_shows_its_reason(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", _unreachable)
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert 'data-testid="seek-status-bad"' in html
         assert "Nothing answered" in html
 
     async def test_the_dataset_panel_shows_the_status_too(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", _working)
-        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert 'data-testid="seek-status-ok"' in html
 
     async def test_nothing_configured_says_so(self, dataset, app_db) -> None:
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert 'data-testid="seek-status-none"' in html
 
 
@@ -270,44 +249,14 @@ class TestVerificationSaysWhatFailed:
 
 
 class TestTheRouteBoundary:
-    async def test_pushing_without_the_feature_is_404(self, dataset, app_db) -> None:
+    async def test_seek_routes_require_sign_in(self, dataset, app_db) -> None:
+        """Anonymous requests are refused; the connection is the real gate."""
         app = create_app()
-        a, b, c = _signed_in(set())
-        with a, b, c:
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=app), base_url="http://test"
-            ) as client:
-                response = await client.post(f"/hub/seek/datasets/{dataset.id}/push", data={})
-        assert response.status_code == 404
-
-    def test_every_seek_route_requires_the_feature(self) -> None:
-        """A route that forgot the dependency would be reachable by anyone."""
-        from metaseed_hub.ui.routes import seek
-
-        for route in seek.router.routes:
-            dependencies = [
-                d.call.__qualname__ if hasattr(d.call, "__qualname__") else str(d.call)
-                for d in getattr(route, "dependant", None).dependencies
-            ]
-            assert any("feature" in name for name in dependencies), (
-                f"{route.path} does not require the seek feature"
-            )
-
-    def test_the_client_refuses_an_unreadable_key(self) -> None:
-        """A changed SECRET_KEY must say so, not fail deep inside a sync."""
-        from metaseed_hub.ui.routes.seek import _client_for
-
-        connection = SeekConnection(
-            tenant_id="t", url="https://seek.example.org", api_key_encrypted="rubbish"
-        )
-        with pytest.raises(ValueError, match="cannot be read"):
-            _client_for(connection)
-
-
-def test_the_client_module_imports_without_the_seek_extra() -> None:
-    """The seek extra is a hard dependency of these routes; a missing one takes
-    the whole hub down at import, not just this feature."""
-    assert TestClient is not None
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/hub/seek/settings", follow_redirects=False)
+        assert response.status_code in (302, 303, 401)
 
 
 class TestTheStoredKeyIsKept:
@@ -323,8 +272,7 @@ class TestTheStoredKeyIsKept:
         await _save_settings("https://seek.example.org", _working)
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+        with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
             _working(factory)
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -347,8 +295,7 @@ class TestTheStoredKeyIsKept:
 
     async def test_a_blank_key_with_nothing_stored_says_so(self, dataset, app_db, session) -> None:
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c:
+        with _signed_in():
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -369,7 +316,7 @@ class TestTheStoredKeyIsKept:
 
     async def test_the_form_says_the_key_is_stored(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", _working)
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert "leave blank to keep it" in html.lower()
 
 
@@ -386,7 +333,7 @@ class TestChoosingTheProject:
 
     async def test_the_choices_are_offered(self, dataset, app_db, session) -> None:
         await _save_settings("https://seek.example.org", self._two_projects)
-        html = (await _get(PROFILE, {"seek"})).text
+        html = (await _get(PROFILE)).text
         assert 'data-testid="seek-project"' in html
         assert "Resilience" in html and "Tulip" in html
 
@@ -398,8 +345,7 @@ class TestChoosingTheProject:
         await _save_settings("https://seek.example.org", self._two_projects)
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c:
+        with _signed_in():
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -442,22 +388,18 @@ class TestTheIsaTemplates:
     export reads them. The file could not be obtained from the hub at all."""
 
     async def test_a_profile_yields_its_templates(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/templates/seek-ready-template/3.0", {"seek"})
+        response = await _get("/hub/seek/templates/seek-ready-template/3.0")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("application/json")
         assert "isa-templates.json" in response.headers["content-disposition"]
         assert response.json()["data"]
 
     async def test_an_unknown_profile_is_404(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/templates/no-such-profile/1.0", {"seek"})
-        assert response.status_code == 404
-
-    async def test_it_needs_the_feature(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/templates/seek-ready-template/3.0", set())
+        response = await _get("/hub/seek/templates/no-such-profile/1.0")
         assert response.status_code == 404
 
     async def test_the_panel_offers_the_download(self, dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert 'data-testid="btn-seek-templates"' in html
 
 
@@ -496,7 +438,7 @@ class TestThePanelOnlyAppearsWhereItWorks:
         session.add(ena)
         await session.commit()
 
-        html = (await _get(f"/hub/datasets/{ena.id}", {"seek"})).text
+        html = (await _get(f"/hub/datasets/{ena.id}")).text
         assert 'data-testid="seek-panel"' not in html
         assert 'data-testid="btn-seek-templates"' not in html
 
@@ -514,8 +456,7 @@ class TestThePanelOnlyAppearsWhereItWorks:
         await session.commit()
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c:
+        with _signed_in():
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -578,8 +519,7 @@ class TestTheReadinessCheck:
         await _save_settings("https://seek.example.org", _working)
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+        with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
             factory.return_value.template_ids_by_title.return_value = {}
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -602,8 +542,7 @@ class TestTheReadinessCheck:
         }
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+        with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
             factory.return_value.template_ids_by_title.return_value = installed
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -618,8 +557,7 @@ class TestTheReadinessCheck:
         await _save_settings("https://seek.example.org", _working)
 
         app = create_app()
-        a, b, c = _signed_in({"seek"})
-        with a, b, c, patch("metaseed.seek.client_from_settings") as factory:
+        with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
             factory.return_value.template_ids_by_title.side_effect = httpx.HTTPStatusError(
                 "503",
                 request=httpx.Request("GET", "https://seek.example.org/templates"),
@@ -633,7 +571,7 @@ class TestTheReadinessCheck:
         assert "not serving SEEK" in response.text
 
     async def test_the_panel_offers_it(self, dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert 'data-testid="btn-seek-check"' in html
 
 
@@ -642,7 +580,7 @@ class TestThePushSaysItIsWorking:
     had started, the panel looked dead and the button invited a second press."""
 
     async def test_the_panel_announces_the_wait(self, dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{dataset.id}", {"seek"})).text
+        html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert "seek-working" in html, "nothing tells the user a push is running"
         assert "hx-disabled-elt" in html, "the button can be pressed twice"
 

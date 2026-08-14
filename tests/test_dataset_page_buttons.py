@@ -1,8 +1,9 @@
-"""The export buttons a user sees must match the features their groups grant.
+"""Every adapter export the registry offers for the profile is a button.
 
-Rendered-page tests, not unit tests of the filter: the filter was correct while
-the page showed every button to everyone, because nothing asserted what the
-template actually receives and draws.
+Rendered-page tests, not unit tests of the menu builder: what the template
+actually receives and draws is the contract. Adapters are plugins available
+to every signed-in user — the per-group FeatureGrant filter that used to
+decide these buttons hid ALL of them, because nothing ever wrote a grant.
 """
 
 from __future__ import annotations
@@ -48,17 +49,11 @@ async def ena_dataset(session: AsyncSession):
     return dataset
 
 
-def _page(dataset_id: str, features: set[str]) -> str:
+def _page(dataset_id: str) -> str:
     app = create_app()
-    with (
-        patch(
-            "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
-            AsyncMock(return_value=_user()),
-        ),
-        patch(
-            "metaseed_hub.ui.routes.dataset.editor.user_feature_set",
-            AsyncMock(return_value=features),
-        ),
+    with patch(
+        "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+        AsyncMock(return_value=_user()),
     ):
         client = TestClient(app)
         response = client.get(f"/hub/datasets/{dataset_id}")
@@ -66,17 +61,14 @@ def _page(dataset_id: str, features: set[str]) -> str:
     return response.text
 
 
-async def test_a_member_of_the_ena_group_sees_the_ena_export_button(ena_dataset, app_db) -> None:
-    html = _page(ena_dataset.id, {"ena"})
+async def test_the_profiles_registry_exports_are_all_buttons(ena_dataset, app_db) -> None:
+    html = _page(ena_dataset.id)
     assert 'data-testid="btn-export-ena"' in html
-
-
-async def test_without_the_group_the_button_does_not_exist(ena_dataset, app_db) -> None:
-    html = _page(ena_dataset.id, set())
-    assert 'data-testid="btn-export-' not in html
-
-
-async def test_a_grant_shows_its_own_button_not_anothers(ena_dataset, app_db) -> None:
-    html = _page(ena_dataset.id, {"dcat"})
     assert 'data-testid="btn-export-dcat"' in html
-    assert 'data-testid="btn-export-ena"' not in html
+
+
+async def test_another_profiles_exporter_is_not_offered(ena_dataset, app_db) -> None:
+    # The profile gate (the registry's) still holds: an ena dataset is not
+    # offered the PRIDE exporter.
+    html = _page(ena_dataset.id)
+    assert 'data-testid="btn-export-pride"' not in html

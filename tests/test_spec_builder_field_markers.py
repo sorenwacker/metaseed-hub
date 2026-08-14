@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 from fastapi import APIRouter, Request
 from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -123,20 +122,9 @@ async def _context(
 class TestDcatMarker:
     """The DCAT property marker, set and re-read through the field editor.
 
-    DCAT is a gated plugin, so the editor only writes the marker for a user
-    whose group has been granted it. These tests are about the marker, so they
-    grant it and let tests/test_features.py cover the gate itself.
+    DCAT is an adapter like ENA and SEEK; its marker writes for every
+    signed-in user (the per-group gate is gone).
     """
-
-    @pytest.fixture(autouse=True)
-    def _granted(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def _all_features(*_args: object, **_kwargs: object) -> set[str]:
-            return {"dcat"}
-
-        monkeypatch.setattr(
-            "metaseed_hub.ui.spec_builder.routes.field_routes.user_features",
-            _all_features,
-        )
 
     async def test_setting_the_marker_stores_it_on_the_field(self, session: AsyncSession) -> None:
         draft, tenant, owner = await _owned_draft(session)
@@ -222,115 +210,17 @@ class TestDcatMarker:
         assert ctx.spec.entities["Investigation"].fields[0].dcat is None
 
 
-class TestDcatIsGated:
-    """DCAT is a plugin, enabled per identity-provider group.
+class TestDcatIsAPluginNotAGatedFeature:
+    """The DCAT marker writes without any grant, like every adapter's fields.
 
-    No fixture grants it here, so the editor sees a user with no features --
-    the same position a real user is in before anyone adds them to the group.
+    DCAT is a metaseed adapter — registered beside ENA and SEEK — and no
+    other adapter's spec-authoring support sits behind a per-group grant
+    (SEEK's isa_tag column never did). The FeatureGrant gate hid the DCAT
+    column from every user since it shipped, because nothing ever wrote a
+    grant row.
     """
 
-    async def test_the_marker_is_not_saved_without_the_feature(self, session: AsyncSession) -> None:
-        draft, tenant, owner = await _owned_draft(session)
-        ctx = await _context(session, draft, tenant, owner)
-        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
-
-        await update(
-            request=_request("PUT"),
-            entity_name="Investigation",
-            idx=0,
-            ctx=ctx,
-            session=session,
-            **_field_form(dcat="dct:issued"),
-        )
-
-        assert ctx.spec.entities["Investigation"].fields[0].dcat is None
-
-    async def test_the_rest_of_the_field_still_saves(self, session: AsyncSession) -> None:
-        # The gate skips one marker, not the whole edit.
-        draft, tenant, owner = await _owned_draft(session)
-        ctx = await _context(session, draft, tenant, owner)
-        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
-
-        await update(
-            request=_request("PUT"),
-            entity_name="Investigation",
-            idx=0,
-            ctx=ctx,
-            session=session,
-            **_field_form(dcat="dct:issued", description="still saved"),
-        )
-
-        field = ctx.spec.entities["Investigation"].fields[0]
-        assert field.description == "still saved"
-        assert field.dcat is None
-
-    async def test_an_existing_marker_survives_losing_the_feature(
-        self, session: AsyncSession
-    ) -> None:
-        # Losing access should hide the field, not destroy what it held.
-        draft, tenant, owner = await _owned_draft(session)
-        ctx = await _context(session, draft, tenant, owner)
-        ctx.spec.entities["Investigation"].fields[0].dcat = "dct:issued"
-        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
-
-        await update(
-            request=_request("PUT"),
-            entity_name="Investigation",
-            idx=0,
-            ctx=ctx,
-            session=session,
-            **_field_form(dcat=""),
-        )
-
-        assert ctx.spec.entities["Investigation"].fields[0].dcat == "dct:issued"
-
-    async def test_the_user_is_told_the_value_was_not_saved(self, session: AsyncSession) -> None:
-        # The input cannot be hidden from the hub, so silence would leave the
-        # user typing into a box that does nothing.
-        draft, tenant, owner = await _owned_draft(session)
-        ctx = await _context(session, draft, tenant, owner)
-        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
-
-        response = await update(
-            request=_request("PUT"),
-            entity_name="Investigation",
-            idx=0,
-            ctx=ctx,
-            session=session,
-            **_field_form(dcat="dct:issued"),
-        )
-
-        assert "DCAT" in response.body.decode()
-
-    async def test_nothing_is_said_when_no_dcat_value_was_sent(self, session: AsyncSession) -> None:
-        # Someone who never touches the field should not be told about a plugin
-        # they were not trying to use.
-        draft, tenant, owner = await _owned_draft(session)
-        ctx = await _context(session, draft, tenant, owner)
-        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
-
-        response = await update(
-            request=_request("PUT"),
-            entity_name="Investigation",
-            idx=0,
-            ctx=ctx,
-            session=session,
-            **_field_form(dcat=""),
-        )
-
-        assert "not saved" not in response.body.decode()
-
-    async def test_granting_it_lets_the_marker_through(
-        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # The mirror of the first test: same call, feature granted, saved.
-        async def _granted(*_args: object, **_kwargs: object) -> set[str]:
-            return {"dcat"}
-
-        monkeypatch.setattr(
-            "metaseed_hub.ui.spec_builder.routes.field_routes.user_features",
-            _granted,
-        )
+    async def test_the_marker_writes_with_no_grant_anywhere(self, session: AsyncSession) -> None:
         draft, tenant, owner = await _owned_draft(session)
         ctx = await _context(session, draft, tenant, owner)
         update = _endpoint(register_field_routes, "/field/{idx}", "PUT")

@@ -7,7 +7,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.schema import FieldSpec, FieldType
 
-from metaseed_hub.ui.dependencies import user_features
 from metaseed_hub.ui.spec_builder.forms import FieldFormData
 from metaseed_hub.ui.spec_builder_helpers import validate_field_name
 
@@ -247,18 +246,11 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.parent_ref = form_data.parent_ref.strip() or None
         field.unique_within = form_data.unique_within.strip() or None
         field.reference = form_data.reference.strip() or None
-        # DCAT is a plugin, enabled per identity-provider group. Checked on the
-        # write rather than only on the input: a hand-rolled POST would bypass a
-        # hidden control. The stored value is left alone rather than cleared, so
-        # losing the grant hides the field without destroying what it held.
-        dcat_skipped = False
-        if "dcat" in await user_features(request, session):
-            field.dcat = dcat.strip() or None
-        elif dcat.strip():
-            # The input is rendered by a template metaseed and the hub share, so
-            # it cannot be hidden from here. Say so instead of dropping the
-            # value in silence.
-            dcat_skipped = True
+        # DCAT is an adapter, like ENA and SEEK, and no adapter's
+        # spec-authoring fields sit behind a per-group grant — the
+        # FeatureGrant gate that used to guard this write hid the column
+        # from every user, because nothing ever wrote a grant row.
+        field.dcat = dcat.strip() or None
         # Whole-object replacement, deliberately, and not the merging path
         # ``SpecBuilder.update_field_constraints`` offers: the field form posts
         # every constraint input on every save, so an empty one means "cleared",
@@ -295,12 +287,7 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "editing_field_idx": None,
                 "field_types": [t.value for t in FieldType],
                 "success": True,
-                "notice": (
-                    "The DCAT property was not saved: it needs the DCAT plugin, "
-                    "which is enabled per group."
-                )
-                if dcat_skipped
-                else None,
+                "notice": None,
             },
         )
 
