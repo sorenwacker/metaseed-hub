@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.36.0] - 260815
 
 ### Added
 - The MCP endpoint accepts an OIDC bearer beside personal access tokens
@@ -31,6 +31,9 @@ All notable changes to this project will be documented in this file.
   The `feature_grants` table is dropped (with an exact-mirror downgrade).
 
 ### Changed
+- metaseed floor raised to 0.38.0: the shipped `isa-miappe-combined`
+  profile, the cross-profile nested-entity resolution fix, and the
+  hub-consumer contract test guarding this hub's imports.
 - Entity routes ride the single load path: `EntityService.ensure_state`
   delegates to `ensure_dataset_facade_for_write`, deleting its duplicated
   spec resolution and strict load. A dataset with an unplaceable stored node
