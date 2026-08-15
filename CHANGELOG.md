@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Stored XSS on the dataset page (introduced with the embedded DCAT card in
+  0.36.0): the JSON-LD block was rendered unescaped, so a dataset title
+  containing `</script>` ended the block and had the rest parsed as markup,
+  running attacker-supplied HTML for everyone the dataset was shared with.
+  `<`, `>` and `&` are escaped as JSON before embedding, which leaves the
+  card valid JSON-LD; the content-negotiated responses are RDF, not HTML,
+  and were never affected.
+- A block apply is limited to 1000 cells. A selection is bounded by the
+  visible table, so an unbounded batch was a crafted request that made the
+  worker rebuild arbitrarily many entities.
+
 ### Added
 - A value that repeats down a column is entered once: shift-click selects a
   block of inline-table cells, and Ctrl+Enter (or "Apply to selection") writes

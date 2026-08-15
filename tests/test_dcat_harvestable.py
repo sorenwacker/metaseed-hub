@@ -104,3 +104,50 @@ async def test_the_dataset_url_negotiates_turtle(dataset, app_db) -> None:
 async def test_responses_carry_a_describedby_link(dataset, app_db) -> None:
     response = _get(f"/hub/datasets/{dataset.id}")
     assert 'rel="describedby"' in response.headers.get("link", "")
+
+
+async def test_dataset_text_cannot_close_the_embedded_script(
+    dataset, session: AsyncSession, app_db
+) -> None:
+    """The card is embedded unescaped, so `</script>` in a title would end the
+    block and everything after it would be parsed as HTML: stored XSS against
+    anyone the dataset is shared with. `<` must not survive into the page."""
+    from metaseed_hub.models import Tenant
+
+    tenant = await session.get(Tenant, dataset.tenant_id)
+    hostile = make_dataset(tenant=tenant, name="hostile", profile="miappe", version="1.2")
+    hostile.data = {
+        "profile": "miappe",
+        "version": "1.2",
+        "tree": [
+            {
+                "id": "inv-1",
+                "entity_type": "Investigation",
+                "label": "T",
+                "data": {
+                    "unique_id": "INV-1",
+                    "title": "</script><img src=x onerror=alert(1)>",
+                    "description": "breaking out",
+                },
+                "children": [],
+            }
+        ],
+    }
+    session.add(hostile)
+    await session.commit()
+
+    response = _get(f"/hub/datasets/{hostile.id}")
+
+    assert response.status_code == 200
+    embedded = response.text.split('type="application/ld+json">', 1)[1]
+    assert "\\u003c" in embedded.split("</script>", 1)[0], (
+        "the card must escape < before it is embedded"
+    )
+    assert "<img src=x" not in response.text
+
+    # Escaping must not cost harvestability: the block is still JSON-LD, and
+    # the title still reads as the text the user typed.
+    import json
+
+    card = json.loads(embedded.split("</script>", 1)[0])
+    assert card["dct:title"] == "</script><img src=x onerror=alert(1)>"

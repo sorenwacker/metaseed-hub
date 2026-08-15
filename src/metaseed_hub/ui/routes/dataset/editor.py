@@ -79,6 +79,18 @@ async def _build_dataset_context(
     }
 
 
+def _script_safe_json(document: str) -> str:
+    """Escape a JSON document for embedding inside a ``<script>`` element.
+
+    An HTML parser ends a script block at the first ``</script``, whatever the
+    JSON quoting around it, so dataset text containing one would close the
+    block and have the rest of the title parsed as markup. The escapes are
+    valid JSON, so a harvester reads the same document either way; the
+    negotiated responses are served as RDF, not HTML, and need none of this.
+    """
+    return document.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
+
+
 def _dcat_documents(state: Any, identifier: str) -> dict[str, str] | None:
     """The dataset's DCAT card as {"dcat.jsonld": ..., "dcat.ttl": ...}.
 
@@ -192,7 +204,9 @@ async def dataset_editor(
                 _source_import_option(dataset.profile) if not ctx["tree_data"] else None
             ),
             "nav_active": "home",
-            "dcat_jsonld": dcat_documents["dcat.jsonld"] if dcat_documents else None,
+            "dcat_jsonld": (
+                _script_safe_json(dcat_documents["dcat.jsonld"]) if dcat_documents else None
+            ),
         },
     )
     response.headers["Link"] = describedby
