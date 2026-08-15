@@ -17,6 +17,7 @@ from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import build_inline_tables, save_dataset_state
+from metaseed_hub.ui.helpers.tables import parent_reference_field
 from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 from metaseed_hub.ui.render import render_template
 
@@ -469,6 +470,120 @@ async def update_table_cell(
     model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
+    await save_dataset_state(session, dataset, state, user)
+
+    return Response(
+        status_code=200,
+        headers={"HX-Trigger": "entityChanged"},
+    )
+
+
+class BlockApplyRefusedError(Exception):
+    """A block apply that must not be written, with the reason to report."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _resolved_target(state: AppState, target: Any) -> tuple[str, str, Any]:
+    """Check one cell of a block and return what writing it needs.
+
+    Every target is resolved before any is written, so a block that cannot be
+    applied whole is refused whole.
+
+    Raises:
+        BlockApplyRefusedError: The target names a missing row, a field the entity does
+            not have, or the column that references the row's parent.
+    """
+    if not isinstance(target, dict):
+        raise BlockApplyRefusedError("A selected cell is malformed.")
+
+    node_id = target.get("node_id")
+    field_name = target.get("field")
+    if not isinstance(node_id, str) or not isinstance(field_name, str):
+        raise BlockApplyRefusedError("A selected cell is malformed.")
+
+    node = state.nodes_by_id.get(node_id)
+    if node is None:
+        raise BlockApplyRefusedError(
+            "A selected row no longer exists. Reload the dataset and select again."
+        )
+
+    facade = state.get_or_create_facade()
+    try:
+        helper = getattr(facade, node.entity_type)
+    except AttributeError as exc:
+        raise BlockApplyRefusedError(f"{node.entity_type} is not part of this profile.") from exc
+
+    if field_name not in set(helper.all_fields):
+        raise BlockApplyRefusedError(f"{field_name} is not a field of {node.entity_type}.")
+
+    parent = state.nodes_by_id.get(node.parent_id) if node.parent_id else None
+    if parent is not None and field_name == parent_reference_field(parent.entity_type):
+        raise BlockApplyRefusedError(
+            f"{field_name} links a row to its {parent.entity_type}; "
+            "change it by editing the row, not by filling cells."
+        )
+
+    return node_id, field_name, helper
+
+
+@router.post("/datasets/{dataset_id}/table/cells")
+async def apply_value_to_cells(
+    request: Request,
+    dataset_id: str,
+    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
+    user: OptionalUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Response:
+    """Write one value into every cell of a selected block, as a single save."""
+    dataset, state = dataset_state
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return HTMLResponse("Malformed request.", status_code=400)
+
+    if not isinstance(payload, dict):
+        return HTMLResponse("Malformed request.", status_code=400)
+    raw_value = payload.get("value", "")
+    targets = payload.get("targets")
+    if not isinstance(raw_value, str) or not isinstance(targets, list) or not targets:
+        return HTMLResponse("Nothing to apply.", status_code=400)
+
+    try:
+        resolved = [_resolved_target(state, target) for target in targets]
+    except BlockApplyRefusedError as refusal:
+        return HTMLResponse(escape(refusal.reason), status_code=400)
+
+    # Resolution is complete, so every write below lands or the batch was
+    # already refused: group by row, since several cells of one row share an
+    # instance and must be rebuilt together.
+    updates: dict[str, dict[str, Any]] = {}
+    for node_id, field_name, helper in resolved:
+        values = updates.get(node_id)
+        if values is None:
+            instance = state.nodes_by_id[node_id].instance
+            values = (
+                instance.model_dump(exclude_none=True) if hasattr(instance, "model_dump") else {}
+            )
+            updates[node_id] = values
+
+        if raw_value == "":
+            values.pop(field_name, None)
+            continue
+        field_type = helper.field_info(field_name).get("type", "string")
+        try:
+            values[field_name] = parse_form_field(raw_value, field_type)
+        except ValueError:
+            values[field_name] = raw_value
+
+    for node_id, values in updates.items():
+        node = state.nodes_by_id[node_id]
+        helper = getattr(state.get_or_create_facade(), node.entity_type)
+        state.update_node(node_id, helper.model.model_construct(**values))
+
     await save_dataset_state(session, dataset, state, user)
 
     return Response(

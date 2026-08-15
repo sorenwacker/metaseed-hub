@@ -267,10 +267,125 @@ function updateCellDisplay(cell) {
     }
 }
 
+// Selecting a block of cells to fill in one go.
+//
+// The anchor is the last cell clicked without shift; shift-clicking a second
+// cell selects the rectangle between them, within one table body. Cells that
+// carry no input (the greyed-out parent reference) are never selectable, so a
+// rectangle spanning one still applies only where a value may be written.
+let bulkAnchor = null;
+
+function clearCellSelection() {
+    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+    document.querySelectorAll('.bulk-apply').forEach(b => { b.hidden = true; });
+}
+
+function cellPosition(cell) {
+    const row = cell.closest('tr');
+    const body = row ? row.closest('tbody') : null;
+    if (!body) return null;
+    return {
+        body: body,
+        row: Array.from(body.children).indexOf(row),
+        col: Array.from(row.children).indexOf(cell)
+    };
+}
+
+function selectBlock(anchor, corner) {
+    const from = cellPosition(anchor);
+    const to = cellPosition(corner);
+    if (!from || !to || from.body !== to.body) return;
+
+    clearCellSelection();
+    const rowRange = [Math.min(from.row, to.row), Math.max(from.row, to.row)];
+    const colRange = [Math.min(from.col, to.col), Math.max(from.col, to.col)];
+    let count = 0;
+    Array.from(from.body.children).forEach((row, rowIdx) => {
+        if (rowIdx < rowRange[0] || rowIdx > rowRange[1]) return;
+        Array.from(row.children).forEach((cell, colIdx) => {
+            if (colIdx < colRange[0] || colIdx > colRange[1]) return;
+            if (!cell.classList.contains('editable-cell')) return;
+            cell.classList.add('cell-selected');
+            count += 1;
+        });
+    });
+
+    const section = from.body.closest('.inline-table-section');
+    const apply = section ? section.querySelector('.bulk-apply') : null;
+    if (apply && count > 1) {
+        apply.hidden = false;
+        apply.textContent = 'Apply to selection (' + count + ')';
+    }
+}
+
+async function applyValueToSelection(section) {
+    const selected = Array.from(section.querySelectorAll('.cell-selected'));
+    const apply = section.querySelector('.bulk-apply');
+    if (!selected.length || !apply) return;
+
+    const anchorInput = bulkAnchor ? bulkAnchor.querySelector('.cell-input') : null;
+    const value = anchorInput ? anchorInput.value : '';
+    const targets = selected.map(cell => {
+        const row = cell.closest('tr');
+        return { node_id: row ? row.dataset.nodeId : null, field: cell.dataset.col };
+    }).filter(t => t.node_id);
+    if (!targets.length) return;
+
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    const response = await fetch(apply.dataset.applyUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-Token': meta ? meta.content : ''
+        },
+        body: JSON.stringify({ value: value, targets: targets })
+    });
+
+    if (!response.ok) {
+        // The server refuses a block it cannot apply whole, and says why.
+        alert(await response.text());
+        return;
+    }
+
+    selected.forEach(cell => {
+        const input = cell.querySelector('.cell-input');
+        if (input) {
+            input.value = value;
+            updateCellDisplay(cell);
+        }
+    });
+    clearCellSelection();
+    document.body.dispatchEvent(new CustomEvent('entityChanged'));
+}
+
+document.addEventListener('click', function(e) {
+    const apply = e.target.closest('.bulk-apply');
+    if (apply) {
+        const section = apply.closest('.inline-table-section');
+        if (section) applyValueToSelection(section);
+        return;
+    }
+
+    const cell = e.target.closest('.editable-cell');
+    if (!cell) {
+        clearCellSelection();
+        return;
+    }
+    if (e.shiftKey && bulkAnchor) {
+        e.preventDefault();
+        selectBlock(bulkAnchor, cell);
+        return;
+    }
+    clearCellSelection();
+    bulkAnchor = cell;
+});
+
 // Editable cell handling
 document.addEventListener('click', function(e) {
     const cell = e.target.closest('.editable-cell');
     if (!cell) return;
+    if (e.shiftKey) return;
 
     // Don't activate if already editing
     if (cell.classList.contains('editing')) return;
@@ -304,6 +419,19 @@ document.addEventListener('focusout', function(e) {
 
 // Handle Enter key to save and move to next cell
 document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.querySelector('.cell-selected')) {
+        clearCellSelection();
+        return;
+    }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        const cell = e.target.closest ? e.target.closest('.editable-cell') : null;
+        const section = cell ? cell.closest('.inline-table-section') : null;
+        if (section && section.querySelector('.cell-selected')) {
+            e.preventDefault();
+            applyValueToSelection(section);
+            return;
+        }
+    }
     if (e.key === 'Enter' && e.target.classList.contains('cell-input')) {
         e.preventDefault();
         const cell = e.target.closest('.editable-cell');

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- A value that repeats down a column is entered once: shift-click selects a
+  block of inline-table cells, and Ctrl+Enter (or "Apply to selection") writes
+  the value to every cell in one request and one dataset version. The block is
+  applied whole or refused whole — a target row deleted meanwhile refuses the
+  batch rather than half-writing it — and the column naming a row's parent is
+  never filled this way, since re-parenting is a link change that
+  `metaseed.facade.linking` owns.
+
 ## [0.36.0] - 260815
 
 ### Added

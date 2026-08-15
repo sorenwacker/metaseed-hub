@@ -8,6 +8,15 @@ from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 logger = logging.getLogger("metaseed_hub")
 
 
+def parent_reference_field(parent_entity_type: str) -> str:
+    """Name the column on a child row that references the given parent type.
+
+    The table renderer greys this column out and the block-apply route refuses
+    to write it; both must mean the same column, so the rule lives here once.
+    """
+    return f"{parent_entity_type.lower()}_id"
+
+
 def build_entity_form_context(
     state: AppState,
     helper: Any,
@@ -275,13 +284,8 @@ def _build_entity_list_table(
                 }
 
     # Determine which columns are inherited (reference to parent)
-    parent_type_lower = node.entity_type.lower()
-    inherited_columns = set()
-    for col in display_columns:
-        if col.endswith("_id"):
-            ref_type = col[:-3]  # Remove "_id" suffix
-            if ref_type == parent_type_lower:
-                inherited_columns.add(col)
+    inherited = parent_reference_field(node.entity_type)
+    inherited_columns = {col for col in display_columns if col == inherited}
 
     return {
         "columns": display_columns,

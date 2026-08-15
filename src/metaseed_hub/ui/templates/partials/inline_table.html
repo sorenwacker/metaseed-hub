@@ -20,6 +20,12 @@
             {% endif %}
         </div>
         {% if node_id and not is_single_entity %}
+        {# Shown by hub.js once a block of cells is selected; it posts the
+           anchor cell's value to every selected cell in one request. #}
+        <button type="button" class="btn btn-sm bulk-apply" hidden
+                data-apply-url="/hub/datasets/{{ dataset_id }}/table/cells">
+            Apply to selection
+        </button>
         <button type="button" class="btn btn-sm btn-primary"
                 hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/{{ field_name }}/row"
                 hx-target="#inline-table-body-{{ field_name }}"

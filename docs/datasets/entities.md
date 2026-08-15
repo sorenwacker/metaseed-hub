@@ -28,6 +28,24 @@ When an entity contains a collection of nested entities, the form shows a **Rela
 - Edit cells inline, or open a row for the full form.
 - Remove a row with its delete control.
 
+### Filling several cells at once
+
+A value that repeats down a column — the same protocol, unit, or growth facility for every row — can be entered once and applied to a block of cells.
+
+1. Click the cell you want to start from.
+2. Shift-click another cell in the same table. Every cell in the rectangle between the two is selected and highlighted.
+3. Type the value in the cell you started from and press **Ctrl+Enter** (**Cmd+Enter** on macOS), or click **Apply to selection**.
+4. Press **Escape** to clear a selection without applying anything.
+
+The value is written to every selected cell, converted per column the same way a single cell edit is — a number column stores a number, a date column a date. The whole block is applied together and recorded as a single [version](versions.md), so undoing a bulk edit means restoring one earlier version rather than many.
+
+Two kinds of cell are never written by a bulk apply, and are skipped even when they fall inside the selected rectangle:
+
+- **Columns showing the parent reference** (greyed out, for example `investigation_id` on a Study table). This is the link between the row and the entity it belongs to; changing it would move rows to a different parent, which is done by editing the entity, not by filling cells.
+- **Cells in a row that no longer exists** — if a collaborator deleted the row while your selection was open, the apply is refused as a whole and nothing is written, rather than partly applied. Reload the dataset and select again.
+
+Selection spans one inline table. Cells in a different table, or in the entity form above it, are not part of it.
+
 ## Validating
 
 Click **Validate** to check the dataset against the profile schema. The result lists errors and warnings per entity and field so you can correct them. Validation does not change the data.
