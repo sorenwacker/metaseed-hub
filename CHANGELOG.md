@@ -12,6 +12,15 @@ All notable changes to this project will be documented in this file.
   batch rather than half-writing it — and the column naming a row's parent is
   never filled this way, since re-parenting is a link change that
   `metaseed.facade.linking` owns.
+- A selected block copies out as tab-separated rows (Ctrl+C) and a
+  tab-separated grid pastes in at the clicked cell (Ctrl+V), so a column of
+  varying values can come from a spreadsheet. Paste fills cells and never
+  adds rows: values past the last row or column, or landing on a
+  parent-reference column, are dropped and the rest keep their positions.
+  Both gestures are one server write — filling repeats a value, pasting
+  varies it — so what is allowed and how a value is converted cannot drift
+  between them. A value the column cannot hold is stored as typed and
+  reported by validation rather than silently discarded.
 
 ## [0.36.0] - 260815
 

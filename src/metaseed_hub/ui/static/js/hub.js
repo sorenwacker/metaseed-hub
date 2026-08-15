@@ -318,18 +318,22 @@ function selectBlock(anchor, corner) {
     }
 }
 
-async function applyValueToSelection(section) {
-    const selected = Array.from(section.querySelectorAll('.cell-selected'));
+// One write for both gestures: filling a selection sends the same value for
+// every cell, pasting sends the values that landed on each. `writes` is a list
+// of {cell, value}.
+async function writeCells(section, writes) {
     const apply = section.querySelector('.bulk-apply');
-    if (!selected.length || !apply) return;
+    if (!apply || !writes.length) return;
 
-    const anchorInput = bulkAnchor ? bulkAnchor.querySelector('.cell-input') : null;
-    const value = anchorInput ? anchorInput.value : '';
-    const targets = selected.map(cell => {
-        const row = cell.closest('tr');
-        return { node_id: row ? row.dataset.nodeId : null, field: cell.dataset.col };
-    }).filter(t => t.node_id);
-    if (!targets.length) return;
+    const cells = writes.map(w => {
+        const row = w.cell.closest('tr');
+        return {
+            node_id: row ? row.dataset.nodeId : null,
+            field: w.cell.dataset.col,
+            value: w.value
+        };
+    }).filter(c => c.node_id);
+    if (!cells.length) return;
 
     const meta = document.querySelector('meta[name="csrf-token"]');
     const response = await fetch(apply.dataset.applyUrl, {
@@ -339,7 +343,7 @@ async function applyValueToSelection(section) {
             'X-Requested-With': 'XMLHttpRequest',
             'X-CSRF-Token': meta ? meta.content : ''
         },
-        body: JSON.stringify({ value: value, targets: targets })
+        body: JSON.stringify({ cells: cells })
     });
 
     if (!response.ok) {
@@ -348,16 +352,81 @@ async function applyValueToSelection(section) {
         return;
     }
 
-    selected.forEach(cell => {
-        const input = cell.querySelector('.cell-input');
+    writes.forEach(w => {
+        const input = w.cell.querySelector('.cell-input');
         if (input) {
-            input.value = value;
-            updateCellDisplay(cell);
+            input.value = w.value;
+            updateCellDisplay(w.cell);
         }
     });
     clearCellSelection();
     document.body.dispatchEvent(new CustomEvent('entityChanged'));
 }
+
+async function applyValueToSelection(section) {
+    const selected = Array.from(section.querySelectorAll('.cell-selected'));
+    if (!selected.length) return;
+    const anchorInput = bulkAnchor ? bulkAnchor.querySelector('.cell-input') : null;
+    const value = anchorInput ? anchorInput.value : '';
+    await writeCells(section, selected.map(cell => ({ cell: cell, value: value })));
+}
+
+// A copied block is tab separated with one line per row — what spreadsheets
+// put on the clipboard, and what they read back.
+function selectionAsText(section) {
+    const rows = [];
+    section.querySelectorAll('tbody tr').forEach(row => {
+        const values = [];
+        Array.from(row.children).forEach(cell => {
+            if (!cell.classList.contains('cell-selected')) return;
+            const input = cell.querySelector('.cell-input');
+            values.push(input ? input.value : '');
+        });
+        if (values.length) rows.push(values.join('\t'));
+    });
+    return rows.join('\n');
+}
+
+// Map a pasted grid onto the table starting at the anchor. Anything past the
+// last row or column is dropped — paste fills cells, it does not add rows —
+// and so is anything landing on a non-editable column, with the remaining
+// values keeping their positions.
+function pastedWrites(anchor, text) {
+    const start = cellPosition(anchor);
+    if (!start) return [];
+    const bodyRows = Array.from(start.body.children);
+    const writes = [];
+
+    text.replace(/\r/g, '').split('\n').forEach((line, rowOffset) => {
+        const row = bodyRows[start.row + rowOffset];
+        if (!row) return;
+        line.split('\t').forEach((value, colOffset) => {
+            const cell = row.children[start.col + colOffset];
+            if (!cell || !cell.classList.contains('editable-cell')) return;
+            writes.push({ cell: cell, value: value });
+        });
+    });
+    return writes;
+}
+
+document.addEventListener('copy', function(e) {
+    const section = bulkAnchor ? bulkAnchor.closest('.inline-table-section') : null;
+    if (!section || !section.querySelector('.cell-selected')) return;
+    const text = selectionAsText(section);
+    if (!text) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', text);
+});
+
+document.addEventListener('paste', function(e) {
+    const section = bulkAnchor ? bulkAnchor.closest('.inline-table-section') : null;
+    if (!section) return;
+    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    // A single value with no structure is an ordinary edit of one cell.
+    if (!text || (text.indexOf('\t') === -1 && text.indexOf('\n') === -1)) return;
+    e.preventDefault();
+    writeCells(section, pastedWrites(bulkAnchor, text));
+});
 
 document.addEventListener('click', function(e) {
     const apply = e.target.closest('.bulk-apply');

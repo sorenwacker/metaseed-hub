@@ -46,6 +46,22 @@ Two kinds of cell are never written by a bulk apply, and are skipped even when t
 
 Selection spans one inline table. Cells in a different table, or in the entity form above it, are not part of it.
 
+### Copying and pasting a block
+
+A selected block can be copied out and pasted back, including to and from a spreadsheet.
+
+- **Copy** — select a block and press **Ctrl+C** (**Cmd+C**). The block is placed on the clipboard as tab-separated rows, which Excel, LibreOffice, and Google Sheets paste as cells.
+- **Paste** — click the cell the block should start at and press **Ctrl+V** (**Cmd+V**). Tab-separated text is read as a grid and written starting at that cell, one row per line.
+
+Paste writes a different value to each cell, so it is the way to fill a column with values that vary. Like a bulk apply it is one request and one [version](versions.md), and it lands whole or not at all.
+
+Where a pasted grid does not match the table, it is clipped rather than reshaped:
+
+- Values falling past the last row or last column of the table are dropped. Paste does not create rows — add them with **+ Add Row** first.
+- Values falling on a parent-reference column are dropped, and the remaining values keep their positions rather than shifting into the gap.
+
+A value that is not valid for its column — a word pasted into a number column — is stored as typed rather than silently discarded, and shows up in the next [validation](#validating) run.
+
 ## Validating
 
 Click **Validate** to check the dataset against the profile schema. The result lists errors and warnings per entity and field so you can correct them. Validation does not change the data.

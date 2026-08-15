@@ -64,22 +64,37 @@ def _values(state: AppState, node_id: str) -> dict[str, Any]:
     return state.nodes_by_id[node_id].instance.model_dump(exclude_none=True)
 
 
-async def _apply(
+async def _write(
     state: AppState,
-    targets: list[dict[str, str]],
-    value: str,
+    cells: list[dict[str, str]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[Any, AsyncMock]:
+    """Post a block of cells, each with its own value — the route's contract.
+
+    Filling one value into a selection is this with the value repeated, which
+    is what the page sends; pasting is this with the values differing. One
+    server contract, so the two gestures cannot drift apart.
+    """
     saved = AsyncMock()
     monkeypatch.setattr(table_routes, "save_dataset_state", saved)
     response = await table_routes.apply_value_to_cells(
-        request=_Request({"value": value, "targets": targets}),
+        request=_Request({"cells": cells}),
         dataset_id="ds-1",
         dataset_state=(object(), state),
         user=None,
         session=object(),
     )
     return response, saved
+
+
+async def _apply(
+    state: AppState,
+    targets: list[dict[str, str]],
+    value: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Any, AsyncMock]:
+    """Fill one value into every target, as the Apply-to-selection control does."""
+    return await _write(state, [{**t, "value": value} for t in targets], monkeypatch)
 
 
 @pytest.mark.asyncio
@@ -211,6 +226,97 @@ async def test_an_empty_value_clears_every_selected_cell(
     assert all("title" not in _values(state, node_id) for node_id in ids)
 
 
+@pytest.mark.asyncio
+async def test_a_paste_writes_a_different_value_per_cell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The point of paste: values that vary down the column."""
+    state, ids = _dataset_with_two_studies()
+
+    response, _ = await _write(
+        state,
+        [
+            {"node_id": ids[0], "field": "title", "value": "first"},
+            {"node_id": ids[1], "field": "title", "value": "second"},
+        ],
+        monkeypatch,
+    )
+
+    assert response.status_code == 200
+    assert [_values(state, node_id)["title"] for node_id in ids] == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_a_paste_is_one_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    state, ids = _dataset_with_two_studies()
+
+    _, saved = await _write(
+        state,
+        [
+            {"node_id": ids[0], "field": "title", "value": "first"},
+            {"node_id": ids[1], "field": "title", "value": "second"},
+        ],
+        monkeypatch,
+    )
+
+    assert saved.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_two_cells_of_one_row_are_written_together(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pasted row spans columns; rebuilding per cell would drop the earlier one."""
+    state, ids = _dataset_with_two_studies()
+
+    await _write(
+        state,
+        [
+            {"node_id": ids[0], "field": "title", "value": "both"},
+            {"node_id": ids[0], "field": "description", "value": "columns"},
+        ],
+        monkeypatch,
+    )
+
+    written = _values(state, ids[0])
+    assert written["title"] == "both"
+    assert written["description"] == "columns"
+
+
+@pytest.mark.asyncio
+async def test_a_pasted_value_the_column_cannot_hold_is_kept_as_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Discarding it silently would lose data; validation reports it instead."""
+    state, ids = _dataset_with_two_studies()
+    numeric = [
+        name
+        for name in state.facade.Study.all_fields
+        if state.facade.Study.field_info(name).get("type") in ("integer", "float")
+    ]
+    if not numeric:
+        pytest.skip("Study has no numeric column in this profile")
+
+    await _write(
+        state,
+        [{"node_id": ids[0], "field": numeric[0], "value": "not a number"}],
+        monkeypatch,
+    )
+
+    assert _values(state, ids[0])[numeric[0]] == "not a number"
+
+
+def test_the_browser_can_copy_and_paste_a_block() -> None:
+    """Both clipboard gestures are wired to the same one-request write."""
+    from pathlib import Path
+
+    script = Path("src/metaseed_hub/ui/static/js/hub.js").read_text()
+
+    assert "copy" in script and "paste" in script
+    assert "clipboardData" in script
+    assert "\\t" in script, "a copied block is tab separated, as spreadsheets read"
+
+
 def test_the_apply_control_is_reachable_from_the_table() -> None:
     """A capability with no control on the page is not a shipped feature."""
     from pathlib import Path
@@ -245,3 +351,21 @@ def test_the_parent_reference_rule_has_one_home() -> None:
     assert "def parent_reference_field" in helpers
     assert "parent_reference_field" in routes
     assert routes.count('_id"') == 0 or "parent_reference_field" in routes
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_block_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A selection is bounded by the visible table; an unbounded batch is not."""
+    state, ids = _dataset_with_two_studies()
+
+    response, saved = await _write(
+        state,
+        [
+            {"node_id": ids[0], "field": "title", "value": "x"}
+            for _ in range(table_routes.MAX_BLOCK_CELLS + 1)
+        ],
+        monkeypatch,
+    )
+
+    assert response.status_code == 400
+    assert saved.await_count == 0

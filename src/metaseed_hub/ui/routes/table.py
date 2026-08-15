@@ -28,6 +28,10 @@ logger = logging.getLogger("metaseed_hub")
 # Primitive types that are not entity types
 PRIMITIVE_TYPES = {"string", "integer", "float", "boolean", "date", "datetime", "uri"}
 
+# A block apply rebuilds one entity per row it touches; a selection is bounded
+# by the visible table, so anything far larger is a crafted request.
+MAX_BLOCK_CELLS = 1000
+
 
 def _handle_primitive_list_row(
     parent_node: TreeNode,
@@ -486,22 +490,27 @@ class BlockApplyRefusedError(Exception):
         self.reason = reason
 
 
-def _resolved_target(state: AppState, target: Any) -> tuple[str, str, Any]:
+def _resolved_cell(state: AppState, cell: Any) -> tuple[str, str, str, Any]:
     """Check one cell of a block and return what writing it needs.
 
-    Every target is resolved before any is written, so a block that cannot be
+    Every cell is resolved before any is written, so a block that cannot be
     applied whole is refused whole.
 
     Raises:
-        BlockApplyRefusedError: The target names a missing row, a field the entity does
+        BlockApplyRefusedError: The cell names a missing row, a field the entity does
             not have, or the column that references the row's parent.
     """
-    if not isinstance(target, dict):
+    if not isinstance(cell, dict):
         raise BlockApplyRefusedError("A selected cell is malformed.")
 
-    node_id = target.get("node_id")
-    field_name = target.get("field")
-    if not isinstance(node_id, str) or not isinstance(field_name, str):
+    node_id = cell.get("node_id")
+    field_name = cell.get("field")
+    raw_value = cell.get("value", "")
+    if (
+        not isinstance(node_id, str)
+        or not isinstance(field_name, str)
+        or not isinstance(raw_value, str)
+    ):
         raise BlockApplyRefusedError("A selected cell is malformed.")
 
     node = state.nodes_by_id.get(node_id)
@@ -526,7 +535,7 @@ def _resolved_target(state: AppState, target: Any) -> tuple[str, str, Any]:
             "change it by editing the row, not by filling cells."
         )
 
-    return node_id, field_name, helper
+    return node_id, field_name, raw_value, helper
 
 
 @router.post("/datasets/{dataset_id}/table/cells")
@@ -537,7 +546,12 @@ async def apply_value_to_cells(
     user: OptionalUser,
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Response:
-    """Write one value into every cell of a selected block, as a single save."""
+    """Write a block of cells, each with its own value, as a single save.
+
+    Filling one value into a selection sends that value repeated; pasting sends
+    values that differ. Both are this one write, so the two gestures cannot
+    drift apart on what is allowed or how a value is converted.
+    """
     dataset, state = dataset_state
 
     try:
@@ -547,13 +561,16 @@ async def apply_value_to_cells(
 
     if not isinstance(payload, dict):
         return HTMLResponse("Malformed request.", status_code=400)
-    raw_value = payload.get("value", "")
-    targets = payload.get("targets")
-    if not isinstance(raw_value, str) or not isinstance(targets, list) or not targets:
+    cells = payload.get("cells")
+    if not isinstance(cells, list) or not cells:
         return HTMLResponse("Nothing to apply.", status_code=400)
+    if len(cells) > MAX_BLOCK_CELLS:
+        # A selection is bounded by what is on screen; an unbounded batch is a
+        # crafted request, and rebuilding that many rows blocks the worker.
+        return HTMLResponse(f"A block is limited to {MAX_BLOCK_CELLS} cells.", status_code=400)
 
     try:
-        resolved = [_resolved_target(state, target) for target in targets]
+        resolved = [_resolved_cell(state, cell) for cell in cells]
     except BlockApplyRefusedError as refusal:
         return HTMLResponse(escape(refusal.reason), status_code=400)
 
@@ -561,7 +578,7 @@ async def apply_value_to_cells(
     # already refused: group by row, since several cells of one row share an
     # instance and must be rebuilt together.
     updates: dict[str, dict[str, Any]] = {}
-    for node_id, field_name, helper in resolved:
+    for node_id, field_name, raw_value, helper in resolved:
         values = updates.get(node_id)
         if values is None:
             instance = state.nodes_by_id[node_id].instance
@@ -577,12 +594,16 @@ async def apply_value_to_cells(
         try:
             values[field_name] = parse_form_field(raw_value, field_type)
         except ValueError:
+            # A value the column cannot hold is kept as typed rather than
+            # dropped: validation reports it, silence would lose it.
             values[field_name] = raw_value
 
     for node_id, values in updates.items():
         node = state.nodes_by_id[node_id]
         helper = getattr(state.get_or_create_facade(), node.entity_type)
-        state.update_node(node_id, helper.model.model_construct(**values))
+        # Written as a draft, like an added row: a value the column cannot hold
+        # is reported by validation, not lost between the paste and the save.
+        state.update_node(node_id, helper.model.model_construct(**values), skip_validation=True)
 
     await save_dataset_state(session, dataset, state, user)
 
