@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.37.0] - 260815
 
 ### Fixed
 - Stored XSS on the dataset page (introduced with the embedded DCAT card in
@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - A block apply is limited to 1000 cells. A selection is bounded by the
   visible table, so an unbounded batch was a crafted request that made the
   worker rebuild arbitrarily many entities.
+
+### Changed
+- metaseed floor raised to 0.39.0, whose `graph.js` is reusable without its
+  transport (metaseed#254).
 
 ### Added
 - A value that repeats down a column is entered once: shift-click selects a
