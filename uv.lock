@@ -1250,10 +1250,11 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.39.0"
+version = "0.41.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "jinja2" },
     { name = "mcp" },
     { name = "openpyxl" },
@@ -1265,9 +1266,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/de/c5/d1884657987715c00573a7ae9491cf2d85d3fe4c3dc1d57a3969946131cd/metaseed-0.39.0.tar.gz", hash = "sha256:0838645d922c02454e5f0e2961c761753e9f6959d97ce03a8cd1db12d92f7913", size = 724657, upload-time = "2026-08-15T19:29:10.212Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/88/7c609d38abf8153df6640eef8818db216eb53128c2abbdafe260622dbdda/metaseed-0.41.0.tar.gz", hash = "sha256:84adec2c5b71aafa1a4e4f77a7bf39731920352edd0ec219b3161fb50c29938c", size = 736415, upload-time = "2026-08-16T17:43:51.293Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/74/936cba2450ae8bd545fbc8076e1b91cc5e93bcc1b4423a6d617b29124b12/metaseed-0.39.0-py3-none-any.whl", hash = "sha256:3125d3ad4c59f039a9e739de2014aba391e8d69dea28864dd36c90b38096a206", size = 886207, upload-time = "2026-08-15T19:29:08.214Z" },
+    { url = "https://files.pythonhosted.org/packages/db/50/59ed911f2d6307d190537fb4aa3cf908db267738a4a2c378288c6434c3e6/metaseed-0.41.0-py3-none-any.whl", hash = "sha256:0c6deba3976782e6dace32b00aa998545a34c5db8ea1209f6246e5064b10d92d", size = 898959, upload-time = "2026-08-16T17:43:49.86Z" },
 ]
 
 [package.optional-dependencies]
@@ -1338,7 +1339,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.39.0,<1" },
+    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.41.0,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },

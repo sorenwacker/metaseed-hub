@@ -2,7 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.0] - 260817
+
+### Changed
+- metaseed floor raised to 0.41.0, which carries that library's full 260816
+  review remediation. The hub was verified clear of 0.41.0's removed names
+  before that release.
 
 ### Fixed
 - Stored XSS in the delete-draft error: the names of datasets using a spec —
