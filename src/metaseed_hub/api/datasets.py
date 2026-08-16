@@ -1,5 +1,6 @@
 """Dataset CRUD API endpoints."""
 
+import copy
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
@@ -98,6 +99,45 @@ class DatasetResponse(BaseModel):
     profile: str
     version: str
     data: dict[str, Any]
+
+
+async def _validated_data(
+    dataset: Dataset, data: dict[str, Any], session: AsyncSession
+) -> dict[str, Any]:
+    """The payload, once it is known to load under the dataset's profile.
+
+    Every UI mutation goes through the write load path, which refuses a payload
+    whose nodes the profile cannot place: saving serializes the loaded facade,
+    so anything that did not load is deleted by the next save. This route wrote
+    the payload straight in, so an API client could store a dataset the UI then
+    silently truncates.
+
+    Args:
+        dataset: The dataset being patched, for its profile and spec ids.
+        data: The proposed payload.
+        session: Database session, for spec drafts.
+
+    Returns:
+        ``data`` unchanged, when it loads.
+
+    Raises:
+        HTTPException: 409 when a node cannot be placed, 422 when the payload
+            is not loadable at all.
+    """
+    from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
+
+    proposed = copy.copy(dataset)
+    proposed.data = data
+    try:
+        await ensure_dataset_facade_for_write(proposed, session)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Dataset payload could not be loaded: {exc}",
+        ) from exc
+    return data
 
 
 @router.get("", response_model=list[DatasetResponse])
@@ -220,7 +260,7 @@ async def update_dataset(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
         dataset.name = dataset_data.name
     if dataset_data.data is not None:
-        dataset.data = dataset_data.data
+        dataset.data = await _validated_data(dataset, dataset_data.data, session)
 
     await session.commit()
     await session.refresh(dataset)
