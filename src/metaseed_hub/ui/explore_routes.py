@@ -58,15 +58,19 @@ class HubSpecLoader(SpecLoader):  # type: ignore[misc]
         self,
         version: str = "1.1",
         profile: str | None = None,
-        *,
-        ctx: Any = None,
     ) -> ProfileSpec:
-        """Load profile from database or built-in specs."""
+        """Load a profile from the database, else from the built-in specs.
+
+        The signature mirrors ``SpecLoader.load_profile`` exactly. It used to
+        accept a keyword-only ``ctx`` and pass it to ``super()``, which the
+        library's method does not take — so every fall-through to a built-in
+        profile raised TypeError and /explore was broken for all of them.
+        """
         if profile:
             key = f"{profile}/{version}"
             if key in self._db_specs:
                 return self._db_specs[key]
-        return super().load_profile(version, profile, ctx=ctx)
+        return super().load_profile(version, profile)
 
 
 async def load_profile_spec(
