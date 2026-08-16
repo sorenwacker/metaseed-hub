@@ -18,6 +18,7 @@ from starlette.responses import Response
 
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.ui.helpers import validate_csrf_token
+from metaseed_hub.ui.helpers.text import safe_filename
 from metaseed_hub.ui.spec_builder.access import (
     SpecInUseError,
     account_owner,
@@ -570,7 +571,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             raise HTTPException(status_code=400, detail="No spec in progress")
 
         yaml_content = spec_to_yaml(state.spec)
-        filename = f"{state.spec.name or 'profile'}.yaml"
+        filename = f"{safe_filename(state.spec.name or '', fallback='profile')}.yaml"
 
         return StreamingResponse(
             iter([yaml_content]),

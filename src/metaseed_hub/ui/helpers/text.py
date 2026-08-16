@@ -37,3 +37,23 @@ def escape_pattern_hyphen(pattern: str) -> str:
     result = re.sub(r"(_)-(\])", r"\1\\-\2", pattern)
     result = re.sub(r"(_)-([^\]])", r"\1\\-\2", result)
     return result
+
+
+def safe_filename(name: str, *, fallback: str = "download") -> str:
+    """A user-supplied name reduced to something safe in a header.
+
+    Interpolated into ``Content-Disposition: attachment; filename="{}"``. A
+    quote closes the filename and lets the rest read as further header
+    content; a newline splits the header outright. Both are the user's own
+    text — a dataset or spec name — so they are removed here rather than
+    forbidden at the point of naming.
+
+    Args:
+        name: The user-supplied name.
+        fallback: What to use when nothing survives.
+
+    Returns:
+        A filename-safe string, never empty.
+    """
+    cleaned = "".join(ch for ch in name if ch.isalnum() or ch in "-_.")
+    return cleaned or fallback

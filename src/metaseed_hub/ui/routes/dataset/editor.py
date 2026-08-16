@@ -32,6 +32,7 @@ from metaseed_hub.ui.helpers import (
 )
 from metaseed_hub.ui.helpers.load_report import skipped_node_message
 from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
+from metaseed_hub.ui.helpers.text import safe_filename
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.routes.seek import profile_supports_seek
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
@@ -608,7 +609,7 @@ async def dataset_export(
 
     # If no data, use dataset name for filename
     if not filename or filename == "export.xlsx":
-        filename = f"{dataset.name.replace(' ', '_')}.xlsx"
+        filename = f"{safe_filename(dataset.name, fallback='dataset')}.xlsx"
 
     return StreamingResponse(
         excel_bytes,
