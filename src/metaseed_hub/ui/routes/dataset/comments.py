@@ -50,25 +50,29 @@ async def _get_comments_html(
     )
     total_count = count_result.scalar() or 0
 
-    # Get top-level comments (no parent) with all nested relationships eagerly loaded
-    result = await session.execute(
+    # The whole thread in one query, then assembled here. The template's reply
+    # macro recurses without bound while eager loading stopped at two levels,
+    # so a reply at depth 3 was a lazy load on an AsyncSession — MissingGreenlet,
+    # a 500. Loading flat removes the coupling instead of moving the cliff.
+    thread = await session.execute(
         select(Comment)
-        .where(Comment.dataset_id == dataset_id, Comment.parent_id.is_(None))
-        .options(
-            selectinload(Comment.user),
-            selectinload(Comment.reactions),
-            selectinload(Comment.replies).selectinload(Comment.user),
-            selectinload(Comment.replies).selectinload(Comment.reactions),
-            selectinload(Comment.replies).selectinload(Comment.replies).selectinload(Comment.user),
-            selectinload(Comment.replies)
-            .selectinload(Comment.replies)
-            .selectinload(Comment.reactions),
-        )
+        .where(Comment.dataset_id == dataset_id)
+        .options(selectinload(Comment.user), selectinload(Comment.reactions))
         .order_by(Comment.created_at.desc())
-        .offset(offset)
-        .limit(limit)
     )
-    comments = list(result.scalars().all())
+    every = list(thread.scalars().all())
+
+    children: dict[str, list[Comment]] = {}
+    for comment in every:
+        if comment.parent_id:
+            children.setdefault(str(comment.parent_id), []).append(comment)
+    for comment in every:
+        # Set on the loaded instances, so the template never triggers a load
+        # at any depth.
+        comment.__dict__["replies"] = children.get(str(comment.id), [])
+
+    roots = [c for c in every if c.parent_id is None]
+    comments = roots[offset : offset + limit]
 
     has_more = (offset + len(comments)) < total_count
     next_offset = offset + limit
