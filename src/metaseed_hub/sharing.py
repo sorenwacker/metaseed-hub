@@ -29,6 +29,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import contains_eager
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -174,13 +175,18 @@ async def members_of(
     """Every membership of one resource, oldest first."""
     from metaseed_hub.models import User
 
+    # contains_eager, not a bare join: the join only filtered, leaving
+    # `member.user` a lazy relationship that the panel template dereferences
+    # per row — a sync load on an AsyncSession, i.e. MissingGreenlet and a 500
+    # for every member the request's identity map does not already hold.
     result = await session.execute(
         select(resource.member_model)
         .where(resource.owns_column() == resource_id)
         .join(User, resource.member_model.user_id == User.id)
+        .options(contains_eager(resource.member_model.user))
         .order_by(resource.member_model.created_at)
     )
-    return list(result.scalars().all())
+    return list(result.scalars().unique().all())
 
 
 async def role_of(
