@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Stored XSS in the delete-draft error: the names of datasets using a spec —
+  whatever their owners typed — were interpolated raw into an HTML fragment
+  htmx swaps into the page. The same class in `dataset_load_example` for the
+  dataset's profile and version. Both escaped, with a scan test that fails on
+  any unescaped value in an error `<div>`, because point fixes kept missing
+  siblings.
+- The members panel no longer 500s. `members_of` joined `User` to filter but
+  selected only membership rows, leaving `member.user` a lazy relationship the
+  template dereferences per row — a sync load on an async session. It looked
+  fine only because tests create every user in one session.
+- The comments panel no longer 500s at reply depth 3. The template's reply
+  macro recurses without bound while eager loading stopped at two levels; the
+  thread is now loaded flat in one query and assembled in Python.
+- `/explore` works for built-in profiles again. `HubSpecLoader.load_profile`
+  forwarded a `ctx` argument the library's method does not accept, so every
+  fall-through to a built-in profile raised TypeError. A test now compares the
+  override against the library signature it inherits.
+- `PATCH /api/datasets/{id}` validates the payload it stores. It assigned
+  `dataset.data` and committed, skipping the write load path every UI mutation
+  goes through — so an API client could store nodes the profile cannot place,
+  which the next UI save silently deletes.
+
 ## [0.37.0] - 260815
 
 ### Fixed
