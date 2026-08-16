@@ -49,6 +49,23 @@ __all__ = ["register_draft_routes"]
 logger = logging.getLogger(__name__)
 
 
+def _dependent_datasets_message(names: list[str]) -> str:
+    """Why a spec cannot be deleted, with the dataset names escaped.
+
+    A dataset name is whatever its owner typed, and this message is an HTML
+    fragment htmx swaps into the page — so the names are content, never markup.
+    """
+    from html import escape
+
+    shown = ", ".join(escape(n) for n in names[:3])
+    if len(names) > 3:
+        shown += f" and {len(names) - 3} more"
+    return (
+        f"Cannot delete: {len(names)} dataset(s) are using this spec "
+        f"({shown}). Delete or migrate the datasets first."
+    )
+
+
 def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register draft editing, publishing, and viewing routes."""
 
@@ -129,13 +146,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         dependent_datasets = await delete_draft_row(session, draft)
         if dependent_datasets:
-            dataset_names = ", ".join(dependent_datasets[:3])
-            if len(dependent_datasets) > 3:
-                dataset_names += f" and {len(dependent_datasets) - 3} more"
-            msg = (
-                f"Cannot delete: {len(dependent_datasets)} dataset(s) are using "
-                f"this spec ({dataset_names}). Delete or migrate the datasets first."
-            )
+            msg = _dependent_datasets_message(dependent_datasets)
             return HTMLResponse(
                 content=f'<div class="notification notification-error">{msg}</div>',
                 headers={"HX-Reswap": "beforeend", "HX-Retarget": "#notification-container"},

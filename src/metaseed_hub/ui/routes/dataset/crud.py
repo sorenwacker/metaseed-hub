@@ -51,6 +51,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger("metaseed_hub")
 
 
+def _no_example_message(profile: str, version: str, *, found: bool) -> str:
+    """Why no example could be loaded, with the profile and version escaped.
+
+    Both are stored per dataset and reach this HTML fragment, which htmx swaps
+    into the page — so they are content, never markup.
+    """
+    from html import escape
+
+    what = "example file found for" if found else "example available for"
+    return f"No {what} {escape(str(profile))} v{escape(str(version))}"
+
+
 @router.get("/new", response_class=HTMLResponse)
 async def dataset_new(
     request: Request,
@@ -749,13 +761,19 @@ async def dataset_load_example(
     version_dir = examples_dir / dataset.profile / dataset.version
 
     if not version_dir.exists():
-        msg = f"No example available for {dataset.profile} v{dataset.version}"
-        return HTMLResponse(f"<div class='error'>{msg}</div>")
+        return HTMLResponse(
+            f"<div class='error'>"
+            f"{_no_example_message(dataset.profile, dataset.version, found=False)}"
+            f"</div>"
+        )
 
     yaml_files = list(version_dir.glob("*.yaml"))
     if not yaml_files:
-        msg = f"No example file found for {dataset.profile} v{dataset.version}"
-        return HTMLResponse(f"<div class='error'>{msg}</div>")
+        return HTMLResponse(
+            f"<div class='error'>"
+            f"{_no_example_message(dataset.profile, dataset.version, found=True)}"
+            f"</div>"
+        )
 
     example_file = yaml_files[0]
     try:
