@@ -2253,14 +2253,7 @@ textarea {
 }
 
 /* A cell in a shift-selected block, waiting for one value to be applied. */
-.editable-cell.cell-selected {
-    outline: 2px solid var(--clr-accent, #2f6f4f);
-    outline-offset: -2px;
-}
 
-.editable-cell.cell-selected .cell-display {
-    background: var(--clr-ivory);
-}
 
 .editable-cell .cell-input {
     display: none;

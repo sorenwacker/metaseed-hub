@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- Multi-cell editing, and the `MULTI_CELL_EDITING` flag that hid it. What was
+  built was a button that applied one value to a selected block; the intent was
+  an Excel-like grid, which it was not, and the selection gesture was never
+  finished. Bulk editing is served by downloading the workbook, editing it, and
+  importing it back — a path this release also fixes.
+
 ### Fixed
 - Importing a workbook no longer writes a count into a containment field. The
   export gives each such field a column holding a number, because the children

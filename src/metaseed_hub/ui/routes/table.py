@@ -16,7 +16,6 @@ from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import build_inline_tables, save_dataset_state
-from metaseed_hub.ui.helpers.tables import parent_reference_field
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.routes.table_rows import (
@@ -31,10 +30,6 @@ from metaseed_hub.ui.routes.table_rows import (
 router = APIRouter(tags=["table"])
 
 logger = logging.getLogger("metaseed_hub")
-
-# A block apply rebuilds one entity per row it touches; a selection is bounded
-# by the visible table, so anything far larger is a crafted request.
-MAX_BLOCK_CELLS = 1000
 
 
 @router.post(
@@ -277,137 +272,6 @@ async def update_table_cell(
     model_class = helper.model
     instance = model_class.model_construct(**current_values)
     state.update_node(node_id, instance)
-    await save_dataset_state(session, dataset, state, user)
-
-    return Response(
-        status_code=200,
-        headers={"HX-Trigger": "entityChanged"},
-    )
-
-
-class BlockApplyRefusedError(Exception):
-    """A block apply that must not be written, with the reason to report."""
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(reason)
-        self.reason = reason
-
-
-def _resolved_cell(state: AppState, cell: Any) -> tuple[str, str, str, Any]:
-    """Check one cell of a block and return what writing it needs.
-
-    Every cell is resolved before any is written, so a block that cannot be
-    applied whole is refused whole.
-
-    Raises:
-        BlockApplyRefusedError: The cell names a missing row, a field the entity does
-            not have, or the column that references the row's parent.
-    """
-    if not isinstance(cell, dict):
-        raise BlockApplyRefusedError("A selected cell is malformed.")
-
-    node_id = cell.get("node_id")
-    field_name = cell.get("field")
-    raw_value = cell.get("value", "")
-    if (
-        not isinstance(node_id, str)
-        or not isinstance(field_name, str)
-        or not isinstance(raw_value, str)
-    ):
-        raise BlockApplyRefusedError("A selected cell is malformed.")
-
-    node = state.nodes_by_id.get(node_id)
-    if node is None:
-        raise BlockApplyRefusedError(
-            "A selected row no longer exists. Reload the dataset and select again."
-        )
-
-    facade = state.get_or_create_facade()
-    try:
-        helper = getattr(facade, node.entity_type)
-    except AttributeError as exc:
-        raise BlockApplyRefusedError(f"{node.entity_type} is not part of this profile.") from exc
-
-    if field_name not in set(helper.all_fields):
-        raise BlockApplyRefusedError(f"{field_name} is not a field of {node.entity_type}.")
-
-    parent = state.nodes_by_id.get(node.parent_id) if node.parent_id else None
-    if parent is not None and field_name == parent_reference_field(parent.entity_type):
-        raise BlockApplyRefusedError(
-            f"{field_name} links a row to its {parent.entity_type}; "
-            "change it by editing the row, not by filling cells."
-        )
-
-    return node_id, field_name, raw_value, helper
-
-
-@router.post("/datasets/{dataset_id}/table/cells")
-async def apply_value_to_cells(
-    request: Request,
-    dataset_id: str,
-    dataset_state: Annotated[tuple[Dataset, AppState], Depends(get_dataset_state_for_mutation)],
-    user: OptionalUser,
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> Response:
-    """Write a block of cells, each with its own value, as a single save.
-
-    Filling one value into a selection sends that value repeated; pasting sends
-    values that differ. Both are this one write, so the two gestures cannot
-    drift apart on what is allowed or how a value is converted.
-    """
-    dataset, state = dataset_state
-
-    try:
-        payload = await request.json()
-    except Exception:
-        return HTMLResponse("Malformed request.", status_code=400)
-
-    if not isinstance(payload, dict):
-        return HTMLResponse("Malformed request.", status_code=400)
-    cells = payload.get("cells")
-    if not isinstance(cells, list) or not cells:
-        return HTMLResponse("Nothing to apply.", status_code=400)
-    if len(cells) > MAX_BLOCK_CELLS:
-        # A selection is bounded by what is on screen; an unbounded batch is a
-        # crafted request, and rebuilding that many rows blocks the worker.
-        return HTMLResponse(f"A block is limited to {MAX_BLOCK_CELLS} cells.", status_code=400)
-
-    try:
-        resolved = [_resolved_cell(state, cell) for cell in cells]
-    except BlockApplyRefusedError as refusal:
-        return HTMLResponse(escape(refusal.reason), status_code=400)
-
-    # Resolution is complete, so every write below lands or the batch was
-    # already refused: group by row, since several cells of one row share an
-    # instance and must be rebuilt together.
-    updates: dict[str, dict[str, Any]] = {}
-    for node_id, field_name, raw_value, helper in resolved:
-        values = updates.get(node_id)
-        if values is None:
-            instance = state.nodes_by_id[node_id].instance
-            values = (
-                instance.model_dump(exclude_none=True) if hasattr(instance, "model_dump") else {}
-            )
-            updates[node_id] = values
-
-        if raw_value == "":
-            values.pop(field_name, None)
-            continue
-        field_type = helper.field_info(field_name).get("type", "string")
-        try:
-            values[field_name] = parse_form_field(raw_value, field_type)
-        except ValueError:
-            # A value the column cannot hold is kept as typed rather than
-            # dropped: validation reports it, silence would lose it.
-            values[field_name] = raw_value
-
-    for node_id, values in updates.items():
-        node = state.nodes_by_id[node_id]
-        helper = getattr(state.get_or_create_facade(), node.entity_type)
-        # Written as a draft, like an added row: a value the column cannot hold
-        # is reported by validation, not lost between the paste and the save.
-        state.update_node(node_id, helper.model.model_construct(**values), skip_validation=True)
-
     await save_dataset_state(session, dataset, state, user)
 
     return Response(

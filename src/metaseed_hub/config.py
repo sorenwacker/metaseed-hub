@@ -26,7 +26,6 @@ class Settings(BaseSettings):
     #: OFF by default: the selection gesture does not work in the browser yet,
     #: and a control that does nothing is worse than an absent one. Set
     #: MULTI_CELL_EDITING=true to work on it in a deployment.
-    multi_cell_editing: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
