@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- The admin page lists published specifications with how many datasets use
+  each, most used first. Which specifications are load-bearing, and which
+  nothing uses, was not visible anywhere: the count existed only inside the
+  refusal to delete a draft that datasets depend on. Counted the same way that
+  refusal counts it — soft-deleted datasets excluded, across every account,
+  because publishing is what makes a specification available to others.
+
 ## [0.39.2] - 260817
 
 ### Fixed

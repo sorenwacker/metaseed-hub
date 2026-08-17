@@ -151,6 +151,53 @@ async def _spec_counts_by_user(session: AsyncSession) -> dict[str, int]:
     return {user_id: count for user_id, count in result.all()}
 
 
+async def _dataset_counts_by_spec(session: AsyncSession) -> dict[str, int]:
+    """Return ``{spec_id: datasets using it}`` for every published spec in use.
+
+    Counted the way the delete refusal counts dependents — by ``spec_id``, with
+    soft-deleted datasets excluded — so the page and the refusal cannot
+    disagree about what "in use" means. A dataset the owner deleted must not
+    keep a specification looking load-bearing forever.
+
+    Deliberately global rather than per tenant: publishing is what makes a
+    specification available to other accounts, so a spec published in one and
+    used in another is in use. Specs nothing uses are absent from the mapping,
+    which the caller reads as zero.
+
+    Args:
+        session: Database session.
+
+    Returns:
+        Mapping of spec id to the number of datasets built on it.
+    """
+    result = await session.execute(
+        select(Dataset.spec_id, func.count(Dataset.id))
+        .where(Dataset.spec_id.is_not(None), Dataset.deleted_at.is_(None))
+        .group_by(Dataset.spec_id)
+    )
+    return {spec_id: count for spec_id, count in result.all()}
+
+
+async def _dataset_counts_by_draft(session: AsyncSession) -> dict[str, int]:
+    """Return ``{draft_id: datasets using it}``, the draft counterpart.
+
+    A draft is the specification its datasets validate against just as much as
+    a published spec is, and deleting one is refused for the same reason.
+
+    Args:
+        session: Database session.
+
+    Returns:
+        Mapping of draft id to the number of datasets built on it.
+    """
+    result = await session.execute(
+        select(Dataset.spec_draft_id, func.count(Dataset.id))
+        .where(Dataset.spec_draft_id.is_not(None), Dataset.deleted_at.is_(None))
+        .group_by(Dataset.spec_draft_id)
+    )
+    return {draft_id: count for draft_id, count in result.all()}
+
+
 async def record_login(session: AsyncSession, user: TokenUser) -> None:
     """Stamp ``last_login_at`` for the user who just completed sign-in.
 
@@ -320,6 +367,19 @@ async def admin_dashboard(
     )
     dataset_activity = [(row.date, row.count) for row in dataset_activity_result]
 
+    # Published specifications, most used first, so the ones nothing uses fall
+    # to the bottom where they are easy to spot.
+    spec_usage = await _dataset_counts_by_spec(session)
+    specs_result = await session.execute(
+        select(Spec)
+        .options(selectinload(Spec.created_by))
+        .where(Spec.deleted_at.is_(None), Spec.status == SpecStatus.PUBLISHED)
+    )
+    specs_in_use = sorted(
+        specs_result.scalars().all(),
+        key=lambda spec: (-spec_usage.get(spec.id, 0), spec.name.lower(), spec.version),
+    )
+
     # User list for admin
     users_result = await session.execute(
         select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
@@ -337,6 +397,8 @@ async def admin_dashboard(
             "users": users,
             "dataset_counts": await _dataset_counts_by_user(session),
             "spec_counts": await _spec_counts_by_user(session),
+            "specs_in_use": specs_in_use,
+            "spec_usage": spec_usage,
             "recent_errors": await _recent_errors(session),
             "error_counts": await _error_counts_by_day(session),
             "using_default_secret_key": get_settings().using_default_secret_key,

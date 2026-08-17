@@ -138,6 +138,41 @@
 
     <!-- User Directory -->
     <section class="admin-section">
+        <h2>Published Specifications</h2>
+        <p class="section-description">
+            How many datasets validate against each specification, counted the way
+            the delete refusal counts them: soft-deleted datasets excluded, and
+            across every account, because publishing is what makes a specification
+            available to other people. Most used first, so the ones nothing uses
+            fall to the bottom.
+        </p>
+        {% if specs_in_use %}
+        <table class="admin-table admin-table-full">
+            <thead>
+                <tr>
+                    <th>Specification</th>
+                    <th>Version</th>
+                    <th>Author</th>
+                    <th title="Datasets built on this specification, in any account">Datasets</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for spec in specs_in_use %}
+                <tr>
+                    <td>{{ spec.name }}</td>
+                    <td>{{ spec.version }}</td>
+                    <td>{{ spec.created_by.email if spec.created_by else 'Unknown' }}</td>
+                    <td>{{ spec_usage.get(spec.id, 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Nothing published yet.</p>
+        {% endif %}
+    </section>
+
+    <section class="admin-section">
         <h2>User Directory</h2>
         <p class="section-description">Registered users.</p>
         {% if users %}
