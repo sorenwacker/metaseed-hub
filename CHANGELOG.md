@@ -34,6 +34,10 @@ All notable changes to this project will be documented in this file.
   else in the codebase hard-deletes a dataset — so an erased account kept its
   stored data, invisible and unowned. Rows a second owner shares are left
   restorable.
+- A soft-deleted user loses membership-based access immediately. The three
+  access-ladder helpers resolved the caller by identity provider subject alone,
+  so a deleted account with a still-valid token kept reading and editing
+  datasets shared with it — the path the MCP layer had already closed.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or

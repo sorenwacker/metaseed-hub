@@ -102,6 +102,31 @@ async def verify_tenant_access(
     return tenant
 
 
+async def _live_user(session: AsyncSession, user: TokenUser) -> User | None:
+    """Resolve the caller's account, treating a soft-deleted one as absent.
+
+    Admin deletion sets ``deleted_at`` and deliberately leaves DatasetMember
+    rows in place, so resolving by ``keycloak_id`` alone let a deleted user
+    keep membership-based access for as long as their token stayed valid. The
+    MCP layer already enforces this; the three access-ladder helpers share this
+    lookup so they cannot drift apart from it again.
+
+    Args:
+        session: Database session.
+        user: The authenticated caller.
+
+    Returns:
+        The live User row, or None when there is none.
+    """
+    found = await session.execute(
+        select(User).where(
+            User.keycloak_id == user.keycloak_id,
+            User.deleted_at.is_(None),
+        )
+    )
+    return found.scalar_one_or_none()
+
+
 async def get_dataset_for_user(
     dataset_id: str,
     session: AsyncSession,
@@ -140,8 +165,7 @@ async def get_dataset_for_user(
         pass  # Not tenant owner, check DatasetMember
 
     # Check if user has access via DatasetMember
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
+    db_user = await _live_user(session, user)
 
     if db_user:
         member_result = await session.execute(
@@ -190,8 +214,7 @@ async def get_dataset_for_editor(
     except HTTPException:
         pass  # Not tenant owner; the membership's role decides.
 
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
+    db_user = await _live_user(session, user)
     if db_user:
         member_result = await session.execute(
             select(DatasetMember).where(
@@ -240,8 +263,7 @@ async def require_dataset_owner(
     except HTTPException:
         pass  # Not tenant owner, require an OWNER-role membership.
 
-    db_user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
-    db_user = db_user_result.scalar_one_or_none()
+    db_user = await _live_user(session, user)
     if db_user:
         owner_result = await session.execute(
             select(DatasetMember).where(
