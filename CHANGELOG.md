@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Requires metaseed 0.42.0, which no longer ships the ISA-MIAPPE Combined
+  (reconciled) profile. A dataset still bound to it has no built-in spec to
+  validate against.
+
 ### Fixed
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
