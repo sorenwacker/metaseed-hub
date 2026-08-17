@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Malformed comment ids on spec drafts are 404s. The ids are UUID-typed
   columns, so an unparsable value raised a database error on Postgres while
   SQLite-backed tests coerced it and passed.
+- Example data can only be read from metaseed's examples directory. The
+  dataset's profile and version are free text and were joined straight onto
+  the path, so `..` walked out of the package and an absolute value discarded
+  the base entirely.
 
 ### Added
 - The footer shows metaseed's GitHub stars beside the hub's, each labelled

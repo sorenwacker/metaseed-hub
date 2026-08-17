@@ -51,6 +51,32 @@ if TYPE_CHECKING:
 logger = logging.getLogger("metaseed_hub")
 
 
+def example_version_dir(examples_dir: Path, profile: str, version: str) -> Path | None:
+    """The example directory for a profile version, if it is really one.
+
+    `profile` and `version` are free text on the dataset, so joining them onto
+    a base directory is not enough: `".."` walks out of the package and an
+    absolute segment discards the base entirely. The result is resolved and
+    required to sit under `examples_dir`.
+
+    Args:
+        examples_dir: Root of metaseed's packaged examples.
+        profile: Profile name carried by the dataset.
+        version: Profile version carried by the dataset.
+
+    Returns:
+        The resolved directory, or None when it escapes the root or does not
+        exist.
+    """
+    root = examples_dir.resolve()
+    candidate = (root / profile / version).resolve()
+    if not candidate.is_relative_to(root) or candidate == root:
+        return None
+    if not candidate.is_dir():
+        return None
+    return candidate
+
+
 def _no_example_message(profile: str, version: str, *, found: bool) -> str:
     """Why no example could be loaded, with the profile and version escaped.
 
@@ -653,8 +679,8 @@ async def dataset_create(
     )
     if load_example == "true":
         examples_dir = Path(metaseed.__file__).parent / "examples"
-        version_dir = examples_dir / profile / version
-        yaml_files = list(version_dir.glob("*.yaml")) if version_dir.exists() else []
+        version_dir = example_version_dir(examples_dir, profile, version)
+        yaml_files = list(version_dir.glob("*.yaml")) if version_dir else []
 
         if yaml_files:
             try:
@@ -758,9 +784,9 @@ async def dataset_load_example(
 
     # Find example YAML file
     examples_dir = Path(metaseed.__file__).parent / "examples"
-    version_dir = examples_dir / dataset.profile / dataset.version
+    version_dir = example_version_dir(examples_dir, dataset.profile, dataset.version)
 
-    if not version_dir.exists():
+    if version_dir is None:
         return HTMLResponse(
             f"<div class='error'>"
             f"{_no_example_message(dataset.profile, dataset.version, found=False)}"
