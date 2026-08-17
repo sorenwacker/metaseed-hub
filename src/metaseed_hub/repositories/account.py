@@ -245,12 +245,12 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
         .scalars()
         .all()
     )
-    for membership in spec_memberships:
-        other_owner = (
+    for spec_membership in spec_memberships:
+        other_spec_owner = (
             (
                 await session.execute(
                     select(SpecMember).where(
-                        SpecMember.spec_id == membership.spec_id,
+                        SpecMember.spec_id == spec_membership.spec_id,
                         SpecMember.user_id != user.id,
                         SpecMember.role == SpecRole.OWNER,
                     )
@@ -259,9 +259,9 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
             .scalars()
             .first()
         )
-        if other_owner is not None:
+        if other_spec_owner is not None:
             continue
-        doomed_specs.append(membership.spec_id)
+        doomed_specs.append(spec_membership.spec_id)
 
     # Deleted as statements rather than ORM instances: the membership rows are
     # loaded in this session, and the ORM would try to blank their primary-key

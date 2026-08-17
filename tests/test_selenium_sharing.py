@@ -127,11 +127,13 @@ def test_a_spec_draft_can_be_shared_with_a_colleague(driver) -> None:
     )
     driver.execute_script("arguments[0].click();", sharing_tab)
     email_field = WebDriverWait(driver, 20).until(
-        EC.visibility_of_element_located((By.CSS_SELECTOR, '.member-add-form input[name="email"]'))
+        EC.visibility_of_element_located(
+            (By.CSS_SELECTOR, '[data-testid="share-form"] input[name="email"]')
+        )
     )
     # Typed in a casing of the sharer's choosing, as a person would.
     email_field.send_keys(invitee_email.upper())
-    driver.find_element(By.CSS_SELECTOR, ".member-add-form button[type='submit']").click()
+    driver.find_element(By.CSS_SELECTOR, "[data-testid='share-form'] button[type='submit']").click()
 
     # The collaborator must appear in the member list, not a "log in first" toast.
     WebDriverWait(driver, 20).until(
