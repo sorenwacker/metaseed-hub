@@ -23,7 +23,10 @@ from metaseed_hub.api import health
 class _Boom:
     """A connection attempt that fails the way a real one leaks detail."""
 
-    message = "connection to server at 'db.internal' (10.0.0.7), port 5432 failed: FATAL: role 'metaseed_prod' does not exist"
+    message = (
+        "connection to server at 'db.internal' (10.0.0.7), port 5432 failed: "
+        "FATAL: role 'metaseed_prod' does not exist"
+    )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         raise OSError(self.message)
@@ -34,16 +37,16 @@ def both_services_fail(monkeypatch: pytest.MonkeyPatch) -> _Boom:
     boom = _Boom()
     monkeypatch.setattr(health, "create_async_engine", boom)
 
-    class _Redis:
-        @staticmethod
-        def from_url(*args: Any, **kwargs: Any) -> Any:
-            raise OSError(_Boom.message)
+    # Patch the module's own attribute, not a sys.modules entry: health.py does
+    # `import redis.asyncio as redis`, which binds the attribute off the parent
+    # package whenever redis.asyncio has genuinely been imported — so a
+    # sys.modules substitution silently loses to the real module.
+    import redis.asyncio
 
-    import sys
+    def _refuse(*args: Any, **kwargs: Any) -> Any:
+        raise OSError(_Boom.message)
 
-    module = type(sys)("redis.asyncio")
-    module.from_url = _Redis.from_url  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "redis.asyncio", module)
+    monkeypatch.setattr(redis.asyncio, "from_url", _refuse)
     return boom
 
 
