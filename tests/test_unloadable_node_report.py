@@ -366,18 +366,52 @@ class TestTheBrowserRefusal:
             assert "Study" in message
             assert "would delete them" in message
 
-    async def test_the_mutation_dependency_collects_what_did_not_load(self) -> None:
-        """The dependency must pass a collector, or the refusal can never fire."""
-        import inspect
+    async def test_the_mutation_dependency_refuses_what_did_not_load(
+        self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A browser edit against a damaged dataset is refused, not silently lossy.
 
+        Asserted through the dependency's behaviour rather than its source: the
+        collector moved into ``ensure_dataset_facade_for_write`` and a test that
+        grepped for ``on_skip=`` failed on a refactor that changed nothing a
+        caller can observe.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        from metaseed_hub.access import tenant_slug_for
         from metaseed_hub.ui import dependencies
+        from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
 
-        source = inspect.getsource(dependencies.get_dataset_state_for_mutation)
-        assert "on_skip=" in source, (
-            "get_dataset_state_for_mutation must collect skipped nodes; without a "
-            "collector every browser edit silently deletes them"
+        tenant = make_tenant(slug=tenant_slug_for("mutrefuse-kc"))
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant, keycloak_id="mutrefuse-kc")
+        session.add(user)
+        await session.flush()
+        dataset = make_dataset(tenant=tenant, name="damaged-for-mutation")
+        dataset.data = _tree_with_an_unloadable_node()
+        flag_modified(dataset, "data")
+        session.add(dataset)
+        await session.commit()
+
+        token = TokenUser(sub="mutrefuse-kc", email=user.email, name="U", roles=[])
+        monkeypatch.setattr(
+            dependencies, "get_current_user_from_cookie", AsyncMock(return_value=token)
         )
-        assert "unloadable_node_refusal" in source
+        csrf = get_or_create_csrf_token(Mock(cookies={}))
+        request = Mock()
+        request.cookies = {CSRF_TOKEN_COOKIE: csrf}
+        request.headers = {"X-CSRF-Token": csrf}
+
+        with pytest.raises(HTTPException) as refusal:
+            await dependencies.get_dataset_state_for_mutation(
+                request=request, dataset_id=dataset.id, session=session
+            )
+
+        assert refusal.value.status_code == 409
+        assert "would delete them" in str(refusal.value.detail)
 
 
 class TestImportRoutesRefuseToo:

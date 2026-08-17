@@ -30,15 +30,12 @@ from metaseed_hub.auth import TokenUser, verify_token
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, Tenant, User
 from metaseed_hub.ui.helpers import (
-    ensure_dataset_facade,
+    ensure_dataset_facade_for_write,
     normalize_email,
     validate_csrf_token,
 )
-from metaseed_hub.ui.helpers.load_report import BROWSER_WAY_THROUGH, unloadable_node_refusal
 
 if TYPE_CHECKING:
-    from metaseed import SkippedNode
-
     from metaseed_hub.ui.metaseed_ui import AppState
 
 logger = logging.getLogger("metaseed_hub")
@@ -244,17 +241,11 @@ async def get_dataset_state_for_mutation(
     # since sharing shipped; nothing on the content paths read it).
     dataset = await get_dataset_for_editor(dataset_id, session, user)
 
-    # Get or create AppState for the dataset
-    # Use ensure_dataset_facade to properly load specs from database for draft specs.
-    # Collect the nodes the load could not place: saving rewrites the dataset from
-    # what loaded, so editing one cell is what deletes them. Refusing here covers
-    # every browser mutation at once, the way _editing covers every MCP one.
-    skipped: list[SkippedNode] = []
-    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
-    if skipped:
-        raise HTTPException(
-            status_code=409,
-            detail=unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH),
-        )
+    # The write-path loader: it refuses the nodes the load could not place
+    # (saving rewrites the dataset from what loaded, so editing one cell is what
+    # deletes them) and demands a client, because a writer cannot operate
+    # facade-less even on an empty dataset. Refusing here covers every browser
+    # mutation at once, the way _editing covers every MCP one.
+    state = await ensure_dataset_facade_for_write(dataset, session)
 
     return dataset, state

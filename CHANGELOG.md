@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
 - Importing a file into a dataset built on a hub specification no longer
   answers 500. The route derived the root entity through the built-in profile
   loader, which cannot resolve a draft's or published spec's name.
+- A browser edit refuses a dataset whose specification could not be loaded.
+  The mutation dependency had reimplemented the write-path loader and left out
+  its demand for a client, so an empty dataset with a broken spec accepted
+  edits against an improvised facade.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or
