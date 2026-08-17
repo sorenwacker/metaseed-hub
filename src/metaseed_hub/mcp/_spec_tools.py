@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
+from metaseed_hub.mcp._contracts import ProfileSpecResolver
 from metaseed_hub.models import SpecDraft
 
 if TYPE_CHECKING:
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
     Caller = Callable[[], AbstractAsyncContextManager[tuple[AsyncSession, User]]]
     OwnedDraft = Callable[[AsyncSession, User, str], Awaitable[SpecDraft]]
     Building = Callable[[AsyncSession, SpecDraft, User], AbstractAsyncContextManager[Any]]
-    ProfileSpecResolver = Callable[[AsyncSession, str, str], Awaitable[Any]]
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -276,7 +276,9 @@ def register_spec_tools(  # noqa: C901
         import copy
 
         async with caller() as (session, user):
-            spec = copy.deepcopy(await profile_spec(session, profile, version))
+            spec = copy.deepcopy(
+                await profile_spec(session, profile, version, prefer_tenant=user.tenant_id)
+            )
             draft_name = name.strip() or spec.name
             draft = await _new_named_draft(
                 session, user, draft_name, spec, template_source=(profile, version)

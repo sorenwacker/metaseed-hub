@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - `/api/health` reports an unhealthy service without describing it. The
   endpoint is unauthenticated and connection errors carry the host, port,
   database name and user; those now go to the server log instead.
+- `get_profile_relationships` and `spec_clone` resolve a profile name in the
+  caller's own tenant, as `create_dataset` and `get_profile_schema` already
+  did. When two tenants publish the same name and version, the tools no longer
+  disagree about which specification that name denotes.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or

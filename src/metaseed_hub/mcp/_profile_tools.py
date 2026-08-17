@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from metaseed_hub.mcp._contracts import ProfileSpecResolver
+
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
     from mcp.server.fastmcp import FastMCP
@@ -25,7 +27,6 @@ if TYPE_CHECKING:
     from metaseed_hub.models import User
 
     Caller = Callable[[], AbstractAsyncContextManager[tuple[AsyncSession, User]]]
-    ProfileSpecLookup = Callable[[AsyncSession, str, str], Awaitable[Any]]
 
 
 def _identifier_info(entity_def: Any) -> tuple[str | None, str | None]:
@@ -57,7 +58,7 @@ def _identifier_info(entity_def: Any) -> tuple[str | None, str | None]:
 
 
 def register_profile_tools(
-    mcp: FastMCP, *, caller: Caller, profile_spec: ProfileSpecLookup
+    mcp: FastMCP, *, caller: Caller, profile_spec: ProfileSpecResolver
 ) -> None:
     """Register the profile relationship tools with the hub's MCP server.
 
@@ -86,7 +87,7 @@ def register_profile_tools(
         from metaseed.facade import ProfileFacade
 
         async with caller() as (session, _user):
-            spec = await profile_spec(session, profile, version)
+            spec = await profile_spec(session, profile, version, prefer_tenant=_user.tenant_id)
 
         facade = ProfileFacade(spec.name, spec=spec)
         hierarchy: dict[str, Any] = {}
