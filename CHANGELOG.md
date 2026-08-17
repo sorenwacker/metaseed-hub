@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
   validate against.
 
 ### Fixed
+- `/api/health` reports an unhealthy service without describing it. The
+  endpoint is unauthenticated and connection errors carry the host, port,
+  database name and user; those now go to the server log instead.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or

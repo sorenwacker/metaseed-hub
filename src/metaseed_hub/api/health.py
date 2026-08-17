@@ -1,5 +1,6 @@
 """Health check endpoint."""
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter
@@ -10,6 +11,8 @@ from metaseed_hub._version import __version__
 from metaseed_hub.config import get_settings
 
 router = APIRouter()
+
+logger = logging.getLogger("metaseed_hub")
 
 
 @router.get("/health")
@@ -33,8 +36,12 @@ async def health_check() -> dict[str, Any]:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         status["services"]["database"] = "healthy"
-    except Exception as e:
-        status["services"]["database"] = f"unhealthy: {e}"
+    except Exception:
+        # The endpoint is unauthenticated, and connection errors carry host,
+        # port, database and user names. The caller learns the state; the
+        # operator reads the reason in the log.
+        logger.exception("health check: database unreachable")
+        status["services"]["database"] = "unhealthy"
         status["status"] = "degraded"
     finally:
         # Dispose even on failure, or the engine's connection pool leaks on
@@ -50,8 +57,9 @@ async def health_check() -> dict[str, Any]:
         client = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
         await client.ping()
         status["services"]["redis"] = "healthy"
-    except Exception as e:
-        status["services"]["redis"] = f"unhealthy: {e}"
+    except Exception:
+        logger.exception("health check: redis unreachable")
+        status["services"]["redis"] = "unhealthy"
         status["status"] = "degraded"
     finally:
         if client is not None:
