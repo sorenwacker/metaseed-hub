@@ -41,10 +41,10 @@ class _RecordingResolver:
         prefer_tenant: str | None = None,
     ) -> Any:
         self.calls.append({"profile": profile, "version": version, "prefer_tenant": prefer_tenant})
-        raise _StopHere
+        raise _ResolverObservedError
 
 
-class _StopHere(Exception):
+class _ResolverObservedError(Exception):
     """Raised once the resolver has been observed; the rest is not under test."""
 
 
@@ -83,7 +83,7 @@ async def test_get_profile_relationships_prefers_the_callers_tenant() -> None:
     mcp = _FakeMCP()
     register_profile_tools(mcp, caller=_caller, profile_spec=resolver)
 
-    with pytest.raises(_StopHere):
+    with pytest.raises(_ResolverObservedError):
         await mcp.tools["get_profile_relationships"]("miappe", "1.1")
 
     assert resolver.calls[0]["prefer_tenant"] == "tenant-of-the-caller"
@@ -101,7 +101,7 @@ async def test_spec_clone_prefers_the_callers_tenant() -> None:
         profile_spec=resolver,
     )
 
-    with pytest.raises(_StopHere):
+    with pytest.raises(_ResolverObservedError):
         await mcp.tools["spec_clone"]("miappe", "1.1")
 
     assert resolver.calls[0]["prefer_tenant"] == "tenant-of-the-caller"
