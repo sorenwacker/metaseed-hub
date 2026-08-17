@@ -131,6 +131,30 @@ async def _post_login_landing(session: "AsyncSession", token_user: "TokenUser") 
     return "/hub/" if (datasets or specs) else "/hub/home"
 
 
+async def _after_sign_in(session: "AsyncSession", token_user: "TokenUser") -> str:
+    """Record the sign-in, make sure the account exists, and say where to go.
+
+    Provisioning belongs here rather than on whichever page the user reaches
+    first. A newcomer is sent to the Home guide precisely because they have no
+    account yet, and that page renders without creating one — so someone could
+    sign in, read it, and remain unresolvable to sharing, which finds people by
+    the address on their account.
+
+    Args:
+        session: Database session.
+        token_user: The person who just signed in.
+
+    Returns:
+        The path to redirect them to.
+    """
+    from metaseed_hub.ui.dependencies import ensure_tenant_and_user
+    from metaseed_hub.ui.routes.admin import record_login
+
+    await record_login(session, token_user)
+    await ensure_tenant_and_user(session, token_user)
+    return await _post_login_landing(session, token_user)
+
+
 @router.get("/callback")
 async def auth_callback(
     request: Request,
@@ -195,14 +219,14 @@ async def auth_callback(
     try:
         from metaseed_hub.auth import verify_token
         from metaseed_hub.database import db
-        from metaseed_hub.ui.routes.admin import record_login
 
         token_user = await verify_token(access_token)
         async with db.session_factory() as db_session:
-            await record_login(db_session, token_user)
-            landing = await _post_login_landing(db_session, token_user)
+            landing = await _after_sign_in(db_session, token_user)
     except Exception:
-        logger.exception("Could not record the sign-in")
+        # Never block the redirect: a bookkeeping or provisioning failure must
+        # not lock a user out, and the next authenticated page retries both.
+        logger.exception("Could not complete the sign-in bookkeeping")
 
     response = RedirectResponse(url=landing, status_code=302)
     response.delete_cookie(key=STATE_COOKIE)

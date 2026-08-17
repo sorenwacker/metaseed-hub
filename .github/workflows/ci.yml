@@ -61,15 +61,20 @@ jobs:
         run: uv run pytest tests/ -v -m "not selenium" --ignore=tests/test_models.py --ignore=tests/test_multi_spec.py --ignore=tests/test_entity_persistence.py --ignore=tests/test_entity_service.py --ignore=tests/test_routes_integration.py
 
   selenium:
-    # Browser end-to-end (login -> create dataset -> export). Advisory: a real
-    # browser + Keycloak round-trip is inherently flaky, so it must never block a
-    # merge. Brings up the full stack via docker compose (postgres/redis/keycloak).
+    # Browser end-to-end (login -> create dataset -> export -> share). Blocking:
+    # it was advisory on the theory that a browser + Keycloak round-trip is too
+    # flaky to gate, and it then failed unnoticed for six days while shipping a
+    # bug it had caught -- an account was never created for someone who signed in
+    # and read only the Home guide, so nobody could share anything with them. A
+    # check nobody has to read reports nothing. The warm-up gate below (a real
+    # password-grant token) is what makes it steady enough to block on; if it
+    # turns flaky again, fix the flake rather than restoring continue-on-error.
+    # Brings up the full stack via docker compose (postgres/redis/keycloak).
     # Runs on pushes to main, tags, and manual dispatch -- not on every PR push --
-    # to conserve Actions minutes (it never gates a merge). Run it on a branch
-    # via the Actions "Run workflow" button when a UI change needs pre-merge cover.
+    # to conserve Actions minutes. Run it on a branch via the Actions
+    # "Run workflow" button when a UI change needs pre-merge cover.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       # Credentials come from repo secrets (the same throwaway dev fixtures the
       # compose stack and docker/keycloak-realm.json use), so no secret literal

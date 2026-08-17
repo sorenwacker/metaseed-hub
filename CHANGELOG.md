@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2] - 260817
+
+### Fixed
+- Signing in creates the account, instead of leaving it to whichever page the
+  person happened to open first. A newcomer is sent to the Home guide because
+  they have no account yet, and that page rendered without creating one — so a
+  colleague could sign in, read it, and stay unresolvable to sharing, which
+  finds people by the address on their account. They looked signed in and could
+  not be shared with.
+
+### Changed
+- The browser tests block the build again. They were advisory on the grounds
+  that a browser and Keycloak round-trip is too flaky to gate, and then failed
+  unnoticed for six days while shipping the bug above, which they had caught.
+
 ## [0.39.1] - 260817
 
 ### Fixed
