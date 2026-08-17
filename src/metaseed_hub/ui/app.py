@@ -38,7 +38,7 @@ from metaseed_hub.ui.helpers import (
     humanize_field_name,
 )
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR, METASEED_TEMPLATES_DIR
-from metaseed_hub.ui.render import get_repo_stars, render_template
+from metaseed_hub.ui.render import get_metaseed_stars, get_repo_stars, render_template
 from metaseed_hub.ui.routes import (
     admin_router,
     auth_router,
@@ -215,6 +215,7 @@ def create_hub_app() -> FastAPI:
 
     # Expose the cached GitHub star count to the footer on every page
     templates.env.globals["get_repo_stars"] = get_repo_stars
+    templates.env.globals["get_metaseed_stars"] = get_metaseed_stars
 
     # Mount hub static files
     app.mount("/hub-static", StaticFiles(directory=str(STATIC_DIR)), name="hub-static")

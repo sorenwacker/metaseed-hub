@@ -34,6 +34,7 @@ _TEMPLATES = Jinja2Templates(directory="src/metaseed_hub/ui/templates")
 # The page templates extend base.html, which calls these. The app registers them
 # in create_ui_app; a direct endpoint call has to supply them itself.
 _TEMPLATES.env.globals["get_repo_stars"] = lambda *_: None
+_TEMPLATES.env.globals["get_metaseed_stars"] = lambda *_: None
 _TEMPLATES.env.globals["is_admin"] = lambda *_: False
 
 

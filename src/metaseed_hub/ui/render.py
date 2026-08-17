@@ -14,6 +14,10 @@ from metaseed_hub.config import get_settings
 from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
 
 HUB_REPO = "sorenwacker/metaseed-hub"
+#: The library this hub is a consumer of. Its stars sit beside the hub's own,
+#: each labelled, because two bare star counts side by side say nothing about
+#: which project they belong to.
+METASEED_REPO = "sorenwacker/metaseed"
 _STARS_OK_TTL_SECONDS = 3600
 _STARS_FAIL_TTL_SECONDS = 300
 # repo -> (fetched_at_monotonic, star_count_or_none, ttl_seconds)
@@ -186,3 +190,13 @@ def render_template(
     set_csrf_cookie(request, response, csrf_token)
 
     return response
+
+
+def get_metaseed_stars() -> int | None:
+    """Stars for the library this hub consumes.
+
+    A zero-argument wrapper on purpose: the templates call star getters with no
+    arguments, and tests stub them the same way, so a repo-taking global would
+    break every page that renders the footer under test.
+    """
+    return get_repo_stars(METASEED_REPO)

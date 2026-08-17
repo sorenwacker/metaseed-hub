@@ -82,7 +82,11 @@
             </span>
             {% set repo_stars = get_repo_stars() %}
             {% if repo_stars is not none %}
-            <a href="https://github.com/sorenwacker/metaseed-hub" target="_blank" rel="noopener" class="footer-link" title="Star metaseed-hub on GitHub">&#9733; {{ repo_stars }}</a>
+            <a href="https://github.com/sorenwacker/metaseed-hub" target="_blank" rel="noopener" class="footer-link" title="metaseed-hub on GitHub — {{ repo_stars }} stars">&#9733; {{ repo_stars }} metaseed-hub</a>
+            {% endif %}
+            {% set metaseed_stars = get_metaseed_stars() %}
+            {% if metaseed_stars is not none %}
+            <a href="https://github.com/sorenwacker/metaseed" target="_blank" rel="noopener" class="footer-link" title="metaseed on GitHub — {{ metaseed_stars }} stars">&#9733; {{ metaseed_stars }} metaseed</a>
             {% endif %}
             <a href="https://github.com/sorenwacker/metaseed-hub/issues" target="_blank" rel="noopener" class="footer-link">Report issue</a>
             {# These pages existed but nothing linked to them, so a privacy

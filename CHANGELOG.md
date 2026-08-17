@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- The footer shows metaseed's GitHub stars beside the hub's, each labelled
+  with its repository and carrying a hover title. Two bare star counts side by
+  side said nothing about which project they belonged to.
+
 ## [0.38.1] - 260817
 
 ### Changed

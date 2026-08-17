@@ -11,7 +11,11 @@ from __future__ import annotations
 from fastapi.templating import Jinja2Templates
 
 TEMPLATES = Jinja2Templates(directory="src/metaseed_hub/ui/templates")
-TEMPLATES.env.globals["get_repo_stars"] = lambda: 0
+# Tolerant of arguments and registered for both getters: these tests build a
+# bare environment, so every template global the real app registers has to be
+# stubbed here or the page fails to render for an unrelated reason.
+TEMPLATES.env.globals["get_repo_stars"] = lambda *a, **k: 0
+TEMPLATES.env.globals["get_metaseed_stars"] = lambda *a, **k: 0
 
 
 def _render(**ctx) -> str:
