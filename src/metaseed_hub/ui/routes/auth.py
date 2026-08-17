@@ -369,6 +369,7 @@ async def auth_create_token(
         encrypt_secret(secret),
         max_age=NEW_TOKEN_TTL_SECONDS,
         httponly=True,
+        secure=not get_settings().debug,
         samesite="lax",
         path="/hub/auth/profile",
     )

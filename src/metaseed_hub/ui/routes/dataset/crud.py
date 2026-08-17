@@ -2,6 +2,7 @@
 
 import copy
 import logging
+from html import escape
 from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -83,8 +84,6 @@ def _no_example_message(profile: str, version: str, *, found: bool) -> str:
     Both are stored per dataset and reach this HTML fragment, which htmx swaps
     into the page — so they are content, never markup.
     """
-    from html import escape
-
     what = "example file found for" if found else "example available for"
     return f"No {what} {escape(str(profile))} v{escape(str(version))}"
 
@@ -513,9 +512,11 @@ async def dataset_import_source(
     try:
         client = run_source_import(dataset.profile, value.strip())
     except LookupError:
+        # dataset.profile is a draft's name for spec-backed datasets, so it is
+        # text its author chose. Escaped like _import_failure_message does.
         return HTMLResponse(
             f"<div class='notification error'>No importer is registered for the "
-            f"{dataset.profile} profile.</div>",
+            f"{escape(dataset.profile)} profile.</div>",
             status_code=404,
         )
     except Exception as exc:
@@ -535,7 +536,7 @@ async def dataset_import_source(
     if not client.serialize().get("entities"):
         return HTMLResponse(
             f"<div class='notification error'>Nothing was found for "
-            f"'{value.strip()}'. Check the identifier and try again.</div>",
+            f"'{escape(value.strip())}'. Check the identifier and try again.</div>",
             status_code=404,
         )
 

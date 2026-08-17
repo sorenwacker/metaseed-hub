@@ -272,3 +272,84 @@ async def test_a_private_record_is_distinguished_from_a_missing_one(
         )
 
     assert "refused access" in response.body.decode()
+
+
+async def test_a_not_found_accession_is_reported_as_text_not_markup(
+    session: AsyncSession,
+) -> None:
+    """The value is reflected input; the route escaped it in one branch only.
+
+    `_import_failure_message` escapes carefully, and the exception branch uses
+    it. The empty-result and missing-importer branches interpolated the raw
+    form value and the stored profile name straight into the fragment htmx
+    swaps into the page.
+    """
+    dataset, token = await _dataset(session)
+    payload = "<script>alert(1)</script>"
+
+    def _nothing(_accession: str, **_kw: object) -> MetaseedClient:
+        return MetaseedClient("pride", "1.0")
+
+    with patch("metaseed.pride.import_accession", _nothing):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value=payload
+        )
+
+    body = response.body.decode()
+    assert response.status_code == 404
+    assert payload not in body
+    assert "&lt;script&gt;" in body
+
+
+async def test_a_missing_importer_does_not_reflect_the_stored_profile(
+    session: AsyncSession,
+) -> None:
+    """A draft-backed dataset's profile is the draft's name, which its author chose.
+
+    The dataset must still load — the write-path loader refuses one whose spec
+    it cannot resolve — so the profile carrying markup is a real draft name,
+    not an arbitrary string.
+    """
+    from metaseed_hub.models import SpecDraft
+
+    name = "<img src=x onerror=alert(1)>"
+    dataset, token = await _dataset(session)
+    draft = SpecDraft(
+        tenant_id=dataset.tenant_id,
+        user_id=(await _db_user(session, token)).id,
+        name=name,
+        version="1.0",
+        spec_data={
+            "name": name,
+            "version": "1.0",
+            "root_entity": "Trial",
+            "entities": {
+                "Trial": {"fields": [{"name": "trial_id", "type": "string", "is_identifier": True}]}
+            },
+        },
+    )
+    session.add(draft)
+    await session.flush()
+    dataset.spec_draft_id = draft.id
+    dataset.profile = name
+    dataset.version = "1.0"
+    await session.commit()
+
+    response = await dataset_import_source(
+        _csrf_request(), dataset.id, session, token, value="anything"
+    )
+
+    body = response.body.decode()
+    assert response.status_code == 404
+    assert "<img src=x" not in body
+    assert "&lt;img" in body
+
+
+async def _db_user(session: AsyncSession, token) -> object:
+    """The stored User row behind a token, for rows that need its id."""
+    from sqlalchemy import select
+
+    from metaseed_hub.models import User
+
+    found = await session.execute(select(User).where(User.keycloak_id == token.keycloak_id))
+    return found.scalar_one()

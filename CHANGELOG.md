@@ -38,6 +38,12 @@ All notable changes to this project will be documented in this file.
   access-ladder helpers resolved the caller by identity provider subject alone,
   so a deleted account with a still-valid token kept reading and editing
   datasets shared with it — the path the MCP layer had already closed.
+- The one-shot cookie carrying a new personal access token is marked secure
+  outside debug, like every other cookie this app writes. It held a live
+  credential for sixty seconds.
+- Two error branches of the source import escape what they echo back: the
+  submitted value, and the profile name, which for a spec-backed dataset is a
+  draft name its author chose.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or
