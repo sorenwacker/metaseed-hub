@@ -383,8 +383,12 @@ class WebSocketManager:
                 },
             )
 
-        # Clean up empty rooms
-        if not room.connections:
+        # Clean up empty rooms. `room` was captured before three suspension
+        # points, so by now the key may hold a different room (a join arrived)
+        # or none at all (a concurrent leave got here first). Delete only the
+        # room this call actually emptied: deleting by key alone unsubscribes a
+        # live room's channel, and its users go silently undelivered.
+        if not room.connections and self._rooms.get(project_id) is room:
             del self._rooms[project_id]
             if self._pubsub:
                 channel = self._get_channel_name(project_id)

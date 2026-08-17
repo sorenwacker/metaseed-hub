@@ -24,6 +24,11 @@ All notable changes to this project will be documented in this file.
   The mutation dependency had reimplemented the write-path loader and left out
   its demand for a client, so an empty dataset with a broken spec accepted
   edits against an improvised facade.
+- A connection leaving a room deletes only the room it emptied. The check ran
+  against a reference captured before three awaits, so two simultaneous leaves
+  raised KeyError, and a leave racing a join unsubscribed a room that had live
+  connections — those users stopped receiving broadcasts with the socket still
+  open.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or
