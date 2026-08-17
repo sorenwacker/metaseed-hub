@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.0] - 260817
 
 ### Changed
 - Requires metaseed 0.42.0, which no longer ships the ISA-MIAPPE Combined
