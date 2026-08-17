@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
   (reconciled) profile. A dataset still bound to it has no built-in spec to
   validate against.
 
+### Removed
+- `SpecNotFoundError`, which nothing raised; the single load path reports a
+  missing or empty spec as `DatasetDataLoadError`. An exception class nothing
+  raises invites `except` clauses that can never fire.
+- A second `spec_to_dict` in `spec_builder_helpers`, unused and near-identical
+  to the one in `spec_builder/state.py` that is actually called.
+- The `now` parameter of `select_expired` and `prune`. It was never read, yet
+  its docstring said callers could pin a reference time in tests — and six
+  tests passed it believing so.
+
 ### Fixed
 - `/api/health` reports an unhealthy service without describing it. The
   endpoint is unauthenticated and connection errors carry the host, port,

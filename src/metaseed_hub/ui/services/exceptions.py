@@ -32,16 +32,6 @@ class FacadeLoadError(EntityServiceError):
     pass
 
 
-class SpecNotFoundError(EntityServiceError):
-    """Spec referenced by dataset does not exist or has no data.
-
-    Raised when a dataset references a spec_draft_id or spec_id but the
-    spec cannot be found in the database or has empty spec_data.
-    """
-
-    pass
-
-
 class DatasetDataLoadError(EntityServiceError):
     """Stored dataset entity data could not be deserialized.
 

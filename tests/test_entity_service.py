@@ -701,7 +701,7 @@ class TestEntityServiceWithPublishedSpec:
     async def test_missing_published_spec_returns_clear_error(
         self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Dataset whose published spec row cannot be loaded raises SpecNotFoundError.
+        """Dataset whose published spec row cannot be loaded raises DatasetDataLoadError.
 
         The FK is SET NULL, so a dangling spec_id cannot be stored; simulate the
         defensive branch by stubbing the spec lookup to return no row.
@@ -724,7 +724,7 @@ class TestEntityServiceWithPublishedSpec:
     async def test_empty_published_spec_data_returns_clear_error(
         self, session: AsyncSession
     ) -> None:
-        """Published spec with empty spec_data raises SpecNotFoundError."""
+        """Published spec with empty spec_data raises DatasetDataLoadError."""
         dataset = await self._make_published_spec_dataset(session, {})
 
         service = EntityService(session, dataset)

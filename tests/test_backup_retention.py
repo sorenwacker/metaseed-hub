@@ -52,7 +52,7 @@ def test_recent_dumps_are_all_kept(tmp_path: Path) -> None:
     paths = _paths(tmp_path, times)
     policy = RetentionPolicy(last=3, daily=0, weekly=0, monthly=0)
 
-    expired = select_expired(paths, policy=policy, now=NOW)
+    expired = select_expired(paths, policy=policy)
 
     assert {p.name for p in expired} == {dump_name(times[3]), dump_name(times[4])}
 
@@ -70,7 +70,7 @@ def test_one_dump_per_day_survives_within_the_daily_horizon(tmp_path: Path) -> N
     paths = _paths(tmp_path, times)
     policy = RetentionPolicy(last=1, daily=7, weekly=0, monthly=0)
 
-    kept = {p.name for p in paths} - {p.name for p in select_expired(paths, policy=policy, now=NOW)}
+    kept = {p.name for p in paths} - {p.name for p in select_expired(paths, policy=policy)}
 
     # 13:00 is the newest dump of each day, so that is the one each day keeps.
     assert kept == {dump_name(_on_day(d, 13)) for d in range(7)}
@@ -83,7 +83,7 @@ def test_weekly_and_monthly_tiers_keep_older_dumps_alive(tmp_path: Path) -> None
     policy = RetentionPolicy(last=3, daily=7, weekly=4, monthly=6)
 
     kept = sorted(
-        (p for p in paths if p not in set(select_expired(paths, policy=policy, now=NOW))),
+        (p for p in paths if p not in set(select_expired(paths, policy=policy))),
         key=lambda p: parse_dump_time(p),  # type: ignore[arg-type,return-value]
         reverse=True,
     )
@@ -105,7 +105,7 @@ def test_the_newest_dump_is_never_expired(tmp_path: Path) -> None:
     paths = _paths(tmp_path, times)
     policy = RetentionPolicy(last=0, daily=0, weekly=0, monthly=0)
 
-    expired = select_expired(paths, policy=policy, now=NOW)
+    expired = select_expired(paths, policy=policy)
 
     assert dump_name(times[0]) not in {p.name for p in expired}
 
@@ -116,7 +116,7 @@ def test_prune_deletes_only_expired_files_and_leaves_strangers(tmp_path: Path) -
     (tmp_path / "README").write_text("not a dump")
     policy = RetentionPolicy(last=1, daily=2, weekly=0, monthly=0)
 
-    deleted = prune(tmp_path, policy=policy, now=NOW)
+    deleted = prune(tmp_path, policy=policy)
 
     remaining = {p.name for p in tmp_path.iterdir()}
     assert remaining == {"README", dump_name(times[0]), dump_name(times[1])}
@@ -128,7 +128,7 @@ def test_dry_run_reports_without_deleting(tmp_path: Path) -> None:
     _paths(tmp_path, times)
     policy = RetentionPolicy(last=1, daily=1, weekly=0, monthly=0)
 
-    deleted = prune(tmp_path, policy=policy, now=NOW, dry_run=True)
+    deleted = prune(tmp_path, policy=policy, dry_run=True)
 
     assert deleted, "the dry run must still report what it would remove"
     assert len(list(tmp_path.iterdir())) == 5

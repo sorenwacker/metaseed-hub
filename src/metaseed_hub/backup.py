@@ -103,15 +103,15 @@ def select_expired(
     paths: Iterable[Path],
     *,
     policy: RetentionPolicy,
-    now: datetime | None = None,
 ) -> list[Path]:
     """Return the dumps that no tier of ``policy`` keeps.
+
+    Buckets come from the dumps' own timestamps, so there is no reference time
+    to pin: retention is relative to the newest dump, not to the clock.
 
     Args:
         paths: Candidate files; non-dumps are ignored, never returned.
         policy: The tiers to apply.
-        now: Unused for bucketing (buckets come from the dumps themselves) but
-            accepted so callers can pin a reference time in tests.
 
     Returns:
         Paths safe to delete, oldest first. The most recent dump is never
@@ -138,7 +138,6 @@ def prune(
     directory: Path,
     *,
     policy: RetentionPolicy,
-    now: datetime | None = None,
     dry_run: bool = False,
 ) -> list[Path]:
     """Delete the dumps in ``directory`` that ``policy`` no longer keeps.
@@ -146,7 +145,7 @@ def prune(
     Returns:
         The dumps deleted, or that would be deleted when ``dry_run``.
     """
-    expired = select_expired(directory.iterdir(), policy=policy, now=now)
+    expired = select_expired(directory.iterdir(), policy=policy)
     for path in expired:
         if dry_run:
             logger.info("would delete %s", path.name)

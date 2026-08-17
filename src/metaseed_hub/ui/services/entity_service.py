@@ -108,10 +108,13 @@ class EntityService:
             Populated AppState ready for entity operations.
 
         Raises:
-            SpecNotFoundError: If spec_draft_id or spec_id is set but the spec
-                cannot be found.
-            FacadeLoadError: If client creation fails for any reason.
-            DatasetDataLoadError: If stored entity data cannot be deserialized.
+            DatasetDataLoadError: If no client could be built for the dataset —
+                a missing or empty spec included — or its stored entity data
+                cannot be deserialized.
+            HTTPException: 409 naming the nodes that did not load. This is not
+                an EntityServiceError, so a caller catching only that will let
+                it propagate, which is intended: the refusal carries the way
+                through for the user.
         """
         from metaseed.api.client import MetaseedClient
 

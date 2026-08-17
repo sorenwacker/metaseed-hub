@@ -130,19 +130,6 @@ def spec_to_yaml(spec: ProfileSpec) -> str:
     return result
 
 
-def spec_to_dict(spec: ProfileSpec) -> dict[str, Any]:
-    """Convert a ProfileSpec to a dictionary.
-
-    Args:
-        spec: The ProfileSpec to convert.
-
-    Returns:
-        Dictionary representation of the spec with enums as strings.
-    """
-    result: dict[str, Any] = spec.model_dump(mode="json", exclude_none=True, exclude_defaults=False)
-    return result
-
-
 def list_available_templates() -> list[dict[str, Any]]:
     """List available profiles that can be used as templates.
 

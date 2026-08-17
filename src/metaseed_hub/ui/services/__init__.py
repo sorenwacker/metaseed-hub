@@ -6,7 +6,6 @@ from .exceptions import (
     EntityServiceError,
     EntityTypeNotFoundError,
     FacadeLoadError,
-    SpecNotFoundError,
 )
 
 __all__ = [
@@ -16,5 +15,4 @@ __all__ = [
     "EntityServiceError",
     "EntityTypeNotFoundError",
     "FacadeLoadError",
-    "SpecNotFoundError",
 ]
