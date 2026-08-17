@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- A cell edit that names an item the list does not have is refused instead of
+  editing a different one. `idx` came off the URL and was checked with
+  `idx < len(list)`, which is true for every negative number, so `-1` edited or
+  deleted the last item; an index past the end changed nothing yet still
+  answered 200.
+- A field name the entity does not have is a 400, not a 500. Four table
+  handlers passed it to `field_info`, which raises `KeyError`.
+
 ### Added
 - The footer shows metaseed's GitHub stars beside the hub's, each labelled
   with its repository and carrying a hover title. Two bare star counts side by
