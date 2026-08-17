@@ -150,8 +150,11 @@ async def _after_sign_in(session: "AsyncSession", token_user: "TokenUser") -> st
     from metaseed_hub.ui.dependencies import ensure_tenant_and_user
     from metaseed_hub.ui.routes.admin import record_login
 
-    await record_login(session, token_user)
+    # Provision before stamping: record_login needs a row to write to, and for
+    # a first-time user there is none until this runs, so their very first
+    # sign-in went unrecorded and the admin directory read "Never".
     await ensure_tenant_and_user(session, token_user)
+    await record_login(session, token_user)
     return await _post_login_landing(session, token_user)
 
 

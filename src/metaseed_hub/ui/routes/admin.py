@@ -201,10 +201,11 @@ async def _dataset_counts_by_draft(session: AsyncSession) -> dict[str, int]:
 async def record_login(session: AsyncSession, user: TokenUser) -> None:
     """Stamp ``last_login_at`` for the user who just completed sign-in.
 
-    Called from the OIDC callback, so it records a sign-in rather than a request.
-    The user row is created lazily on the first page, so an unknown subject is a
-    no-op; and because this is bookkeeping, any failure is swallowed — a user
-    must not be locked out because a write to this column failed.
+    Called from the OIDC callback, so it records a sign-in rather than a request,
+    and after the account is provisioned so a first sign-in has a row to stamp.
+    An unknown subject is still a no-op; and because this is bookkeeping, any
+    failure is swallowed — a user must not be locked out because a write to this
+    column failed.
     """
     try:
         db_user = (

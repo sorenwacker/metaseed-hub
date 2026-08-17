@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- A first sign-in is recorded. The stamp was written before the account was
+  provisioned, so a brand-new user had no row to write to and the admin
+  directory showed "Never" for someone who had just arrived.
+
 ### Added
 - The admin page lists published specifications with how many datasets use
   each, most used first. Which specifications are load-bearing, and which
