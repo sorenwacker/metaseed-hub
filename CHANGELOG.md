@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.1] - 260817
 
 ### Changed
 - Block cell selection, fill and paste are behind `MULTI_CELL_EDITING`, off by
