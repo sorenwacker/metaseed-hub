@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -16,6 +18,26 @@ from metaseed_hub.ui.spec_builder.access import require_draft_access
 from ._common import SessionDep, UserContextDep
 
 __all__ = ["register_comment_routes"]
+
+
+def _is_comment_id(value: str) -> bool:
+    """Whether `value` could name a comment.
+
+    SpecComment ids are UUID-typed columns, so a malformed value raises a
+    DBAPIError on Postgres rather than matching nothing. Checking the syntax
+    first turns that 500 into the 404 it always was.
+
+    Args:
+        value: A client-supplied comment id.
+
+    Returns:
+        True when the value parses as a UUID.
+    """
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> None:
@@ -90,6 +112,10 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         # spec_draft_id scoping the sibling delete/react routes enforce.
         resolved_parent_id: str | None = None
         if parent_id:
+            if not _is_comment_id(parent_id):
+                return HTMLResponse(
+                    "<div class='error'>Parent comment not found</div>", status_code=404
+                )
             parent = (
                 await session.execute(
                     select(SpecComment).where(
@@ -122,6 +148,9 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         """Delete a spec comment (only by owner)."""
         user_id, _ = user_ctx
         await require_draft_access(session, draft_id, user_id)
+
+        if not _is_comment_id(comment_id):
+            return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
 
         # Find comment and verify ownership. Scope by spec_draft_id so the
         # comment can only be deleted through the draft it belongs to, matching
@@ -158,6 +187,9 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
             reaction_type = ReactionType(reaction)
         except ValueError:
             return HTMLResponse("<div class='error'>Invalid reaction</div>", status_code=400)
+
+        if not _is_comment_id(comment_id):
+            return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
 
         # Confirm the comment belongs to the URL draft before reacting, mirroring
         # delete_spec_comment. Without this a member of one draft could toggle a

@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
   answered 200.
 - A field name the entity does not have is a 400, not a 500. Four table
   handlers passed it to `field_info`, which raises `KeyError`.
+- Malformed comment ids on spec drafts are 404s. The ids are UUID-typed
+  columns, so an unparsable value raised a database error on Postgres while
+  SQLite-backed tests coerced it and passed.
 
 ### Added
 - The footer shows metaseed's GitHub stars beside the hub's, each labelled
