@@ -124,3 +124,54 @@ def test_the_export_delegates_rather_than_duplicating() -> None:
     assert "number_format" not in source, (
         "cell-level formatting has crept back into the hub's export"
     )
+
+
+# Templates that draw a *specification's* structure -- its entity definitions
+# and the containment fields between them -- rather than a dataset's entities.
+# Different data and a different picture: metaseed's graph.js renders the
+# `{nodes, edges, entity_types}` a dataset facade produces, and has nothing to
+# say about a spec that has no instances yet. They are not copies of it.
+DRAW_A_SPECIFICATION_NOT_A_DATASET = {
+    "explore/compare.html",
+    "explore/view.html",
+    "explore/view_builtin.html",
+    "spec_builder/view.html",
+}
+
+
+def test_no_template_draws_the_dataset_graph_itself() -> None:
+    """The entity graph is metaseed's; a template redrawing it is a fork.
+
+    `graph.html` carried ~280 lines of inlined vis.js drawing -- a lesser copy of
+    `metaseed/ui/static/js/graph.js`, which has the legend with per-entity-type
+    counts, click-a-type-to-hide, and the layout controls. The copy existed
+    because the library's drawing could not be reused without its transport;
+    that is no longer true, so a reappearance is drift rather than necessity.
+    """
+    from pathlib import Path
+
+    templates = Path("src/metaseed_hub/ui/templates")
+    offenders: list[str] = []
+    for path in sorted(templates.rglob("*.html")):
+        name = str(path.relative_to(templates))
+        if name in DRAW_A_SPECIFICATION_NOT_A_DATASET:
+            continue
+        if "new vis.Network" in path.read_text():
+            offenders.append(name)
+
+    assert not offenders, (
+        "these draw the dataset graph themselves rather than loading metaseed's "
+        "graph.js:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_graph_page_loads_the_library_drawing() -> None:
+    """Deleting the fork is only half of it; the page must use the real one."""
+    from pathlib import Path
+
+    page = Path("src/metaseed_hub/ui/templates/graph.html").read_text()
+
+    assert "/hub/static/js/graph.js" in page, "the graph page must load metaseed's graph.js"
+    assert "METASEED_GRAPH_URL" in page, (
+        "the host supplies the data URL; that is the whole of its side of the contract"
+    )

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The graph page loads metaseed's drawing instead of its own. `graph.html`
+  inlined about 280 lines of vis.js — a lesser copy of the library's, without
+  the legend counts or click-a-type-to-hide it now gets for free. The page
+  supplies the dataset's data URL and nothing else, and a gate test fails if a
+  hub-side copy grows back.
+
 ### Fixed
 - A first sign-in is recorded. The stamp was written before the account was
   provisioned, so a brand-new user had no row to write to and the admin
