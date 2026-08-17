@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
   caller's own tenant, as `create_dataset` and `get_profile_schema` already
   did. When two tenants publish the same name and version, the tools no longer
   disagree about which specification that name denotes.
+- Importing a file into a dataset built on a hub specification no longer
+  answers 500. The route derived the root entity through the built-in profile
+  loader, which cannot resolve a draft's or published spec's name.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or

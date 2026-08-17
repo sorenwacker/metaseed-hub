@@ -745,7 +745,6 @@ async def dataset_import_into_existing(
     import json
 
     import yaml
-    from metaseed.specs.loader import SpecLoader
 
     try:
         validate_csrf_or_error(request)
@@ -763,12 +762,24 @@ async def dataset_import_into_existing(
         )
     filename = file.filename or ""
 
-    # The profile's root entity type: the default for payloads without a _type
-    # marker (a profile name is never an entity type), and the first type
-    # processed so children can attach to it.
-    loader = SpecLoader(profile=dataset.profile)
-    spec = loader.load_profile(dataset.version, dataset.profile)
-    root_entity = spec.root_entity or "Investigation"
+    # Get dataset state first: it is what knows the root entity. Deriving that
+    # from a built-in SpecLoader instead raised SpecLoadError for every dataset
+    # built on a hub draft or published spec, whose profile is the spec's name.
+    # The write-path loader refuses when a stored node did not load: this route
+    # saves below, and saving a partial load is what deletes the skipped nodes.
+    try:
+        state = await ensure_dataset_facade_for_write(dataset, session)
+    except HTTPException as exc:
+        return HTMLResponse(
+            f"<div class='notification error'>{html.escape(str(exc.detail))}</div>",
+            status_code=exc.status_code,
+        )
+    facade = state.get_or_create_facade()
+
+    # The default type for payloads without a _type marker (a profile name is
+    # never an entity type), and the first type processed so children attach.
+    root_types = state.get_root_entity_types()
+    root_entity = root_types[0] if root_types else "Investigation"
 
     # Parse based on file type
     entities_by_type: dict[str, list[dict[str, Any]]] = {}
@@ -802,18 +813,6 @@ async def dataset_import_into_existing(
             f"<div class='notification error'>Parse error: {html.escape(str(e)[:200])}</div>",
             status_code=400,
         )
-
-    # Get dataset state and add entities. The write-path loader refuses when a
-    # stored node did not load: this route saves below, and saving a partial
-    # load is what deletes the nodes that were skipped.
-    try:
-        state = await ensure_dataset_facade_for_write(dataset, session)
-    except HTTPException as exc:
-        return HTMLResponse(
-            f"<div class='notification error'>{html.escape(str(exc.detail))}</div>",
-            status_code=exc.status_code,
-        )
-    facade = state.get_or_create_facade()
 
     imported_count, errors = add_entities_in_order(state, facade, entities_by_type, root_entity)
 
