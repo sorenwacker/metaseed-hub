@@ -243,3 +243,79 @@ async def test_erasure_takes_the_tenant_and_seek_connection_with_it(session):
         .all()
     )
     assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_erasure_removes_the_users_own_deleted_datasets(session):
+    """A soft-deleted, solely-owned dataset is invisible and unowned — and it
+    survived erasure with its full JSONB intact. Nothing in the codebase ever
+    hard-deleted a Dataset, so 'right to erasure' left the data behind."""
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    dataset = await _add(session, make_dataset(tenant=tenant))
+    await _own(session, user, dataset)
+    dataset.soft_delete()
+    await session.commit()
+    dataset_id = dataset.id
+
+    await delete_account(session, user)
+    await session.commit()
+
+    assert await session.get(Dataset, dataset_id) is None
+
+
+@pytest.mark.asyncio
+async def test_erasure_removes_the_users_own_withdrawn_specs(session):
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    spec = await _add(session, make_spec(tenant=tenant, created_by=user))
+    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=SpecRole.OWNER))
+    spec.soft_delete()
+    await session.commit()
+    spec_id = spec.id
+
+    await delete_account(session, user)
+    await session.commit()
+
+    assert await session.get(Spec, spec_id) is None
+
+
+@pytest.mark.asyncio
+async def test_erasure_keeps_a_deleted_dataset_someone_else_also_owns(session):
+    """Erasing the person must not destroy work that outlives them, and a
+    co-owner can still restore a soft-deleted dataset."""
+    tenant = await _add(session, make_tenant())
+    other_tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    colleague = await _add(session, make_user(tenant=other_tenant))
+    dataset = await _add(session, make_dataset(tenant=tenant))
+    await _own(session, user, dataset)
+    await _own(session, colleague, dataset)
+    dataset.soft_delete()
+    await session.commit()
+    dataset_id = dataset.id
+
+    await delete_account(session, user)
+    await session.commit()
+
+    assert await session.get(Dataset, dataset_id) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_tenant_holding_only_tombstones_is_erased_not_scrubbed(session):
+    """The tenant survives to protect co-owned work. Rows nobody can see are
+    not that, yet the retention probes counted them."""
+    from metaseed_hub.models import Tenant
+
+    tenant = await _add(session, make_tenant())
+    user = await _add(session, make_user(tenant=tenant))
+    dataset = await _add(session, make_dataset(tenant=tenant))
+    await _own(session, user, dataset)
+    dataset.soft_delete()
+    await session.commit()
+    tenant_id = tenant.id
+
+    await delete_account(session, user)
+    await session.commit()
+
+    assert await session.get(Tenant, tenant_id) is None

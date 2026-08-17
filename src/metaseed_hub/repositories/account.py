@@ -9,7 +9,11 @@ member and delete tools.
 A dataset the user already soft-deleted, or a spec they withdrew, does not
 block: every list view filters those out, so a blocker among them would be one
 the user is told to reassign but cannot see or act on — with soft delete as the
-only delete they have, their account would be unremovable.
+only delete they have, their account would be unremovable. Not blocking is not
+the same as surviving: those rows are hard-deleted during erasure, since
+nothing else in the codebase ever removes a Dataset or Spec and leaving them
+would keep the user's stored data after their account was erased. Rows a second
+owner shares are exempt and stay restorable.
 
 Once no dataset is left owner-less, deleting the user row removes their
 personal records by cascade (team/dataset/spec memberships, comments,
@@ -27,7 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from metaseed_hub.models import (
     Dataset,
@@ -173,9 +177,104 @@ async def delete_account(session: AsyncSession, user: User) -> None:
         raise AccountDeletionBlockedError(datasets, specs)
 
     tenant_id = user.tenant_id
+    await _erase_solely_owned_tombstones(session, user)
     await session.delete(user)
     await session.flush()
     await _erase_tenant_footprint(session, tenant_id)
+
+
+async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> None:
+    """Hard-delete the user's own soft-deleted datasets and specs.
+
+    These are deliberately not blockers: every list view hides them, so asking
+    the owner to reassign one they cannot see would make deletion impossible.
+    But nothing else ever hard-deletes a Dataset or Spec, so leaving them meant
+    a user's erased account kept its full stored data — invisible, unowned, and
+    not erased at all.
+
+    Rows another owner shares are left alone: erasing the person must not
+    destroy work that outlives them, and a co-owner can still restore a
+    soft-deleted dataset.
+
+    Args:
+        session: Database session.
+        user: The user being erased.
+    """
+    doomed_datasets: list[str] = []
+    doomed_specs: list[str] = []
+
+    dataset_memberships = (
+        (
+            await session.execute(
+                select(DatasetMember).where(
+                    DatasetMember.user_id == user.id,
+                    DatasetMember.role == DatasetRole.OWNER,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for membership in dataset_memberships:
+        other_owner = (
+            (
+                await session.execute(
+                    select(DatasetMember).where(
+                        DatasetMember.dataset_id == membership.dataset_id,
+                        DatasetMember.user_id != user.id,
+                        DatasetMember.role == DatasetRole.OWNER,
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if other_owner is not None:
+            continue
+        doomed_datasets.append(membership.dataset_id)
+
+    spec_memberships = (
+        (
+            await session.execute(
+                select(SpecMember).where(
+                    SpecMember.user_id == user.id,
+                    SpecMember.role == SpecRole.OWNER,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for membership in spec_memberships:
+        other_owner = (
+            (
+                await session.execute(
+                    select(SpecMember).where(
+                        SpecMember.spec_id == membership.spec_id,
+                        SpecMember.user_id != user.id,
+                        SpecMember.role == SpecRole.OWNER,
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if other_owner is not None:
+            continue
+        doomed_specs.append(membership.spec_id)
+
+    # Deleted as statements rather than ORM instances: the membership rows are
+    # loaded in this session, and the ORM would try to blank their primary-key
+    # foreign keys instead of letting the database's ON DELETE CASCADE run.
+    if doomed_datasets:
+        await session.execute(
+            delete(Dataset).where(Dataset.id.in_(doomed_datasets), Dataset.deleted_at.is_not(None))
+        )
+    if doomed_specs:
+        await session.execute(
+            delete(Spec).where(Spec.id.in_(doomed_specs), Spec.deleted_at.is_not(None))
+        )
+    await session.flush()
 
 
 async def _erase_tenant_footprint(session: AsyncSession, tenant_id: str) -> None:
@@ -201,6 +300,11 @@ async def _erase_tenant_footprint(session: AsyncSession, tenant_id: str) -> None
     tenant = await session.get(Tenant, tenant_id)
     if tenant is None:
         return
+    # Every remaining row counts, soft-deleted or not: this runs after the
+    # user's own tombstones are erased, so what is left is work that genuinely
+    # survives them. A co-owned dataset the user had soft-deleted still lives
+    # here and still references the tenant — dropping it would violate the
+    # dataset's NOT NULL tenant_id and take a restorable dataset with it.
     has_dataset = (
         (await session.execute(select(Dataset.id).where(Dataset.tenant_id == tenant_id).limit(1)))
         .scalars()

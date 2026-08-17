@@ -29,6 +29,11 @@ All notable changes to this project will be documented in this file.
   raised KeyError, and a leave racing a join unsubscribed a room that had live
   connections — those users stopped receiving broadcasts with the socket still
   open.
+- Account erasure removes the user's own soft-deleted datasets and specs.
+  They never blocked deletion, because no list view shows them, but nothing
+  else in the codebase hard-deletes a dataset — so an erased account kept its
+  stored data, invisible and unowned. Rows a second owner shares are left
+  restorable.
 - A cell edit that names an item the list does not have is refused instead of
   editing a different one. `idx` came off the URL and was checked with
   `idx < len(list)`, which is true for every negative number, so `-1` edited or
