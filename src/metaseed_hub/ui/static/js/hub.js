@@ -275,6 +275,14 @@ function updateCellDisplay(cell) {
 // rectangle spanning one still applies only where a value may be written.
 let bulkAnchor = null;
 
+// The whole block-selection feature is behind MULTI_CELL_EDITING. Without it
+// the table keeps its ordinary one-cell-at-a-time editing: a half-working
+// selection gesture is worse than none, and the server route stays unreachable
+// because nothing renders its button.
+function multiCellEditingEnabled() {
+    return document.body.dataset.multiCellEditing === '1';
+}
+
 function clearCellSelection() {
     document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
     document.querySelectorAll('.bulk-apply').forEach(b => { b.hidden = true; });
@@ -410,6 +418,7 @@ function pastedWrites(anchor, text) {
 }
 
 document.addEventListener('copy', function(e) {
+    if (!multiCellEditingEnabled()) return;
     const section = bulkAnchor ? bulkAnchor.closest('.inline-table-section') : null;
     if (!section || !section.querySelector('.cell-selected')) return;
     const text = selectionAsText(section);
@@ -419,6 +428,7 @@ document.addEventListener('copy', function(e) {
 });
 
 document.addEventListener('paste', function(e) {
+    if (!multiCellEditingEnabled()) return;
     const section = bulkAnchor ? bulkAnchor.closest('.inline-table-section') : null;
     if (!section) return;
     const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
@@ -429,6 +439,7 @@ document.addEventListener('paste', function(e) {
 });
 
 document.addEventListener('click', function(e) {
+    if (!multiCellEditingEnabled()) return;
     const apply = e.target.closest('.bulk-apply');
     if (apply) {
         const section = apply.closest('.inline-table-section');
@@ -488,7 +499,9 @@ document.addEventListener('focusout', function(e) {
 
 // Handle Enter key to save and move to next cell
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.querySelector('.cell-selected')) {
+    if (!multiCellEditingEnabled()) {
+        // fall through to the ordinary single-cell handlers below
+    } else if (e.key === 'Escape' && document.querySelector('.cell-selected')) {
         clearCellSelection();
         return;
     }

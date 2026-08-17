@@ -22,6 +22,12 @@ DEV_OIDC_CLIENT_SECRET = "metaseed-hub-dev-secret"
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
+    #: Whether the inline tables offer block selection, fill and paste.
+    #: OFF by default: the selection gesture does not work in the browser yet,
+    #: and a control that does nothing is worse than an absent one. Set
+    #: MULTI_CELL_EDITING=true to work on it in a deployment.
+    multi_cell_editing: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

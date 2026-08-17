@@ -172,6 +172,7 @@ def render_template(
     context["matomo_url"] = settings.matomo_url
     context["matomo_site_id"] = settings.matomo_site_id
     context["base_url"] = settings.app_url
+    context["multi_cell_editing"] = settings.multi_cell_editing
 
     response = templates.TemplateResponse(
         request=request,

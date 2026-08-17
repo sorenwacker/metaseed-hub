@@ -27,7 +27,7 @@
     {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     {% block head %}{% endblock %}
 </head>
-<body hx-headers='{"X-Requested-With": "XMLHttpRequest"{% if csrf_token %}, "X-CSRF-Token": "{{ csrf_token }}"{% endif %}}'>
+<body data-multi-cell-editing="{{ '1' if multi_cell_editing else '' }}" hx-headers='{"X-Requested-With": "XMLHttpRequest"{% if csrf_token %}, "X-CSRF-Token": "{{ csrf_token }}"{% endif %}}'>
     <div class="hub-layout">
         <header class="hub-header">
             <a href="/hub/home" class="hub-logo">

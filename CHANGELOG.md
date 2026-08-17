@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Block cell selection, fill and paste are behind `MULTI_CELL_EDITING`, off by
+  default. The "Apply to selection" control appeared in every inline table
+  header while the selection gesture did not work in the browser — a button
+  that does nothing, crowding the "+ Add Row" beside it. The server route and
+  its whole-or-nothing semantics are unchanged and tested; what was never
+  verified was the browser gesture, so the feature is hidden until it is.
+
 ## [0.38.0] - 260817
 
 ### Changed
