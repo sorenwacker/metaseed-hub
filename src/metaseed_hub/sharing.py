@@ -99,9 +99,22 @@ class SharedResource:
     member_model: type[Any]
     foreign_key: str
     title_of: Any
+    # The column naming who made the thing, where the model has one. Creation
+    # writes no membership row, so without this its creator has no role and
+    # every owner-only control — sharing included — is hidden from them.
+    # Datasets have no such column: their ownership is the tenant plus the
+    # membership table, and always has been.
+    creator_column: str | None = None
 
     def owns_column(self) -> Any:
         return getattr(self.member_model, self.foreign_key)
+
+    def creator_of(self, resource: Any) -> str | None:
+        """The id of whoever created ``resource``, if the model records one."""
+        if self.creator_column is None:
+            return None
+        created_by: str | None = getattr(resource, self.creator_column, None)
+        return created_by
 
 
 def _resources() -> dict[str, SharedResource]:
@@ -128,11 +141,13 @@ def _resources() -> dict[str, SharedResource]:
             member_model=SpecDraftMember,
             foreign_key="spec_draft_id",
             title_of=lambda resource: resource.name,
+            creator_column="user_id",
         ),
         "spec": SharedResource(
             kind="spec",
             model=Spec,
             member_model=SpecMember,
+            creator_column="created_by_id",
             foreign_key="spec_id",
             title_of=lambda resource: f"{resource.name} {resource.version}",
         ),
@@ -192,7 +207,13 @@ async def members_of(
 async def role_of(
     session: AsyncSession, resource: SharedResource, resource_id: str, user_id: str
 ) -> Role | None:
-    """``user_id``'s role in a resource, or ``None`` if they have no membership."""
+    """``user_id``'s role in a resource, or ``None`` if they have none.
+
+    An explicit membership row decides, so a creator given a lesser role keeps
+    it. Failing that, whoever created the resource owns it: nothing writes a
+    membership row at creation, and without this the person who made a draft
+    could not share it.
+    """
     result = await session.execute(
         select(resource.member_model.role).where(
             resource.owns_column() == resource_id,
@@ -200,7 +221,14 @@ async def role_of(
         )
     )
     role = result.scalar_one_or_none()
-    return Role(role) if role is not None else None
+    if role is not None:
+        return Role(role)
+
+    if resource.creator_column is not None:
+        found = await session.get(resource.model, resource_id)
+        if found is not None and resource.creator_of(found) == user_id:
+            return Role.OWNER
+    return None
 
 
 async def _owner_count(session: AsyncSession, resource: SharedResource, resource_id: str) -> int:

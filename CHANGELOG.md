@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.1] - 260817
+
+### Fixed
+- The person who created a spec draft can share it again. Creation writes no
+  membership row, and sharing read ownership from that table alone, so the
+  creator had no role and every owner-only control — the add-member form
+  included — was hidden from them. Ownership now falls back to the resource's
+  own creator column, which repairs the drafts that already exist rather than
+  needing them migrated. An explicit membership still decides, and datasets,
+  which have no creator column, are unchanged.
+
 ## [0.39.0] - 260817
 
 ### Changed
