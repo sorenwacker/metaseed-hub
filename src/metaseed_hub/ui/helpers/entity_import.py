@@ -37,6 +37,34 @@ def group_entities_by_type(
     return by_type
 
 
+def _containment_fields(facade: Any, entity_type: str) -> set[str]:
+    """The fields of ``entity_type`` that hold child entities.
+
+    The export writes a column for each of these carrying a count, because the
+    children themselves are their own sheets. Importing that number back would
+    put a string where a list of children belongs — and the count is not even
+    reliable: an Investigation with one Study exports ``studies`` as ``'0'``.
+    The tree is rebuilt from the sheets, so the column has nothing to add.
+
+    Args:
+        facade: Profile facade.
+        entity_type: The entity type whose fields to inspect.
+
+    Returns:
+        The containment field names, empty when the type is unknown.
+    """
+    helper = getattr(facade, entity_type, None)
+    if helper is None:
+        return set()
+    names: set[str] = set()
+    for name in getattr(helper, "all_fields", []):
+        info = helper.field_info(name)
+        items = info.get("items")
+        if info.get("type") in ("list", "entity") and items and items in facade.entities:
+            names.add(name)
+    return names
+
+
 def add_entities_in_order(
     state: AppState,
     facade: Any,
@@ -85,10 +113,14 @@ def add_entities_in_order(
                         f"{entity_type}: _parent {parent_key!r} matches no "
                         "imported entity; the row was imported at the root"
                     )
+                containment = _containment_fields(facade, entity_type)
                 clean_data = {
                     k: v
                     for k, v in entity_data.items()
-                    if v is not None and str(v).strip() and not k.startswith("_")
+                    if v is not None
+                    and str(v).strip()
+                    and not k.startswith("_")
+                    and k not in containment
                 }
                 if clean_data:
                     node = add_entity_node(

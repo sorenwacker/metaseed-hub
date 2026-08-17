@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Importing a workbook no longer writes a count into a containment field. The
+  export gives each such field a column holding a number, because the children
+  are their own sheets; reimporting stored that string where a list of children
+  belongs. Pydantic serialized it anyway and only warned, which is how it
+  survived. The count was unreliable too — an Investigation with one Study
+  exported `studies` as `'0'`.
+
 ### Changed
 - The graph page loads metaseed's drawing instead of its own. `graph.html`
   inlined about 280 lines of vis.js — a lesser copy of the library's, without
