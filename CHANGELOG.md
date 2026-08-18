@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- Built with hatchling, as metaseed is, rather than setuptools. The two repos
+  were scaffolded a month apart and each kept its scaffold's default; nothing
+  chose the split. Versions still come from git tags through setuptools-scm,
+  which hatch-vcs wraps, and the built wheel was compared file by file against
+  the setuptools one: 154 files, identical, same version string.
 - The admin page puts errors in their own tab. They sat between the tables an
   admin actually came for, and an exception message or a path carrying a UUID
   is arbitrarily long, so rows grew until the table pushed past the page. Those

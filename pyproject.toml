@@ -49,14 +49,23 @@ dev = [
 exclude_dirs = ["tests"]
 
 [build-system]
-requires = ["setuptools>=64", "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# Matches metaseed, which this application is the consumer of: one build
+# backend across the two repositories rather than one per scaffold. The version
+# still comes from git tags via setuptools-scm, which hatch-vcs wraps, so tag
+# handling and .devN numbering are unchanged.
+[tool.hatch.version]
+source = "vcs"
 
-[tool.setuptools_scm]
-version_file = "src/metaseed_hub/_version.py"
+[tool.hatch.build.hooks.vcs]
+version-file = "src/metaseed_hub/_version.py"
+
+# The templates and static assets live under the package and must ship with it;
+# hatchling includes the tree it is pointed at.
+[tool.hatch.build.targets.wheel]
+packages = ["src/metaseed_hub"]
 
 [tool.pytest.ini_options]
 markers = [
