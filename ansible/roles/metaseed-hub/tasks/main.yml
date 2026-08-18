@@ -64,6 +64,17 @@
     mode: "0600"
   tags: setup
 
+# Written before the compose file is brought up, because the container mounts
+# it: a missing source would have Docker create a directory in its place.
+- name: Let Matomo see the visitor rather than the proxy
+  ansible.builtin.template:
+    src: matomo-common.config.ini.php.j2
+    dest: /opt/metaseed-docker/matomo-common.config.ini.php
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0644"
+  tags: setup
+
 - name: Start database services
   become_user: "{{ app_user }}"
   ansible.builtin.shell: |

@@ -65,6 +65,9 @@ services:
       - "127.0.0.1:{{ matomo_port }}:80"
     volumes:
       - matomo_data:/var/www/html
+      # Merged with the config Matomo owns, so it survives Matomo rewriting
+      # its own file. Without it Matomo records the proxy as every visitor.
+      - /opt/metaseed-docker/matomo-common.config.ini.php:/var/www/html/config/common.config.ini.php:ro
 
 volumes:
   postgres_data:

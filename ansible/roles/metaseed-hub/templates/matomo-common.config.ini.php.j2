@@ -1,0 +1,20 @@
+; Matomo reads this in addition to config/config.ini.php and never rewrites it,
+; which is why the setting lives here rather than being patched into the file
+; Matomo owns.
+;
+; Matomo sits behind nginx, which forwards the visitor's address in X-Real-IP
+; and X-Forwarded-For. Matomo ignores those headers unless it is told to trust
+; them, so without this every visit is recorded as the Docker bridge gateway
+; (172.19.0.0) and no visitor can be located: the country report reads
+; "Unknown" for almost everything, and the few entries that do appear are
+; derived from something other than the address, so they are not measurements
+; of where anyone was.
+;
+; Only trust these headers behind a proxy that sets them itself. nginx here
+; uses $proxy_add_x_forwarded_for and is the only route to the container, whose
+; port is bound to 127.0.0.1, so a client cannot forge the header.
+
+[General]
+proxy_client_headers[] = HTTP_X_FORWARDED_FOR
+proxy_host_headers[] = HTTP_X_FORWARDED_HOST
+proxy_uri_header = 1

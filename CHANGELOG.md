@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Matomo records the visitor's address instead of the proxy's. It sits behind
+  nginx, which forwards `X-Real-IP` and `X-Forwarded-For`, but Matomo ignores
+  those headers unless told to trust them — so every visit was stored as the
+  Docker bridge gateway and almost none could be located. The country report
+  read "Unknown" for the large majority, and the handful of countries that did
+  appear were not derived from an address, so they measured nothing. Applied
+  through `common.config.ini.php`, which Matomo merges and never rewrites.
+  Visits already recorded stay unlocatable.
+
 ### Removed
 - Multi-cell editing, and the `MULTI_CELL_EDITING` flag that hid it. What was
   built was a button that applied one value to a selected block; the intent was
