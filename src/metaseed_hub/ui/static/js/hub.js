@@ -376,3 +376,20 @@ function toggleSidebar() {
 }
 
 // Ontology lookup is handled by metaseed's lookup.js
+
+// Tab strips (.source-tabs) show one .source-panel at a time. Delegated from
+// the document so any page can use the pattern -- it began inline in
+// dataset_new.html, which meant a second page adopting the markup got panels
+// that never switched.
+document.addEventListener('click', function(e) {
+    const tab = e.target.closest('.source-tab');
+    if (!tab) return;
+    const strip = tab.closest('.source-tabs');
+    const scope = strip ? strip.parentElement : document;
+    if (!scope) return;
+    scope.querySelectorAll(':scope > .source-tabs .source-tab').forEach(t => t.classList.remove('active'));
+    scope.querySelectorAll(':scope > .source-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const panel = scope.querySelector('#panel-' + tab.dataset.tab);
+    if (panel) panel.classList.add('active');
+});

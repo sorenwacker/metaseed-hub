@@ -142,15 +142,7 @@
 </div>
 
 <script>
-// Tab switching
-document.querySelectorAll('.source-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.source-panel').forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-    });
-});
+// Tab switching is delegated from hub.js, shared with the admin page.
 
 // Drag and drop
 const importZone = document.getElementById('import-zone');

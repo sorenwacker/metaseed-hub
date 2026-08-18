@@ -148,3 +148,37 @@ async def test_the_dashboard_shows_the_count(session: AsyncSession) -> None:
     body = response.body.decode()
     assert "Published Specifications" in body
     assert "Loadbearing" in body
+
+
+async def test_the_errors_live_in_their_own_tab(session: AsyncSession) -> None:
+    """Errors are noisy and rarely why an admin opened the page.
+
+    They sat between the tables people actually use, and an exception message
+    or a path with a UUID in it is arbitrarily long, so the row grew until the
+    table pushed past the page.
+    """
+    from unittest.mock import Mock
+
+    from metaseed_hub.auth import TokenUser
+    from metaseed_hub.ui.app import create_hub_app
+    from metaseed_hub.ui.routes.admin import admin_dashboard
+
+    create_hub_app()
+    request = Mock()
+    request.url.path = "/hub/admin/"
+    request.headers = {}
+    request.cookies = {}
+    response = await admin_dashboard(
+        request=request,
+        session=session,
+        user=TokenUser(sub="admin-kc", email="a@example.org", name="A", roles=["admin"]),
+    )
+
+    body = response.body.decode()
+    assert 'id="panel-errors"' in body, "errors must have their own panel"
+    assert 'id="panel-overview"' in body
+    assert 'data-tab="errors"' in body, "and a tab that reaches it"
+
+    # The errors heading belongs inside the errors panel, not the overview one.
+    overview = body.split('id="panel-overview"')[1].split('id="panel-errors"')[0]
+    assert "<h2>Errors</h2>" not in overview

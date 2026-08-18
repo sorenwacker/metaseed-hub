@@ -6843,6 +6843,25 @@ a.start-option-card:hover {
     background: var(--clr-paper);
 }
 
+/* An error's text is arbitrary: an exception message, a path with a UUID in it.
+   Left alone the row grows until the table pushes past the page. The cell wraps
+   mid-token where it must, and the table can scroll horizontally rather than
+   widening its container. */
+.admin-table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.admin-error-text {
+    overflow-wrap: anywhere;
+    max-width: 40rem;
+}
+
+.admin-error-request {
+    overflow-wrap: anywhere;
+    max-width: 20rem;
+}
+
 .admin-table-full {
     background: var(--clr-paper);
     border-radius: var(--radius-md);

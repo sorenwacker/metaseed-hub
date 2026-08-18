@@ -17,6 +17,18 @@
     </div>
     {% endif %}
 
+    {# Errors are noisy and rarely what an admin came for, so they get their own
+       tab rather than sitting between the tables people use. The tab pattern is
+       the one dataset_new.html already uses. #}
+    <div class="source-tabs" role="tablist">
+        <button type="button" class="source-tab active" data-tab="overview">Overview</button>
+        <button type="button" class="source-tab" data-tab="errors">
+            Errors{% if recent_errors %} ({{ recent_errors|length }}){% endif %}
+        </button>
+    </div>
+
+    <div id="panel-overview" class="source-panel active">
+
     <!-- Summary Statistics -->
     <section class="admin-section">
         <h2>System Overview</h2>
@@ -86,55 +98,6 @@
     </section>
 
     <!-- Errors -->
-    <section class="admin-section">
-        <h2>Errors</h2>
-        <p class="section-description">
-            Unhandled server errors, newest first. Kept for 30 days, then removed.
-        </p>
-        {% if recent_errors %}
-        {% if error_counts %}
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Errors</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for date, count in error_counts %}
-                <tr>
-                    <td>{{ date }}</td>
-                    <td>{{ count }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-        <table class="admin-table admin-table-full">
-            <thead>
-                <tr>
-                    <th>When</th>
-                    <th>Request</th>
-                    <th>Error</th>
-                    <th>User</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for e in recent_errors %}
-                <tr>
-                    <td>{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td><code>{{ e.method }} {{ e.path }}</code></td>
-                    <td><strong>{{ e.exception_type }}</strong>: {{ e.message }}</td>
-                    {# Null when the caller was not identified, or the account was deleted. #}
-                    <td>{{ e.user.email if e.user else '-' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty-state">No errors recorded.</p>
-        {% endif %}
-    </section>
 
     <!-- User Directory -->
     <section class="admin-section">
@@ -246,5 +209,58 @@
         </form>
         <div id="admin-content-result"></div>
     </section>
+    </div>
+
+    <div id="panel-errors" class="source-panel">
+    <section class="admin-section">
+        <h2>Errors</h2>
+        <p class="section-description">
+            Unhandled server errors, newest first. Kept for 30 days, then removed.
+        </p>
+        {% if recent_errors %}
+        {% if error_counts %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Errors</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for date, count in error_counts %}
+                <tr>
+                    <td>{{ date }}</td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        <table class="admin-table admin-table-full">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Request</th>
+                    <th>Error</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in recent_errors %}
+                <tr>
+                    <td>{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td><code>{{ e.method }} {{ e.path }}</code></td>
+                    <td><strong>{{ e.exception_type }}</strong>: {{ e.message }}</td>
+                    {# Null when the caller was not identified, or the account was deleted. #}
+                    <td>{{ e.user.email if e.user else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">No errors recorded.</p>
+        {% endif %}
+    </section>
+    </div>
 </div>
 {% endblock %}

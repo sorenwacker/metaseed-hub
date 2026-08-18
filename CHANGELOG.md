@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The admin page puts errors in their own tab. They sat between the tables an
+  admin actually came for, and an exception message or a path carrying a UUID
+  is arbitrarily long, so rows grew until the table pushed past the page. Those
+  cells now wrap, and the tab strip's switching moved from an inline copy in
+  `dataset_new.html` into `hub.js`, so a second page adopting the markup gets
+  panels that actually switch.
+
 ### Fixed
 - Matomo records the visitor's address instead of the proxy's. It sits behind
   nginx, which forwards `X-Real-IP` and `X-Forwarded-For`, but Matomo ignores
