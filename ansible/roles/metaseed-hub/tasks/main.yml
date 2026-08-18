@@ -62,7 +62,9 @@
     owner: "{{ app_user }}"
     group: "{{ app_group }}"
     mode: "0600"
-  tags: setup
+  tags:
+    - setup
+    - matomo
 
 # Written before the compose file is brought up, because the container mounts
 # it: a missing source would have Docker create a directory in its place.
@@ -73,7 +75,32 @@
     owner: "{{ app_user }}"
     group: "{{ app_group }}"
     mode: "0644"
-  tags: setup
+  tags:
+    - setup
+    - matomo
+
+# Its own tag so the analytics configuration can be applied without the rest of
+# the role, whose "Pull latest changes" would move the checkout to the tip of
+# main -- releases here are tag-driven, and a config fix must not deploy code.
+#
+# Copied into the volume rather than bind-mounted from the compose file: a new
+# mount needs the container recreated, and docker-compose 1.29.2 on this host
+# cannot recreate against the installed Docker Engine (KeyError 'ContainerConfig'
+# reading image_config). It stops the old container first, so an attempted
+# recreate takes Matomo down and leaves it down. The volume persists across
+# rebuilds, so the file survives there anyway.
+- name: Give Matomo its proxy configuration
+  ansible.builtin.shell: |
+    set -e
+    docker cp /opt/metaseed-docker/matomo-common.config.ini.php \
+      metaseed-matomo:/var/www/html/config/common.config.ini.php
+    docker exec metaseed-matomo \
+      chown www-data:www-data /var/www/html/config/common.config.ini.php
+    docker restart metaseed-matomo
+  changed_when: true
+  tags:
+    - never
+    - matomo
 
 - name: Start database services
   become_user: "{{ app_user }}"
