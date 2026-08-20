@@ -14,6 +14,7 @@ apply a merged pin -- a bump that only lands in `main` changes nothing.
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,20 @@ _MAJOR_LOCKED = ["postgres", "mariadb"]
 def _prod_images() -> dict[str, str]:
     compose = yaml.safe_load(_PROD_COMPOSE.read_text())
     return {name: svc["image"] for name, svc in compose["services"].items()}
+
+
+def test_production_compose_is_tracked_by_git() -> None:
+    """A `docker-compose.yml` ignore rule predates this file and matches at any
+    depth. Untracked, the pins exist only on one laptop: Dependabot cannot read
+    them, CI cannot check them, and ansible cannot ship them."""
+    tracked = subprocess.run(
+        ["git", "ls-files", _PROD_COMPOSE.relative_to(_REPO).as_posix()],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=_REPO,
+    )
+    assert tracked.stdout.strip(), "the production compose file is not tracked by git"
 
 
 def test_production_compose_is_a_static_file() -> None:

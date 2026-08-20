@@ -1,0 +1,84 @@
+# Production compose file for the deployment host.
+#
+# A plain file rather than a jinja template so Dependabot can parse it and open
+# pull requests for the image pins; it does not read `.j2`. Credentials are
+# therefore not interpolated here -- ansible writes them to `.env` alongside
+# this file, which compose substitutes at up time.
+#
+# Every image names a full version. A floating tag makes the running version a
+# function of when the host last pulled, which is recorded nowhere; and for
+# postgres and matomo-db a float across a major boundary would leave the
+# container unable to open its data directory. See docs/container-updates.md.
+services:
+  postgres:
+    image: postgres:16.15
+    container_name: metaseed-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4.10-alpine
+    container_name: metaseed-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+  matomo-db:
+    image: mariadb:11.8.8
+    container_name: metaseed-matomo-db
+    restart: always
+    command: --max-allowed-packet=64MB
+    environment:
+      MARIADB_DATABASE: matomo
+      MARIADB_USER: matomo
+      MARIADB_PASSWORD: ${MATOMO_DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MATOMO_DB_PASSWORD}
+    volumes:
+      - matomo_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  matomo:
+    image: matomo:5.12.0-apache
+    container_name: metaseed-matomo
+    restart: always
+    depends_on:
+      matomo-db:
+        condition: service_healthy
+    environment:
+      MATOMO_DATABASE_HOST: matomo-db
+      MATOMO_DATABASE_ADAPTER: mysql
+      MATOMO_DATABASE_TABLES_PREFIX: matomo_
+      MATOMO_DATABASE_USERNAME: matomo
+      MATOMO_DATABASE_PASSWORD: ${MATOMO_DB_PASSWORD}
+      MATOMO_DATABASE_DBNAME: matomo
+    # Loopback only. The public tracker (matomo.php/js) is served via nginx at
+    # /matomo/; the PHP admin UI is reachable only through an SSH tunnel to this
+    # port, so it is never exposed to the internet.
+    ports:
+      - "127.0.0.1:${MATOMO_PORT}:80"
+    volumes:
+      - matomo_data:/var/www/html
+
+volumes:
+  postgres_data:
+  redis_data:
+  matomo_db_data:
+  matomo_data:
