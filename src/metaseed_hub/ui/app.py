@@ -105,6 +105,7 @@ def create_hub_app() -> FastAPI:
             access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
             refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
             new_tokens: dict[str, Any] | None = None
+            session_over = False
 
             # If we have an access token, verify it
             if access_token:
@@ -113,18 +114,30 @@ def create_hub_app() -> FastAPI:
                 except Exception:
                     # Token invalid/expired, try to refresh
                     if refresh_token:
-                        new_tokens = await refresh_access_token(refresh_token)
+                        result = await refresh_access_token(refresh_token)
+                        new_tokens, session_over = result.tokens, result.rejected
                         if new_tokens:
                             # Store refreshed token in request state for downstream
                             request.state.refreshed_access_token = new_tokens["access_token"]
             elif refresh_token:
                 # No access token but have refresh token - try to refresh
-                new_tokens = await refresh_access_token(refresh_token)
+                result = await refresh_access_token(refresh_token)
+                new_tokens, session_over = result.tokens, result.rejected
                 if new_tokens:
                     request.state.refreshed_access_token = new_tokens["access_token"]
 
             # Process request
             response: StarletteResponse = await call_next(request)
+
+            # The issuer refused the refresh token, so the session is over.
+            # Dropping the cookies stops the browser presenting a credential
+            # that has been discarded, and stops every later page paying for
+            # another doomed refresh call. Only on an explicit refusal: an
+            # unreachable issuer means "not checked", and clearing then would
+            # sign everyone out for the length of someone else's outage.
+            if session_over:
+                response.delete_cookie(key=ACCESS_TOKEN_COOKIE, path="/")
+                response.delete_cookie(key=REFRESH_TOKEN_COOKIE, path="/")
 
             # If we got new tokens, set them on the response
             if new_tokens:
@@ -152,6 +165,31 @@ def create_hub_app() -> FastAPI:
             return response
 
     app.add_middleware(TokenRefreshMiddleware)
+
+    class NoStoreMiddleware(BaseHTTPMiddleware):
+        """Keep every hub page out of the browser's caches.
+
+        Without this the sign-in redirects are unreachable. A browser answers
+        history navigations -- the back button, a restored tab, a reopened
+        window -- from its own cache without asking the server, so the dataset
+        list kept drawing itself from a snapshot after the session behind it had
+        expired, every link on it leading to a sign-in page. ``no-store`` also
+        keeps the page out of the back/forward cache, so the browser re-asks and
+        the redirect happens.
+
+        Static assets carry no session and are excluded: marking them no-store
+        would re-download every stylesheet and script on every page.
+        """
+
+        async def dispatch(self, request: StarletteRequest, call_next: Any) -> StarletteResponse:
+            """Add the cache directive to everything but the static mounts."""
+            response: StarletteResponse = await call_next(request)
+            path = request.scope.get("path", "")
+            if "/hub-static/" not in path and "/static/" not in path:
+                response.headers["Cache-Control"] = "no-store"
+            return response
+
+    app.add_middleware(NoStoreMiddleware)
 
     # Outermost of the two, so it sees anything the request raises. It records
     # and re-raises, leaving the 500 response and the log line unchanged.

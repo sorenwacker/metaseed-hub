@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from metaseed.services.terms import get_term_source
 
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+from metaseed_hub.ui.dependencies import AuthRequiredError, get_current_user_from_cookie
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,15 @@ async def _require_user_json(request: Request) -> TokenUser:
 
     These endpoints proxy outbound requests to EMBL-EBI OLS4. Leaving them open
     lets an unauthenticated caller drive traffic through the hub; gate them behind
-    a valid session cookie. HTTPException keeps the failure a clean 401 under both
-    the root and /hub mounts (the redirect-based auth handler is hub-only).
+    a valid session cookie. The caller is ``fetch`` inside a page, which would
+    follow a redirect to the identity provider and fail opaquely, so the refusal
+    stays a 401 and names the sign-in page in its body. The router is included
+    under both the root and the /hub mount, which is why ``main.py`` registers
+    the handler on the outer application too.
     """
     user = await get_current_user_from_cookie(request)
     if user is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise AuthRequiredError(as_json=True)
     return user
 
 

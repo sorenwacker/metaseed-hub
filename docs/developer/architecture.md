@@ -34,6 +34,27 @@ CREATE TABLE projects (
 );
 ```
 
+## Sessions and expiry
+
+A browser session is two cookies: `metaseed_access_token` (the OIDC access token, lifetime set by the issuer) and `metaseed_refresh_token` (30 days, or shorter if the issuer's session idles out first). `TokenRefreshMiddleware` verifies the access token on every request and, when it has expired, exchanges the refresh token for a new one and rewrites both cookies. A session therefore survives an expired access token silently, and ends only when the refresh fails.
+
+When the refresh fails the session is over, and the hub says so in one shape everywhere:
+
+- **A page request** answers `302` to `/hub/auth/login?next=<path>`.
+- **An HTMX or `fetch` request** answers `401` with `HX-Redirect: /hub/auth/login?next=<path>`, which htmx acts on before it inspects the status. `hub.js` redirects on any `401` that carries no such header, so a route that forgets it still lands the user on the sign-in page instead of failing silently inside the page.
+
+Both come from `AuthRequiredError`, raised by `require_user` and by every other authentication check. Raising a bare `HTTPException(401)` from a UI route is what produces a page that renders its chrome and then quietly fails to fill itself in; `tests/test_session_expiry.py` gates against it.
+
+The dead cookies are deleted when the issuer explicitly refuses the refresh token (`400`/`401` from the token endpoint), so a browser stops presenting a credential that has been discarded and each later page costs no doomed refresh call. Only then: an unreachable issuer is not a verdict on anyone's session, and clearing on an outage would sign every user out for its duration and leave them unable to sign back in. `RefreshResult.rejected` is what separates the two.
+
+`next` is carried to the identity provider in the `metaseed_oauth_next` cookie rather than a query parameter, because the callback URL is registered with the provider and cannot vary. It is accepted only as a same-origin absolute path (`/hub/...`, no scheme, no `//` prefix), so it cannot become an open redirect; anything else falls back to `_post_login_landing`.
+
+### Why authenticated pages are never cached
+
+`NoStoreMiddleware` puts `Cache-Control: no-store` on every hub response. Without it the redirects above are unreachable: a browser serves history navigations — the back button, a restored tab, a reopened window — from its own cache without asking the server, so the last authenticated page keeps rendering after the session behind it has gone. What the user then sees is their dataset list, drawn from a snapshot, with every link on it leading to a sign-in page; and a dataset page restored the same way loads its panels through `hx-trigger="load"`, each of which now answers 401, leaving an empty editor. `no-store` also keeps the page out of the back/forward cache, so the browser re-asks and the redirect happens.
+
+The header is set on responses from the hub app, which is where authenticated HTML is served. Static assets are mounted on the parent app in `main.py` and keep their own caching.
+
 ## Dataset persistence
 
 `dataset.data` (JSONB) stores a `{profile, version, spec_hash, tree: [...]}` envelope. The `{profile, version, tree}` part is produced by metaseed's `MetaseedClient.serialize(format="tree")`; each tree node carries `id`, `entity_type`, `label`, `data`, and `children`.

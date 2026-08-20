@@ -2,9 +2,10 @@
 
 import logging
 from typing import TYPE_CHECKING, Annotated
+from urllib.parse import urlencode, urlparse
 
 from fastapi import Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,11 +47,29 @@ logger = logging.getLogger("metaseed_hub")
 ACCESS_TOKEN_COOKIE = "metaseed_access_token"
 
 
-class AuthRequiredError(Exception):
-    """Raised when authentication is required but user is not authenticated."""
+LOGIN_PATH = "/hub/auth/login"
+"""Where a request without a usable session is sent."""
 
-    def __init__(self, is_htmx: bool = False) -> None:
-        self.is_htmx = is_htmx
+
+class AuthRequiredError(Exception):
+    """Raised when a request needs a session and does not have a usable one.
+
+    The single way the application reports a missing or expired session. The
+    handler below decides the shape -- redirect, ``HX-Redirect``, or JSON --
+    from the request, so no route has to remember which of the three its caller
+    can act on. A route that writes its own 401 instead writes one without the
+    redirect header, and htmx then logs it to the console and leaves the page
+    looking as though it worked; ``tests/test_session_expiry.py`` gates on it.
+
+    Args:
+        as_json: For endpoints read by ``fetch`` rather than by htmx or the
+            browser's address bar. A redirect would be followed to the identity
+            provider and fail opaquely, so those get a 401 naming the sign-in
+            page in the body.
+    """
+
+    def __init__(self, *, as_json: bool = False) -> None:
+        self.as_json = as_json
         super().__init__("Authentication required")
 
 
@@ -99,24 +118,65 @@ async def require_user(request: Request) -> TokenUser:
     """
     user = await get_current_user_from_cookie(request)
     if not user:
-        is_htmx = request.headers.get("HX-Request") == "true"
-        raise AuthRequiredError(is_htmx=is_htmx)
+        raise AuthRequiredError()
     return user
 
 
-def handle_auth_required_error(request: Request, exc: Exception) -> Response:
-    """Handle AuthRequiredError by redirecting to login.
+def _requested_path(request: Request) -> str:
+    """The page to return the user to once they have signed in.
 
-    For HTMX requests, returns 401 with HX-Redirect header.
-    For regular requests, returns 302 redirect.
+    For an htmx request that is the page the user is looking at, not the panel
+    or the cell that happened to make the call -- ``HX-Current-URL`` carries
+    it. Everything else is the request's own path, which is the full one
+    including the ``/hub`` mount.
     """
-    if isinstance(exc, AuthRequiredError) and exc.is_htmx:
+    current = request.headers.get("HX-Current-URL")
+    if current:
+        parsed = urlparse(current)
+        return parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    query = request.url.query
+    return request.url.path + (f"?{query}" if query else "")
+
+
+def login_url_for(request: Request) -> str:
+    """The sign-in URL that returns to where this request was headed.
+
+    ``next`` is dropped unless it is a path on this hub: it reaches the
+    callback from a cookie the browser holds, and an absolute or
+    protocol-relative value would make the sign-in page an open redirect.
+    """
+    target = _requested_path(request)
+    if not target.startswith("/hub") or target.startswith("//"):
+        return LOGIN_PATH
+    return f"{LOGIN_PATH}?{urlencode({'next': target})}"
+
+
+def handle_auth_required_error(request: Request, exc: Exception) -> Response:
+    """Send a request without a usable session to the sign-in page.
+
+    Three shapes, one decision, so a caller never has to interpret a refusal it
+    cannot act on: htmx follows ``HX-Redirect`` (which it reads before it looks
+    at the status), ``fetch`` reads ``login_url`` out of the body, and a plain
+    navigation is redirected.
+    """
+    login_url = login_url_for(request)
+
+    if request.headers.get("HX-Request") == "true":
         return Response(
             content="Session expired",
             status_code=401,
-            headers={"HX-Redirect": "/hub/auth/login"},
+            headers={"HX-Redirect": login_url},
         )
-    return RedirectResponse(url="/hub/auth/login", status_code=302)
+
+    accept = request.headers.get("accept", "")
+    wants_json = "application/json" in accept and "text/html" not in accept
+    if wants_json or (isinstance(exc, AuthRequiredError) and exc.as_json):
+        return JSONResponse(
+            {"error": "Authentication required", "login_url": login_url},
+            status_code=401,
+        )
+
+    return RedirectResponse(url=login_url, status_code=302)
 
 
 def handle_duplicate_account_email(request: Request, exc: Exception) -> Response:
@@ -219,13 +279,13 @@ async def get_dataset_state_for_mutation(
     Raises:
         HTTPException: 401 if auth fails, 403 if CSRF fails, 404 if dataset not found.
     """
-    # Validate authentication
+    # Validate authentication. Every browser edit arrives here, so an expired
+    # session has to end on the sign-in page rather than in the console: this
+    # refused with a bare 401 and htmx left the page looking as though the edit
+    # had been saved.
     user = await get_current_user_from_cookie(request)
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-        )
+        raise AuthRequiredError()
 
     # Validate CSRF token
     if not validate_csrf_token(request):

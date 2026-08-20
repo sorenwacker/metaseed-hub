@@ -340,26 +340,25 @@ class TestSpecExportAuth:
     """Tests for spec builder export authentication handling."""
 
     @pytest.mark.asyncio
-    async def test_export_redirects_to_login_when_unauthenticated(self) -> None:
-        """Export endpoint redirects to login instead of 401 when not authenticated."""
+    async def test_export_refuses_the_session_rather_than_saving_a_401(self) -> None:
+        """A download that meets an expired session must end on the sign-in
+        page, not save the refusal body as a .yaml file. The route raises the
+        one session error and the application-wide handler redirects."""
         from pathlib import Path
         from unittest.mock import AsyncMock, patch
 
+        import pytest as _pytest
         from fastapi import APIRouter
-        from fastapi.responses import RedirectResponse
         from fastapi.templating import Jinja2Templates
 
-        from metaseed_hub.ui.spec_builder.access import LoginRequiredRedirectError
+        from metaseed_hub.ui.dependencies import AuthRequiredError
 
         mock_request = Mock()
         mock_request.cookies = {}
         mock_session = AsyncMock()
 
-        # Mock get_user_context to raise LoginRequiredRedirectError
         async def mock_get_user_context(*args, **kwargs):
-            if kwargs.get("redirect_on_unauthorized"):
-                raise LoginRequiredRedirectError()
-            return ("user-id", "tenant-id")
+            raise AuthRequiredError()
 
         # Patch at the source module since the import happens inside the function
         with patch(
@@ -386,16 +385,12 @@ class TestSpecExportAuth:
 
             assert export_route is not None
 
-            # Call the endpoint directly
-            response = await export_route.endpoint(
-                request=mock_request,
-                draft_id="test-draft-id",
-                session=mock_session,
-            )
-
-            assert isinstance(response, RedirectResponse)
-            assert response.status_code == 302
-            assert response.headers["location"] == "/hub/auth/login"
+            with _pytest.raises(AuthRequiredError):
+                await export_route.endpoint(
+                    request=mock_request,
+                    draft_id="test-draft-id",
+                    session=mock_session,
+                )
 
     @pytest.mark.asyncio
     async def test_export_returns_yaml_when_authenticated(self) -> None:

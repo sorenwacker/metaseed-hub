@@ -623,11 +623,13 @@ async def lookup_entities(
     """
     from fastapi.responses import JSONResponse
 
-    from metaseed_hub.ui.dependencies import get_dataset_for_user
+    from metaseed_hub.ui.dependencies import AuthRequiredError, get_dataset_for_user
     from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
 
     if user is None:
-        return JSONResponse({"results": []}, status_code=401)
+        # The dropdown is filled by fetch, so the refusal carries the sign-in
+        # URL rather than an empty result set that reads as "no matches".
+        raise AuthRequiredError(as_json=True)
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
     state = await ensure_dataset_facade(dataset, session)

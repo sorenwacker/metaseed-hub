@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- An expired session no longer leaves the hub looking signed in. No response
+  carried a cache directive, so a browser answered history navigations — the
+  back button, a restored tab, a reopened window — out of its own cache: the
+  dataset list kept drawing itself from a snapshot after the session behind it
+  had gone, and opening a dataset from it produced an empty editor, because the
+  page's panels load over HTMX and every one of them was refused. Hub responses
+  are now `no-store`, so the browser asks and the redirect happens. Alongside
+  it, one refusal shape everywhere — `AuthRequiredError`, which the handler
+  turns into a redirect, an `HX-Redirect`, or JSON naming the sign-in page, so
+  an edit made after the session expired can no longer fail in the console
+  while the page looks as though it saved. Signing in returns to the page that
+  was refused, and cookies the identity provider has explicitly rejected are
+  cleared (an unreachable provider is left alone: an outage is not a verdict).
+
 ### Changed
 - Built with hatchling, as metaseed is, rather than setuptools. The two repos
   were scaffolded a month apart and each kept its scaffold's default; nothing

@@ -2,6 +2,7 @@
 
 import logging
 import secrets
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlencode
 
@@ -33,6 +34,39 @@ STATE_COOKIE = "metaseed_oauth_state"
 
 # Refresh token lifetime (30 days)
 REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60
+
+NEXT_COOKIE = "metaseed_oauth_next"
+"""Carries the page a refused request was headed for across the sign-in.
+
+A query parameter cannot do it: the callback URL is registered with the
+identity provider and has to match exactly. Lives as long as the state cookie,
+and is deleted by the callback that reads it.
+"""
+
+NEXT_COOKIE_MAX_AGE = 600
+
+
+def _next_after_login(candidate: str | None, *, default: str) -> str:
+    """The page to land on after signing in, or ``default`` if it is not ours.
+
+    ``candidate`` originates in a query parameter, so it is attacker-writable:
+    accepted only as an absolute path on this hub, which rules out an absolute
+    URL, a protocol-relative ``//host`` (which a browser reads as another
+    origin), and a traversal out of the mount.
+
+    Args:
+        candidate: The requested destination, as received.
+        default: Where to go when the request named nowhere usable.
+
+    Returns:
+        A path on this hub.
+    """
+    if not candidate or not candidate.startswith("/hub"):
+        return default
+    if candidate.startswith("//") or ".." in candidate:
+        return default
+    return candidate
+
 
 # OIDC discovery cache
 _oidc_config: dict[str, Any] | None = None
@@ -71,8 +105,15 @@ async def get_oidc_config() -> dict[str, Any]:
 
 
 @router.get("/login")
-async def auth_login(request: Request) -> RedirectResponse:
-    """Redirect to OIDC provider login page."""
+async def auth_login(request: Request, next: str | None = None) -> RedirectResponse:
+    """Redirect to OIDC provider login page.
+
+    Args:
+        request: The incoming request.
+        next: The page the user was refused, remembered across the sign-in so
+            an expired session does not also cost them their place. Ignored
+            unless it is a path on this hub.
+    """
     settings = get_settings()
     hub_base_url = f"{settings.app_url}/hub"
     oidc_config = await get_oidc_config()
@@ -99,6 +140,17 @@ async def auth_login(request: Request) -> RedirectResponse:
         samesite="lax",
         max_age=600,
     )
+    destination = _next_after_login(next, default="")
+    if destination:
+        response.set_cookie(
+            key=NEXT_COOKIE,
+            value=destination,
+            httponly=True,
+            secure=not settings.debug,
+            samesite="lax",
+            max_age=NEXT_COOKIE_MAX_AGE,
+            path="/hub",
+        )
     return response
 
 
@@ -231,8 +283,13 @@ async def auth_callback(
         # not lock a user out, and the next authenticated page retries both.
         logger.exception("Could not complete the sign-in bookkeeping")
 
+    # Where the user was going when the session ran out beats the default
+    # landing: they clicked a dataset, not the dataset list.
+    landing = _next_after_login(request.cookies.get(NEXT_COOKIE), default=landing)
+
     response = RedirectResponse(url=landing, status_code=302)
     response.delete_cookie(key=STATE_COOKIE)
+    response.delete_cookie(key=NEXT_COOKIE, path="/hub")
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,
         value=access_token,
@@ -256,20 +313,38 @@ async def auth_callback(
     return response
 
 
-async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
+@dataclass(frozen=True)
+class RefreshResult:
+    """What the issuer said when asked to renew a session.
+
+    ``rejected`` separates a verdict from an outage: the issuer answering "this
+    refresh token is no good" ends the session and clears the cookies, while an
+    unreachable issuer is not checked at all and leaves them alone. Conflating
+    the two would sign every user out for the length of someone else's downtime.
+
+    Attributes:
+        tokens: The new token set, or None if none was issued.
+        rejected: True only when the issuer explicitly refused the token.
+    """
+
+    tokens: dict[str, Any] | None
+    rejected: bool
+
+
+async def refresh_access_token(refresh_token: str) -> RefreshResult:
     """Use refresh token to get new access token.
 
     Args:
         refresh_token: The refresh token from cookie.
 
     Returns:
-        Dict with new tokens if successful, None if refresh failed.
+        The new tokens, and whether the issuer refused the refresh token.
     """
     settings = get_settings()
     try:
         oidc_config = await get_oidc_config()
     except HTTPException:
-        return None
+        return RefreshResult(tokens=None, rejected=False)
 
     try:
         async with httpx.AsyncClient() as client:
@@ -286,13 +361,18 @@ async def refresh_access_token(refresh_token: str) -> dict[str, Any] | None:
 
         if token_response.status_code == 200:
             tokens: dict[str, Any] = token_response.json()
-            return tokens
+            return RefreshResult(tokens=tokens, rejected=False)
+        # 400/401 is the issuer saying the token is expired, revoked, or
+        # already used (OAuth 2.0 ``invalid_grant``). Anything else -- a 500,
+        # a gateway error -- is the issuer having a bad day, not a verdict.
+        if token_response.status_code in (400, 401):
+            return RefreshResult(tokens=None, rejected=True)
     except Exception as e:
         # Best-effort refresh: on any failure the caller falls back to re-login.
         # Log it so a persistently failing refresh is diagnosable.
         logger.debug(f"Token refresh failed: {e}")
 
-    return None
+    return RefreshResult(tokens=None, rejected=False)
 
 
 @router.get("/profile")
@@ -304,6 +384,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
         specs_needing_new_owner,
     )
     from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
         ensure_tenant_and_user,
         get_current_user_from_cookie,
     )
@@ -312,7 +393,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
 
     user = await get_current_user_from_cookie(request)
     if not user:
-        return RedirectResponse(url="/hub/auth/login", status_code=302)
+        raise AuthRequiredError()
 
     from metaseed_hub.ui.services.seek_connection import connection_for_user
 
@@ -371,6 +452,7 @@ async def auth_create_token(
     """Mint a personal access token for the signed-in user."""
     from metaseed_hub.tokens import issue_token
     from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
         ensure_tenant_and_user,
         get_current_user_from_cookie,
     )
@@ -378,7 +460,7 @@ async def auth_create_token(
 
     user = await get_current_user_from_cookie(request)
     if not user:
-        return RedirectResponse(url="/hub/auth/login", status_code=302)
+        raise AuthRequiredError()
     submitted = (await request.form()).get("_csrf_token")
     if not validate_csrf_token(request, submitted if isinstance(submitted, str) else None):
         return RedirectResponse(url="/hub/auth/profile?error=csrf", status_code=302)
@@ -412,6 +494,7 @@ async def auth_revoke_token(
     """Withdraw one of the signed-in user's tokens."""
     from metaseed_hub.tokens import revoke_token
     from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
         ensure_tenant_and_user,
         get_current_user_from_cookie,
     )
@@ -419,7 +502,7 @@ async def auth_revoke_token(
 
     user = await get_current_user_from_cookie(request)
     if not user:
-        return RedirectResponse(url="/hub/auth/login", status_code=302)
+        raise AuthRequiredError()
     submitted = (await request.form()).get("_csrf_token")
     if not validate_csrf_token(request, submitted if isinstance(submitted, str) else None):
         return RedirectResponse(url="/hub/auth/profile?error=csrf", status_code=302)
@@ -447,6 +530,7 @@ async def auth_delete_account(request: Request, session: DbSession) -> Response:
         delete_account,
     )
     from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
         ensure_tenant_and_user,
         get_current_user_from_cookie,
     )
@@ -458,7 +542,7 @@ async def auth_delete_account(request: Request, session: DbSession) -> Response:
 
     user = await get_current_user_from_cookie(request)
     if not user:
-        return RedirectResponse(url="/hub/auth/login", status_code=302)
+        raise AuthRequiredError()
 
     form = await request.form()
     csrf_token = form.get("_csrf_token")

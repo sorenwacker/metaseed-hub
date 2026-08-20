@@ -12,6 +12,12 @@ Metaseed Hub uses OpenID Connect (OIDC) for authentication. The hosted instance 
 
 Your name and initials appear in the header. Click the avatar to open [Your Profile](#your-profile); click **Logout** to end the session.
 
+### When your session expires
+
+A sign-in lasts as long as the identity provider keeps the session alive; after that the hub cannot act for you any more. The next thing you do — opening a page, following a link, editing a cell — takes you to the sign-in page instead. Signing in returns you to the page you were trying to reach, not to the dataset list.
+
+Pages are never served from the browser's cache, so going back, or returning to a tab you left open, asks the hub again rather than redrawing what was on screen before. An expired session therefore shows the sign-in page, not a dataset list you can no longer open.
+
 ### Your profile
 
 The profile page (avatar → **Your Profile**) shows the account information read from your OIDC token: name, email, subject ID, and any roles. The email shown under **Sharing** is the address collaborators use to share datasets with you, and they may type it in any capitalisation. See [how an email is resolved](collaboration.md#how-an-email-is-resolved).

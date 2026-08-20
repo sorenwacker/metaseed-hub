@@ -542,28 +542,24 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
     ) -> StreamingResponse | RedirectResponse:
         """Download the spec as a YAML file.
 
-        Handles authentication gracefully - redirects to login instead of 401
-        so browser downloads don't fail silently.
+        A download that meets an expired session ends on the sign-in page:
+        ``get_user_context`` raises ``AuthRequiredError`` and the handler
+        redirects, rather than the browser saving a 401 body as a .yaml file.
         """
         from metaseed_hub.ui.spec_builder.access import (
-            LoginRequiredRedirectError,
             get_user_context,
             load_state_for_draft,
         )
 
-        # Handle authentication with redirect instead of 401
-        try:
-            user_id, _tenant_id = await get_user_context(
-                request, session, redirect_on_unauthorized=True
-            )
-        except LoginRequiredRedirectError:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+        user_id, _tenant_id = await get_user_context(request, session)
 
-        # Load draft state
+        # Load draft state. A draft someone else owns is a 403, and sending the
+        # user to sign in again is the only thing the browser can show them for
+        # a download it cannot render.
         try:
             state, draft = await load_state_for_draft(session, draft_id, user_id)
         except HTTPException as e:
-            if e.status_code in (401, 403):
+            if e.status_code == 403:
                 return RedirectResponse(url="/hub/auth/login", status_code=302)
             raise
 
