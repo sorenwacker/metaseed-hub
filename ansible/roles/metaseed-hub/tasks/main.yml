@@ -33,7 +33,10 @@
       - docker-compose-plugin
     state: present
     update_cache: true
-  tags: setup
+  # Also `containers`, so that tag can deliver its own prerequisite: the update
+  # script refuses to run without compose v2, and a tag that installs the timer
+  # but not the plugin would leave it failing every Monday.
+  tags: [setup, containers]
 
 - name: Start Docker service
   ansible.builtin.systemd:
