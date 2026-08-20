@@ -150,7 +150,7 @@ def test_the_host_uses_compose_v2() -> None:
     """Compose 1.29.2 stops the old container and then fails to recreate it
     against the installed engine, taking the service down and leaving it down."""
     tasks = (_ROLE / "tasks" / "main.yml").read_text()
-    assert "docker-compose-plugin" in tasks, "the v2 plugin is never installed"
+    assert "docker-compose-v2" in tasks, "the v2 plugin is never installed"
     script = _UPDATE_SCRIPT.read_text()
     assert "docker-compose " not in script, "the update script still calls compose v1"
     assert "docker compose " in script

@@ -30,7 +30,7 @@
       # Compose v2. v1 (1.29.2) cannot recreate a container against the
       # installed engine -- it stops the old one, fails with KeyError
       # 'ContainerConfig', and leaves the service down.
-      - docker-compose-plugin
+      - docker-compose-v2
     state: present
     update_cache: true
   # Also `containers`, so that tag can deliver its own prerequisite: the update
