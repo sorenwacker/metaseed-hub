@@ -17,9 +17,11 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
+from metaseed_hub.container_drift import check as check_container_drift
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, ErrorEvent, Spec, SpecStatus, User
 from metaseed_hub.ui.dependencies import require_user
@@ -403,6 +405,12 @@ async def admin_dashboard(
             "recent_errors": await _recent_errors(session),
             "error_counts": await _error_counts_by_day(session),
             "using_default_secret_key": get_settings().using_default_secret_key,
+            # Drift means a merged image pin has not reached this host, which is
+            # invisible from every other page. Off the host (development, CI)
+            # the compose file is absent, so the check returns without ever
+            # reaching for Docker. On the host it shells out, which is why it
+            # runs in a thread rather than stalling the event loop.
+            "container_drift": await run_in_threadpool(check_container_drift),
             "nav_active": "admin",
         },
     )

@@ -44,6 +44,51 @@
         </div>
     </section>
 
+    {# What the host runs against what the repository pins. Drift means a merged
+       image update has not been applied here, which nothing else on the site
+       would show. Docker is unreachable off the deployment host, and that reads
+       as "not checked" rather than as a fault. #}
+    <section class="admin-section">
+        <h2>Container images</h2>
+        {% if not container_drift.checked %}
+        <p class="text-muted">{{ container_drift.summary }}</p>
+        {% else %}
+        {% if container_drift.drifted or container_drift.missing %}
+        <div class="admin-warning" role="alert">
+            <strong>Container drift:</strong> {{ container_drift.summary }}.
+            The weekly update has not applied a pin change; check
+            <code>journalctl -u metaseed-containers.service</code>.
+        </div>
+        {% endif %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Container</th>
+                    <th>Pinned</th>
+                    <th>Running</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for container in container_drift.containers %}
+                <tr>
+                    <td>{{ container.name }}</td>
+                    <td><code>{{ container.pinned }}</code></td>
+                    <td>
+                        {% if container.running is none %}
+                        <span class="drift-behind">not running</span>
+                        {% elif container.has_drifted %}
+                        <span class="drift-behind"><code>{{ container.running }}</code></span>
+                        {% else %}
+                        <code>{{ container.running }}</code>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+
     <!-- Activity Over Time -->
     <section class="admin-section">
         <h2>Activity (Last 30 Days)</h2>
