@@ -1,0 +1,114 @@
+#!/bin/bash
+# Applies merged container image pins to this host.
+#
+# Runs weekly via metaseed-containers.timer. Follows origin/main rather than a
+# release tag: the application is tag-driven because its version comes from the
+# tag, but an image pin has no such property, and tying it to tags would leave a
+# security bump waiting in main until someone cut an unrelated app release.
+#
+# Only the compose file is taken from the checkout -- this never touches
+# application code, dependencies, migrations, or the hub service.
+
+set -euo pipefail
+
+APP_DIR="{{ app_dir }}"
+DOCKER_DIR=/opt/metaseed-docker
+BACKUP_DIR="{{ backup_dir }}"
+LOG_FILE="{{ app_dir }}/logs/containers.log"
+LOCK_FILE=/tmp/metaseed-containers.lock
+HEALTH_URL="http://127.0.0.1:{{ app_port }}/api/health"
+LIVE_COMPOSE="$DOCKER_DIR/docker-compose.yml"
+# Staged outside the checkout: deploy.sh runs `git reset --hard`, and an
+# untracked file in the work tree is noise at best.
+STAGED_COMPOSE="$DOCKER_DIR/.docker-compose.yml.incoming"
+
+mkdir -p "$(dirname "$LOG_FILE")"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" | tee -a "$LOG_FILE" >&2
+}
+
+exec 200>"$LOCK_FILE"
+flock -n 200 || { log "Container update already running, exiting"; exit 0; }
+
+# Compose v1 stops the old container and then fails to recreate it against the
+# installed engine (KeyError 'ContainerConfig'), taking the service down and
+# leaving it down. Refuse rather than discover that mid-recreate.
+if ! docker compose version >/dev/null 2>&1; then
+    log_error "docker compose v2 is not installed; refusing to recreate containers"
+    exit 1
+fi
+
+cd "$APP_DIR"
+
+log "Fetching origin/main..."
+git fetch origin main --quiet
+
+# Read the compose file from origin/main without moving the checkout, which is
+# parked on a release tag and must stay there.
+if ! git show "origin/main:ansible/roles/metaseed-hub/files/docker-compose.yml" > "$STAGED_COMPOSE" 2>/dev/null; then
+    log_error "compose file not found in origin/main"
+    exit 1
+fi
+
+if [ -f "$LIVE_COMPOSE" ] && cmp -s "$STAGED_COMPOSE" "$LIVE_COMPOSE"; then
+    rm -f "$STAGED_COMPOSE"
+    exit 0  # Pins unchanged; nothing to apply.
+fi
+
+log "========================================="
+log "Container pins changed; applying"
+diff "$LIVE_COMPOSE" "$STAGED_COMPOSE" 2>/dev/null | grep '^[<>].*image:' | tee -a "$LOG_FILE" || true
+
+# Recreating postgres restarts the database with nobody watching. A dump from
+# the last day is what makes that recoverable if the container fails to return
+# for a reason unrelated to the version change.
+RECENT_BACKUP=$(find "$BACKUP_DIR" -name 'metaseed_hub-*.dump' -mtime -1 2>/dev/null | head -1)
+if [ -z "$RECENT_BACKUP" ]; then
+    log_error "no backup from the last 24h in $BACKUP_DIR; refusing to recreate containers"
+    log_error "check: systemctl list-timers metaseed-backup.timer"
+    rm -f "$STAGED_COMPOSE"
+    exit 1
+fi
+log "Recent backup present: $(basename "$RECENT_BACKUP")"
+
+mv "$STAGED_COMPOSE" "$LIVE_COMPOSE"
+
+log "Pulling images..."
+if ! docker compose --project-directory "$DOCKER_DIR" pull 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "image pull failed"
+    exit 1
+fi
+
+# Recreates only the containers whose image actually changed; the rest keep
+# running untouched.
+log "Recreating changed containers..."
+if ! docker compose --project-directory "$DOCKER_DIR" up -d 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "compose up failed"
+    exit 1
+fi
+
+log "Waiting for the hub to answer..."
+HEALTH_OK=false
+for i in $(seq 1 30); do
+    sleep 1
+    if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
+        HEALTH_OK=true
+        break
+    fi
+done
+
+if [ "$HEALTH_OK" = false ]; then
+    log_error "health check failed after 30s following a container update"
+    sudo /bin/journalctl -u metaseed-hub -n 50 --no-pager 2>&1 | tee -a "$LOG_FILE" || true
+    exit 1
+fi
+
+log "Now running:"
+docker compose --project-directory "$DOCKER_DIR" ps --format '{{ '{{' }}.Service{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}' 2>&1 | tee -a "$LOG_FILE" || true
+log "Container update successful"
+log "========================================="

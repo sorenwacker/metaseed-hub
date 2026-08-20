@@ -27,7 +27,10 @@
       - curl
       - postgresql-client
       - docker.io
-      - docker-compose
+      # Compose v2. v1 (1.29.2) cannot recreate a container against the
+      # installed engine -- it stops the old one, fails with KeyError
+      # 'ContainerConfig', and leaves the service down.
+      - docker-compose-plugin
     state: present
     update_cache: true
   tags: setup
@@ -55,16 +58,32 @@
     mode: "0755"
   tags: setup
 
-- name: Create docker-compose file
-  ansible.builtin.template:
-    src: docker-compose.yml.j2
+# Copied verbatim, not templated: Dependabot reads `docker-compose.yml` and not
+# `.j2`, so keeping the pins in a plain file is what makes them get bumped at
+# all. Credentials come from the .env below instead.
+- name: Install docker-compose file
+  ansible.builtin.copy:
+    src: docker-compose.yml
     dest: /opt/metaseed-docker/docker-compose.yml
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0644"
+  tags:
+    - setup
+    - matomo
+    - containers
+
+- name: Create docker-compose environment file
+  ansible.builtin.template:
+    src: docker-env.j2
+    dest: /opt/metaseed-docker/.env
     owner: "{{ app_user }}"
     group: "{{ app_group }}"
     mode: "0600"
   tags:
     - setup
     - matomo
+    - containers
 
 # Written before the compose file is brought up, because the container mounts
 # it: a missing source would have Docker create a directory in its place.
@@ -105,7 +124,7 @@
 - name: Start database services
   become_user: "{{ app_user }}"
   ansible.builtin.shell: |
-    docker-compose up -d
+    docker compose up -d
   args:
     chdir: /opt/metaseed-docker
   tags: setup
@@ -280,6 +299,43 @@
     state: started
     daemon_reload: true
   tags: [setup, backup]
+
+# Tagged `containers` as well as `setup` so image pins can be applied on their
+# own. Without this timer a merged pin changes nothing on the host: deploy.sh
+# handles the application only and never invokes Docker, which is how PostgreSQL
+# sat on an unpatched minor for months. See docs/container-updates.md.
+- name: Install container update script
+  ansible.builtin.template:
+    src: update-containers.sh.j2
+    dest: /opt/metaseed-docker/update-containers.sh
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+  tags: [setup, containers]
+
+- name: Install container update service
+  ansible.builtin.template:
+    src: metaseed-containers.service.j2
+    dest: /etc/systemd/system/metaseed-containers.service
+    mode: "0644"
+  notify: Reload systemd
+  tags: [setup, containers]
+
+- name: Install container update timer
+  ansible.builtin.template:
+    src: metaseed-containers.timer.j2
+    dest: /etc/systemd/system/metaseed-containers.timer
+    mode: "0644"
+  notify: Reload systemd
+  tags: [setup, containers]
+
+- name: Enable and start the container update timer
+  ansible.builtin.systemd:
+    name: metaseed-containers.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [setup, containers]
 
 - name: Configure sudoers for deploy
   ansible.builtin.copy:

@@ -1,0 +1,15 @@
+[Unit]
+Description=Weekly check for container image updates
+
+[Timer]
+# A fixed low-traffic window, because applying an update restarts PostgreSQL
+# with nobody watching. Deliberately no OnBootSec: a host coming back up should
+# come back on the images it had, not recreate its database on the way in.
+OnCalendar={{ container_update_schedule }}
+RandomizedDelaySec=300
+# A missed week is picked up on the next Monday rather than firing at whatever
+# hour the host happens to return, which would defeat the fixed window.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
