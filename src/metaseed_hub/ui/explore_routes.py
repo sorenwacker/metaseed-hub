@@ -10,7 +10,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
 from metaseed.specs.merge import DiffVisualizer, SpecComparator
@@ -334,11 +334,14 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
         session: Annotated[AsyncSession, Depends(get_session)],
     ) -> Response:
         """Explorer page - reuses metaseed's merge interface."""
-        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+        from metaseed_hub.ui.dependencies import (
+            AuthRequiredError,
+            get_current_user_from_cookie,
+        )
 
         user = await get_current_user_from_cookie(request)
         if not user:
-            return RedirectResponse(url="/hub/auth/login", status_code=302)
+            raise AuthRequiredError()
 
         try:
             profiles, profile_versions, profile_display_names = await _build_explore_catalog(
@@ -371,13 +374,16 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
     ) -> JSONResponse:
         """Compare/explore profiles - matches metaseed's API."""
         from metaseed_hub.ui.dependencies import (
+            AuthRequiredError,
             get_current_user_from_cookie,
             get_tenant_for_user,
         )
 
         user = await get_current_user_from_cookie(request)
         if not user:
-            return JSONResponse({"error": "Login required"}, status_code=401)
+            # Read by fetch, which would follow a redirect to the identity
+            # provider and fail opaquely; the refusal names the sign-in page.
+            raise AuthRequiredError(as_json=True)
 
         form = await request.form()
         profile_specs = form.getlist("profiles")
@@ -433,13 +439,16 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
     ) -> JSONResponse:
         """Get diff visualization data - matches metaseed's API."""
         from metaseed_hub.ui.dependencies import (
+            AuthRequiredError,
             get_current_user_from_cookie,
             get_tenant_for_user,
         )
 
         user = await get_current_user_from_cookie(request)
         if not user:
-            return JSONResponse({"error": "Login required"}, status_code=401)
+            # Read by fetch, which would follow a redirect to the identity
+            # provider and fail opaquely; the refusal names the sign-in page.
+            raise AuthRequiredError(as_json=True)
 
         profile_specs = profiles.split(",")
 

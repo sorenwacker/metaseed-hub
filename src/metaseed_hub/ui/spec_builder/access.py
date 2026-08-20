@@ -37,12 +37,6 @@ logger = logging.getLogger(__name__)
 _UNSET_REVISION: Any = object()
 
 
-class LoginRequiredRedirectError(Exception):
-    """Raised when user needs to login and should be redirected."""
-
-    pass
-
-
 class SpecInUseError(Exception):
     """A published spec cannot be withdrawn while datasets are built on it.
 
@@ -96,31 +90,32 @@ def handle_draft_conflict(request: Request, exc: Exception) -> Response:
 async def get_user_context(
     request: Request,
     session: AsyncSession,
-    *,
-    redirect_on_unauthorized: bool = False,
 ) -> tuple[str, str]:
     """Get user_id and tenant_id from request context.
 
     Args:
         request: The FastAPI request
         session: Database session
-        redirect_on_unauthorized: If True, raise LoginRequiredRedirectError
 
     Returns:
         Tuple of (user_id, tenant_id)
 
     Raises:
-        HTTPException 401 if user is not authenticated (API routes)
-        LoginRequiredRedirectError if redirect_on_unauthorized=True (page routes)
+        AuthRequiredError: If there is no usable session.
     """
-    from metaseed_hub.ui.dependencies import ensure_tenant_and_user, get_current_user_from_cookie
+    from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
 
     token_user = await get_current_user_from_cookie(request)
 
     if not token_user:
-        if redirect_on_unauthorized:
-            raise LoginRequiredRedirectError()
-        raise HTTPException(status_code=401, detail="Login required")
+        # One refusal for every caller: the handler answers a page request with
+        # a redirect and an htmx request with HX-Redirect, so a route no longer
+        # chooses between them.
+        raise AuthRequiredError()
 
     # Provision the tenant and user through the canonical helper so onboarding
     # behaves identically here and on the other entry points.

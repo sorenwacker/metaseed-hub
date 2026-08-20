@@ -33,9 +33,40 @@ document.addEventListener('submit', function(evt) {
     }
 }, true);
 
+// A session that has expired must end on the sign-in page, not in the console.
+// The server answers an htmx request with HX-Redirect, which htmx acts on by
+// itself; this is the backstop for a request that answers 401 without it.
+var LOGIN_PATH = '/hub/auth/login';
+
+function goToLogin() {
+    window.location.href = LOGIN_PATH + '?next=' +
+        encodeURIComponent(window.location.pathname + window.location.search);
+}
+
 document.body.addEventListener('htmx:responseError', function(evt) {
     console.error('HTMX responseError:', evt.detail);
+    var xhr = evt.detail.xhr;
+    if (xhr && xhr.status === 401 && !xhr.getResponseHeader('HX-Redirect')) {
+        goToLogin();
+    }
 });
+
+// The same for plain fetch: the ontology lookups and the reference dropdowns
+// read JSON, and htmx never sees those responses.
+(function wrapFetch() {
+    var original = window.fetch;
+    if (!original) {
+        return;
+    }
+    window.fetch = function() {
+        return original.apply(this, arguments).then(function(response) {
+            if (response.status === 401) {
+                goToLogin();
+            }
+            return response;
+        });
+    };
+})();
 
 document.body.addEventListener('htmx:sendError', function(evt) {
     console.error('HTMX sendError:', evt.detail);

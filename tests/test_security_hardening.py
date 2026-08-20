@@ -56,17 +56,31 @@ class TestUploadCap:
 
 
 class TestOntologyAuth:
-    """Informational: the OLS proxy endpoints must require a session."""
+    """Informational: the OLS proxy endpoints must require a session.
+
+    Driven through the real application rather than a bare router: the router
+    is included under both the root and the /hub mount, and the refusal it
+    raises is answered by a handler the application registers. Mounting it
+    alone tests a configuration that does not exist.
+    """
 
     def test_search_requires_authentication(self) -> None:
-        from metaseed_hub.ui.routes.ontology_api import router
+        from metaseed_hub.main import create_app
 
-        app = FastAPI()
-        app.include_router(router)
-        client = TestClient(app)
+        client = TestClient(create_app())
 
         resp = client.get("/api/ontology/search", params={"q": "drought"})
         assert resp.status_code == 401
+
+    def test_the_refusal_says_where_to_sign_in(self) -> None:
+        """A fetch cannot follow a redirect to the identity provider and report
+        anything useful, so the body names the sign-in page instead."""
+        from metaseed_hub.main import create_app
+
+        client = TestClient(create_app())
+
+        resp = client.get("/api/ontology/search", params={"q": "drought"})
+        assert resp.json()["login_url"] == "/hub/auth/login"
 
 
 class TestOriginGuard:

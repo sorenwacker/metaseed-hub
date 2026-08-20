@@ -110,6 +110,17 @@ def create_app() -> FastAPI:
 
     app.include_router(ontology_router)
 
+    # The ontology router is included here as well as inside the hub app, so
+    # the refusal it raises has to be answerable out here too -- otherwise a
+    # lookup made after the session expired is a 500 instead of a 401 naming
+    # the sign-in page.
+    from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
+        handle_auth_required_error,
+    )
+
+    app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
+
     # Include Hub UI routes
     from metaseed_hub.ui.app import create_hub_app
 

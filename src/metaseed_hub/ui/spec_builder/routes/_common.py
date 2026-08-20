@@ -13,7 +13,6 @@ from starlette.responses import Response
 from metaseed_hub.database import get_session
 from metaseed_hub.ui.spec_builder.access import (
     DraftContext,
-    LoginRequiredRedirectError,
     get_draft_context,
 )
 from metaseed_hub.ui.spec_builder.access import (
@@ -50,20 +49,11 @@ async def _require_user_context(
         Tuple of (user_id, tenant_id) where user_id is the database User.id.
 
     Raises:
-        HTTPException: 302 redirect if user is not authenticated.
+        AuthRequiredError: If there is no usable session. The application-wide
+            handler turns it into the sign-in redirect.
     """
-    from fastapi import HTTPException
-
-    try:
-        user_id, tenant_id = await _get_user_context(
-            request, session, redirect_on_unauthorized=True
-        )
-        return UserId(user_id), TenantId(tenant_id)
-    except LoginRequiredRedirectError:
-        raise HTTPException(
-            status_code=302,
-            headers={"Location": "/hub/auth/login"},
-        )
+    user_id, tenant_id = await _get_user_context(request, session)
+    return UserId(user_id), TenantId(tenant_id)
 
 
 # Dependency that provides authenticated user context
