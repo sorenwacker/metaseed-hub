@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.40.0] - 260820
+
+### Added
+- The admin page lists published specifications with how many datasets use
+  each, most used first. Which specifications are load-bearing, and which
+  nothing uses, was not visible anywhere: the count existed only inside the
+  refusal to delete a draft that datasets depend on. Counted the same way that
+  refusal counts it — soft-deleted datasets excluded, across every account,
+  because publishing is what makes a specification available to others.
+
+### Changed
+- Built with hatchling, as metaseed is, rather than setuptools. The two repos
+  were scaffolded a month apart and each kept its scaffold's default; nothing
+  chose the split. Versions still come from git tags through setuptools-scm,
+  which hatch-vcs wraps, and the built wheel was compared file by file against
+  the setuptools one: 154 files, identical, same version string.
+- The admin page puts errors in their own tab. They sat between the tables an
+  admin actually came for, and an exception message or a path carrying a UUID
+  is arbitrarily long, so rows grew until the table pushed past the page. Those
+  cells now wrap, and the tab strip's switching moved from an inline copy in
+  `dataset_new.html` into `hub.js`, so a second page adopting the markup gets
+  panels that actually switch.
+- The graph page loads metaseed's drawing instead of its own. `graph.html`
+  inlined about 280 lines of vis.js — a lesser copy of the library's, without
+  the legend counts or click-a-type-to-hide it now gets for free. The page
+  supplies the dataset's data URL and nothing else, and a gate test fails if a
+  hub-side copy grows back.
+
 ### Fixed
 - An expired session no longer leaves the hub looking signed in. No response
   carried a cache directive, so a browser answered history navigations — the
@@ -18,21 +46,6 @@ All notable changes to this project will be documented in this file.
   while the page looks as though it saved. Signing in returns to the page that
   was refused, and cookies the identity provider has explicitly rejected are
   cleared (an unreachable provider is left alone: an outage is not a verdict).
-
-### Changed
-- Built with hatchling, as metaseed is, rather than setuptools. The two repos
-  were scaffolded a month apart and each kept its scaffold's default; nothing
-  chose the split. Versions still come from git tags through setuptools-scm,
-  which hatch-vcs wraps, and the built wheel was compared file by file against
-  the setuptools one: 154 files, identical, same version string.
-- The admin page puts errors in their own tab. They sat between the tables an
-  admin actually came for, and an exception message or a path carrying a UUID
-  is arbitrarily long, so rows grew until the table pushed past the page. Those
-  cells now wrap, and the tab strip's switching moved from an inline copy in
-  `dataset_new.html` into `hub.js`, so a second page adopting the markup gets
-  panels that actually switch.
-
-### Fixed
 - Matomo records the visitor's address instead of the proxy's. It sits behind
   nginx, which forwards `X-Real-IP` and `X-Forwarded-For`, but Matomo ignores
   those headers unless told to trust them — so every visit was stored as the
@@ -41,6 +54,15 @@ All notable changes to this project will be documented in this file.
   appear were not derived from an address, so they measured nothing. Applied
   through `common.config.ini.php`, which Matomo merges and never rewrites.
   Visits already recorded stay unlocatable.
+- Importing a workbook no longer writes a count into a containment field. The
+  export gives each such field a column holding a number, because the children
+  are their own sheets; reimporting stored that string where a list of children
+  belongs. Pydantic serialized it anyway and only warned, which is how it
+  survived. The count was unreliable too — an Investigation with one Study
+  exported `studies` as `'0'`.
+- A first sign-in is recorded. The stamp was written before the account was
+  provisioned, so a brand-new user had no row to write to and the admin
+  directory showed "Never" for someone who had just arrived.
 
 ### Removed
 - Multi-cell editing, and the `MULTI_CELL_EDITING` flag that hid it. What was
@@ -48,34 +70,6 @@ All notable changes to this project will be documented in this file.
   an Excel-like grid, which it was not, and the selection gesture was never
   finished. Bulk editing is served by downloading the workbook, editing it, and
   importing it back — a path this release also fixes.
-
-### Fixed
-- Importing a workbook no longer writes a count into a containment field. The
-  export gives each such field a column holding a number, because the children
-  are their own sheets; reimporting stored that string where a list of children
-  belongs. Pydantic serialized it anyway and only warned, which is how it
-  survived. The count was unreliable too — an Investigation with one Study
-  exported `studies` as `'0'`.
-
-### Changed
-- The graph page loads metaseed's drawing instead of its own. `graph.html`
-  inlined about 280 lines of vis.js — a lesser copy of the library's, without
-  the legend counts or click-a-type-to-hide it now gets for free. The page
-  supplies the dataset's data URL and nothing else, and a gate test fails if a
-  hub-side copy grows back.
-
-### Fixed
-- A first sign-in is recorded. The stamp was written before the account was
-  provisioned, so a brand-new user had no row to write to and the admin
-  directory showed "Never" for someone who had just arrived.
-
-### Added
-- The admin page lists published specifications with how many datasets use
-  each, most used first. Which specifications are load-bearing, and which
-  nothing uses, was not visible anywhere: the count existed only inside the
-  refusal to delete a draft that datasets depend on. Counted the same way that
-  refusal counts it — soft-deleted datasets excluded, across every account,
-  because publishing is what makes a specification available to others.
 
 ## [0.39.2] - 260817
 
