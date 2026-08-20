@@ -40,6 +40,10 @@ backup_keep_daily: 7
 backup_keep_weekly: 4
 backup_keep_monthly: 6
 
+# Container image updates (see docs/container-updates.md). Applying one restarts
+# PostgreSQL unattended, so the window is fixed and quiet rather than on boot.
+container_update_schedule: "Mon *-*-* 04:15:00"
+
 # OIDC (SURF SRAM)
 oidc_url: https://proxy.sram.surf.nl
 oidc_realm: ""

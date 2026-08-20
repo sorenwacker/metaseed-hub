@@ -6742,6 +6742,13 @@ a.start-option-card:hover {
     border-radius: 3px;
 }
 
+/* A container running something other than its pin. Colour alone would not
+   carry this, so the row is also named in the warning above the table. */
+.drift-behind {
+    color: #7b241c;
+    font-weight: 600;
+}
+
 .admin-section {
     background: var(--clr-surface);
     border-radius: var(--radius-lg);

@@ -52,7 +52,12 @@ src/metaseed_hub/_version.py
 # Ansible secrets
 ansible/secrets.yml
 ansible/*.vault.yml
+# A compose file rendered from a template carries the credentials it was
+# rendered with. The production one in the role is not rendered -- its
+# credentials come from a .env written beside it on the host -- so it is
+# tracked, which is also what lets Dependabot see its image pins.
 docker-compose.yml
+!ansible/roles/metaseed-hub/files/docker-compose.yml
 
 # App user home directory files
 .ansible/

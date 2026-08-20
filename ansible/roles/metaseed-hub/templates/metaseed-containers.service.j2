@@ -1,0 +1,15 @@
+[Unit]
+Description=Metaseed Hub Container Image Updates
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User={{ app_user }}
+Group={{ app_group }}
+WorkingDirectory={{ app_dir }}
+ExecStart=/opt/metaseed-docker/update-containers.sh
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+Environment="PATH={{ app_dir }}/.local/bin:/usr/local/bin:/usr/bin:/bin"

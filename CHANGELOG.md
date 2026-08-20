@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The admin page reports whether the host's container images match the versions
+  it pins. Nothing in the application showed whether a deployment had fallen
+  behind on them. Admin-only, and off the deployment host it reports "not
+  checked" rather than inventing a fault. See `docs/container-updates.md`.
+
 ## [0.40.0] - 260820
 
 ### Added
