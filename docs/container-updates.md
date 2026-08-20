@@ -67,4 +67,4 @@ It exits non-zero and names every container whose running image does not match i
 
 ## Compose version requirement
 
-All of this needs Docker Compose v2 (`docker compose`, the plugin). Compose 1.29.2 cannot recreate containers against the installed Docker Engine — it fails with `KeyError: 'ContainerConfig'` after having already stopped the old container, which takes the service down and leaves it down. The role installs the `docker-compose-plugin` package for this reason, and the update script refuses to run if only v1 is present.
+All of this needs Docker Compose v2 (`docker compose`). Compose 1.29.2 cannot recreate containers against the installed Docker Engine — it fails with `KeyError: 'ContainerConfig'` after having already stopped the old container, which takes the service down and leaves it down. The role installs the `docker-compose-v2` package for this reason, and the update script refuses to run if only v1 is present.
