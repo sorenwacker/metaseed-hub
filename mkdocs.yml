@@ -2,6 +2,11 @@ site_name: Metaseed Hub
 site_description: Collaborative metadata management platform
 repo_url: https://github.com/sorenwacker/metaseed-hub
 
+# Rendered in the footer of every page. AI-generated content must be disclosed
+# as such (EU AI Act transparency); tests/test_docs_ai_disclosure.py gates this
+# line.
+copyright: This documentation was generated with Claude Code (AI-generated content).
+
 theme:
   name: material
   palette:
