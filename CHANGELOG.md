@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Dependency updates come from **Renovate** on `config:best-practices`
+  instead of Dependabot, which cannot update `uv.lock`. Renovate regenerates
+  the lockfile, pins Actions and the production images to digests, keeps
+  image majors off (PostgreSQL 16, MariaDB 11), groups Python, Actions and
+  image updates into one weekly PR each, and merges minor/patch updates
+  itself once CI passes — replacing `dependabot-auto-merge.yml`.
+
+
 ### Added
 - The admin page reports whether the host's container images match the versions
   it pins. Nothing in the application showed whether a deployment had fallen

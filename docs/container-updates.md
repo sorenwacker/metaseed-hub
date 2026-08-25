@@ -18,7 +18,7 @@ The second reason applies to the databases and is the more serious one. PostgreS
 
 ## How updates arrive
 
-Dependabot watches the compose file and opens a pull request when a pinned image has a newer version. Major bumps are excluded in `.github/dependabot.yml`, so PostgreSQL 16 stays on 16 and MariaDB 11 stays on 11; crossing a major is a deliberate, separately planned piece of work. Minor and patch bumps are grouped into a single weekly pull request, which `dependabot-auto-merge.yml` merges once CI passes.
+Renovate (`renovate.json`, on the `config:best-practices` preset) watches the compose file and opens a pull request when a pinned image has a newer version, pinning it to its digest. Major bumps are disabled for images, so PostgreSQL 16 stays on 16 and MariaDB 11 stays on 11; crossing a major is a deliberate, separately planned piece of work. Minor and patch bumps are grouped into a single weekly pull request, which Renovate merges itself once CI passes (`automerge` for minor, patch, pin and digest updates).
 
 The result is that keeping the images current is not per-container manual work. Merging happens without intervention; the version change lands in `main` as a reviewable commit either way.
 

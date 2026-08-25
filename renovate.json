@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", "schedule:weekly"],
+  "timezone": "Europe/Amsterdam",
+  "lockFileMaintenance": {"enabled": true, "extends": ["schedule:weekly"]},
+  "packageRules": [
+    {
+      "description": "Minor and patch updates merge themselves once CI passes, as the Dependabot workflow did.",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "matchManagers": ["pep621", "uv"],
+      "groupName": "python dependencies"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Production images: one weekly PR, pinned to digests; a major (PostgreSQL 16 -> 17, MariaDB 11 -> 12) is separately planned work.",
+      "matchManagers": ["docker-compose", "dockerfile"],
+      "matchFileNames": ["ansible/roles/metaseed-hub/files/**"],
+      "groupName": "production images"
+    },
+    {
+      "matchManagers": ["docker-compose", "dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}
