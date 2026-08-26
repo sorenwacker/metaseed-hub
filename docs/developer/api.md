@@ -1,5 +1,19 @@
 # API Reference
 
+## REST API (`/api`, bearer token)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/me` | The account and tenant the token acts in |
+| GET | `/api/datasets` | The caller's datasets in a tenant (`?tenant_id=`) |
+| POST | `/api/datasets` | Create a dataset |
+| GET | `/api/datasets/{id}` | One dataset with its entities |
+| PATCH | `/api/datasets/{id}` | Replace a dataset's name or entities |
+| DELETE | `/api/datasets/{id}` | Soft-delete a dataset |
+| GET | `/api/specs` | Published specifications |
+| GET | `/api/specs/{name}/{version}` | One published specification as YAML |
+| POST | `/api/specs` | Publish a profile document (`{"yaml": ...}`); 409 under the version-bump gate |
+
 ## Hub UI Routes
 
 ### Accounts

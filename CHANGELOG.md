@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The REST API tells a token holder who it is and exchanges specifications.**
+  `GET /api/me` names the account and tenant behind a personal access token,
+  which a client needs before it can create a dataset; `GET /api/specs` and
+  `GET /api/specs/{name}/{version}` list and return published specifications
+  as YAML; `POST /api/specs` publishes a profile document under the spec
+  builder's version-bump gate. This is what a metaseed instance uses to push
+  and pull profiles and datasets.
+
 ### Changed
 - Dependency updates come from **Renovate** on `config:best-practices`
   instead of Dependabot, which cannot update `uv.lock`. Renovate regenerates

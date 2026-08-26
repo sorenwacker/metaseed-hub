@@ -131,6 +131,8 @@ curl -H "Authorization: Bearer msh_your_token" \
   https://metaseed.ewi.tudelft.nl/api/datasets
 ```
 
+Three calls exist for a metaseed instance that pushes and pulls against the hub (see *Pushing and pulling with metaseed-hub* in the metaseed documentation): `GET /api/me` names the account and tenant the token acts in; `GET /api/specs` lists the published specifications and `GET /api/specs/{name}/{version}` returns one as a YAML profile document; `POST /api/specs` with `{"yaml": "..."}` publishes a profile in your tenant under the same version-bump gate the spec builder applies — identical content already published answers 200, a version taken by different content or a version below what the change requires answers 409 with the reason. `GET`, `POST` and `PATCH` on `/api/datasets` carry datasets both ways.
+
 The hub accepts exactly two credentials: a SRAM access token, which a browser obtains through the sign-in flow, and a token from this page. A token acts for your own data only and never carries administrator rights, whatever your account holds.
 
 ## Revoking access

@@ -23,7 +23,7 @@ import yaml
 _REPO = Path(__file__).resolve().parent.parent
 _ROLE = _REPO / "ansible" / "roles" / "metaseed-hub"
 _PROD_COMPOSE = _ROLE / "files" / "docker-compose.yml"
-_DEPENDABOT = _REPO / ".github" / "dependabot.yml"
+_RENOVATE = _REPO / "renovate.json"
 _UPDATE_SCRIPT = _ROLE / "templates" / "update-containers.sh.j2"
 
 # A pin must name more than the major. Three components for most images, but
@@ -83,25 +83,42 @@ def test_production_image_names_a_full_version(service: str) -> None:
     )
 
 
-def test_dependabot_watches_the_production_compose_file() -> None:
-    config = yaml.safe_load(_DEPENDABOT.read_text())
-    docker = [u for u in config["updates"] if u["package-ecosystem"] == "docker"]
-    assert docker, "no docker ecosystem; image pins are never bumped"
-    watched = {u["directory"].strip("/") for u in docker}
-    expected = _PROD_COMPOSE.parent.relative_to(_REPO).as_posix()
-    assert expected in watched, f"dependabot does not watch {expected}"
+def _docker_rules() -> list[dict]:
+    import json
+
+    config = json.loads(_RENOVATE.read_text())
+    return [
+        rule for rule in config["packageRules"] if "docker-compose" in rule.get("matchManagers", [])
+    ]
+
+
+def test_renovate_watches_the_production_compose_file() -> None:
+    """Renovate's docker-compose manager finds every compose file by default;
+    the rule that groups the production images must name their directory, or
+    a bump lands as an ungrouped PR nothing else expects."""
+    rules = _docker_rules()
+    assert rules, "no docker-compose rule; image pins are never bumped"
+    compose_dir = _PROD_COMPOSE.parent.relative_to(_REPO).as_posix()
+    patterns = [f for rule in rules for f in rule.get("matchFileNames", [])]
+    assert any(pattern.rstrip("*").rstrip("/") == compose_dir for pattern in patterns), (
+        f"renovate does not group images under {compose_dir}: {patterns}"
+    )
 
 
 @pytest.mark.parametrize("image", _MAJOR_LOCKED)
-def test_dependabot_never_bumps_a_database_major(image: str) -> None:
+def test_renovate_never_bumps_a_database_major(image: str) -> None:
     """A major bump that auto-merged would leave the container exiting on an
     incompatible data directory, with the hub down until a restore."""
-    config = yaml.safe_load(_DEPENDABOT.read_text())
-    docker = [u for u in config["updates"] if u["package-ecosystem"] == "docker"]
-    ignored = [rule for u in docker for rule in u.get("ignore", [])]
-    match = [r for r in ignored if r["dependency-name"] == image]
-    assert match, f"{image} major updates are not ignored"
-    assert "version-update:semver-major" in match[0]["update-types"]
+    disabled_major = [
+        rule
+        for rule in _docker_rules()
+        if "major" in rule.get("matchUpdateTypes", []) and rule.get("enabled") is False
+    ]
+    assert disabled_major, f"docker major updates are not disabled, so {image} could jump"
+    assert not any(
+        "matchPackageNames" in rule and image not in rule["matchPackageNames"]
+        for rule in disabled_major
+    )
 
 
 def test_the_timer_is_installed_and_enabled() -> None:
