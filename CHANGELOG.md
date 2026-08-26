@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## v0.41.0 (260826)
+
 ### Added
 - **The REST API tells a token holder who it is and exchanges specifications.**
   `GET /api/me` names the account and tenant behind a personal access token,
@@ -12,17 +14,23 @@ All notable changes to this project will be documented in this file.
   as YAML; `POST /api/specs` publishes a profile document under the spec
   builder's version-bump gate. This is what a metaseed instance uses to push
   and pull profiles and datasets.
+- **The spec tools accept the SEEK field markers** metaseed 0.43 defines —
+  `seek_attribute_type`, `seek_controlled_vocab` and `seek_cv_free_text`. The
+  tools refuse to silently drop a marker they do not expose, so the marker
+  parity gate turned the dependency bump into a failing suite rather than a
+  field an agent could not declare.
 
 ### Changed
+- **metaseed is pinned to 0.43.0 or later**, the release that carries the
+  template-bound profile fields. An older hub answers 422 when a metaseed
+  instance pushes a profile that uses them.
+
 - Dependency updates come from **Renovate** on `config:best-practices`
   instead of Dependabot, which cannot update `uv.lock`. Renovate regenerates
   the lockfile, pins Actions and the production images to digests, keeps
   image majors off (PostgreSQL 16, MariaDB 11), groups Python, Actions and
   image updates into one weekly PR each, and merges minor/patch updates
   itself once CI passes — replacing `dependabot-auto-merge.yml`.
-
-
-### Added
 - The admin page reports whether the host's container images match the versions
   it pins. Nothing in the application showed whether a deployment had fallen
   behind on them. Admin-only, and off the deployment host it reports "not

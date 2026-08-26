@@ -60,8 +60,8 @@ Each of these reports what is still missing after the change, using the profile'
 | `spec_update_entity` | Change an entity's description or ontology term; unset arguments keep their values |
 | `spec_rename_entity` | Rename an entity, cascading the root and every reference to it |
 | `spec_delete_entity` | Remove an entity type |
-| `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values; the twelve field markers declare what the field means |
-| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them, plus the eight constraints, `clear`, and the twelve field markers; unset arguments keep their values |
+| `spec_add_field` | Add a field to an entity. `items` links a `list` or `entity` field to the child entity it nests; `reference` and `parent_ref` name cross-references; `pattern`, `min_length`, `max_length`, `minimum`, `maximum`, `min_items`, `max_items`, and `enum` constrain its values; the eighteen field markers declare what the field means |
+| `spec_update_field` | Change a field's attributes in place, `items`, `reference`, and `parent_ref` among them, plus the eight constraints, `clear`, and the eighteen field markers; unset arguments keep their values |
 | `spec_delete_field` | Remove a field |
 | `spec_move_field` | Move a field one position up or down |
 | `spec_add_rule` | Add a validation rule |
@@ -85,7 +85,11 @@ Because an omitted argument means "unchanged", it cannot express removal. `clear
 
 #### Field markers
 
-A constraint says what values a field may hold; a marker says what the field *is*. Both `spec_add_field` and `spec_update_field` accept the twelve markers metaseed's `FieldSpec` defines: `is_identifier` and `is_label` declare which field identifies the entity and which one labels it in listings, overriding the positional convention that would otherwise pick the first field; `owns` marks a containment relationship; and `codename`, `ontologies`, `unique_within`, `dcat`, `example`, `options`, `unit`, `label`, and `tier` carry the field's metadata. `tier` is one of `required`, `recommended`, or `optional`.
+A constraint says what values a field may hold; a marker says what the field *is*. Both `spec_add_field` and `spec_update_field` accept the eighteen markers metaseed's `FieldSpec` defines: `is_identifier` and `is_label` declare which field identifies the entity and which one labels it in listings, overriding the positional convention that would otherwise pick the first field; `owns` marks a containment relationship; and `codename`, `ontologies`, `unique_within`, `dcat`, `example`, `options`, `unit`, `label`, and `tier` carry the field's metadata. `tier` is one of `required`, `recommended`, or `optional`. For a profile bound to
+FAIRDOM-SEEK, `isa_tag`, `within`, `reference_scope`, `seek_attribute_type`,
+`seek_controlled_vocab` and `seek_cv_free_text` say which SEEK column a field
+becomes: its ISA tag, its attribute type, the controlled vocabulary it binds,
+and whether that vocabulary accepts free text.
 
 A marker, unlike a numeric constraint, has a representable empty value, so it needs no `clear`: `false`, `""`, and `[]` are the removal request. An unset marker is absent from the specification rather than written as `owns: false`, so a draft that never touched a marker hashes the same as one that toggled it back off. A list marker is replaced whole, not merged. A value the schema refuses — a `tier` that is not one of the three levels, say — is reported and the field is left untouched, as it is when a constraint name is refused.
 

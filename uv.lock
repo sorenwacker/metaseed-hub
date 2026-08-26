@@ -6,8 +6,8 @@ resolution-markers = [
     "python_full_version == '3.14.*' and sys_platform == 'win32'",
     "python_full_version == '3.14.*' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version < '3.12' and sys_platform != 'win32'",
 ]
 
@@ -1250,7 +1250,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.42.0"
+version = "0.43.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1266,9 +1266,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/9f/e26cb0d96011b311a4218a298a3e87eac7472a5c709dceda7a169572ee30/metaseed-0.42.0.tar.gz", hash = "sha256:808ac45f314744e22e24c8b35f72dcbac3d4d00c12c66cf89b916019bab4e1ed", size = 716998, upload-time = "2026-08-17T11:52:49.445Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/9c/968f407d2e65a7c68f57bf1f7e9507f09f0b84609971799ede24ada5ca4a/metaseed-0.43.0.tar.gz", hash = "sha256:40ad923a037db6eb071aa6e90a9ce950afadd7d5f20de36e8c6c8a3de22148f2", size = 766245, upload-time = "2026-08-26T17:41:06.336Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/a8/5864aef5b1acba07a04689de6cb5aa4dac3763fda48b45fa931368fce495/metaseed-0.42.0-py3-none-any.whl", hash = "sha256:5d1c57f88369b653c20dfb01def038b5af8625b34bee0f23e26343925b9e9c01", size = 875767, upload-time = "2026-08-17T11:52:47.573Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/5d/14d642406fd870f7efaa09e9c5df2584821ba93651eea61ecd92fa1fa26a/metaseed-0.43.0-py3-none-any.whl", hash = "sha256:5e0f35b487f5b5cf49c15c876a2736631f3779d362936dce9886cc22ae41af00", size = 940937, upload-time = "2026-08-26T17:41:04.531Z" },
 ]
 
 [package.optional-dependencies]
@@ -1339,7 +1339,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.42.0,<1" },
+    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.43.0,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },

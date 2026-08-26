@@ -404,6 +404,9 @@ def register_spec_tools(  # noqa: C901
         tier: str | None = None,
         isa_tag: str | None = None,
         within: str | None = None,
+        seek_attribute_type: str | None = None,
+        seek_controlled_vocab: str | None = None,
+        seek_cv_free_text: bool | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
 
@@ -478,6 +481,9 @@ def register_spec_tools(  # noqa: C901
                 "tier": tier,
                 "isa_tag": isa_tag,
                 "within": within,
+                "seek_attribute_type": seek_attribute_type,
+                "seek_controlled_vocab": seek_controlled_vocab,
+                "seek_cv_free_text": seek_cv_free_text,
             }
         )
         constraints = _constraints(
@@ -553,6 +559,9 @@ def register_spec_tools(  # noqa: C901
         tier: str | None = None,
         isa_tag: str | None = None,
         within: str | None = None,
+        seek_attribute_type: str | None = None,
+        seek_controlled_vocab: str | None = None,
+        seek_cv_free_text: bool | None = None,
         clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
@@ -628,6 +637,9 @@ def register_spec_tools(  # noqa: C901
                 "tier": tier,
                 "isa_tag": isa_tag,
                 "within": within,
+                "seek_attribute_type": seek_attribute_type,
+                "seek_controlled_vocab": seek_controlled_vocab,
+                "seek_cv_free_text": seek_cv_free_text,
             }
         )
         constraints = _constraint_values(
