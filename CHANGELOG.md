@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## v0.41.0 (260826)
+## [0.41.0] - 260826
 
 ### Added
 - **The REST API tells a token holder who it is and exchanges specifications.**
