@@ -203,6 +203,12 @@ async def create_dataset(
         version=dataset_data.version,
         data=dataset_data.data,
     )
+    # The same check PATCH applies: a payload the profile cannot place -- or a
+    # profile this hub does not have -- must not become a row the UI then
+    # truncates or cannot open. A metaseed instance pushing a dataset built on
+    # a profile it has not pushed yet gets the refusal, not a broken record.
+    if dataset_data.data:
+        dataset.data = await _validated_data(dataset, dataset_data.data, session)
     session.add(dataset)
     await session.commit()
     await session.refresh(dataset)

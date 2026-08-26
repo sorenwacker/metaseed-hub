@@ -292,3 +292,24 @@ async def test_update_rejects_invalid_name(
         resp = await client.patch(f"/api/datasets/{ds.id}", json={"name": "bad/name"})
     assert resp.status_code == 422
     assert "alphanumeric" in resp.json()["detail"]
+
+
+async def test_create_refuses_a_payload_its_profile_cannot_load(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """A pushed dataset built on a profile this hub does not have used to be
+    stored as-is and could then not be opened; now it is refused, as a PATCH
+    with the same payload already was."""
+    async with _build_client(session, caller) as client:
+        response = await client.post(
+            "/api/datasets",
+            json={
+                "tenant_id": own_tenant_id,
+                "name": "test-unknown-profile",
+                "profile": "no-such-profile",
+                "version": "9.9",
+                "data": {"entities": [{"_type": "Thing", "identifier": "x"}]},
+            },
+        )
+    assert response.status_code in (409, 422), response.text
+    assert (await session.execute(select(Dataset))).scalars().all() == []
