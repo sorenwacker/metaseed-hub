@@ -126,8 +126,20 @@ async def _validated_data(
     """
     from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
 
-    proposed = copy.copy(dataset)
-    proposed.data = data
+    # A fresh transient row, not a copy of ``dataset``: copying a mapped
+    # instance shares its ORM state, which on a row not yet persisted left the
+    # session unable to refresh it after the insert. The load also rewrites
+    # nested dicts into model objects in place (an ISA ontology source, a
+    # term), which on the caller's dict left a payload the database could not
+    # store as JSON -- so it works on a deep copy and the original is kept.
+    proposed = Dataset(
+        tenant_id=dataset.tenant_id,
+        profile=dataset.profile,
+        version=dataset.version,
+        spec_id=dataset.spec_id,
+        spec_draft_id=dataset.spec_draft_id,
+        data=copy.deepcopy(data),
+    )
     try:
         await ensure_dataset_facade_for_write(proposed, session)
     except HTTPException:

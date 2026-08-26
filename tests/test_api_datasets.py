@@ -313,3 +313,44 @@ async def test_create_refuses_a_payload_its_profile_cannot_load(
         )
     assert response.status_code in (409, 422), response.text
     assert (await session.execute(select(Dataset))).scalars().all() == []
+
+
+async def test_validation_does_not_rewrite_the_stored_payload(
+    session: AsyncSession, caller: TokenUser, own_tenant_id: str
+) -> None:
+    """Loading the payload into a facade replaces nested dicts (an ISA ontology
+    source, say) with model objects in place; storing those as JSONB failed
+    with 500 on the first real dataset pushed from metaseed. Validation must
+    work on its own copy and the row must hold plain JSON."""
+    # The flat form metaseed pushes: the ontology source is its own entity,
+    # linked to the investigation by its parent id; the load nests it back.
+    payload = {
+        "entities": [
+            {"_type": "Investigation", "identifier": "I1", "title": "An investigation"},
+            {
+                "_type": "OntologySource",
+                "name": "OBI",
+                "file": "http://purl.obolibrary.org/obo/obi.owl",
+                "version": "1",
+                "_parent_unique_id": "I1",
+            },
+        ]
+    }
+    async with _build_client(session, caller) as client:
+        response = await client.post(
+            "/api/datasets",
+            json={
+                "tenant_id": own_tenant_id,
+                "name": "test-with-ontology-source",
+                "profile": "isa",
+                "version": "1.0",
+                "data": payload,
+            },
+        )
+        assert response.status_code == 201, response.text
+        patched = await client.patch(
+            f"/api/datasets/{response.json()['id']}", json={"data": payload}
+        )
+    assert patched.status_code == 200, patched.text
+    row = (await session.execute(select(Dataset))).scalar_one()
+    assert row.data == payload
