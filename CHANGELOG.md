@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The license is MIT**, the same as metaseed's. The hub had carried Apache
+  2.0 since a LICENSE file was added to match a badge; nothing recorded a
+  reason for the difference. The README says what the hub is and does, and
+  the package metadata names the license, authors, keywords, and URLs.
+
 ## [0.43.0] - 260827
 
 ### Fixed

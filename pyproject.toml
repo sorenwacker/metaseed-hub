@@ -4,6 +4,34 @@ dynamic = ["version"]
 description = "Collaborative hub for metaseed projects with real-time features"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Sören Wacker" }]
+keywords = [
+    "metadata",
+    "fair-data",
+    "research-data-management",
+    "miappe",
+    "isa-tab",
+    "darwin-core",
+    "dissco",
+    "fairdom-seek",
+    "metaseed",
+    "fastapi",
+    "htmx",
+    "mcp",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = [
     "fastapi>=0.115.0",
     # Security floors for transitive deps pulled in via fastapi (Dependabot):
@@ -25,6 +53,13 @@ dependencies = [
     "mcp>=1.28,<2",
     "types-pyyaml>=6.0.12.20260408",
 ]
+
+[project.urls]
+Homepage = "https://sorenwacker.github.io/metaseed-hub/"
+Documentation = "https://sorenwacker.github.io/metaseed-hub/"
+Repository = "https://github.com/sorenwacker/metaseed-hub"
+Changelog = "https://github.com/sorenwacker/metaseed-hub/blob/main/CHANGELOG.md"
+Issues = "https://github.com/sorenwacker/metaseed-hub/issues"
 
 [project.optional-dependencies]
 dev = [
