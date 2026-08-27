@@ -273,8 +273,14 @@ async function runComparison() {
             document.getElementById('filter-section').style.display = 'none';
             document.getElementById('compare-legend').style.display = 'none';
             document.getElementById('explore-legend').style.display = 'flex';
-            document.getElementById('canvas-info').innerHTML =
-                `Exploring <strong>${profiles[0]}</strong> - ${data.statistics.total_entities} entities, ${data.statistics.total_fields} fields`;
+            // The profile key comes from the page's own select, but it is
+            // still text: build the label from nodes rather than markup.
+            const info = document.getElementById('canvas-info');
+            info.textContent = 'Exploring ';
+            const strong = document.createElement('strong');
+            strong.textContent = profiles[0];
+            info.appendChild(strong);
+            info.appendChild(document.createTextNode(` - ${data.statistics.total_entities} entities, ${data.statistics.total_fields} fields`));
         } else {
             document.getElementById('filter-section').style.display = 'block';
             document.getElementById('compare-legend').style.display = 'flex';

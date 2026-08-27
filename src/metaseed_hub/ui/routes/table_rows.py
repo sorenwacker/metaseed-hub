@@ -88,6 +88,8 @@ def _build_primitive_row_html(
     # field_name is a caller-controlled path parameter interpolated into
     # attribute values; escape it so it cannot break out of the attribute.
     field_name = escape(field_name)
+    dataset_id = escape(str(dataset_id))
+    parent_node_id = escape(str(parent_node_id))
 
     post_url = f"/hub/datasets/{dataset_id}/table/{parent_node_id}"
     post_url += f"/primitive/{field_name}/{row_idx}"

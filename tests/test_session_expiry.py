@@ -379,3 +379,12 @@ async def test_an_unreachable_issuer_does_not_end_the_session(dataset, app_db) -
 
     cleared = [h for h in response.headers.get_list("set-cookie") if "Max-Age=0" in h]
     assert not any(REFRESH_TOKEN_COOKIE in h for h in cleared)
+
+
+def test_a_backslash_destination_is_not_followed() -> None:
+    # Browsers normalise ``/\\evil.com`` to ``//evil.com`` -- a different origin
+    # -- so the check that refuses ``//`` has to refuse this spelling too.
+    from metaseed_hub.ui.routes.auth import _next_after_login
+
+    assert _next_after_login("/hub/\\evil.com/x", default="/hub/") == "/hub/"
+    assert _next_after_login("/hub\\evil.com", default="/hub/") == "/hub/"

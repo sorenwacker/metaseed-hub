@@ -805,8 +805,11 @@ async def dataset_load_example(
     example_file = yaml_files[0]
     try:
         example_data = yaml.safe_load(example_file.read_text(encoding="utf-8"))
-    except yaml.YAMLError as e:
-        return HTMLResponse(f"<div class='error'>Error loading example: {e}</div>")
+    except yaml.YAMLError:
+        logger.exception("Bundled example %s is not readable YAML", example_file)
+        return HTMLResponse(
+            "<div class='error'>The example could not be read. The server log has the cause.</div>"
+        )
 
     # Deep copy to prevent Pydantic from modifying the original dict
     example_data_copy = copy.deepcopy(example_data)

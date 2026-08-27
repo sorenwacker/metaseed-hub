@@ -63,7 +63,8 @@ def _next_after_login(candidate: str | None, *, default: str) -> str:
     """
     if not candidate or not candidate.startswith("/hub"):
         return default
-    if candidate.startswith("//") or ".." in candidate:
+    # A backslash too: browsers read ``/\\evil`` as ``//evil``, another origin.
+    if candidate.startswith("//") or ".." in candidate or "\\" in candidate:
         return default
     return candidate
 

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.43.0] - 260827
+
+### Fixed
+- **A logged value cannot forge a second log record.** The hub's log handler
+  uses metaseed's `OneLineFormatter`, which keeps every record on one line;
+  CodeQL's log-injection findings are addressed in that one place.
+- **A failed explorer, comparison or graph request no longer describes the
+  exception to the client**; the cause goes to the log. The sign-in
+  destination check also refuses a backslash (browsers read `/\host` as
+  another origin), spec-builder redirects URL-quote the ids they carry, and
+  table-row markup escapes the ids it interpolates.
+- **CI workflows run with read-only permissions by default and every Action
+  is pinned to a commit.** CodeQL scanning is on for the repository with the
+  extended query suite.
+
+### Changed
+- metaseed is pinned to 0.45.0 or later, which carries the formatter.
+
 ## [0.42.0] - 260827
 
 ### Changed

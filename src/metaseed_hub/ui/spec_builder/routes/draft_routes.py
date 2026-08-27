@@ -179,7 +179,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         await session.commit()
         state_cache.pop(draft_id, None)
 
-        return RedirectResponse(url=f"/hub/spec-builder/{draft_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/hub/spec-builder/{quote(draft_id, safe='')}", status_code=303
+        )
 
     @router.post("/{draft_id}/publish", response_class=HTMLResponse)
     async def publish_draft(
@@ -454,7 +456,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             # an ordinary form post, so an HTTPException would replace the page
             # with a bare error document.
             return RedirectResponse(
-                url=f"/hub/spec-builder/spec/{spec_id}?error={quote(str(exc))}",
+                url=f"/hub/spec-builder/spec/{quote(spec_id, safe='')}?error={quote(str(exc))}",
                 status_code=303,
             )
         except ValueError as exc:

@@ -362,8 +362,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
 
         except Exception as e:
             logger.exception("Explorer page failed: %s", e)
+            # The cause is in the log; the client gets that it failed, not the
+            # exception's text, which can name paths and internals.
             return JSONResponse(
-                {"error": f"Explorer error: {e!s}"},
+                {"error": "The explorer could not load. The server log has the cause."},
                 status_code=500,
             )
 
@@ -429,7 +431,10 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
 
         except Exception as e:
             logger.exception("Compare failed: %s", e)
-            return JSONResponse({"error": str(e)}, status_code=500)
+            return JSONResponse(
+                {"error": "The comparison failed. The server log has the cause."},
+                status_code=500,
+            )
 
     @router.get("/graph/{profiles:path}", response_model=None)
     async def get_diff_graph(
@@ -473,6 +478,9 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
 
         except Exception as e:
             logger.exception("Graph generation failed: %s", e)
-            return JSONResponse({"error": str(e)}, status_code=500)
+            return JSONResponse(
+                {"error": "The graph could not be built. The server log has the cause."},
+                status_code=500,
+            )
 
     return router

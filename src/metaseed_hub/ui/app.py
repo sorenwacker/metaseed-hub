@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import ChoiceLoader, FileSystemLoader
+from metaseed.logging import OneLineFormatter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,13 +63,14 @@ from metaseed_hub.ui.routes.auth import (
 from metaseed_hub.ui.spec_builder import create_spec_builder_router
 from metaseed_hub.ui.spec_builder_helpers import spec_label
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-    stream=sys.stdout,
+# Configure logging. The formatter keeps every record on one line, so a
+# request value holding a line break cannot forge a second entry (the same
+# formatter metaseed's own logging uses).
+_log_handler = logging.StreamHandler(sys.stdout)
+_log_handler.setFormatter(
+    OneLineFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
 )
+logging.basicConfig(level=logging.INFO, handlers=[_log_handler])
 logger = logging.getLogger("metaseed_hub")
 
 UI_DIR = Path(__file__).parent
