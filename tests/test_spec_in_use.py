@@ -152,3 +152,57 @@ class TestThePageSaysSoBeforeTheClick:
         assert 'data-testid="spec-in-use"' in html
         assert "Test_WES" in html
         assert 'data-testid="unpublish-blocked"' in html
+
+
+class TestTheButtonIsAnElement:
+    """The button rendered as text once: another block had been pasted into
+    the middle of its tag, so ``title="..."`` and ``Unpublish`` appeared on
+    the page as words and nothing was clickable. A substring check on
+    ``data-testid`` cannot tell the two apart; parsing the HTML can."""
+
+    async def test_unpublish_is_a_real_button_inside_the_form(self, session, publisher) -> None:
+        from html.parser import HTMLParser
+
+        from tests.test_spec_versioning import _endpoint, _request
+
+        spec = await _published_spec(session, *publisher)
+        publisher_tenant, publishing_user = publisher
+        view = _endpoint("/spec/{spec_id}", "GET")
+        response = await view(
+            _request("GET"), spec.id, session, (publishing_user.id, publisher_tenant.id)
+        )
+        html = response.body.decode()
+
+        class _Buttons(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.buttons: list[dict[str, str | None]] = []
+                self.text: list[str] = []
+                self._in_button: dict[str, str | None] | None = None
+
+            def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+                if tag == "button":
+                    self._in_button = dict(attrs)
+                    self.buttons.append(self._in_button)
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag == "button":
+                    self._in_button = None
+
+            def handle_data(self, data: str) -> None:
+                if self._in_button is not None:
+                    self._in_button["_text"] = (self._in_button.get("_text") or "") + data
+                else:
+                    self.text.append(data)
+
+        parser = _Buttons()
+        parser.feed(html)
+        unpublish = [b for b in parser.buttons if (b.get("_text") or "").strip() == "Unpublish"]
+        assert unpublish, "no <button> whose text is Unpublish"
+        assert unpublish[0].get("data-testid") == "unpublish"
+        assert unpublish[0].get("type") == "submit"
+        assert "Withdraw from the organisation" in (unpublish[0].get("title") or "")
+        stray = "".join(parser.text)
+        assert "title=" not in stray and ">Unpublish" not in stray, (
+            "button markup is leaking onto the page as text"
+        )

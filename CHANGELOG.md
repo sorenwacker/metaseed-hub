@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **A profile pushed over the API is a private draft, not a publication.** On
+  this hub *published* means visible to every user; 0.41.0 published a pushed
+  profile straight away, which put an author's work in front of everyone
+  without them choosing it. A push now lands as the caller's draft (and a
+  revised push updates it); `"publish": true` publishes explicitly, and
+  `POST /api/specs/{id}/unpublish` withdraws one, both with the permissions the
+  spec builder applies. `GET /api/specs` says which are drafts and which are
+  published, and whose.
+
+### Fixed
+- **The Unpublish button on a published specification rendered as text and
+  could not be pressed.** The sharing panel had been inserted into the middle
+  of the button's tag, so its attributes appeared on the page as words. The
+  test that covered the button checked for a substring the broken markup still
+  contained; it now parses the page and finds a real button.
+
 ## [0.41.0] - 260826
 
 ### Added

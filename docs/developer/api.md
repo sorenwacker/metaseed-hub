@@ -12,7 +12,8 @@
 | DELETE | `/api/datasets/{id}` | Soft-delete a dataset |
 | GET | `/api/specs` | Published specifications |
 | GET | `/api/specs/{name}/{version}` | One published specification as YAML |
-| POST | `/api/specs` | Publish a profile document (`{"yaml": ...}`); 409 under the version-bump gate |
+| POST | `/api/specs` | Push a profile document (`{"yaml": ...}`) as a private draft; `"publish": true` publishes it, 409 under the version-bump gate |
+| POST | `/api/specs/{id}/unpublish` | Withdraw a published specification to a private draft |
 
 ## Hub UI Routes
 

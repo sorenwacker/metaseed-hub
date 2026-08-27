@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.api import api_router
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Spec, SpecStatus, User
+from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
 from metaseed_hub.ui.dependencies import tenant_slug_for
 from tests.factories import make_tenant, make_user
 
@@ -84,45 +84,97 @@ async def test_me_names_the_account_and_tenant_the_token_acts_in(
     assert body["tenant_id"]
 
 
-async def test_a_pushed_profile_is_published_at_its_own_name_and_version(
+async def test_a_pushed_profile_is_a_private_draft_unless_publishing_is_asked_for(
     session: AsyncSession, caller: TokenUser
 ) -> None:
+    """On this hub "published" means visible to every user. A push from a
+    metaseed instance must not make that decision on the author's behalf."""
     async with _build_client(session, caller) as client:
         response = await client.post("/api/specs", json={"yaml": PROFILE_YAML})
         assert response.status_code == 201, response.text
         body = response.json()
+        assert body["visibility"] == "draft"
+        assert body["mine"] is True
         assert (body["name"], body["version"]) == ("test-push-profile", "1.0")
-        assert body["content_hash"]
         listed = (await client.get("/api/specs")).json()
-        assert [(s["name"], s["version"]) for s in listed] == [("test-push-profile", "1.0")]
+        assert [(s["name"], s["visibility"]) for s in listed] == [("test-push-profile", "draft")]
         pulled = await client.get("/api/specs/test-push-profile/1.0")
     assert pulled.status_code == 200
-    assert "name: test-push-profile" in pulled.text
     assert "is_identifier: true" in pulled.text
-    row = (await session.execute(select(Spec))).scalar_one()
-    assert row.status == SpecStatus.PUBLISHED
-    assert row.content_hash == body["content_hash"]
-    creator = (await session.execute(select(User).where(User.id == row.created_by_id))).scalar_one()
-    assert creator.email == "caller@example.com"
+    assert (await session.execute(select(Spec))).scalars().all() == [], "nothing was published"
+    draft = (await session.execute(select(SpecDraft))).scalar_one()
+    assert draft.name == "test-push-profile"
 
 
-async def test_a_version_already_published_is_refused_not_replaced(
+async def test_pushing_a_revised_profile_updates_the_callers_draft_in_place(
     session: AsyncSession, caller: TokenUser
 ) -> None:
     changed = PROFILE_YAML.replace("        required: true\n", "        required: false\n", 1)
     async with _build_client(session, caller) as client:
-        assert (await client.post("/api/specs", json={"yaml": PROFILE_YAML})).status_code == 201
+        first = await client.post("/api/specs", json={"yaml": PROFILE_YAML})
         again = await client.post("/api/specs", json={"yaml": PROFILE_YAML})
+        revised = await client.post("/api/specs", json={"yaml": changed})
+    assert (first.status_code, again.status_code, revised.status_code) == (201, 200, 200)
+    assert again.json()["content_hash"] == first.json()["content_hash"]
+    assert revised.json()["content_hash"] != first.json()["content_hash"]
+    assert len((await session.execute(select(SpecDraft))).scalars().all()) == 1
+
+
+async def test_publishing_is_explicit_and_lands_for_everyone(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    async with _build_client(session, caller) as client:
+        response = await client.post("/api/specs", json={"yaml": PROFILE_YAML, "publish": True})
+        assert response.status_code == 201, response.text
+        body = response.json()
+        assert body["visibility"] == "published"
+        assert body["content_hash"]
+        listed = (await client.get("/api/specs")).json()
+    assert [(s["name"], s["visibility"]) for s in listed] == [("test-push-profile", "published")]
+    row = (await session.execute(select(Spec))).scalar_one()
+    assert row.status == SpecStatus.PUBLISHED
+    creator = (await session.execute(select(User).where(User.id == row.created_by_id))).scalar_one()
+    assert creator.email == "caller@example.com"
+
+
+async def test_a_published_version_is_refused_not_replaced(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    changed = PROFILE_YAML.replace("        required: true\n", "        required: false\n", 1)
+    async with _build_client(session, caller) as client:
+        first = await client.post("/api/specs", json={"yaml": PROFILE_YAML, "publish": True})
+        assert first.status_code == 201
+        again = await client.post("/api/specs", json={"yaml": PROFILE_YAML, "publish": True})
         # Identical content is not a second release: the hub already has it.
         assert again.status_code == 200
-        assert (
-            again.json()["content_hash"]
-            == (await client.get("/api/specs")).json()[0]["content_hash"]
-        )
-        replaced = await client.post("/api/specs", json={"yaml": changed})
+        replaced = await client.post("/api/specs", json={"yaml": changed, "publish": True})
     assert replaced.status_code == 409
     assert "1.0" in replaced.json()["detail"]
-    assert (await session.execute(select(Spec))).scalars().all().__len__() == 1
+    assert len((await session.execute(select(Spec))).scalars().all()) == 1
+
+
+async def test_a_published_specification_can_be_withdrawn_to_a_draft(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    async with _build_client(session, caller) as client:
+        published = (
+            await client.post("/api/specs", json={"yaml": PROFILE_YAML, "publish": True})
+        ).json()
+        withdrawn = await client.post(f"/api/specs/{published['id']}/unpublish")
+        assert withdrawn.status_code == 200, withdrawn.text
+        assert withdrawn.json()["visibility"] == "draft"
+        listed = (await client.get("/api/specs")).json()
+    assert [s["visibility"] for s in listed] == ["draft"]
+    remaining = (await session.execute(select(Spec).where(Spec.deleted_at.is_(None)))).scalars()
+    assert list(remaining) == []
+
+
+async def test_withdrawing_what_is_not_published_is_a_404(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    async with _build_client(session, caller) as client:
+        response = await client.post("/api/specs/00000000-0000-0000-0000-000000000000/unpublish")
+    assert response.status_code == 404
 
 
 async def test_a_pull_of_an_unknown_spec_is_a_404(session: AsyncSession, caller: TokenUser) -> None:
