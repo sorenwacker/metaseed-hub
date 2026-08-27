@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.42.0] - 260827
+
 ### Changed
 - **A profile pushed over the API is a private draft, not a publication.** On
   this hub *published* means visible to every user; 0.41.0 published a pushed
