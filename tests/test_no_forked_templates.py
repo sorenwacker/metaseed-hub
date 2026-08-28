@@ -37,7 +37,6 @@ NOT_YET_UNFORKED: frozenset[str] = frozenset(
         "spec_builder/partials/validation_rule_form.html",
         "spec_builder/partials/validation_rules_list.html",
         "spec_builder/partials/yaml_preview.html",
-        "spec_builder/start.html",
     }
 )
 
