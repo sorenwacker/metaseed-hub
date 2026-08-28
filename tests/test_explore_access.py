@@ -187,7 +187,7 @@ async def test_a_shared_draft_loads_for_its_member(session: AsyncSession) -> Non
     tenants, but load_profile_spec accepted only the caller's own tenant —
     so a shared draft appeared in the picker and then refused to compare.
     """
-    from metaseed_hub.models import SpecDraftMember, SpecDraftRole
+    from metaseed_hub.models import Role, SpecDraftMember
 
     owner_tenant = make_tenant(slug="shr00001")
     member_tenant = make_tenant(slug="shr00002")
@@ -200,9 +200,7 @@ async def test_a_shared_draft_loads_for_its_member(session: AsyncSession) -> Non
     draft = make_spec_draft(tenant=owner_tenant, user=owner, spec_data=_spec_data())
     session.add(draft)
     await session.flush()
-    session.add(
-        SpecDraftMember(spec_draft_id=draft.id, user_id=member.id, role=SpecDraftRole.VIEWER)
-    )
+    session.add(SpecDraftMember(spec_draft_id=draft.id, user_id=member.id, role=Role.VIEWER))
     await session.commit()
 
     loaded = await load_profile_spec(

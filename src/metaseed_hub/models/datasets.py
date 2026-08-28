@@ -119,7 +119,6 @@ class DatasetVersion(TimestampMixin, Base):
 #: Roles are one vocabulary across every shared thing; see
 #: :mod:`metaseed_hub.sharing`. The alias keeps the old name readable at call
 #: sites that talk about datasets specifically.
-DatasetRole = Role
 
 
 class DatasetMember(Base):

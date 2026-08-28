@@ -14,10 +14,9 @@ from metaseed_hub.models import (
     Comment,
     Dataset,
     DatasetMember,
-    DatasetRole,
+    Role,
     Spec,
     SpecMember,
-    SpecRole,
     User,
 )
 from metaseed_hub.repositories.account import (
@@ -38,7 +37,7 @@ async def _add(session, obj):
     return obj
 
 
-async def _own(session, user, dataset, role=DatasetRole.OWNER):
+async def _own(session, user, dataset, role=Role.OWNER):
     member = DatasetMember(dataset_id=dataset.id, user_id=user.id, role=role)
     session.add(member)
     await session.flush()
@@ -83,7 +82,7 @@ async def test_co_owned_dataset_allows_deletion_and_survives(session):
         .all()
     )
     assert [m.user_id for m in members] == [staying.id]
-    assert members[0].role == DatasetRole.OWNER
+    assert members[0].role == Role.OWNER
 
 
 async def test_viewer_membership_does_not_block(session):
@@ -92,7 +91,7 @@ async def test_viewer_membership_does_not_block(session):
     viewer = await _add(session, make_user(tenant=tenant, display_name="Viewer"))
     dataset = await _add(session, make_dataset(tenant=tenant))
     await _own(session, owner, dataset)
-    await _own(session, viewer, dataset, role=DatasetRole.VIEWER)
+    await _own(session, viewer, dataset, role=Role.VIEWER)
 
     assert await datasets_needing_new_owner(session, viewer) == []
     await delete_account(session, viewer)
@@ -110,7 +109,7 @@ async def test_sole_owner_with_only_viewer_coworkers_blocks(session):
     viewer = await _add(session, make_user(tenant=tenant))
     dataset = await _add(session, make_dataset(tenant=tenant))
     await _own(session, owner, dataset)
-    await _own(session, viewer, dataset, role=DatasetRole.VIEWER)
+    await _own(session, viewer, dataset, role=Role.VIEWER)
 
     blocking = await datasets_needing_new_owner(session, owner)
     assert [d.id for d in blocking] == [dataset.id]
@@ -122,7 +121,7 @@ async def test_deletion_cascades_personal_records(session):
     other = await _add(session, make_user(tenant=tenant))
     dataset = await _add(session, make_dataset(tenant=tenant))
     await _own(session, other, dataset)  # co-owner so nothing blocks
-    await _own(session, user, dataset, role=DatasetRole.VIEWER)
+    await _own(session, user, dataset, role=Role.VIEWER)
     await _add(session, Comment(dataset_id=dataset.id, user_id=user.id, content="hi"))
 
     await delete_account(session, user)
@@ -143,7 +142,7 @@ async def test_sole_non_owner_member_blocks(session):
     tenant = await _add(session, make_tenant())
     user = await _add(session, make_user(tenant=tenant))
     dataset = await _add(session, make_dataset(tenant=tenant))
-    await _own(session, user, dataset, role=DatasetRole.EDITOR)
+    await _own(session, user, dataset, role=Role.EDITOR)
 
     blocking = await datasets_needing_new_owner(session, user)
     assert [d.id for d in blocking] == [dataset.id]
@@ -151,7 +150,7 @@ async def test_sole_non_owner_member_blocks(session):
         await delete_account(session, user)
 
 
-async def _own_spec(session, user, spec, role=SpecRole.OWNER):
+async def _own_spec(session, user, spec, role=Role.OWNER):
     session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=role))
     await session.flush()
 
@@ -207,7 +206,7 @@ async def test_a_spec_the_user_withdrew_does_not_block(session):
     tenant = await _add(session, make_tenant())
     user = await _add(session, make_user(tenant=tenant))
     spec = await _add(session, make_spec(tenant=tenant, created_by=user))
-    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=SpecRole.OWNER))
+    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=Role.OWNER))
     spec.soft_delete()
     await session.commit()
 
@@ -269,7 +268,7 @@ async def test_erasure_removes_the_users_own_withdrawn_specs(session):
     tenant = await _add(session, make_tenant())
     user = await _add(session, make_user(tenant=tenant))
     spec = await _add(session, make_spec(tenant=tenant, created_by=user))
-    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=SpecRole.OWNER))
+    session.add(SpecMember(spec_id=spec.id, user_id=user.id, role=Role.OWNER))
     spec.soft_delete()
     await session.commit()
     spec_id = spec.id

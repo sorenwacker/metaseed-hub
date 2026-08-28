@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.access import get_dataset_for_editor, get_dataset_for_user, tenant_slug_for
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, User
+from metaseed_hub.models import Dataset, DatasetMember, Role, User
 from tests.factories import make_dataset, make_tenant, make_user
 
 pytestmark = pytest.mark.asyncio
@@ -48,7 +48,7 @@ async def _shared_dataset_with_a_member(
     dataset = make_dataset(tenant=owner_tenant)
     session.add(dataset)
     await session.flush()
-    session.add(DatasetMember(dataset_id=dataset.id, user_id=member.id, role=DatasetRole.EDITOR))
+    session.add(DatasetMember(dataset_id=dataset.id, user_id=member.id, role=Role.EDITOR))
     await session.commit()
 
     return dataset, member, TokenUser(sub=member_sub, email=member.email, name="M", roles=[])

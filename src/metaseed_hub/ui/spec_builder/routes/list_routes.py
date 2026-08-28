@@ -11,8 +11,8 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
+from metaseed_hub.sharing import account_owner
 from metaseed_hub.ui.spec_builder.access import (
-    account_owner,
     create_new_draft,
     free_draft_name,
 )

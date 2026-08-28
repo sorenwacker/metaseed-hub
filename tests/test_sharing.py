@@ -256,9 +256,9 @@ class TestTheVocabularyIsOne:
     def test_every_shared_thing_uses_the_same_roles(self) -> None:
         """Three enums said almost the same thing; a dataset had curators and a
         draft had editors, while the interface claimed they matched."""
-        from metaseed_hub.models import DatasetRole, SpecDraftRole, SpecRole
+        from metaseed_hub.models import Role
 
-        assert DatasetRole is SpecRole is SpecDraftRole is Role
+        assert Role is Role is Role is Role
         assert [role.value for role in Role] == ["owner", "editor", "viewer"]
 
     def test_an_unknown_kind_is_refused(self) -> None:
@@ -362,11 +362,7 @@ class TestAStrangerLearnsNothing:
         thing_id = await _make(session, "dataset", tenant, owner)
 
         assert not await may_see_members(
-            session,
-            resource_for("dataset"),
-            thing_id,
-            user_id=stranger.id,
-            tenant_id=other_tenant.id,
+            session, resource_for("dataset"), thing_id, user_id=stranger.id
         )
 
     async def test_someone_it_is_shared_with_can(self, session, people) -> None:
@@ -377,29 +373,28 @@ class TestAStrangerLearnsNothing:
         thing_id = await _make(session, "dataset", tenant, owner)
         await add_member(session, resource, thing_id, actor_id=owner.id, email=second.email)
 
-        assert await may_see_members(
-            session, resource, thing_id, user_id=second.id, tenant_id=other_tenant.id
-        )
+        assert await may_see_members(session, resource, thing_id, user_id=second.id)
 
     async def test_the_account_it_lives_in_can(self, session, people) -> None:
-        """A dataset's own account has no membership row until someone shares
-        it, so ownership of the account has to count."""
+        """The person whose account a dataset lives in sees its members without a
+        membership row; a second user in that account (impossible in production,
+        an account is one person) does not."""
         from metaseed_hub.sharing import may_see_members
 
         (tenant, owner), (_, second), _ = people
         resource = resource_for("dataset")
-        thing_id = await _make(session, "dataset", tenant, owner)
-
-        # A colleague of the account with no membership row of their own.
+        dataset = make_dataset(tenant=tenant, name="unshared")
+        session.add(dataset)
         colleague = make_user(
             tenant=tenant, keycloak_id="kc-colleague", email="colleague@example.org"
         )
         session.add(colleague)
         await session.commit()
+        thing_id = dataset.id
 
-        assert await may_see_members(
-            session, resource, thing_id, user_id=colleague.id, tenant_id=tenant.id
-        )
+        assert await may_see_members(session, resource, thing_id, user_id=owner.id)
+        assert not await may_see_members(session, resource, thing_id, user_id=colleague.id)
+        assert not await may_see_members(session, resource, thing_id, user_id=second.id)
 
 
 class TestTheCreatorOwnsWhatTheyMake:
@@ -452,3 +447,12 @@ class TestTheCreatorOwnsWhatTheyMake:
                 if "record_creator(" not in window:
                     missing.append(f"{path.relative_to(src)}:{index + 1}")
         assert not missing, f"dataset created without recording its creator: {missing}"
+
+
+def test_there_is_one_role_vocabulary() -> None:
+    """``DatasetRole``, ``SpecRole`` and ``SpecDraftRole`` were aliases of one
+    enum that read as three; a fourth would be written the same way."""
+    import metaseed_hub.models as models
+
+    for name in ("DatasetRole", "SpecRole", "SpecDraftRole"):
+        assert not hasattr(models, name), f"{name} is back; use sharing.Role"

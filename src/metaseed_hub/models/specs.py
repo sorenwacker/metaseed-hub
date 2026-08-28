@@ -101,9 +101,6 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
 
 
-SpecRole = Role
-
-
 class SpecMember(Base):
     """User membership in a spec with role-based access."""
 
@@ -198,9 +195,6 @@ class SpecDraft(TimestampMixin, Base):
         order_by="SpecComment.created_at",
         cascade="all, delete-orphan",
     )
-
-
-SpecDraftRole = Role
 
 
 class SpecDraftMember(Base):

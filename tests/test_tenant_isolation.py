@@ -41,7 +41,7 @@ from metaseed_hub.models import (
     Comment,
     CommentReaction,
     DatasetMember,
-    DatasetRole,
+    Role,
     SpecComment,
     SpecCommentReaction,
     Tenant,
@@ -298,7 +298,7 @@ async def test_require_dataset_owner_denies_viewer_member(session: AsyncSession)
     dataset = make_dataset(tenant=owner_tenant, name="shared")
     session.add(dataset)
     await session.flush()
-    session.add(DatasetMember(dataset_id=dataset.id, user_id=viewer.id, role=DatasetRole.VIEWER))
+    session.add(DatasetMember(dataset_id=dataset.id, user_id=viewer.id, role=Role.VIEWER))
     await session.commit()
 
     viewer_token = TokenUser(sub="viewerd1-kc", email=viewer.email, name="V", roles=[])

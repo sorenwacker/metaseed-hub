@@ -6,14 +6,14 @@ tenant-only check and ignored ``DatasetMember`` rows the UI honoured, and it
 imported its tenancy helpers from the UI layer to do so. Access control is not
 a UI concern, so it lives here and the layers import it.
 
-The ladder, least to most privileged:
+The ladder, least to most privileged, each reading the one role that
+:func:`metaseed_hub.sharing.role_of` gives the caller:
 
-- :func:`get_dataset_for_user` — any member (VIEWER included) or the owning
-  tenant. Reads and comments.
-- :func:`get_dataset_for_editor` — the owning tenant, or a member whose role
-  is in :data:`~metaseed_hub.sharing.EDIT_ROLES`. Content mutations.
-- :func:`require_dataset_owner` — the owning tenant or an OWNER member.
-  Membership changes, and destroying the dataset itself.
+- :func:`get_dataset_for_user` — any role. Reads and comments.
+- :func:`get_dataset_for_editor` — a role in
+  :data:`~metaseed_hub.sharing.EDIT_ROLES`. Content mutations.
+- :func:`require_dataset_owner` — OWNER. Membership changes, and destroying
+  the dataset itself.
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.models import Dataset, DatasetMember, DatasetRole, Tenant, User
-from metaseed_hub.sharing import EDIT_ROLES
+from metaseed_hub.models import Dataset, Tenant, User
+from metaseed_hub.sharing import EDIT_ROLES, Role, resource_for, role_of
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -127,57 +127,39 @@ async def live_user(session: AsyncSession, user: TokenUser) -> User | None:
     return found.scalar_one_or_none()
 
 
+async def _dataset_and_role(
+    dataset_id: str, session: AsyncSession, user: TokenUser
+) -> tuple[Dataset, Role | None]:
+    """The dataset and the caller's role in it, or 404 if there is no dataset."""
+    result = await session.execute(
+        select(Dataset).where(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
+    )
+    dataset = result.scalar_one_or_none()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    db_user = await live_user(session, user)
+    if db_user is None:
+        return dataset, None
+    return dataset, await role_of(session, resource_for("dataset"), dataset.id, db_user.id)
+
+
 async def get_dataset_for_user(
     dataset_id: str,
     session: AsyncSession,
     user: TokenUser,
 ) -> Dataset:
-    """Get dataset if user has access through tenant or sharing.
+    """Get dataset if the user has any role in it: reads and comments.
 
-    A user has access to a dataset if:
-    1. Their tenant owns the dataset, OR
-    2. They have been granted access via DatasetMember
-
-    Args:
-        dataset_id: ID of the dataset to retrieve.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Dataset if user has access.
+    :func:`metaseed_hub.sharing.role_of` decides — a membership, or the
+    account the dataset lives in.
 
     Raises:
         HTTPException: 404 if dataset not found, 403 if access denied.
     """
-    result = await session.execute(
-        select(Dataset).where(Dataset.id == dataset_id, Dataset.deleted_at.is_(None))
-    )
-    dataset = result.scalar_one_or_none()
-
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-
-    # First, try tenant access (owner)
-    try:
-        await verify_tenant_access(dataset.tenant_id, session, user)
-        return dataset
-    except HTTPException:
-        pass  # Not tenant owner, check DatasetMember
-
-    # Check if user has access via DatasetMember
-    db_user = await live_user(session, user)
-
-    if db_user:
-        member_result = await session.execute(
-            select(DatasetMember).where(
-                DatasetMember.dataset_id == dataset_id,
-                DatasetMember.user_id == db_user.id,
-            )
-        )
-        if member_result.scalar_one_or_none():
-            return dataset
-
-    raise HTTPException(status_code=403, detail="Access denied")
+    dataset, role = await _dataset_and_role(dataset_id, session, user)
+    if role is None:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return dataset
 
 
 async def get_dataset_for_editor(
@@ -188,48 +170,23 @@ async def get_dataset_for_editor(
     """Get dataset only if the user may change its content.
 
     The sharing panel offers VIEWER for exactly one reason: to let someone look
-    without letting them change anything. Content mutations therefore authorize
-    through this helper — the tenant owner, or a member whose role is in
-    :data:`~metaseed_hub.sharing.EDIT_ROLES` — while reads and comments stay on
-    :func:`get_dataset_for_user`, which any member passes.
-
-    Args:
-        dataset_id: ID of the dataset to retrieve.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Dataset if the user may edit it.
+    without letting them change anything. Content mutations authorize here —
+    a role in :data:`~metaseed_hub.sharing.EDIT_ROLES` — while reads and
+    comments stay on :func:`get_dataset_for_user`.
 
     Raises:
         HTTPException: 404 if dataset not found, 403 if the user has no access
             or only view access.
     """
-    dataset = await get_dataset_for_user(dataset_id, session, user)
-
-    # Tenant owners may always edit their own data.
-    try:
-        await verify_tenant_access(dataset.tenant_id, session, user)
-        return dataset
-    except HTTPException:
-        pass  # Not tenant owner; the membership's role decides.
-
-    db_user = await live_user(session, user)
-    if db_user:
-        member_result = await session.execute(
-            select(DatasetMember).where(
-                DatasetMember.dataset_id == dataset_id,
-                DatasetMember.user_id == db_user.id,
-                DatasetMember.role.in_(EDIT_ROLES),
-            )
+    dataset, role = await _dataset_and_role(dataset_id, session, user)
+    if role is None:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if role not in EDIT_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="This dataset is shared with you to view, not to change.",
         )
-        if member_result.scalar_one_or_none():
-            return dataset
-
-    raise HTTPException(
-        status_code=403,
-        detail="This dataset is shared with you to view, not to change.",
-    )
+    return dataset
 
 
 async def require_dataset_owner(
@@ -237,42 +194,18 @@ async def require_dataset_owner(
     session: AsyncSession,
     user: TokenUser,
 ) -> Dataset:
-    """Get dataset only if the user owns it (tenant owner or OWNER member).
+    """Get dataset only if the user owns it.
 
-    Membership-management mutations must be restricted to owners. An ordinary
-    member (including a VIEWER) can read a dataset via get_dataset_for_user but
-    must not add, remove, or re-role members.
-
-    Args:
-        dataset_id: ID of the dataset to retrieve.
-        session: Database session.
-        user: Authenticated user.
-
-    Returns:
-        Dataset if the user is an owner.
+    Membership management and destroying the dataset are owner-only. An
+    ordinary member (including a VIEWER) can read a dataset but must not add,
+    remove, or re-role members.
 
     Raises:
         HTTPException: 404 if dataset not found, 403 if the user is not an owner.
     """
-    dataset = await get_dataset_for_user(dataset_id, session, user)
-
-    # Tenant owners are always dataset owners.
-    try:
-        await verify_tenant_access(dataset.tenant_id, session, user)
-        return dataset
-    except HTTPException:
-        pass  # Not tenant owner, require an OWNER-role membership.
-
-    db_user = await live_user(session, user)
-    if db_user:
-        owner_result = await session.execute(
-            select(DatasetMember).where(
-                DatasetMember.dataset_id == dataset_id,
-                DatasetMember.user_id == db_user.id,
-                DatasetMember.role == DatasetRole.OWNER,
-            )
-        )
-        if owner_result.scalar_one_or_none():
-            return dataset
-
-    raise HTTPException(status_code=403, detail="Owner access required")
+    dataset, role = await _dataset_and_role(dataset_id, session, user)
+    if role is None:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if role is not Role.OWNER:
+        raise HTTPException(status_code=403, detail="Owner access required")
+    return dataset

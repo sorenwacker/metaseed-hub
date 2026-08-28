@@ -183,11 +183,11 @@ class TestAuthorizationDependencies:
         result_mock.scalar_one_or_none.return_value = draft
         session.execute.return_value = result_mock
 
-        from metaseed_hub.models import SpecDraftRole
+        from metaseed_hub.models import Role
 
         with patch(
             "metaseed_hub.ui.spec_builder.access.get_draft_role",
-            return_value=SpecDraftRole.VIEWER,
+            return_value=Role.VIEWER,
         ):
             assert await require_draft_access(session, "draft-1", "member-2") is draft
 

@@ -170,18 +170,15 @@ async def may_see_members(
     resource_id: str,
     *,
     user_id: str,
-    tenant_id: str,
 ) -> bool:
     """Whether this person may see who has access to a resource.
 
-    Being shared with it, or owning the account it lives in. Without this the
-    members list — names and email addresses — was readable by anyone signed in
-    who knew an id, since only the write paths checked anything.
+    Anyone with a role: shared with it, its creator, or the person whose
+    account it lives in. Without this the members list — names and email
+    addresses — was readable by anyone signed in who knew an id, since only
+    the write paths checked anything.
     """
-    if await role_of(session, resource, resource_id, user_id) is not None:
-        return True
-    thing = await session.get(resource.model, resource_id)
-    return thing is not None and str(thing.tenant_id) == str(tenant_id)
+    return await role_of(session, resource, resource_id, user_id) is not None
 
 
 async def members_of(
@@ -209,10 +206,16 @@ async def role_of(
 ) -> Role | None:
     """``user_id``'s role in a resource, or ``None`` if they have none.
 
-    An explicit membership row decides, so a creator given a lesser role keeps
-    it. Failing that, whoever created the resource owns it: nothing writes a
-    membership row at creation, and without this the person who made a draft
-    could not share it.
+    This is the one answer every layer reads: the web routes, the REST API,
+    the MCP tools and the spec builder. Three rules, in order:
+
+    1. An explicit membership row decides, so a creator given a lesser role
+       keeps it.
+    2. Failing that, whoever created the resource owns it, where the model
+       records a creator.
+    3. Failing that, the person whose account the resource lives in owns it.
+       An account belongs to one person, so this is the resource's home, not
+       a group grant.
     """
     result = await session.execute(
         select(resource.member_model.role).where(
@@ -224,11 +227,41 @@ async def role_of(
     if role is not None:
         return Role(role)
 
-    if resource.creator_column is not None:
-        found = await session.get(resource.model, resource_id)
-        if found is not None and resource.creator_of(found) == user_id:
-            return Role.OWNER
+    found = await session.get(resource.model, resource_id)
+    if found is None:
+        return None
+    if resource.creator_column is not None and resource.creator_of(found) == user_id:
+        return Role.OWNER
+    holder = await account_owner(session, str(found.tenant_id))
+    if holder is not None and holder.id == user_id:
+        return Role.OWNER
     return None
+
+
+async def account_owner(session: AsyncSession, tenant_id: str) -> User | None:
+    """The person whose account holds an item.
+
+    An account belongs to exactly one person, so this is who to approach about
+    a specification that lives there. It is not always the author: publishing a
+    draft someone shared with you puts the specification in *their* account
+    while recording you as its author.
+
+    Args:
+        session: Database session.
+        tenant_id: The account.
+
+    Returns:
+        The owning user, or None if the account has no live user.
+    """
+    from metaseed_hub.models import User
+
+    result = await session.execute(
+        select(User)
+        .where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+        .order_by(User.created_at)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def _owner_count(session: AsyncSession, resource: SharedResource, resource_id: str) -> int:

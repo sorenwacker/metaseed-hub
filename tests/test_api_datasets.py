@@ -22,7 +22,7 @@ from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, Tenant
 from metaseed_hub.ui.dependencies import tenant_slug_for
-from tests.factories import make_dataset, make_tenant
+from tests.factories import make_dataset, make_tenant, make_user
 
 CALLER_SUB = "caller01-rest-api"
 
@@ -57,8 +57,12 @@ async def caller(session: AsyncSession) -> TokenUser:
 @pytest_asyncio.fixture
 async def own_tenant_id(session: AsyncSession) -> str:
     """Persist the caller's tenant (slug derived from CALLER_SUB) and return its id."""
+    # The account and its person, as sign-in provisions them: access is read
+    # from who the caller is, so a tenant with nobody in it reaches nothing.
     tenant = make_tenant(name="Caller Tenant", slug=tenant_slug_for(CALLER_SUB))
     session.add(tenant)
+    await session.flush()
+    session.add(make_user(tenant=tenant, keycloak_id=CALLER_SUB, email="caller@example.com"))
     await session.commit()
     return tenant.id
 

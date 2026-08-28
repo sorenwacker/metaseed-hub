@@ -60,12 +60,12 @@ def _resource_or_404(kind: str) -> SharedResource:
         raise HTTPException(status_code=404, detail="No such thing to share") from None
 
 
-async def _viewer(session: DbSession, user: TokenUser) -> tuple[str, str]:
-    """The asking person's user and account ids."""
+async def _viewer(session: DbSession, user: TokenUser) -> str:
+    """The asking person's user id."""
     from metaseed_hub.ui.dependencies import ensure_tenant_and_user
 
-    tenant, db_user = await ensure_tenant_and_user(session, user)
-    return str(db_user.id), str(tenant.id)
+    _tenant, db_user = await ensure_tenant_and_user(session, user)
+    return str(db_user.id)
 
 
 async def _seen_or_404(
@@ -75,10 +75,8 @@ async def _seen_or_404(
 
     404 rather than 403: a stranger learns nothing about what exists.
     """
-    viewer_id, tenant_id = await _viewer(session, user)
-    if not await may_see_members(
-        session, resource, resource_id, user_id=viewer_id, tenant_id=tenant_id
-    ):
+    viewer_id = await _viewer(session, user)
+    if not await may_see_members(session, resource, resource_id, user_id=viewer_id):
         raise HTTPException(status_code=404, detail="Not found")
     return viewer_id
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.models import DatasetMember, DatasetRole
+from metaseed_hub.models import DatasetMember, Role
 from metaseed_hub.sharing import members_of, resource_for
 from metaseed_hub.ui.dependencies import tenant_slug_for
 from tests.factories import make_dataset, make_tenant, make_user
@@ -36,8 +36,8 @@ async def test_a_member_renders_without_a_lazy_load(session: AsyncSession) -> No
     await session.flush()
     session.add_all(
         [
-            DatasetMember(dataset_id=dataset.id, user_id=owner.id, role=DatasetRole.OWNER),
-            DatasetMember(dataset_id=dataset.id, user_id=other.id, role=DatasetRole.VIEWER),
+            DatasetMember(dataset_id=dataset.id, user_id=owner.id, role=Role.OWNER),
+            DatasetMember(dataset_id=dataset.id, user_id=other.id, role=Role.VIEWER),
         ]
     )
     await session.commit()

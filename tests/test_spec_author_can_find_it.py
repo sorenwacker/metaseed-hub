@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Spec, SpecStatus
-from metaseed_hub.ui.spec_builder.access import account_owner
+from metaseed_hub.sharing import account_owner
 from tests.factories import make_spec, make_tenant, make_user
 
 

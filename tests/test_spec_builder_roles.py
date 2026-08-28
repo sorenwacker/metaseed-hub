@@ -22,10 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import (
     Dataset,
+    Role,
     Spec,
     SpecDraft,
     SpecDraftMember,
-    SpecDraftRole,
     Tenant,
     User,
 )
@@ -66,7 +66,7 @@ def _draft_endpoint(path_suffix: str, method: str) -> Any:
 
 async def _shared_draft(
     session: AsyncSession,
-) -> tuple[SpecDraft, Tenant, User, dict[SpecDraftRole, User]]:
+) -> tuple[SpecDraft, Tenant, User, dict[Role, User]]:
     """A draft with one member per role, all in the owner's tenant."""
     tenant = make_tenant()
     session.add(tenant)
@@ -82,8 +82,8 @@ async def _shared_draft(
     )
     session.add(draft)
     await session.flush()
-    members: dict[SpecDraftRole, User] = {}
-    for role in SpecDraftRole:
+    members: dict[Role, User] = {}
+    for role in Role:
         user = make_user(tenant=tenant, email=f"member-{role.value}@example.org")
         session.add(user)
         await session.flush()
@@ -98,20 +98,21 @@ class TestGetDraftRole:
 
     async def test_draft_owner_holds_owner_role(self, session: AsyncSession) -> None:
         draft, _tenant, owner, _members = await _shared_draft(session)
-        assert await get_draft_role(session, draft, owner.id) is SpecDraftRole.OWNER
+        assert await get_draft_role(session, draft, owner.id) is Role.OWNER
 
     async def test_members_hold_their_recorded_role(self, session: AsyncSession) -> None:
         draft, _tenant, _owner, members = await _shared_draft(session)
         for role, user in members.items():
             assert await get_draft_role(session, draft, user.id) is role
 
-    async def test_tenant_colleague_holds_viewer_role(self, session: AsyncSession) -> None:
-        """The tenant-wide grant is read-only: colleagues resolve to VIEWER."""
+    async def test_a_second_user_in_the_account_holds_no_role(self, session: AsyncSession) -> None:
+        """There is no tenant-wide grant: an account belongs to one person, so a
+        second user in it (impossible in production) is a stranger to the draft."""
         draft, tenant, _owner, _members = await _shared_draft(session)
         colleague = make_user(tenant=tenant, email="colleague@example.org")
         session.add(colleague)
         await session.commit()
-        assert await get_draft_role(session, draft, colleague.id) is SpecDraftRole.VIEWER
+        assert await get_draft_role(session, draft, colleague.id) is None
 
     async def test_outsider_holds_no_role(self, session: AsyncSession) -> None:
         draft, _tenant, _owner, _members = await _shared_draft(session)
@@ -129,14 +130,14 @@ class TestWriteGate:
 
     async def test_viewer_is_refused_edit_access(self, session: AsyncSession) -> None:
         draft, _tenant, _owner, members = await _shared_draft(session)
-        viewer = members[SpecDraftRole.VIEWER]
+        viewer = members[Role.VIEWER]
         with pytest.raises(HTTPException) as err:
             await require_edit_role(session, draft, viewer.id)
         assert err.value.status_code == 403
 
     async def test_editor_passes_edit_but_not_owner_gate(self, session: AsyncSession) -> None:
         draft, _tenant, _owner, members = await _shared_draft(session)
-        editor = members[SpecDraftRole.EDITOR]
+        editor = members[Role.EDITOR]
         await require_edit_role(session, draft, editor.id)
         with pytest.raises(HTTPException) as err:
             await require_owner_role(session, draft, editor.id)
@@ -144,7 +145,7 @@ class TestWriteGate:
 
     async def test_owner_member_passes_owner_gate(self, session: AsyncSession) -> None:
         draft, _tenant, _owner, members = await _shared_draft(session)
-        await require_owner_role(session, draft, members[SpecDraftRole.OWNER].id)
+        await require_owner_role(session, draft, members[Role.OWNER].id)
 
     async def test_a_viewer_cannot_send_mutating_requests(
         self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
@@ -152,7 +153,7 @@ class TestWriteGate:
         """get_draft_context, the dependency of every entity/field/rule route,
         must reject non-GET requests from a viewer."""
         draft, tenant, _owner, members = await _shared_draft(session)
-        viewer = members[SpecDraftRole.VIEWER]
+        viewer = members[Role.VIEWER]
 
         async def _as_viewer(
             request: Request, sess: AsyncSession, **kwargs: Any
@@ -173,7 +174,7 @@ class TestWriteGate:
         self, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         draft, tenant, _owner, members = await _shared_draft(session)
-        editor = members[SpecDraftRole.EDITOR]
+        editor = members[Role.EDITOR]
 
         async def _as_editor(
             request: Request, sess: AsyncSession, **kwargs: Any
@@ -197,7 +198,7 @@ class TestOwnerOnlyRoutes:
                 request=_request("POST"),
                 draft_id=draft.id,
                 session=session,
-                user_ctx=(members[SpecDraftRole.EDITOR].id, tenant.id),
+                user_ctx=(members[Role.EDITOR].id, tenant.id),
             )
         assert err.value.status_code == 403
         await session.refresh(draft)
@@ -224,7 +225,7 @@ class TestOwnerOnlyRoutes:
                 request=_request("POST"),
                 draft_id=draft.id,
                 session=session,
-                user_ctx=(members[SpecDraftRole.VIEWER].id, tenant.id),
+                user_ctx=(members[Role.VIEWER].id, tenant.id),
             )
         assert err.value.status_code == 403
         drafts = (await session.execute(select(SpecDraft))).scalars().all()
@@ -237,7 +238,7 @@ class TestOwnerOnlyRoutes:
             request=_request("POST"),
             draft_id=draft.id,
             session=session,
-            user_ctx=(members[SpecDraftRole.OWNER].id, tenant.id),
+            user_ctx=(members[Role.OWNER].id, tenant.id),
         )
         specs = (await session.execute(select(Spec))).scalars().all()
         assert len(specs) == 1

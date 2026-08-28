@@ -6,6 +6,8 @@ module imports every model module, which is what lets SQLAlchemy resolve the
 string-name relationships and Alembic autogenerate see the full schema.
 """
 
+from metaseed_hub.sharing import Role
+
 from .base import Base, _enum_values
 from .comments import (
     Comment,
@@ -14,7 +16,7 @@ from .comments import (
     SpecComment,
     SpecCommentReaction,
 )
-from .datasets import Dataset, DatasetMember, DatasetRole, DatasetVersion
+from .datasets import Dataset, DatasetMember, DatasetVersion
 from .identity import Tenant, User
 from .mixins import SoftDeleteMixin, TimestampMixin
 from .operations import ApiToken, ErrorEvent, SeekConnection
@@ -22,20 +24,18 @@ from .specs import (
     Spec,
     SpecDraft,
     SpecDraftMember,
-    SpecDraftRole,
     SpecMember,
-    SpecRole,
     SpecStatus,
 )
 
 __all__ = [
+    "Role",
     "ApiToken",
     "Base",
     "Comment",
     "CommentReaction",
     "Dataset",
     "DatasetMember",
-    "DatasetRole",
     "DatasetVersion",
     "ErrorEvent",
     "ReactionType",
@@ -46,9 +46,7 @@ __all__ = [
     "SpecCommentReaction",
     "SpecDraft",
     "SpecDraftMember",
-    "SpecDraftRole",
     "SpecMember",
-    "SpecRole",
     "SpecStatus",
     "Tenant",
     "TimestampMixin",

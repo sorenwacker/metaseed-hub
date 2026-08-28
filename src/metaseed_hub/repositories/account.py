@@ -36,10 +36,9 @@ from sqlalchemy import delete, select
 from metaseed_hub.models import (
     Dataset,
     DatasetMember,
-    DatasetRole,
+    Role,
     Spec,
     SpecMember,
-    SpecRole,
 )
 
 if TYPE_CHECKING:
@@ -95,7 +94,7 @@ async def datasets_needing_new_owner(session: AsyncSession, user: User) -> list[
                     select(DatasetMember).where(
                         DatasetMember.dataset_id == membership.dataset_id,
                         DatasetMember.user_id != user.id,
-                        DatasetMember.role == DatasetRole.OWNER,
+                        DatasetMember.role == Role.OWNER,
                     )
                 )
             )
@@ -139,7 +138,7 @@ async def specs_needing_new_owner(session: AsyncSession, user: User) -> list[Spe
                     select(SpecMember).where(
                         SpecMember.spec_id == membership.spec_id,
                         SpecMember.user_id != user.id,
-                        SpecMember.role == SpecRole.OWNER,
+                        SpecMember.role == Role.OWNER,
                     )
                 )
             )
@@ -208,7 +207,7 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
             await session.execute(
                 select(DatasetMember).where(
                     DatasetMember.user_id == user.id,
-                    DatasetMember.role == DatasetRole.OWNER,
+                    DatasetMember.role == Role.OWNER,
                 )
             )
         )
@@ -222,7 +221,7 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
                     select(DatasetMember).where(
                         DatasetMember.dataset_id == membership.dataset_id,
                         DatasetMember.user_id != user.id,
-                        DatasetMember.role == DatasetRole.OWNER,
+                        DatasetMember.role == Role.OWNER,
                     )
                 )
             )
@@ -238,7 +237,7 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
             await session.execute(
                 select(SpecMember).where(
                     SpecMember.user_id == user.id,
-                    SpecMember.role == SpecRole.OWNER,
+                    SpecMember.role == Role.OWNER,
                 )
             )
         )
@@ -252,7 +251,7 @@ async def _erase_solely_owned_tombstones(session: AsyncSession, user: User) -> N
                     select(SpecMember).where(
                         SpecMember.spec_id == spec_membership.spec_id,
                         SpecMember.user_id != user.id,
-                        SpecMember.role == SpecRole.OWNER,
+                        SpecMember.role == Role.OWNER,
                     )
                 )
             )

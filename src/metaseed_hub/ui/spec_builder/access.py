@@ -18,14 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import (
-    Dataset,
-    Spec,
-    SpecDraft,
-    SpecDraftMember,
-    SpecDraftRole,
-    User,
-)
+from metaseed_hub.models import Dataset, Spec, SpecDraft
+from metaseed_hub.sharing import EDIT_ROLES, Role, resource_for, role_of
 
 from .cache import state_cache
 from .state import SpecBuilderState
@@ -130,9 +124,8 @@ async def can_edit_spec(
 ) -> bool:
     """Whether ``user_id`` may edit — and so also withdraw — a published spec.
 
-    Its author, or anyone the specification has been shared with in an
-    edit-capable role. (An earlier team-admin branch was removed with teams;
-    the shared-role branch below replaced it when spec sharing arrived.)
+    Its author, the account it lives in, or anyone it has been shared with in
+    an edit-capable role: :func:`metaseed_hub.sharing.role_of` decides.
     """
     result = await session.execute(
         select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
@@ -140,39 +133,20 @@ async def can_edit_spec(
     spec = result.scalar_one_or_none()
     if not spec:
         return False
+    return await role_of(session, resource_for("spec"), spec.id, user_id) in EDIT_ROLES
 
-    if spec.created_by_id == user_id:
-        return True
-
-    # Whoever the specification has been shared with as owner or editor. Until
-    # published specifications could be shared at all, this was the author and
-    # nobody else, and handing one over meant editing the database.
-    from metaseed_hub.sharing import EDIT_ROLES, resource_for, role_of
-
-    role = await role_of(session, resource_for("spec"), spec.id, user_id)
-    return role in EDIT_ROLES
-
-
-# Roles allowed to modify a draft's specification. VIEWER is read-only.
-_EDIT_ROLES = frozenset({SpecDraftRole.EDITOR, SpecDraftRole.OWNER})
 
 # Request methods that never modify a draft; everything else must be gated on
 # an edit-capable role.
 _READ_METHODS = frozenset({"GET", "HEAD"})
 
 
-async def get_draft_role(
-    session: AsyncSession, draft: SpecDraft, user_id: str
-) -> SpecDraftRole | None:
-    """Resolve the caller's effective role on a draft.
+async def get_draft_role(session: AsyncSession, draft: SpecDraft, user_id: str) -> Role | None:
+    """The caller's role on a draft: :func:`metaseed_hub.sharing.role_of`.
 
-    Access is granted through three paths, checked in order of precedence:
-
-    - The draft owner (``draft.user_id``, a User.id FK) holds ``OWNER``.
-    - An explicit ``SpecDraftMember`` row holds its recorded role.
-    - Any other user in the draft's tenant holds ``VIEWER``. This tenant-wide
-      grant exists so account colleagues can read a draft without being
-      shared on it; it never confers edit rights.
+    The draft's creator (``draft.user_id``), an explicit membership, or the
+    account the draft lives in. There is no tenant-wide grant: an account
+    belongs to one person, so "a colleague in the same account" names nobody.
 
     Args:
         session: Database session
@@ -182,56 +156,19 @@ async def get_draft_role(
     Returns:
         The effective role, or None if the user may not access the draft.
     """
-    if draft.user_id == user_id:
-        return SpecDraftRole.OWNER
-
-    member_result = await session.execute(
-        select(SpecDraftMember).where(
-            SpecDraftMember.spec_draft_id == draft.id,
-            SpecDraftMember.user_id == user_id,
-        )
-    )
-    member = member_result.scalar_one_or_none()
-    if member is not None:
-        role: SpecDraftRole = member.role
-        return role
-
-    result = await session.execute(
-        select(User).where(
-            User.id == user_id,
-            User.tenant_id == draft.tenant_id,
-        )
-    )
-    if result.scalar_one_or_none() is not None:
-        return SpecDraftRole.VIEWER
-    return None
+    return await role_of(session, resource_for("draft"), draft.id, user_id)
 
 
 async def can_edit_draft(session: AsyncSession, draft: SpecDraft, user_id: str) -> bool:
-    """Whether the caller may modify the draft's specification content.
-
-    Args:
-        session: Database session.
-        draft: The draft to check.
-        user_id: Database User.id (not keycloak_id).
-
-    Returns:
-        True if the caller holds an EDITOR or OWNER role on the draft.
-    """
-    return await get_draft_role(session, draft, user_id) in _EDIT_ROLES
+    """Whether the caller may modify the draft's specification content."""
+    return await get_draft_role(session, draft, user_id) in EDIT_ROLES
 
 
 async def require_edit_role(session: AsyncSession, draft: SpecDraft, user_id: str) -> None:
     """Require the caller to hold an edit-capable role on a draft.
 
     Gates every route that modifies the draft's specification. Members shared
-    with the VIEWER role, and tenant colleagues who were never shared on the
-    draft at all, may read it but not change it.
-
-    Args:
-        session: Database session.
-        draft: The draft being modified.
-        user_id: Database User.id (not keycloak_id) of the caller.
+    with the VIEWER role may read it but not change it.
 
     Raises:
         HTTPException: 403 if the caller does not hold EDITOR or OWNER.
@@ -246,18 +183,12 @@ async def require_owner_role(session: AsyncSession, draft: SpecDraft, user_id: s
     """Require the caller to hold the OWNER role on a draft.
 
     Gates the destructive draft-level operations (publish, reset), which are
-    granted to the draft owner and to members explicitly given the OWNER role,
-    but not to editors or viewers.
-
-    Args:
-        session: Database session.
-        draft: The draft being operated on.
-        user_id: Database User.id (not keycloak_id) of the caller.
+    granted to owners but not to editors or viewers.
 
     Raises:
         HTTPException: 403 if the caller's effective role is not OWNER.
     """
-    if await get_draft_role(session, draft, user_id) is not SpecDraftRole.OWNER:
+    if await get_draft_role(session, draft, user_id) is not Role.OWNER:
         raise HTTPException(status_code=403, detail="Only a draft owner may do this")
 
 
@@ -606,32 +537,6 @@ async def unpublish_spec(
         spec=builder.spec,
         source_spec_id=spec.id,
     )
-
-
-async def account_owner(session: AsyncSession, tenant_id: str) -> User | None:
-    """The person whose account holds an item.
-
-    An account belongs to exactly one person, so this is who to approach about
-    a specification that lives there. It is not always the author: publishing a
-    draft someone shared with you puts the specification in *their* account
-    while recording you as its author, and without both names on the page that
-    is invisible — a spec published this way appears to vanish for its author
-    and to appear from nowhere for the owner.
-
-    Args:
-        session: Database session.
-        tenant_id: The account.
-
-    Returns:
-        The owning user, or None if the account has no live user.
-    """
-    result = await session.execute(
-        select(User)
-        .where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
-        .order_by(User.created_at)
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
 
 
 async def free_draft_name(

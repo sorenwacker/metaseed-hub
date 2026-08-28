@@ -17,11 +17,11 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
+from metaseed_hub.sharing import account_owner
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.helpers.text import safe_filename
 from metaseed_hub.ui.spec_builder.access import (
     SpecInUseError,
-    account_owner,
     can_edit_draft,
     can_edit_spec,
     create_new_draft,

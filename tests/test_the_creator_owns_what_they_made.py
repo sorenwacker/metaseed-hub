@@ -8,10 +8,9 @@ at all. The members panel renders its add-member form under
 share it, and the browser test for exactly that has failed since the
 owner-gating arrived.
 
-Reading ownership from the resource's own creator column fixes the drafts that
-already exist, which a membership backfill would have to migrate. Datasets are
-untouched: they have no creator column, and their ownership has always been
-the tenant plus the membership table.
+Ownership is one rule for everything, in `role_of`: an explicit membership,
+else the creator where the model records one, else the person whose account
+the item lives in.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.models import SpecDraft, SpecMember, SpecRole
+from metaseed_hub.models import SpecDraft, SpecMember
 from metaseed_hub.sharing import Role, resource_for, role_of
 from tests.factories import make_dataset, make_spec, make_tenant, make_user
 
@@ -77,14 +76,15 @@ async def test_the_creator_of_a_spec_owns_it(session: AsyncSession) -> None:
     assert await role_of(session, resource_for("spec"), spec.id, user.id) is Role.OWNER
 
 
-async def test_a_membership_still_decides_for_datasets(session: AsyncSession) -> None:
-    """Datasets have no creator column; nothing about them changes."""
+async def test_the_accounts_user_owns_a_dataset_that_lives_there(session: AsyncSession) -> None:
+    """Datasets record no creator; the account they live in is theirs."""
     tenant, user = await _tenant_and_user(session, "dsowner")
+    _other_tenant, stranger = await _tenant_and_user(session, "dsstranger")
     dataset = make_dataset(tenant=tenant)
     session.add(dataset)
     await session.commit()
-
-    assert await role_of(session, resource_for("dataset"), dataset.id, user.id) is None
+    assert await role_of(session, resource_for("dataset"), dataset.id, user.id) is Role.OWNER
+    assert await role_of(session, resource_for("dataset"), dataset.id, stranger.id) is None
 
 
 async def test_an_explicit_membership_still_wins_for_a_spec(session: AsyncSession) -> None:
@@ -94,7 +94,7 @@ async def test_an_explicit_membership_still_wins_for_a_spec(session: AsyncSessio
     spec = make_spec(tenant=tenant, created_by=user)
     session.add(spec)
     await session.flush()
-    session.add(SpecMember(spec_id=spec.id, user_id=colleague.id, role=SpecRole.VIEWER))
+    session.add(SpecMember(spec_id=spec.id, user_id=colleague.id, role=Role.VIEWER))
     await session.commit()
 
     assert await role_of(session, resource_for("spec"), spec.id, colleague.id) is Role.VIEWER
