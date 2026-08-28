@@ -4,8 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.44.0] - 260828
+
 ### Changed
-- **The explorer's entity panel is metaseed's.** The hub loaded its own copy, which showed fields as name and type; it now loads `explore-panel.js` from the library and shows every field attribute, the validation rules, the SEEK mapping and the profile's metadata. Needs metaseed 0.46 or later, which serves the script.
+- **The explorer's entity panel is metaseed's.** The hub loaded its own copy, which showed fields as name and type; it now loads `explore-panel.js` from the library and shows every field attribute, the validation rules, the SEEK mapping and the profile's metadata. Needs metaseed 0.46 or later, which serves the script; the pin is now `>=0.46.0`.
 
 ### Changed
 - A release deploy finishes by applying the container image pins, so a pin merged with a release lands with it instead of waiting for the weekly timer; a failure there is logged, not a failed deploy. Takes effect on the host after the Ansible role is applied again.
