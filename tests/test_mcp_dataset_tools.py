@@ -461,3 +461,23 @@ async def test_a_name_collision_prefers_the_callers_own_published_spec(
     picked = await _published_spec(session, "shared-name", "1.0", prefer_tenant=tenant_a.id)
     assert picked is not None
     assert picked.tenant_id == tenant_a.id
+
+
+async def test_an_agent_created_dataset_is_owned_by_its_user(server, session: AsyncSession) -> None:
+    tenant, user, secret, _token = await _user_with_token(
+        session, slug="mcp00009", email="owner-by-agent@example.org"
+    )
+    create = await _tool(server, "create_dataset")
+    with _calling_with(secret):
+        await create("agent-made", "miappe", "1.1")
+
+    from sqlalchemy import select
+
+    from metaseed_hub.database import db
+    from metaseed_hub.sharing import Role, resource_for, role_of
+
+    async with db.session_factory() as check:
+        dataset = (
+            await check.execute(select(Dataset).where(Dataset.tenant_id == tenant.id))
+        ).scalar_one()
+        assert await role_of(check, resource_for("dataset"), dataset.id, user.id) is Role.OWNER

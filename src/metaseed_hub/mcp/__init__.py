@@ -46,6 +46,7 @@ from metaseed_hub.models import (
     SpecStatus,
     User,
 )
+from metaseed_hub.sharing import record_creator, resource_for
 from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token, token_from_header
 
 if TYPE_CHECKING:
@@ -661,6 +662,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 data={},
             )
             session.add(dataset)
+            await record_creator(session, resource_for("dataset"), dataset, user.id)
             await session.commit()
             return json.dumps({"name": name, "profile": profile, "version": version})
 

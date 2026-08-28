@@ -354,3 +354,26 @@ async def test_validation_does_not_rewrite_the_stored_payload(
     assert patched.status_code == 200, patched.text
     row = (await session.execute(select(Dataset))).scalar_one()
     assert row.data == payload
+
+
+@pytest.mark.asyncio
+async def test_create_makes_the_caller_the_owner(session, caller, own_tenant_id) -> None:
+    """The creator holds the owner role, so they can share what they made."""
+    from metaseed_hub.sharing import Role, resource_for, role_of
+    from metaseed_hub.ui.dependencies import ensure_tenant_and_user
+
+    _tenant, user = await ensure_tenant_and_user(session, caller)
+    async with _build_client(session, caller) as client:
+        resp = await client.post(
+            "/api/datasets",
+            json={
+                "tenant_id": own_tenant_id,
+                "name": "made-by-me",
+                "profile": "miappe",
+                "version": "1.1",
+                "data": {},
+            },
+        )
+    assert resp.status_code == 201, resp.text
+    role = await role_of(session, resource_for("dataset"), resp.json()["id"], user.id)
+    assert role is Role.OWNER

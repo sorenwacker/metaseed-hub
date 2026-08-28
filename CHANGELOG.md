@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The person who creates a dataset can share it.** No creation path recorded the creator as a member, and the sharing rules read ownership from the membership table alone, so a dataset's creator saw no share form and was refused as "not an owner". Every path (web form, file and accession import, REST API, MCP, hub push) now records the creator as owner, a gate test fails when a new path forgets, and a migration gives every existing dataset its account's user as owner.
+
 ## [0.45.0] - 260828
 
 ### Changed

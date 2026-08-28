@@ -14,6 +14,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from metaseed_hub.access import live_user
 from metaseed_hub.models import (
     Dataset,
     Spec,
@@ -21,6 +22,7 @@ from metaseed_hub.models import (
     SpecDraftMember,
     SpecStatus,
 )
+from metaseed_hub.sharing import record_creator, resource_for
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -299,6 +301,7 @@ async def dataset_import(
         data={},
     )
     session.add(dataset)
+    await record_creator(session, resource_for("dataset"), dataset, db_user.id)
     try:
         await session.commit()
     except IntegrityError:
@@ -434,6 +437,8 @@ async def create_dataset_from_accession(
         data={},
     )
     session.add(dataset)
+    creator = await live_user(session, user) if user is not None else None
+    await record_creator(session, resource_for("dataset"), dataset, creator.id if creator else None)
     await session.flush()
 
     state = await ensure_dataset_facade(dataset, session)
@@ -666,6 +671,7 @@ async def dataset_create(
         data={},
     )
     session.add(dataset)
+    await record_creator(session, resource_for("dataset"), dataset, db_user.id)
     try:
         await session.commit()
     except IntegrityError:

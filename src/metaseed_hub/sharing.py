@@ -290,6 +290,29 @@ async def add_member(
     return member
 
 
+async def record_creator(
+    session: AsyncSession, resource: SharedResource, thing: Any, user_id: str | None
+) -> None:
+    """Make the person who created ``thing`` its first owner.
+
+    Every creation path calls this: without a membership row the creator has no
+    role, so the sharing panel showed them no controls and ``add_member``
+    refused them. ``thing`` is the freshly added resource; its id is assigned
+    on flush, so the session is flushed here. The membership is added, not
+    committed: the caller commits the resource and its ownership together.
+    ``user_id`` may be ``None`` only for callers that act without a person,
+    which then leave the resource ownerless deliberately.
+    """
+    if user_id is None:
+        return
+    await session.flush()
+    if await session.get(resource.member_model, (thing.id, user_id)) is not None:
+        return
+    session.add(
+        resource.member_model(**{resource.foreign_key: thing.id}, user_id=user_id, role=Role.OWNER)
+    )
+
+
 async def set_role(
     session: AsyncSession,
     resource: SharedResource,

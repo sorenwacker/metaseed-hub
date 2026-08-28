@@ -20,6 +20,7 @@ from metaseed_hub.sharing import (
     Role,
     add_member,
     members_of,
+    record_creator,
     remove_member,
     resource_for,
     role_of,
@@ -82,11 +83,9 @@ async def _make(session: AsyncSession, kind: str, tenant, user) -> str:
     session.add(thing)
     await session.commit()
 
-    resource = resource_for(kind)
-    member = resource.member_model(
-        **{resource.foreign_key: thing.id}, user_id=user.id, role=Role.OWNER
-    )
-    session.add(member)
+    # The way production makes a creator the owner, not a row written by hand:
+    # a hand-written row once hid that no creation path wrote one for datasets.
+    await record_creator(session, resource_for(kind), thing, user.id)
     await session.commit()
     return str(thing.id)
 
@@ -401,3 +400,55 @@ class TestAStrangerLearnsNothing:
         assert await may_see_members(
             session, resource, thing_id, user_id=colleague.id, tenant_id=tenant.id
         )
+
+
+class TestTheCreatorOwnsWhatTheyMake:
+    """Nothing wrote an owner row for a new dataset, so its creator had no role:
+    no share form, and ``add_member`` refused them. Every creation path now
+    records the creator, and this gate keeps a new path from forgetting."""
+
+    async def test_a_recorded_creator_is_an_owner_who_can_share(self, session, people) -> None:
+        (tenant, owner), (_, second), _ = people
+        dataset = make_dataset(tenant=tenant, name="mine")
+        session.add(dataset)
+        await record_creator(session, resource_for("dataset"), dataset, owner.id)
+        await session.commit()
+        resource = resource_for("dataset")
+        assert await role_of(session, resource, dataset.id, owner.id) is Role.OWNER
+        await add_member(session, resource, dataset.id, actor_id=owner.id, email=second.email)
+        assert await role_of(session, resource, dataset.id, second.id) is Role.VIEWER
+
+    async def test_recording_twice_or_nobody_changes_nothing(self, session, people) -> None:
+        (tenant, owner), _, _ = people
+        dataset = make_dataset(tenant=tenant, name="mine")
+        session.add(dataset)
+        resource = resource_for("dataset")
+        await record_creator(session, resource, dataset, None)
+        await record_creator(session, resource, dataset, owner.id)
+        await record_creator(session, resource, dataset, owner.id)
+        await session.commit()
+        assert [m.user_id for m in await members_of(session, resource, dataset.id)] == [owner.id]
+
+    def test_every_dataset_creation_site_records_its_creator(self) -> None:
+        """A ``Dataset(`` built to be stored must be followed by ``record_creator``.
+
+        ``proposed = Dataset(`` in the API is a transient row used only to
+        validate a payload and is never added to a session.
+        """
+        import re
+        from pathlib import Path
+
+        src = Path(__file__).resolve().parent.parent / "src" / "metaseed_hub"
+        missing = []
+        for path in src.rglob("*.py"):
+            if path.parts[-2] == "models":
+                continue
+            lines = path.read_text().splitlines()
+            for index, line in enumerate(lines):
+                match = re.match(r"\s*(\w+) = Dataset\($", line)
+                if not match or match.group(1) == "proposed":
+                    continue
+                window = "\n".join(lines[index : index + 25])
+                if "record_creator(" not in window:
+                    missing.append(f"{path.relative_to(src)}:{index + 1}")
+        assert not missing, f"dataset created without recording its creator: {missing}"

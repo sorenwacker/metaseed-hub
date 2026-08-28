@@ -102,7 +102,7 @@ async def verify_tenant_access(
     return tenant
 
 
-async def _live_user(session: AsyncSession, user: TokenUser) -> User | None:
+async def live_user(session: AsyncSession, user: TokenUser) -> User | None:
     """Resolve the caller's account, treating a soft-deleted one as absent.
 
     Admin deletion sets ``deleted_at`` and deliberately leaves DatasetMember
@@ -165,7 +165,7 @@ async def get_dataset_for_user(
         pass  # Not tenant owner, check DatasetMember
 
     # Check if user has access via DatasetMember
-    db_user = await _live_user(session, user)
+    db_user = await live_user(session, user)
 
     if db_user:
         member_result = await session.execute(
@@ -214,7 +214,7 @@ async def get_dataset_for_editor(
     except HTTPException:
         pass  # Not tenant owner; the membership's role decides.
 
-    db_user = await _live_user(session, user)
+    db_user = await live_user(session, user)
     if db_user:
         member_result = await session.execute(
             select(DatasetMember).where(
@@ -263,7 +263,7 @@ async def require_dataset_owner(
     except HTTPException:
         pass  # Not tenant owner, require an OWNER-role membership.
 
-    db_user = await _live_user(session, user)
+    db_user = await live_user(session, user)
     if db_user:
         owner_result = await session.execute(
             select(DatasetMember).where(

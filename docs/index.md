@@ -5,7 +5,7 @@ Metaseed Hub is a collaborative platform for building standardized research meta
 ## What you can do
 
 - **Datasets** — create metadata datasets from a profile, edit entities through generated forms, validate against the schema, track versions, and import or export data.
-- **Collaboration** — share a dataset with collaborators as Owner, Curator, or Viewer, and discuss it through threaded comments.
+- **Collaboration** — share a dataset with collaborators as Owner, Editor, or Viewer, and discuss it through threaded comments.
 - **Spec Builder** — design custom metadata specifications: entities, fields, relationships, and validation rules; publish them and fork published specs.
 - **Explorer** — browse a profile's structure and compare two profiles side by side.
 - **Administration** — admin users see aggregated usage statistics.

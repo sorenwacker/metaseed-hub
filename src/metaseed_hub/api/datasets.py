@@ -13,12 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from metaseed_hub.access import (
     get_dataset_for_editor,
     get_dataset_for_user,
+    live_user,
     require_dataset_owner,
     verify_tenant_access,
 )
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
+from metaseed_hub.sharing import record_creator, resource_for
 
 router = APIRouter()
 
@@ -222,6 +224,8 @@ async def create_dataset(
     if dataset_data.data:
         dataset.data = await _validated_data(dataset, dataset_data.data, session)
     session.add(dataset)
+    creator = await live_user(session, _user)
+    await record_creator(session, resource_for("dataset"), dataset, creator.id if creator else None)
     await session.commit()
     await session.refresh(dataset)
     return dataset
