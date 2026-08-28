@@ -317,17 +317,16 @@ class TestARoleFromTheBrowserIsNotTrusted:
 class TestEveryPageLoadsTheOnePanel:
     """Four copies of the same markup existed, two of them still pointing at
     routes that no longer exist. These assert each page asks for the shared
-    panel instead of carrying its own."""
+    panel instead of carrying its own, and asks for it in the same place: a
+    **Sharing** tab of the page's sidebar."""
 
-    @pytest.mark.parametrize(
-        "template,expected",
-        [
-            ("dataset.html", "/hub/sharing/dataset/"),
-            ("partials/dataset_overview.html", "/hub/sharing/dataset/"),
-            ("spec_builder/base.html", "/hub/sharing/draft/"),
-            ("spec_builder/view.html", "/hub/sharing/spec/"),
-        ],
-    )
+    PAGES = [
+        ("dataset.html", "/hub/sharing/dataset/"),
+        ("spec_builder/base.html", "/hub/sharing/draft/"),
+        ("spec_builder/view.html", "/hub/sharing/spec/"),
+    ]
+
+    @pytest.mark.parametrize("template,expected", PAGES)
     def test_the_page_asks_for_the_shared_panel(self, template: str, expected: str) -> None:
         import pathlib as _pathlib
 
@@ -337,6 +336,44 @@ class TestEveryPageLoadsTheOnePanel:
         assert "member-role-select" not in markup, (
             f"{template} carries its own copy of the members markup"
         )
+
+    @pytest.mark.parametrize("template,expected", PAGES)
+    def test_sharing_is_a_tab_of_the_sidebar(self, template: str, expected: str) -> None:
+        """Sharing sat in a different place on each page: a main-area tab, a
+        sidebar tab, a block above the body. Now it is a sidebar tab everywhere,
+        so the home page can say where it is and be right."""
+        import pathlib as _pathlib
+
+        markup = (_pathlib.Path("src/metaseed_hub/ui/templates") / template).read_text()
+        panel = markup.index(expected)
+        aside_open = markup.rfind("<aside", 0, panel)
+        aside_close = markup.find("</aside>", panel)
+        assert aside_open != -1 and aside_close != -1, f"{template}: panel is not in an <aside>"
+        sidebar = markup[aside_open:aside_close]
+        assert 'data-tab="sharing"' in sidebar and 'id="sharing-count"' in sidebar
+
+    def test_the_dataset_overview_is_one_partial_without_sharing(self) -> None:
+        import pathlib as _pathlib
+
+        root = _pathlib.Path("src/metaseed_hub/ui/templates")
+        assert (
+            '{% include "partials/dataset_overview.html" %}' in (root / "dataset.html").read_text()
+        )
+        assert "sharing" not in (root / "partials/dataset_overview.html").read_text().lower()
+
+    def test_the_panel_updates_the_tab_count_on_every_swap(self) -> None:
+        import pathlib as _pathlib
+
+        panel = _pathlib.Path("src/metaseed_hub/ui/templates/partials/members_panel.html")
+        markup = panel.read_text()
+        assert 'id="sharing-count"' in markup and 'hx-swap-oob="true"' in markup
+
+    def test_the_home_page_says_where_sharing_is(self) -> None:
+        import pathlib as _pathlib
+
+        home = _pathlib.Path("src/metaseed_hub/ui/templates/overview_home.html").read_text()
+        assert "tab in the sidebar" in home
+        assert "right panel" not in home and "Curator" not in home
 
     def test_no_page_points_at_the_routes_that_were_removed(self) -> None:
         import pathlib as _pathlib

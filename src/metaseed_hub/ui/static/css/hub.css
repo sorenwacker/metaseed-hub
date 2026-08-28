@@ -5976,6 +5976,16 @@ a.start-option-card:hover {
     overflow: hidden;
 }
 
+/* The section's tabs (Entities, Sharing) hold the tree and the members
+   panel; the open tab takes the remaining height and scrolls, as the tree
+   did when it was the section's direct child. */
+.sidebar-section-grow .sidebar-tab-content.active {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .sidebar-section-grow #entity-tree {
     overflow-y: auto;
     overflow-x: hidden;

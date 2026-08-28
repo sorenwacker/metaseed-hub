@@ -397,6 +397,20 @@ function toggleTreeNode(btn) {
 }
 
 // Toggle sidebar
+// Sidebar tabs: the same markup on the dataset page, the spec builder and
+// the published-spec view, so one switcher serves all three. `button` is the
+// clicked .sidebar-tab; the tabs and their panels share the enclosing <aside>.
+function showSidebarTab(button) {
+    const aside = button.closest('aside');
+    const name = button.dataset.tab;
+    aside.querySelectorAll('.sidebar-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === name);
+    });
+    aside.querySelectorAll('.sidebar-tab-content').forEach(panel => {
+        panel.classList.toggle('active', panel.dataset.tab === name);
+    });
+}
+
 function toggleSidebar() {
     var sidebar = document.getElementById('project-sidebar');
     var layout = document.getElementById('project-layout');

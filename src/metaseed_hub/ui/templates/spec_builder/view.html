@@ -63,15 +63,6 @@
         </div>
     </div>
 
-    <div class="spec-sharing">
-        <h3>Who can edit this specification</h3>
-        {# The same panel as datasets and drafts. Until this existed, handing a
-           published specification to a colleague meant editing the database. #}
-        <div id="members-panel"
-             hx-get="/hub/sharing/spec/{{ spec_record.id }}/members"
-             hx-trigger="load" hx-swap="innerHTML">
-        </div>
-    </div>
     {% if datasets_using %}
     <div class="spec-in-use-note" data-testid="spec-in-use">
         {{ datasets_using|length }} dataset(s) are built on this specification, so it cannot be
@@ -83,33 +74,48 @@
     <div class="spec-view-body">
         <!-- Left sidebar - Entity tree -->
         <aside class="spec-view-sidebar">
-            <h3>Entities</h3>
-            <div class="entity-tree">
-                {% if spec and spec.entities %}
-                {% for name, entity in spec.entities.items() %}
-                <div class="entity-tree-item {% if name == spec.root_entity %}root{% endif %}"
-                     onclick="showEntityDetails('{{ name }}')">
-                    <span class="entity-icon">{% if name == spec.root_entity %}R{% else %}E{% endif %}</span>
-                    <span class="entity-name">{{ name }}</span>
-                    <span class="field-count">{{ entity.fields|length }} fields</span>
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="entities" onclick="showSidebarTab(this)" data-testid="tab-entities">Entities</button>
+                <button class="sidebar-tab" data-tab="sharing" onclick="showSidebarTab(this)" data-testid="tab-sharing">
+                    Sharing <span class="tab-badge" id="sharing-count"></span>
+                </button>
+            </div>
+            <div class="sidebar-tab-content active" data-tab="entities">
+                <div class="entity-tree">
+                    {% if spec and spec.entities %}
+                    {% for name, entity in spec.entities.items() %}
+                    <div class="entity-tree-item {% if name == spec.root_entity %}root{% endif %}"
+                         onclick="showEntityDetails('{{ name }}')">
+                        <span class="entity-icon">{% if name == spec.root_entity %}R{% else %}E{% endif %}</span>
+                        <span class="entity-name">{{ name }}</span>
+                        <span class="field-count">{{ entity.fields|length }} fields</span>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-state-sm">No entities defined</div>
+                    {% endif %}
                 </div>
-                {% endfor %}
-                {% else %}
-                <div class="empty-state-sm">No entities defined</div>
+
+                {% if spec and spec.validation_rules %}
+                <h3>Validation Rules</h3>
+                <div class="rules-list-view">
+                    {% for rule in spec.validation_rules %}
+                    <div class="rule-item-view">
+                        <span class="rule-name">{{ rule.name }}</span>
+                        <span class="rule-applies">{{ rule.applies_to }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
                 {% endif %}
             </div>
-
-            {% if spec and spec.validation_rules %}
-            <h3>Validation Rules</h3>
-            <div class="rules-list-view">
-                {% for rule in spec.validation_rules %}
-                <div class="rule-item-view">
-                    <span class="rule-name">{{ rule.name }}</span>
-                    <span class="rule-applies">{{ rule.applies_to }}</span>
+            <div class="sidebar-tab-content" data-tab="sharing">
+                {# The same panel as datasets and drafts: who may edit and re-publish
+                   this specification. #}
+                <div id="members-panel"
+                     hx-get="/hub/sharing/spec/{{ spec_record.id }}/members"
+                     hx-trigger="load" hx-swap="innerHTML">
                 </div>
-                {% endfor %}
             </div>
-            {% endif %}
         </aside>
 
         <!-- Center: ERD Canvas (read-only) -->

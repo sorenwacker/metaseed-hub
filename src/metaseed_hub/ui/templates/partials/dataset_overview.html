@@ -12,10 +12,6 @@
         <button class="overview-tab" data-tab="comments" onclick="switchOverviewTab('comments')">
             Comments
         </button>
-        <button class="overview-tab" data-tab="sharing" onclick="switchOverviewTab('sharing')">
-            Sharing
-            <span class="tab-count">{{ members|length }}</span>
-        </button>
     </div>
 
     <!-- History Tab -->
@@ -46,14 +42,6 @@
         </form>
     </div>
 
-    <!-- Sharing Tab -->
-    <div class="overview-tab-content" id="tab-sharing">
-        {# One panel for every shared thing: partials/members_panel.html #}
-        <div id="members-panel"
-             hx-get="/hub/sharing/dataset/{{ dataset.id }}/members"
-             hx-trigger="load" hx-swap="innerHTML">
-        </div>
-    </div>
 </div>
 
 <script>

@@ -6,12 +6,9 @@ from typing import Annotated, Any
 from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from metaseed import SkippedNode
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
     Dataset,
-    DatasetMember,
     Tenant,
 )
 from metaseed_hub.ui.dependencies import (
@@ -131,14 +128,6 @@ async def dataset_editor(
     # Load tenant for breadcrumb
     tenant = await session.get(Tenant, dataset.tenant_id)
 
-    # Load members with user info
-    members_result = await session.execute(
-        select(DatasetMember)
-        .where(DatasetMember.dataset_id == dataset_id)
-        .options(selectinload(DatasetMember.user))
-    )
-    members = list(members_result.scalars().all())
-
     # Build common dataset context
     try:
         ctx = await _build_dataset_context(dataset, session)
@@ -171,7 +160,6 @@ async def dataset_editor(
                 "user": user,
                 "dataset": dataset,
                 "tenant": tenant,
-                "members": members,
                 "state": None,
                 "root_types": [],
                 "tree_data": [],
@@ -191,7 +179,6 @@ async def dataset_editor(
             "user": user,
             "dataset": dataset,
             "tenant": tenant,
-            "members": members,
             "state": ctx["state"],
             "root_types": root_types,
             "tree_data": ctx["tree_data"],
@@ -274,14 +261,6 @@ async def dataset_overview(
     """Return the overview panel with version history, comments, and sharing."""
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    # Load members
-    members_result = await session.execute(
-        select(DatasetMember)
-        .where(DatasetMember.dataset_id == dataset_id)
-        .options(selectinload(DatasetMember.user))
-    )
-    members = list(members_result.scalars().all())
-
     # Check if there's any tree data
     state = await ensure_dataset_facade(dataset, session)
     tree_data = get_tree_data_from_nodes(state)
@@ -291,7 +270,6 @@ async def dataset_overview(
         name="partials/dataset_overview.html",
         context={
             "dataset": dataset,
-            "members": members,
             "tree_data": tree_data,
         },
     )
