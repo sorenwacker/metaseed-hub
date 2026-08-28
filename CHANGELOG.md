@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **The explorer's entity panel is metaseed's.** The hub loaded its own copy, which showed fields as name and type; it now loads `explore-panel.js` from the library and shows every field attribute, the validation rules, the SEEK mapping and the profile's metadata. Needs metaseed 0.46 or later, which serves the script.
+
+### Changed
 - A release deploy finishes by applying the container image pins, so a pin merged with a release lands with it instead of waiting for the weekly timer; a failure there is logged, not a failed deploy. Takes effect on the host after the Ansible role is applied again.
 - Renovate runs from `.github/workflows/renovate.yml`, weekly and on demand, instead of relying on the hosted app, which never ran on this repository. It needs a `RENOVATE_TOKEN` secret; see *Where Renovate runs* in `docs/container-updates.md`.
 

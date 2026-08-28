@@ -175,3 +175,17 @@ def test_the_graph_page_loads_the_library_drawing() -> None:
     assert "METASEED_GRAPH_URL" in page, (
         "the host supplies the data URL; that is the whole of its side of the contract"
     )
+
+
+def test_the_explorer_panel_is_the_librarys() -> None:
+    """The hub's explorer used to carry its own selectEntity -- a lesser copy of
+    metaseed's panel that showed fields as name and type while metaseed's showed
+    every attribute, the rules and the profile. The panel is one script the
+    library serves; the hub loads it and defines none of it."""
+    template = (
+        Path(__file__).resolve().parent.parent / "src/metaseed_hub/ui/templates/explore/index.html"
+    ).read_text()
+    assert "/static/js/explore-panel.js" in template
+    for own in ("function selectEntity", "function renderRule", "function renderFieldDetails"):
+        assert own not in template, f"the hub defines {own} itself"
+    assert 'id="rules-section"' in template and 'id="profile-section"' in template

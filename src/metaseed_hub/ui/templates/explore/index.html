@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="/hub/static/css/style.css">
 <script src="/hub/hub-static/js/vis-network.min.js"></script>
 <script src="/hub/static/js/erd-common.js?v=1"></script>
+<script src="/hub/static/js/explore-panel.js?v=1"></script>
 {% endblock %}
 
 {% block nav %}
@@ -45,6 +46,15 @@
                         <option value="">Version</option>
                     </select>
                 </div>
+            </div>
+
+            <div class="form-section" id="profile-section" style="display:none" data-testid="explore-profile">
+                <label class="form-label">Profile</label>
+                <div id="profile-meta" class="field-details"></div>
+            </div>
+            <div class="form-section" id="rules-section" style="display:none" data-testid="explore-rules">
+                <label class="form-label">Validation rules <span id="rules-count"></span></label>
+                <div id="rules-list" class="rules-list"></div>
             </div>
 
             <div class="form-section">
@@ -268,6 +278,8 @@ async function runComparison() {
         originalGraphData = data.graph;
         hiddenEntities.clear();
         initERD(data.graph);
+        renderRules(data.graph.rules || {}, profiles[0]);
+        renderProfileMeta(data.graph.profiles_meta || {}, profiles[0]);
 
         if (exploreMode) {
             document.getElementById('filter-section').style.display = 'none';
@@ -403,54 +415,8 @@ function buildNodeLabel(name, fields) {
     return label;
 }
 
-function selectEntity(nodeId) {
-    const node = ERD.getNodes().get(nodeId);
-    if (!node) return;
-    document.getElementById('editor-title').textContent = node.data.name;
-    const fields = node.data.fields || [];
-    let html = `
-        <div class="form-section">
-            <label class="form-label">Status</label>
-            <span class="diff-badge ${node.data.diff_type}">${node.data.diff_type}</span>
-        </div>
-        <div class="form-section">
-            <label class="form-label">Present In</label>
-            <div class="profile-tags">
-                ${Object.entries(node.data.profiles || {})
-                    .filter(([_, present]) => present)
-                    .map(([p, _]) => `<span class="profile-tag">${p}</span>`)
-                    .join('')}
-            </div>
-        </div>
-    `;
-    if (fields.length > 0) {
-        html += `<div class="form-section">
-            <label class="form-label">Fields (${fields.length})</label>
-            <div class="field-diff-list">`;
-        fields.forEach(field => {
-            html += `
-                <div class="field-diff-item ${field.diff_type}">
-                    <div class="field-diff-header">
-                        <span>${field.required ? '*' : ''}${field.name}</span>
-                        <code>${field.type}</code>
-                    </div>
-                    <div class="field-diff-profiles">
-                        ${field.profiles.map(p => `<span class="profile-tag sm">${p.split('/')[0]}</span>`).join('')}
-                    </div>
-                    ${field.attributes_changed?.length ?
-                        `<div class="field-diff-changes">Changed: ${field.attributes_changed.join(', ')}</div>` : ''}
-                </div>
-            `;
-        });
-        html += '</div></div>';
-    }
-    document.getElementById('editor-content').innerHTML = html;
-    document.getElementById('editor-panel').classList.add('open');
-}
-
-function closeEditorPanel() {
-    document.getElementById('editor-panel').classList.remove('open');
-}
+// selectEntity and closeEditorPanel come from metaseed's explore-panel.js,
+// with the rules list and the profile block: the panel is the library's.
 
 function applyFilters() {
     if (!originalGraphData || currentProfiles.length < 2) return;
