@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- A release deploy finishes by applying the container image pins, so a pin merged with a release lands with it instead of waiting for the weekly timer; a failure there is logged, not a failed deploy. Takes effect on the host after the Ansible role is applied again.
 - Renovate runs from `.github/workflows/renovate.yml`, weekly and on demand, instead of relying on the hosted app, which never ran on this repository. It needs a `RENOVATE_TOKEN` secret; see *Where Renovate runs* in `docs/container-updates.md`.
 
 ### Changed

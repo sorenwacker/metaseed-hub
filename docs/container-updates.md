@@ -30,6 +30,10 @@ This follows `main` rather than a release tag, unlike the application. Applicati
 
 The application path is untouched by this: `deploy.sh` handles git checkout, `uv sync`, migrations, and the service restart, and never invokes Docker.
 
+## Applied on every release too
+
+A release deploy (`deploy.sh`, on a new tag) finishes by running the container update script, so a pin merged with a release lands with it rather than waiting for the next Monday. The weekly timer still covers pins merged without a release. The update runs after the release is healthy and its failure is logged but does not fail the deploy: the application is on the new version either way, and the pins get another chance on the timer.
+
 ## Guards on the unattended update
 
 Recreating the PostgreSQL container restarts the database. Connections drop and the hub returns errors for the few seconds the container takes to come back. Because this happens without anyone watching, the update script refuses to proceed unless both conditions hold:

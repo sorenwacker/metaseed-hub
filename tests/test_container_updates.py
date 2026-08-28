@@ -203,3 +203,19 @@ def test_renovate_runs_from_this_repositorys_own_workflow() -> None:
     assert all(
         re.search(r"@[0-9a-f]{40} # v", line) for line in workflow.splitlines() if "uses:" in line
     ), "every action is pinned to a commit"
+
+
+_DEPLOY_SCRIPT = _ROLE / "templates" / "deploy.sh.j2"
+
+
+def test_a_release_deploy_applies_the_container_pins_afterwards() -> None:
+    """A pin merged with a release used to wait for the next Monday timer --
+    up to a week on an image with a published fix. The deploy now runs the
+    update after the release is healthy, and a failure there is logged rather
+    than turning a successful deploy into a failed one."""
+    script = _DEPLOY_SCRIPT.read_text()
+    success = script.index("Deploy successful")
+    update = script.index("update-containers.sh", success)
+    tail = script[update:]
+    assert "exit 1" not in tail, "the container update must not fail the deploy"
+    assert "log_error" in tail, "a failed update is logged"

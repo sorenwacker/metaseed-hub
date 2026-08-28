@@ -150,3 +150,11 @@ echo "$LATEST" > "$COMMIT_FILE"
 log "========================================="
 log "Deploy successful: $SHORT_LATEST"
 log "========================================="
+
+# A pin merged with this release lands with it, not on the next Monday. The
+# update script has its own lock, backup check and health check; its failure
+# is logged here and never fails a deploy that already succeeded.
+log "Applying container image pins..."
+if ! /opt/metaseed-docker/update-containers.sh 2>&1 | tee -a "$LOG_FILE"; then
+    log_error "Container update failed; the release is deployed, the image pins are not. It runs again on metaseed-containers.timer."
+fi
