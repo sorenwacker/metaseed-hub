@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="/hub/static/css/style.css">
 <script src="/hub/hub-static/js/vis-network.min.js"></script>
 <script src="/hub/static/js/erd-common.js?v=1"></script>
-<script src="/hub/static/js/explore-panel.js?v=1"></script>
+<script src="/hub/static/js/explore-panel.js?v=2"></script>
 {% endblock %}
 
 {% block nav %}
@@ -112,7 +112,9 @@
         </div>
         <div class="canvas-legend" id="explore-legend" style="display: none;">
             <span class="legend-item"><span class="legend-dot entity"></span> Entity</span>
-            <span class="legend-item"><span class="legend-line"></span> Relationship</span>
+            <span class="legend-item"><span class="legend-line"></span> Nested</span>
+            <span class="legend-item"><span class="legend-line-dashed"></span> Reference</span>
+            <span class="legend-item"><span class="legend-line-rule"></span> Rule</span>
             <span class="legend-item"><code>*</code> Required</span>
             <span class="legend-item" style="margin-left: 12px;">Right-click to hide</span>
         </div>

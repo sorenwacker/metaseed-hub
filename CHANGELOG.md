@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.45.0] - 260828
+
+### Changed
+- The explorer legend names the rule edges metaseed 0.47 draws (dashed amber, labelled with the rule name), next to nested and reference edges. The pin is `>=0.47.0`.
+
 ## [0.44.0] - 260828
 
 ### Changed
