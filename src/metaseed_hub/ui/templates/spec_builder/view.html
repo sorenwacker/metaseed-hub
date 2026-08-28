@@ -34,7 +34,7 @@
                 {% endif %}
             </div>
             {% if owner %}
-            <div class="spec-owner">
+            <div>
                 In the account of
                 <a href="mailto:{{ owner.email }}?subject=Specification%20{{ spec_record.name|urlencode }}%20v{{ spec_record.version|urlencode }}">{{ owner.display_name }}</a>
                 {% if spec_record.created_by and owner.id != spec_record.created_by.id %}
@@ -64,7 +64,7 @@
     </div>
 
     {% if datasets_using %}
-    <div class="spec-in-use-note" data-testid="spec-in-use">
+    <div data-testid="spec-in-use">
         {{ datasets_using|length }} dataset(s) are built on this specification, so it cannot be
         withdrawn: {{ datasets_using[:5]|join(', ') }}{% if datasets_using|length > 5 %} and
         {{ datasets_using|length - 5 }} more{% endif %}.

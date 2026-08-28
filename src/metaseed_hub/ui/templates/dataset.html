@@ -62,12 +62,12 @@
             {% if import_option %}
             {# Only while the dataset is empty: the importer replaces the whole
                tree, so this is a way to start rather than a way to merge. #}
-            <form class="sidebar-import-form"
+            <form
                   hx-post="/hub/datasets/{{ dataset.id }}/import-source"
                   hx-swap="innerHTML"
                   hx-target="#import-source-result"
                   data-testid="form-import-source">
-                <label class="sidebar-import-label" for="import-source-value">{{ import_option.input_label }}</label>
+                <label for="import-source-value">{{ import_option.input_label }}</label>
                 <input type="text"
                        id="import-source-value"
                        name="value"

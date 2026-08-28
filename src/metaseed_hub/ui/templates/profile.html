@@ -9,34 +9,34 @@
 {% endblock %}
 
 {% block content %}
-<div class="profile-page">
+<div>
     <header class="page-header">
         <h1>Your Profile</h1>
-        <p class="page-subtitle">Information from your identity provider (SRAM)</p>
+        <p>Information from your identity provider (SRAM)</p>
     </header>
 
     <div class="profile-card">
         <div class="profile-section">
             <h2>Account Information</h2>
-            <dl class="profile-info">
-                <div class="info-row">
+            <dl>
+                <div>
                     <dt>Name</dt>
                     <dd>{{ user.name or 'Not provided' }}</dd>
                 </div>
-                <div class="info-row">
+                <div>
                     <dt>Email</dt>
                     <dd>{{ user.email or 'Not provided' }}</dd>
                 </div>
-                <div class="info-row">
+                <div>
                     <dt>Subject ID</dt>
                     <dd><code>{{ user.sub }}</code></dd>
                 </div>
                 {% if user.roles %}
-                <div class="info-row">
+                <div>
                     <dt>Roles</dt>
                     <dd>
                         {% for role in user.roles %}
-                        <span class="role-badge">{{ role }}</span>
+                        <span>{{ role }}</span>
                         {% endfor %}
                     </dd>
                 </div>
@@ -46,18 +46,18 @@
 
         <div class="profile-section">
             <h2>Sharing</h2>
-            <p class="help-text">
+            <p>
                 To share datasets or specs with colleagues, they must first log in to Metaseed Hub.
                 Once they've logged in, you can add them using their email address.
             </p>
-            <p class="help-text">
+            <p>
                 <strong>Your email for sharing:</strong> <code>{{ user.email }}</code>
             </p>
         </div>
 
         <div class="profile-section">
             <h2>Access tokens</h2>
-            <p class="help-text">
+            <p>
                 A token lets a tool act as you where a browser login is not possible —
                 for example connecting Claude to your datasets over MCP. It carries your
                 identity, so treat it like a password.
@@ -66,8 +66,8 @@
             {% if new_token %}
             <div class="notification notification-success">
                 <p><strong>Copy this now — it is not shown again.</strong></p>
-                <p><code class="token-secret">{{ new_token }}</code></p>
-                <p class="help-text">Connect a client with:</p>
+                <p><code>{{ new_token }}</code></p>
+                <p>Connect a client with:</p>
                 <p><code>claude mcp add --transport http metaseed {{ request.base_url }}hub/mcp --header "Authorization: Bearer {{ new_token }}"</code></p>
             </div>
             {% endif %}
@@ -99,7 +99,7 @@
             <p class="empty-state">No tokens yet.</p>
             {% endif %}
 
-            <form method="post" action="/hub/auth/profile/tokens" class="token-create-form">
+            <form method="post" action="/hub/auth/profile/tokens" >
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <input type="text" name="name" class="form-input" placeholder="What is it for? e.g. laptop" maxlength="100">
                 <button type="submit" class="btn btn-primary">Create token</button>
@@ -110,38 +110,38 @@
         {% include "partials/seek_settings_section.html" %}
         {% endif %}
 
-        <div class="profile-section danger-zone">
+        <div class="profile-section">
             <h2>Delete account</h2>
             {% if delete_error == 'confirm' %}
-            <p class="danger-msg">The email you typed did not match &mdash; your account was not deleted.</p>
+            <p>The email you typed did not match &mdash; your account was not deleted.</p>
             {% elif delete_error == 'owned_datasets' %}
-            <p class="danger-msg">You still solely own datasets or specs. Reassign or delete them first.</p>
+            <p>You still solely own datasets or specs. Reassign or delete them first.</p>
             {% endif %}
-            <p class="help-text">
+            <p>
                 Deleting your account permanently removes your personal data &mdash; team,
                 dataset and spec memberships, comments, notes, and drafts. This cannot be undone.
             </p>
             {% if datasets_needing_new_owner or specs_needing_new_owner %}
-            <p class="danger-msg">
+            <p>
                 Before your account can be deleted, these items you solely own must be
                 reassigned to a new owner or deleted &mdash; you decide what happens to each:
             </p>
             {% if datasets_needing_new_owner %}
-            <ul class="owned-list">
+            <ul>
                 {% for ds in datasets_needing_new_owner %}
                 <li>Dataset: <a href="/hub/datasets/{{ ds.id }}">{{ ds.name }}</a></li>
                 {% endfor %}
             </ul>
             {% endif %}
             {% if specs_needing_new_owner %}
-            <ul class="owned-list">
+            <ul>
                 {% for sp in specs_needing_new_owner %}
                 <li>Spec: {{ sp.name }} <code>{{ sp.version }}</code></li>
                 {% endfor %}
             </ul>
             {% endif %}
             {% else %}
-            <form method="post" action="/hub/auth/profile/delete" class="danger-form"
+            <form method="post" action="/hub/auth/profile/delete" 
                   onsubmit="return confirm('Permanently delete your account? This cannot be undone.');">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
                 <label for="confirm_email">Type your email (<code>{{ user.email }}</code>) to confirm:</label>

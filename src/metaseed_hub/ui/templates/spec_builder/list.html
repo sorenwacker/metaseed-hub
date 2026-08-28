@@ -8,7 +8,7 @@
 {% block content %}
 <div class="spec-list-page">
     <div class="page-header">
-        <div class="header-content">
+        <div>
             <h1>Specifications</h1>
             <p>Create and manage metadata specifications for your datasets.</p>
         </div>
@@ -35,7 +35,7 @@
                 <h3 class="spec-name">{{ draft|spec_label }}</h3>
                 <p class="spec-version">v{{ draft.version }}</p>
                 <div class="spec-meta">
-                    <span class="spec-date" title="{{ draft.updated_at }}">
+                    <span title="{{ draft.updated_at }}">
                         Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
                     </span>
                 </div>
@@ -81,12 +81,12 @@
                         {% else %}Unknown{% endif %}
                         {% set owner = owners.get(spec.tenant_id) if owners else None %}
                         {% if owner and spec.created_by and owner.id != spec.created_by.id %}
-                        <span class="spec-owner" title="A specification published from a shared draft lives in the account it was shared from">
+                        <span title="A specification published from a shared draft lives in the account it was shared from">
                             (in {{ owner.display_name }}'s account)
                         </span>
                         {% endif %}
                     </span>
-                    <span class="spec-date" title="{{ spec.created_at }}">
+                    <span title="{{ spec.created_at }}">
                         {{ spec.created_at.strftime('%Y-%m-%d') }}
                     </span>
                 </div>

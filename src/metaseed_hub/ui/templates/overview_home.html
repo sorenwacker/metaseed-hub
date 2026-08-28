@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-container">
+<div>
     <section class="overview overview-page">
         <h1 class="overview-title">
             Welcome{% if user %}, {{ user.name.split()[0] }}{% endif %}
@@ -16,7 +16,7 @@
             Getting set up, and where each thing lives.
         </p>
 
-        <p class="overview-beta-invite">
+        <p>
             Repository integrations &mdash; SEEK, ENA, PRIDE, BrAPI, MetaboLights
             and DCAT export &mdash; are rolled out per group.
             <a href="https://sram.surf.nl/registration?collaboration=f4840adc-d5cb-4eb6-9906-ab9827e82df5">Apply

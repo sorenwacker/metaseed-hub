@@ -120,7 +120,7 @@
                             <h3>{{ spec.name }}</h3>
                             <span class="version-badge">v{{ spec.version }}</span>
                         </div>
-                        <p class="standard-description">
+                        <p>
                             {% if spec.description %}{{ spec.description }}{% endif %}
                             <span class="spec-author">
                                 published by {{ spec.created_by.display_name if spec.created_by else 'Unknown' }}

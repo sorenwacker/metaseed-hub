@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="home-container">
+<div>
     <!-- Datasets Section -->
     <section class="home-section">
         <div class="section-header">
@@ -20,7 +20,7 @@
                 <a href="/hub/datasets/{{ dataset.id }}" class="project-card-link">
                     <h3>{{ dataset.name }}</h3>
                     {% if dataset.description %}
-                    <p class="project-desc">{{ dataset.description }}</p>
+                    <p>{{ dataset.description }}</p>
                     {% endif %}
                     <div class="project-meta">
                         <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>

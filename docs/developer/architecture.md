@@ -79,6 +79,8 @@ Every save that changes `dataset.data` also records a `DatasetVersion` row (see 
 
 Dependency rule: routes and templates call hub helpers (`ui/helpers/`, `ui/services/`), and the helpers call metaseed's public API (`MetaseedClient`, `ProfileFacade`). Imports of metaseed's internal UI layer (`metaseed.ui`) are allowed only in the designated boundary module `ui/metaseed_ui.py`, which re-exports what the hub still uses: `AppState`/`TreeNode` (the request-scoped entity-tree cache derived from the facade) and the packaged template/static directories. The gate test `tests/test_metaseed_coupling.py` scans every module under `src/metaseed_hub` and fails on any other `metaseed.ui` import.
 
+The stylesheet has two gates of its own in `tests/test_stylesheet.py`: no selector is defined twice at the top level of `hub.css` (the second definition used to win silently, by source order), and every class a template uses has a rule in the hub's or the library's stylesheet or is read by a script. Vulture cannot see CSS or templates; these are their vulture.
+
 ## Integration with metaseed
 
 Metaseed Hub uses metaseed as a library through its public API:

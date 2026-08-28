@@ -510,7 +510,7 @@ function showNotification(message, type = 'info') {
     const container = document.getElementById('notification-container');
     const el = document.createElement('div');
     el.className = `notification notification-${type}`;
-    el.innerHTML = `<span>${message}</span><button class="notification-close" onclick="this.parentElement.remove()">&times;</button>`;
+    el.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()">&times;</button>`;
     container.appendChild(el);
     setTimeout(() => el.remove(), 5000);
 }
