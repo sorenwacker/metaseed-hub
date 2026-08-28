@@ -132,9 +132,6 @@ def test_the_export_delegates_rather_than_duplicating() -> None:
 # `{nodes, edges, entity_types}` a dataset facade produces, and has nothing to
 # say about a spec that has no instances yet. They are not copies of it.
 DRAW_A_SPECIFICATION_NOT_A_DATASET = {
-    "explore/compare.html",
-    "explore/view.html",
-    "explore/view_builtin.html",
     "spec_builder/view.html",
 }
 
@@ -189,3 +186,26 @@ def test_the_explorer_panel_is_the_librarys() -> None:
     for own in ("function selectEntity", "function renderRule", "function renderFieldDetails"):
         assert own not in template, f"the hub defines {own} itself"
     assert 'id="rules-section"' in template and 'id="profile-section"' in template
+
+
+def test_every_template_is_rendered_or_included_somewhere() -> None:
+    """A template nothing renders is dead code that still gets edited.
+
+    Seven were found at once: two copies of an explorer view that had drifted
+    apart (one had the validation-rules list, the other did not), a compare
+    page, three partials and a spec-builder start page -- none reachable from
+    any route. Vulture cannot see templates, so this is their vulture.
+    """
+    from pathlib import Path
+
+    root = Path("src/metaseed_hub")
+    templates = root / "ui/templates"
+    sources = "\n".join(
+        path.read_text() for path in [*root.rglob("*.py"), *templates.rglob("*.html")]
+    )
+    dead = [
+        str(path.relative_to(templates))
+        for path in sorted(templates.rglob("*.html"))
+        if str(path.relative_to(templates)) not in sources
+    ]
+    assert not dead, f"templates nothing renders, includes or extends: {dead}"

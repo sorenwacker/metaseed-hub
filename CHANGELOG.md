@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- Seven templates nothing rendered: two diverged copies of an explorer view, a compare page, three partials and a spec-builder start page. A test now fails when a template is neither rendered, included nor extended.
+
 ### Changed
+- On a narrow screen the spec builder and the published-spec view stack the sidebar above the canvas, as the dataset page already did.
 - **Sharing is in the same place on every page**: a *Sharing* tab of the sidebar, on a dataset, a draft and a published specification alike. It was a main-area tab, a sidebar tab and a block above the body respectively, and the home page described none of them. The tab's member count is now updated on every change instead of being read once at page load.
 - **One rule for who may do what.** The dataset routes, the REST API, the MCP tools and the spec builder each decided access their own way, with three names for the same three roles; `DatasetRole`, `SpecRole` and `SpecDraftRole` are gone and every layer asks `sharing.role_of`: an explicit membership, else the creator, else the person whose account the item lives in. The tenant-wide viewer grant on drafts, which could never name anyone because an account belongs to one person, is gone with it.
 

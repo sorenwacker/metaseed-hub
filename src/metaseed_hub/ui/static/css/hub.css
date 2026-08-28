@@ -5547,8 +5547,20 @@ a.start-option-card:hover {
     font-size: 0.75rem;
 }
 
-/* Responsive adjustments for dataset layout */
+/* Responsive adjustments for the sidebar layouts: the sidebar stacks above
+   the canvas and takes at most 40% of the height, on every page that has
+   one. The spec builder and the spec view had no narrow-screen rule at all,
+   so a phone got a 280px sidebar beside a canvas a few pixels wide. */
 @media (max-width: 768px) {
+    .spec-builder-body,
+    .spec-view-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+    }
+    .spec-builder-sidebar,
+    .spec-view-sidebar {
+        max-height: 40vh;
+    }
     .dataset-layout {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
