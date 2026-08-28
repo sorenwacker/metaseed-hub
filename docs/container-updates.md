@@ -68,3 +68,9 @@ It exits non-zero and names every container whose running image does not match i
 ## Compose version requirement
 
 All of this needs Docker Compose v2 (`docker compose`). Compose 1.29.2 cannot recreate containers against the installed Docker Engine — it fails with `KeyError: 'ContainerConfig'` after having already stopped the old container, which takes the service down and leaves it down. The role installs the `docker-compose-v2` package for this reason, and the update script refuses to run if only v1 is present.
+
+## Where Renovate runs
+
+Renovate runs from this repository's own workflow, `.github/workflows/renovate.yml`: weekly (early Monday, UTC) and on demand from the Actions tab (**Renovate > Run workflow**), reading `renovate.json`. The hosted Mend app is installed but has never run on this repository; a workflow here has a visible log and needs nothing enabled elsewhere.
+
+The workflow needs one secret, `RENOVATE_TOKEN`: a fine-grained personal access token for this repository with read and write access to *Contents*, *Pull requests*, *Issues*, and *Workflows*. It can't use the workflow's own `GITHUB_TOKEN`, because pull requests opened with that token trigger no other workflows — the CI gate would never run on an update and nothing could auto-merge. If the hosted app starts running as well, disable one of the two, or every update arrives twice.

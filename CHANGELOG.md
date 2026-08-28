@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- Renovate runs from `.github/workflows/renovate.yml`, weekly and on demand, instead of relying on the hosted app, which never ran on this repository. It needs a `RENOVATE_TOKEN` secret; see *Where Renovate runs* in `docs/container-updates.md`.
+
+### Changed
 - **The license is MIT**, the same as metaseed's. The hub had carried Apache
   2.0 since a LICENSE file was added to match a badge; nothing recorded a
   reason for the difference. The README says what the hub is and does, and
