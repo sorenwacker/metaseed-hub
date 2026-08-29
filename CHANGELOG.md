@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.47.0] - 260829
+
+### Fixed
+- The explorer's rule cards stack name, description and parameters again; the spec builder's one-line rule row had restyled them through a shared class name. Fixed in metaseed 0.48, which the pin now requires.
+
 ## [0.46.0] - 260829
 
 ### Removed
