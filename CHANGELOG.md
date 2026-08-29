@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.46.0] - 260829
+
 ### Removed
 - **The stylesheet says each thing once.** Forty-three selectors were defined twice (`.sidebar-toggle` three times, with different positions, resolved by source order) and a members-panel family that no longer had a panel; the duplicates are merged into one definition each, the dead family is gone, and two gates keep it so: no top-level selector twice, and no template class without a rule or a script that reads it. Thirty class names the templates carried without any rule are gone from the markup; `btn-warning` and `alert-warning`, which were used but never styled, have rules.
 - Seven templates nothing rendered: two diverged copies of an explorer view, a compare page, three partials and a spec-builder start page. A test now fails when a template is neither rendered, included nor extended.
