@@ -4,8 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.48.0] - 260831
+
 ### Added
 - The landing page says how to apply for the features still in development: the same beta-tester registration link the signed-in home carries, so a visitor can apply before signing in.
+
+### Changed
+- Matomo 5.13.0.
 
 ## [0.47.0] - 260829
 
