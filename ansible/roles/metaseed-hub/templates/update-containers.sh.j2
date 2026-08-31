@@ -108,6 +108,18 @@ if [ "$HEALTH_OK" = false ]; then
     exit 1
 fi
 
+# The matomo image keeps the application in a volume; its entrypoint copies
+# files only when matomo.php is absent, so after a recreation the container
+# can serve the old application under the new tag. Sync and migrate when the
+# volume's version differs from the image's.
+MATOMO_APP=$(docker exec metaseed-matomo php -r "include '/var/www/html/core/Version.php'; echo \\Piwik\\Version::VERSION;" 2>/dev/null || true)
+MATOMO_IMG=$(docker exec metaseed-matomo php -r "include '/usr/src/matomo/core/Version.php'; echo \\Piwik\\Version::VERSION;" 2>/dev/null || true)
+if [ -n "$MATOMO_IMG" ] && [ "$MATOMO_APP" != "$MATOMO_IMG" ]; then
+    log "Matomo application files: $MATOMO_APP -> $MATOMO_IMG"
+    docker exec metaseed-matomo sh -c 'cp -a /usr/src/matomo/. /var/www/html/ && chown -R www-data:www-data /var/www/html'
+    docker exec -u www-data metaseed-matomo php /var/www/html/console core:update --yes --no-interaction 2>&1 | tail -1 | tee -a "$LOG_FILE" || log_error "matomo core:update failed"
+fi
+
 log "Now running:"
 docker compose --project-directory "$DOCKER_DIR" ps --format '{{ '{{' }}.Service{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}' 2>&1 | tee -a "$LOG_FILE" || true
 log "Container update successful"

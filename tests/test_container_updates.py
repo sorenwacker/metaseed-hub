@@ -184,6 +184,18 @@ def test_drift_is_reported() -> None:
     assert "container_drift" in dashboard, "drift is not visible on the admin dashboard"
 
 
+def test_a_matomo_image_bump_also_updates_its_application_files() -> None:
+    """The matomo image keeps the application in a volume, and its entrypoint
+    copies files only when ``matomo.php`` is absent -- so a recreated container
+    served the OLD application from the volume while ``docker ps`` showed the
+    new tag (5.12.0 files under a 5.13.0 image, found 260831). The update
+    script must sync the image's files over the volume and run the schema
+    update whenever the versions differ."""
+    script = _UPDATE_SCRIPT.read_text()
+    assert "/usr/src/matomo" in script, "matomo's application files are never refreshed"
+    assert "core:update" in script, "matomo's schema update never runs"
+
+
 def test_renovate_runs_from_this_repositorys_own_workflow() -> None:
     """The hosted app never ran here; a workflow we can see does the job.
 

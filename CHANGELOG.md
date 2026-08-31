@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- A Matomo image bump now also updates Matomo itself: the image keeps the application in a volume its entrypoint refreshes only on first install, so a recreated container served the old application under the new tag. The container-update script syncs the image's files over the volume and runs the schema update whenever the versions differ.
+
 ## [0.48.0] - 260831
 
 ### Added

@@ -73,6 +73,10 @@ It exits non-zero and names every container whose running image does not match i
 
 All of this needs Docker Compose v2 (`docker compose`). Compose 1.29.2 cannot recreate containers against the installed Docker Engine — it fails with `KeyError: 'ContainerConfig'` after having already stopped the old container, which takes the service down and leaves it down. The role installs the `docker-compose-v2` package for this reason, and the update script refuses to run if only v1 is present.
 
+## Matomo application files
+
+The matomo image keeps the application in the `/var/www/html` volume, and its entrypoint copies files from the image only when `matomo.php` is absent. A recreated container therefore serves the old application under the new image tag until the files are synced. The update script compares the volume's version with the image's after every recreation; when they differ it copies `/usr/src/matomo` over the volume (`config.ini.php` survives, the image ships no such file) and runs `console core:update`.
+
 ## Where Renovate runs
 
 Renovate runs from this repository's own workflow, `.github/workflows/renovate.yml`: weekly (early Monday, UTC) and on demand from the Actions tab (**Renovate > Run workflow**), reading `renovate.json`. The hosted Mend app is installed but has never run on this repository; a workflow here has a visible log and needs nothing enabled elsewhere.
