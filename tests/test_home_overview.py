@@ -87,3 +87,18 @@ def test_signed_out_navigation_does_not_lead_nowhere() -> None:
     assert "{% if user %}" in nav, "the app nav is only for signed-in users"
     # Docs is public and stays.
     assert "Docs" in nav
+
+
+def test_both_audiences_can_apply_for_beta_features() -> None:
+    """Integrations still in development are rolled out to beta testers. The
+    signed-in home says how to apply; a visitor deciding whether to sign in
+    could not see it at all. Both pages carry the same registration link, so
+    it cannot rot on one of them."""
+    registration = (
+        "https://sram.surf.nl/registration?collaboration=f4840adc-d5cb-4eb6-9906-ab9827e82df5"
+    )
+    landing = _read("partials/overview.html")
+    home = _read("overview_home.html")
+    assert registration in home
+    assert registration in landing, "the landing page does not say how to apply"
+    assert "beta" in landing.lower()

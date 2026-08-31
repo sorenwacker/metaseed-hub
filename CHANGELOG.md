@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The landing page says how to apply for the features still in development: the same beta-tester registration link the signed-in home carries, so a visitor can apply before signing in.
+
 ## [0.47.0] - 260829
 
 ### Fixed
