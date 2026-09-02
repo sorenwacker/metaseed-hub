@@ -113,12 +113,17 @@ def _markers(supplied: dict[str, Any]) -> dict[str, Any]:
 def _constraints(limits: dict[str, Any]) -> Any | None:
     """A ``Constraints`` over the limits supplied, or None if none were.
 
+    ``limits`` maps every constraint this tool exposes; routing it through
+    :func:`_constraint_values` means ``spec_add_field`` refuses when metaseed
+    defines a constraint the tool does not expose, exactly as ``spec_update_field``
+    does — otherwise a new metaseed constraint was silently unaddable.
+
     None rather than an empty object: an empty ``constraints`` block would be
     written into every field of every draft the hub builds.
     """
     from metaseed.specs.schema import Constraints
 
-    values = _clean(limits)
+    values = _constraint_values(limits)
     return Constraints(**values) if values else None
 
 

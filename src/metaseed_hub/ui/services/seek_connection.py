@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
+from metaseed_hub.access import get_tenant_for_user
 from metaseed_hub.models import SeekConnection, Tenant
-from metaseed_hub.ui.dependencies import tenant_slug_for
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,12 +21,13 @@ if TYPE_CHECKING:
 
 
 async def tenant_for_user(session: AsyncSession, user: TokenUser) -> Tenant | None:
-    """The tenant owning ``user``'s datasets, or ``None`` before first use."""
-    result = await session.execute(
-        select(Tenant).where(Tenant.slug == tenant_slug_for(user.keycloak_id))
-    )
-    tenant: Tenant | None = result.scalar_one_or_none()
-    return tenant
+    """The tenant owning ``user``'s datasets, or ``None`` before first use.
+
+    A thin re-export of :func:`metaseed_hub.access.get_tenant_for_user`, kept as
+    a name this service and the SEEK route already call; the query lives in the
+    access layer once.
+    """
+    return await get_tenant_for_user(session, user)
 
 
 async def connection_for_user(session: AsyncSession, user: TokenUser) -> SeekConnection | None:

@@ -99,8 +99,11 @@ async def test_non_constraint_attributes_still_update(server, session) -> None:
     assert field["constraints"]["maximum"] == 100
 
 
-def test_the_tool_offers_every_constraint_metaseed_defines() -> None:
-    """Hardcoding the names here would let the hub and metaseed drift apart."""
+@pytest.mark.parametrize("tool_name", ["spec_add_field", "spec_update_field"])
+def test_the_tool_offers_every_constraint_metaseed_defines(tool_name: str) -> None:
+    """Hardcoding the names here would let the hub and metaseed drift apart.
+    Both tools must expose every constraint: add builds a field, update edits
+    one, and a constraint missing from either is unsettable."""
     import inspect
 
     from metaseed.specs.builder import CONSTRAINT_NAMES
@@ -108,7 +111,25 @@ def test_the_tool_offers_every_constraint_metaseed_defines() -> None:
     from metaseed_hub.mcp import create_mcp_server
 
     server = create_mcp_server()
-    signature = inspect.signature(server._tool_manager.get_tool("spec_update_field").fn)
+    signature = inspect.signature(server._tool_manager.get_tool(tool_name).fn)
     for name in CONSTRAINT_NAMES:
-        assert name in signature.parameters, f"spec_update_field cannot set {name}"
-    assert "clear" in signature.parameters
+        assert name in signature.parameters, f"{tool_name} cannot set {name}"
+    if tool_name == "spec_update_field":
+        assert "clear" in signature.parameters
+
+
+def test_the_add_field_constraint_builder_shares_the_completeness_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """spec_add_field built constraints through _constraints, which did not
+    enforce the completeness guard _constraint_values does, so a new metaseed
+    constraint was silently unaddable rather than reported."""
+    import metaseed.specs.builder as builder_mod
+
+    from metaseed_hub.mcp._spec_tools import _constraints
+
+    monkeypatch.setattr(
+        builder_mod, "CONSTRAINT_NAMES", (*builder_mod.CONSTRAINT_NAMES, "future_constraint")
+    )
+    with pytest.raises(ValueError, match="future_constraint"):
+        _constraints({"pattern": "x"})

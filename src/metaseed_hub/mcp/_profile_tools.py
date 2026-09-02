@@ -43,11 +43,13 @@ def _identifier_info(entity_def: Any) -> tuple[str | None, str | None]:
     Returns:
         A ``(identifier, note)`` pair; note is None for conventional entities.
     """
+    from metaseed.specs.schema import identifying_field
+
     field_names = {f.name for f in entity_def.fields}
-    identifier = next(
-        (f.name for f in entity_def.fields if f.is_identifier),
-        next((f.name for f in entity_def.fields if not f.reference), None),
-    )
+    # One inference rule, in metaseed: is_identifier wins, else the first
+    # non-reference field. Re-deriving it here was a third copy to disagree.
+    key_field = identifying_field(entity_def.fields)
+    identifier = key_field.name if key_field is not None else None
     note = None
     if identifier and identifier != "unique_id" and "unique_id" not in field_names:
         note = (

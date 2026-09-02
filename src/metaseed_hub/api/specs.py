@@ -22,7 +22,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.access import get_tenant_for_user
+from metaseed_hub.access import get_tenant_for_user, live_user
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
@@ -70,11 +70,7 @@ async def _caller(session: AsyncSession, user: TokenUser) -> User:
     Raises:
         HTTPException: 403 when the token's account is not on this hub.
     """
-    row = (
-        await session.execute(
-            select(User).where(User.keycloak_id == user.sub, User.deleted_at.is_(None))
-        )
-    ).scalar_one_or_none()
+    row = await live_user(session, user)
     if row is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No hub account")
     return row
