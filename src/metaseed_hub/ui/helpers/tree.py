@@ -225,3 +225,24 @@ def get_tree_data_from_nodes(state: AppState) -> list[dict[str, Any]]:
         return result
 
     return [node_to_dict(n) for n in state.entity_tree]
+
+
+def count_entities_by_type(tree: list[dict[str, Any]]) -> dict[str, int]:
+    """Count the entities in a serialized tree, keyed by entity type.
+
+    Walks ``children`` recursively, so nested entities count as well as roots.
+    Serves the version diff and the home page cards from one definition.
+
+    Args:
+        tree: A dataset's ``data["tree"]``: root nodes with nested ``children``.
+
+    Returns:
+        ``{entity_type: count}`` in order of first appearance.
+    """
+    counts: dict[str, int] = {}
+    for node in tree:
+        entity_type = node.get("entity_type", "Unknown")
+        counts[entity_type] = counts.get(entity_type, 0) + 1
+        for child_type, child_count in count_entities_by_type(node.get("children", [])).items():
+            counts[child_type] = counts.get(child_type, 0) + child_count
+    return counts

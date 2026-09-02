@@ -4,7 +4,7 @@ A **dataset** holds metadata entities organized according to a **profile** speci
 
 ## The dataset list
 
-Open **Datasets** in the header. **My Datasets** shows each dataset with its profile, version, and last-updated date. Click a dataset to open the editor.
+Open **Datasets** in the header. **My Datasets** shows each dataset with its profile, version, last-updated date, and how many entities it holds; hovering over the count shows the number per entity type. Click a dataset to open the editor.
 
 ## Creating a dataset
 

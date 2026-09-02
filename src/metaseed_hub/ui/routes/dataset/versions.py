@@ -18,6 +18,7 @@ from metaseed_hub.ui.dependencies import (
     get_dataset_for_editor,
     get_dataset_for_user,
 )
+from metaseed_hub.ui.helpers.tree import count_entities_by_type
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
@@ -50,20 +51,8 @@ def _calculate_diff(old_data: dict[str, Any], new_data: dict[str, Any]) -> dict[
     old_tree = old_data.get("tree", [])
     new_tree = new_data.get("tree", [])
 
-    def count_entities(tree: list[dict[str, Any]]) -> dict[str, int]:
-        """Count entities by type in tree."""
-        counts: dict[str, int] = {}
-        for node in tree:
-            entity_type = node.get("entity_type", "Unknown")
-            counts[entity_type] = counts.get(entity_type, 0) + 1
-            if "children" in node:
-                child_counts = count_entities(node["children"])
-                for k, v in child_counts.items():
-                    counts[k] = counts.get(k, 0) + v
-        return counts
-
-    old_counts = count_entities(old_tree)
-    new_counts = count_entities(new_tree)
+    old_counts = count_entities_by_type(old_tree)
+    new_counts = count_entities_by_type(new_tree)
 
     all_types = set(old_counts.keys()) | set(new_counts.keys())
     changes: list[str] = []

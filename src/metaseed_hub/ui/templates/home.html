@@ -25,6 +25,14 @@
                     <div class="project-meta">
                         <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
                         <span class="date">{{ dataset.updated_at.strftime('%Y-%m-%d') }}</span>
+                        {% set counts = entity_counts[dataset.id] %}
+                        {% set total = counts.values()|sum %}
+                        {% if total %}
+                        <span class="entity-count" data-testid="entity-count"
+                              title="{% for entity_type, n in counts.items() %}{{ n }} {{ entity_type }}{{ ', ' if not loop.last }}{% endfor %}">{{ total }} {{ 'entity' if total == 1 else 'entities' }}</span>
+                        {% else %}
+                        <span class="entity-count entity-count-empty" data-testid="entity-count">No entities</span>
+                        {% endif %}
                     </div>
                 </a>
             </div>

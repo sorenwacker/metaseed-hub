@@ -38,6 +38,7 @@ from metaseed_hub.ui.helpers import (
     escape_pattern_hyphen,
     humanize_field_name,
 )
+from metaseed_hub.ui.helpers.tree import count_entities_by_type
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR, METASEED_TEMPLATES_DIR
 from metaseed_hub.ui.render import get_metaseed_stars, get_repo_stars, render_template
 from metaseed_hub.ui.routes import (
@@ -356,6 +357,11 @@ def create_hub_app() -> FastAPI:
                 "user": user,
                 "tenant": tenant,
                 "datasets": datasets,
+                # What each card says about size: the tree is already loaded
+                # with the row, so counting it costs no further query.
+                "entity_counts": {
+                    ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets
+                },
                 "specs": specs,
                 "nav_active": "home",
             },

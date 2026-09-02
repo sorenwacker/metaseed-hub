@@ -643,6 +643,15 @@ body {
     gap: var(--space-md);
 }
 
+.project-meta .entity-count {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.project-meta .entity-count-empty {
+    font-style: italic;
+}
+
 .profile-badge {
     background: linear-gradient(135deg, var(--clr-moss) 0%, var(--clr-sage) 100%);
     color: white;
