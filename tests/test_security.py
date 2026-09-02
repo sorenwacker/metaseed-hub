@@ -165,7 +165,9 @@ class TestAuthorizationDependencies:
             return_value=None,
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await require_draft_access(session, "draft-1", "outsider-2")
+                await require_draft_access(
+                    session, "11111111-1111-1111-1111-111111111111", "outsider-2"
+                )
 
         assert exc_info.value.status_code == 403
 
@@ -189,7 +191,12 @@ class TestAuthorizationDependencies:
             "metaseed_hub.ui.spec_builder.access.get_draft_role",
             return_value=Role.VIEWER,
         ):
-            assert await require_draft_access(session, "draft-1", "member-2") is draft
+            assert (
+                await require_draft_access(
+                    session, "11111111-1111-1111-1111-111111111111", "member-2"
+                )
+                is draft
+            )
 
 
 class TestXSSPrevention:
