@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus
 from metaseed_hub.ui.spec_builder.access import unpublish_spec
-from tests.factories import make_spec, make_tenant, make_user
+from tests.factories import make_spec, make_spec_draft, make_tenant, make_user
 
 
 def _spec_data(name: str = "Secret", version: str = "1.0") -> dict:
@@ -159,3 +159,28 @@ async def test_a_plain_colleague_may_not_withdraw_someone_elses_spec(
 
     assert await can_edit_spec(session, author.id, spec.id) is True
     assert await can_edit_spec(session, colleague.id, spec.id) is False
+
+
+async def test_withdrawing_over_a_draft_of_the_same_name_does_not_collide(
+    session: AsyncSession,
+) -> None:
+    """Draft names are unique per (tenant, user). Unpublishing a spec whose name
+    matches a draft the author already holds hit the unique index; the withdrawn
+    spec now comes back under a collision-avoiding name."""
+    tenant, author, _colleague, spec = await _published(session)
+    # A draft the author already holds under the spec's own name.
+    session.add(make_spec_draft(tenant=tenant, user=author, name=spec.name, version="9.9"))
+    await session.commit()
+    clashing = spec.name
+
+    draft = await unpublish_spec(session, spec, author.id)
+
+    assert draft.name != clashing, "the name was deduplicated"
+    assert draft.spec_data["spec"]["name"] == "Secret", "the specification is unchanged"
+    drafts = (
+        (await session.execute(select(SpecDraft).where(SpecDraft.user_id == author.id)))
+        .scalars()
+        .all()
+    )
+    assert len(drafts) == 2, "both drafts coexist"
+    assert clashing in {d.name for d in drafts}, "the original draft keeps its name"

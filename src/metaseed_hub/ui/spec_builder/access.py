@@ -354,8 +354,19 @@ async def save_state_to_draft(
 
 
 async def _stored_revision(session: AsyncSession, draft_id: str) -> datetime | None:
-    """Read the draft row's current ``updated_at``, or None if it is gone."""
-    result = await session.execute(select(SpecDraft.updated_at).where(SpecDraft.id == draft_id))
+    """Read and lock the draft row's ``updated_at``, or None if it is gone.
+
+    ``FOR UPDATE`` holds the row until this transaction commits, so the
+    compare-then-write in :func:`save_state_to_draft` is atomic: a second saver
+    (another request, or the other production worker) blocks here until the
+    first commits, then reads the new revision and its own expected revision no
+    longer matches — a conflict instead of a lost overwrite. Without the lock
+    both could read the same revision, both pass the check, and the later write
+    silently discarded the earlier one.
+    """
+    result = await session.execute(
+        select(SpecDraft.updated_at).where(SpecDraft.id == draft_id).with_for_update()
+    )
     return result.scalar_one_or_none()
 
 
@@ -551,11 +562,17 @@ async def unpublish_spec(
     # duplicate draft beside it, nor withdraw it with the work gone.
     spec.soft_delete()
 
+    # A user may already hold a draft named like the spec; draft names are
+    # unique per (tenant, user), so reuse the collision-avoiding name here or
+    # the withdrawal fails on the unique index.
+    name = await free_draft_name(
+        session, user_id=user_id, tenant_id=spec.tenant_id, wanted=spec.name
+    )
     return await create_new_draft(
         session,
         user_id=user_id,
         tenant_id=spec.tenant_id,
-        name=spec.name,
+        name=name,
         spec=builder.spec,
         source_spec_id=spec.id,
     )

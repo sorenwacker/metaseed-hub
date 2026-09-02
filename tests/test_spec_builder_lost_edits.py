@@ -207,3 +207,17 @@ async def test_consecutive_edits_by_the_same_holder_keep_working(
     await session.refresh(draft)
     stored = draft.spec_data["spec"]["entities"]
     assert {"Investigation", "Study", "Assay", "Sample"} <= set(stored)
+
+
+def test_the_revision_read_locks_the_row() -> None:
+    """The compare-then-write in save_state_to_draft is only atomic if the
+    revision read locks the row: without FOR UPDATE two concurrent saves can
+    both read the same revision, both pass the conflict check, and the later
+    write silently overwrites the earlier. This is the gate for that lock,
+    which a race cannot be reproduced deterministically in a unit test."""
+    import inspect
+
+    from metaseed_hub.ui.spec_builder import access
+
+    source = inspect.getsource(access._stored_revision)
+    assert "with_for_update()" in source, "the revision read must lock the row"
