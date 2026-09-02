@@ -110,3 +110,21 @@ def test_nested_child_survives_facade_save() -> None:
     nodes = _flat_nodes(serialize_tree(state)["tree"])
     studies = [n for n in nodes if n["entity_type"] == "Study"]
     assert [s["data"].get("unique_id") for s in studies] == ["STU-9"]
+
+
+def test_a_failed_nested_child_is_reported_not_swallowed() -> None:
+    """create_nested_nodes logged a failed child and dropped it (and its whole
+    subtree). It returns the failures now, so a caller can report what did not
+    arrive, matching add_entities_in_order's contract."""
+    from unittest.mock import patch
+
+    import metaseed_hub.ui.helpers.tree as tree_mod
+
+    state, _ = _state_with_investigation()
+    node = add_entity_node(state, "Study", {"unique_id": "STU-1", "title": "S"})
+    with patch.object(tree_mod, "add_entity_node", side_effect=RuntimeError("boom")):
+        errors = create_nested_nodes(
+            state, state.facade, node, "Study", {"persons": [{"name": "P"}]}
+        )
+    assert errors, "a failed nested child must be reported"
+    assert any("boom" in e for e in errors)

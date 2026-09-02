@@ -133,11 +133,16 @@ def create_nested_nodes(
     parent_node: TreeNode,
     entity_type: str,
     data: dict[str, Any],
-) -> None:
+) -> list[str]:
     """Recursively create child TreeNodes for nested entity data.
 
     This function processes nested fields (like studies, protocols, samples)
     in entity data and creates corresponding TreeNode children.
+
+    A child that cannot be created — and the whole subtree beneath it, since the
+    recursion into it never runs — is collected as an error message rather than
+    dropped with only a log line, mirroring ``add_entities_in_order``'s
+    ``list[str]`` contract so the callers can report what did not arrive.
 
     Args:
         state: AppState to add nodes to.
@@ -145,12 +150,16 @@ def create_nested_nodes(
         parent_node: Parent TreeNode to attach children to.
         entity_type: Type name of the parent entity.
         data: Raw dict data containing nested entity fields.
+
+    Returns:
+        Per-child error messages; empty when every nested node was created.
     """
+    errors: list[str] = []
     try:
         helper = getattr(facade, entity_type)
     except AttributeError:
         logger.warning(f"No helper for {entity_type}")
-        return
+        return errors
 
     for field_name in helper.nested_fields:
         field_data = data.get(field_name)
@@ -191,10 +200,15 @@ def create_nested_nodes(
                 )
 
                 # Recursively process this child's nested fields
-                create_nested_nodes(state, facade, child_node, nested_type, item_data)
+                errors.extend(
+                    create_nested_nodes(state, facade, child_node, nested_type, item_data)
+                )
 
             except Exception as e:
                 logger.error(f"Failed to create {nested_type}: {e}")
+                errors.append(f"{nested_type}: {e}")
+
+    return errors
 
 
 def get_tree_data_from_nodes(state: AppState) -> list[dict[str, Any]]:

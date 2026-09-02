@@ -350,7 +350,11 @@ async def dataset_import(
             }
             if entity_data:
                 node = add_entity_node(state, root_entity, entity_data)
-                create_nested_nodes(state, facade, node, root_entity, copy.deepcopy(entity_data))
+                nested_errors = create_nested_nodes(
+                    state, facade, node, root_entity, copy.deepcopy(entity_data)
+                )
+                if nested_errors:
+                    logger.warning(f"Import errors: {nested_errors[:5]}")
 
         if state.editing_node_id is None and state.entity_tree:
             state.editing_node_id = state.entity_tree[0].id
@@ -717,7 +721,11 @@ async def dataset_create(
                 state.editing_node_id = node.id
 
                 # Create nested child nodes from the unmodified copy
-                create_nested_nodes(state, facade, node, root_entity, example_data_copy)
+                example_errors = create_nested_nodes(
+                    state, facade, node, root_entity, example_data_copy
+                )
+                if example_errors:
+                    logger.error(f"Example load errors: {example_errors[:5]}")
 
                 # Save to database with version history
                 await save_dataset_state(session, dataset, state, user)
@@ -847,7 +855,9 @@ async def dataset_load_example(
         state.editing_node_id = node.id
 
         # Create nested child nodes from the unmodified copy
-        create_nested_nodes(state, facade, node, root_entity, example_data_copy)
+        example_errors = create_nested_nodes(state, facade, node, root_entity, example_data_copy)
+        if example_errors:
+            logger.error(f"Example load errors: {example_errors[:5]}")
 
         # Save to database with version history
         await save_dataset_state(session, dataset, state, user)

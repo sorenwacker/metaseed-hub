@@ -65,6 +65,48 @@ def _containment_fields(facade: Any, entity_type: str) -> set[str]:
     return names
 
 
+def _child_types(facade: Any, entity_type: str) -> set[str]:
+    """The entity types contained by ``entity_type`` through a list/entity field."""
+    helper = getattr(facade, entity_type, None)
+    if helper is None:
+        return set()
+    children: set[str] = set()
+    for name in getattr(helper, "all_fields", []):
+        info = helper.field_info(name)
+        items = info.get("items")
+        if info.get("type") in ("list", "entity") and items and items in facade.entities:
+            children.add(items)
+    return children
+
+
+def _containment_order(facade: Any, root_entity: str) -> list[str]:
+    """Entity types ordered so a parent precedes every type it contains.
+
+    A child's ``_parent`` is resolved against nodes created earlier in the
+    pass, so a parent has to be processed first. Ordering by ``facade.entities``
+    declaration order guaranteed that only for the root; a grandchild whose
+    parent type was declared later was re-rooted. A breadth-first walk of the
+    containment graph from the root fixes the order; any type the walk does not
+    reach (an orphan, or a cycle) is appended in declaration order so nothing is
+    dropped.
+    """
+    order: list[str] = []
+    seen: set[str] = set()
+    queue = [root_entity] if root_entity in facade.entities else []
+    while queue:
+        current = queue.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        order.append(current)
+        queue.extend(sorted(_child_types(facade, current) - seen))
+    for entity_type in facade.entities:
+        if entity_type not in seen:
+            order.append(entity_type)
+            seen.add(entity_type)
+    return order
+
+
 def add_entities_in_order(
     state: AppState,
     facade: Any,
@@ -89,7 +131,7 @@ def add_entities_in_order(
     """
     imported = 0
     errors: list[str] = []
-    entity_order = [root_entity] + [e for e in facade.entities if e != root_entity]
+    entity_order = _containment_order(facade, root_entity)
 
     for entity_type in sorted(set(entities_by_type) - set(entity_order)):
         count = len(entities_by_type[entity_type])
