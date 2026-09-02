@@ -18,6 +18,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 HUB_SRC = Path("src/metaseed_hub")
 
 #: Modules that may build a workbook themselves, with the reason. Empty: the
@@ -162,14 +164,21 @@ def test_no_template_draws_the_dataset_graph_itself() -> None:
     )
 
 
-def test_the_graph_page_loads_the_library_drawing() -> None:
-    """Deleting the fork is only half of it; the page must use the real one."""
+@pytest.mark.parametrize("template", ["graph.html", "dataset.html"])
+def test_every_page_with_a_graph_loads_the_library_drawing(template: str) -> None:
+    """Deleting the fork is only half of it; the page must use the real one.
+
+    Two pages draw the graph: the standalone window and the dataset page,
+    where it opens beside the editor. Both load the same file and supply
+    only the data URL.
+    """
     from pathlib import Path
 
-    page = Path("src/metaseed_hub/ui/templates/graph.html").read_text()
+    page = Path("src/metaseed_hub/ui/templates") / template
+    markup = page.read_text()
 
-    assert "/hub/static/js/graph.js" in page, "the graph page must load metaseed's graph.js"
-    assert "METASEED_GRAPH_URL" in page, (
+    assert "/hub/static/js/graph.js" in markup, f"{template} must load metaseed's graph.js"
+    assert "METASEED_GRAPH_URL" in markup, (
         "the host supplies the data URL; that is the whole of its side of the contract"
     )
 

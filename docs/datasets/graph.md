@@ -4,7 +4,9 @@ The graph view visualizes a dataset's entities and the relationships between the
 
 ## Opening the graph
 
-Open a dataset and click **Graph** in the sidebar. Entities appear as nodes and relationships as edges, laid out as a force-directed graph.
+Open a dataset and click **Graph** in the sidebar. The graph opens beside the center pane, so the entity overview or the form you are editing stays in view, and it redraws after every change to the dataset. Click **Graph** again, or **Close** on the graph, to hide it. Whether the graph is open is remembered per browser, so a dataset you reopen comes back the way you left it.
+
+Entities appear as nodes and relationships as edges, laid out as a force-directed graph. **Fullscreen** gives the graph the whole screen (Esc leaves), and **New window** opens it alone in a separate browser window, for a second screen.
 
 ## Navigating
 

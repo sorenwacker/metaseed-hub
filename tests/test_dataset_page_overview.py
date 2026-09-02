@@ -77,3 +77,27 @@ async def test_the_sharing_badge_leaves_the_viewer_out(
 
     panel = _get(f"/hub/sharing/dataset/{ena_dataset.id}/members")
     assert 'data-testid="sharing-count">0<' in panel
+
+
+def _graph_container(html: str) -> str:
+    return html[html.index('id="graph-container"') :]
+
+
+async def test_the_graph_opens_beside_the_editor_rather_than_replacing_it(
+    ena_dataset, app_db
+) -> None:
+    """Reported: the graph could not be shown at the same time as the entity
+    table. The graph now lives on the dataset page, hidden until toggled, in
+    the same center panes as the editor; the standalone page stays for a second
+    window."""
+    html = _get(f"/hub/datasets/{ena_dataset.id}")
+    assert 'id="dataset-graph-btn"' in html
+    assert 'id="graph-container"' in html and 'id="graph-view"' in html
+    assert 'id="dataset-panes"' in html
+    container = _graph_container(html)
+    assert 'class="graph-container hidden"' in container, "closed until asked for"
+    assert f'href="/hub/datasets/{ena_dataset.id}/graph"' in container, "a new-window link"
+    assert 'id="editor"' in html
+    # The drawing is the library's; the page supplies only the data URL.
+    assert "/hub/static/js/graph.js" in html
+    assert f"/hub/datasets/{ena_dataset.id}/api/graph" in html

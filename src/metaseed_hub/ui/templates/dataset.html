@@ -53,7 +53,9 @@
                         hx-target="#editor"
                         hx-swap="innerHTML"
                         title="Validate all entities">Validate</button>
-                <a href="/hub/datasets/{{ dataset.id }}/graph" class="btn btn-sm" title="Graph view">Graph</a>
+                <button type="button" id="dataset-graph-btn" class="btn btn-sm" onclick="toggleDatasetGraph()"
+                        aria-pressed="false" data-testid="btn-view-graph"
+                        title="Show or hide the graph beside the editor">Graph</button>
             </div>
             <div class="sidebar-actions-row">
                 <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
@@ -168,6 +170,11 @@
 
     </aside>
 
+    {# The editor and the graph share the center: the graph opens beside
+       whatever the editor shows, so the entity table and the graph can be read
+       together. The drawing, legend and controls are metaseed's graph.js; the
+       page owns only the layout and the data URL. #}
+    <div class="dataset-panes" id="dataset-panes">
     <!-- Main Editor Area -->
     <main class="dataset-editor" id="editor">
         {% if error %}
@@ -193,10 +200,71 @@
         {% include "partials/dataset_overview.html" %}
         {% endif %}
     </main>
+    <div id="graph-container" class="graph-container hidden" data-testid="graph-container">
+        <div class="graph-panel-bar">
+            <strong>Graph</strong>
+            <span class="graph-panel-bar-end"></span>
+            <button type="button" class="btn btn-sm" onclick="fullscreenDatasetGraph()" title="Show the graph on the whole screen (Esc leaves)">Fullscreen</button>
+            <a href="/hub/datasets/{{ dataset.id }}/graph" target="_blank" rel="noopener" class="btn btn-sm" title="Open the graph in its own window">New window</a>
+            <button type="button" class="btn btn-sm" onclick="toggleDatasetGraph()" title="Close the graph">Close &times;</button>
+        </div>
+        <div class="graph-controls">
+            <label class="graph-control-label">
+                Spacing
+                <input type="range" id="graph-spacing" min="50" max="500" value="100" oninput="updateGraphPhysics()">
+            </label>
+            <label class="graph-control-label">
+                Repulsion
+                <input type="range" id="graph-repulsion" min="-1000" max="-100" value="-500" oninput="updateGraphPhysics()">
+            </label>
+            <button type="button" id="graph-layout-btn" class="btn btn-sm" onclick="toggleGraphLayout()">Hierarchical</button>
+            <button type="button" class="btn btn-sm" onclick="fitGraph()">Fit</button>
+        </div>
+        <div class="graph-body">
+            <div id="graph-view"></div>
+            <div id="graph-legend" class="graph-legend"></div>
+        </div>
+    </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+    window.METASEED_GRAPH_URL = '/hub/datasets/{{ dataset.id }}/api/graph';
+</script>
+<script src="/hub/static/js/graph.js"></script>
+<script>
+// Graph beside the editor: on or off, remembered per browser. graph.js draws
+// and redraws it after every htmx swap while the container is visible.
+const GRAPH_OPEN_KEY = 'hubDatasetGraphOpen';
+
+function setDatasetGraph(open) {
+    const container = document.getElementById('graph-container');
+    container.classList.toggle('hidden', !open);
+    document.getElementById('dataset-layout').classList.toggle('graph-open', open);
+    document.getElementById('dataset-graph-btn').setAttribute('aria-pressed', String(open));
+    try { localStorage.setItem(GRAPH_OPEN_KEY, open ? '1' : '0'); } catch (e) {}
+    if (open) loadGraph();
+}
+
+function toggleDatasetGraph() {
+    setDatasetGraph(document.getElementById('graph-container').classList.contains('hidden'));
+}
+
+function fullscreenDatasetGraph() {
+    const container = document.getElementById('graph-container');
+    if (!container.requestFullscreen) return;
+    if (document.fullscreenElement) document.exitFullscreen();
+    else container.requestFullscreen();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    let remembered = null;
+    try { remembered = localStorage.getItem(GRAPH_OPEN_KEY); } catch (e) {}
+    if (remembered === '1') setDatasetGraph(true);
+});
+</script>
 <script>
 // Sidebar toggle
 function toggleSidebar() {
