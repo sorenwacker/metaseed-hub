@@ -24,6 +24,8 @@ branch_labels: str | None = None
 depends_on: str | None = None
 
 #: One owner row per dataset that has none, for the account's oldest live user.
+#: That user may already hold a lesser role on the dataset; the row is raised
+#: to owner rather than inserted twice on the same (dataset, user) key.
 BACKFILL_OWNERS = """
 INSERT INTO dataset_members (dataset_id, user_id, role)
 SELECT DISTINCT ON (d.id) d.id, u.id, CAST('owner' AS memberrole)
@@ -34,6 +36,7 @@ WHERE NOT EXISTS (
     WHERE m.dataset_id = d.id AND m.role = CAST('owner' AS memberrole)
 )
 ORDER BY d.id, u.created_at
+ON CONFLICT (dataset_id, user_id) DO UPDATE SET role = EXCLUDED.role
 """
 
 

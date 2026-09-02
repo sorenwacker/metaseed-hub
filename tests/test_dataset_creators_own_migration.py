@@ -27,6 +27,7 @@ _GONE_USER = "44444444-4444-4444-4444-444444444444"
 _OWNED = "55555555-5555-5555-5555-555555555555"
 _ORPHAN = "66666666-6666-6666-6666-666666666666"
 _NO_LIVE_USER = "77777777-7777-7777-7777-777777777777"
+_DEMOTED = "88888888-8888-8888-8888-888888888888"
 
 
 def _alembic(target: str) -> subprocess.CompletedProcess[str]:
@@ -79,6 +80,7 @@ async def _seed() -> None:
                 (_OWNED, _TENANT, "already-owned"),
                 (_ORPHAN, _TENANT, "orphan"),
                 (_NO_LIVE_USER, _OTHER_TENANT, "nobody-alive"),
+                (_DEMOTED, _TENANT, "viewer-only"),
             ):
                 await conn.execute(
                     text(
@@ -93,6 +95,17 @@ async def _seed() -> None:
                     "VALUES (:dataset, :user, 'owner')"
                 ),
                 {"dataset": _OWNED, "user": _USER},
+            )
+            # The account's user holds a lesser role and nobody owns it. The
+            # backfill must raise that row, not insert a second one on the
+            # same (dataset, user) key: that collision stopped a local
+            # `alembic upgrade head` dead.
+            await conn.execute(
+                text(
+                    "INSERT INTO dataset_members (dataset_id, user_id, role) "
+                    "VALUES (:dataset, :user, 'viewer')"
+                ),
+                {"dataset": _DEMOTED, "user": _USER},
             )
     finally:
         await engine.dispose()
@@ -130,3 +143,21 @@ async def test_every_ownerless_dataset_gets_its_accounts_user_as_owner() -> None
     assert owners[_ORPHAN] == [_USER], "the orphan gets the account's user"
     assert owners[_OWNED] == [_USER], "an owned dataset gains no second owner row"
     assert _NO_LIVE_USER not in owners, "a deleted user is not made an owner"
+    assert owners[_DEMOTED] == [_USER], "an existing lesser role is raised to owner"
+    assert await _roles(_DEMOTED, _USER) == ["owner"], "raised, not duplicated"
+
+
+async def _roles(dataset: str, user: str) -> list[str]:
+    engine = create_async_engine(_SCRATCH_URL)
+    try:
+        async with engine.connect() as conn:
+            rows = await conn.execute(
+                text(
+                    "SELECT CAST(role AS text) FROM dataset_members "
+                    "WHERE dataset_id = :dataset AND user_id = :user"
+                ),
+                {"dataset": dataset, "user": user},
+            )
+            return [role for (role,) in rows]
+    finally:
+        await engine.dispose()
