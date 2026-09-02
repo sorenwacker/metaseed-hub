@@ -7,6 +7,8 @@ header content; a newline splits the header.
 
 from __future__ import annotations
 
+import pathlib
+
 from metaseed_hub.ui.helpers.text import safe_filename
 
 
@@ -34,3 +36,13 @@ def test_both_download_routes_use_it() -> None:
     src = Path(__file__).resolve().parent.parent / "src" / "metaseed_hub"
     for rel in ("ui/routes/dataset/editor.py", "ui/spec_builder/routes/draft_routes.py"):
         assert "safe_filename" in (src / rel).read_text(), rel
+
+
+def test_the_adapter_export_shapes_its_filename_too() -> None:
+    """The whole-file check above passed while the adapter export hand-rolled
+    its own stem with ``dataset.name.replace(" ", "_")`` two functions below a
+    correct use: both download filenames in the editor module must go through
+    ``safe_filename``."""
+    editor = pathlib.Path("src/metaseed_hub/ui/routes/dataset/editor.py").read_text()
+    assert "dataset.name.replace" not in editor
+    assert editor.count("safe_filename(dataset.name") >= 2

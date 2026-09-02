@@ -732,7 +732,7 @@ async def dataset_export_adapter(
             archive.writestr(PurePosixPath(name).name, content)
     buffer.seek(0)
 
-    stem = dataset.name.replace(" ", "_") or "dataset"
+    stem = safe_filename(dataset.name, fallback="dataset")
     return StreamingResponse(
         buffer,
         media_type="application/zip",
