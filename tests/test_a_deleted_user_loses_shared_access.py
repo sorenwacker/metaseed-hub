@@ -20,7 +20,12 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from metaseed_hub.access import get_dataset_for_editor, get_dataset_for_user, tenant_slug_for
+from metaseed_hub.access import (
+    get_dataset_for_editor,
+    get_dataset_for_user,
+    tenant_slug_for,
+    verify_tenant_access,
+)
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.models import Dataset, DatasetMember, Role, User
 from tests.factories import make_dataset, make_tenant, make_user
@@ -86,3 +91,26 @@ async def test_a_live_member_still_has_access(session: AsyncSession) -> None:
 
     assert (await get_dataset_for_user(dataset.id, session, token)).id == dataset.id
     assert (await get_dataset_for_editor(dataset.id, session, token)).id == dataset.id
+
+
+async def test_a_soft_deleted_user_cannot_pass_the_tenant_gate(session: AsyncSession) -> None:
+    """verify_tenant_access resolved the tenant from the token's subject hash
+    alone and never looked at the User row, so a deleted user with a live OIDC
+    token still passed it — the one ladder helper left outside the fix this
+    module documents."""
+    sub = f"gone-{uuid4().hex[:8]}"
+    tenant = make_tenant(slug=tenant_slug_for(sub))
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant, keycloak_id=sub)
+    session.add(user)
+    await session.commit()
+    token = TokenUser(sub=sub, email=user.email, name="G", roles=[])
+
+    assert (await verify_tenant_access(tenant.id, session, token)).id == tenant.id
+
+    user.soft_delete()
+    await session.commit()
+    with pytest.raises(HTTPException) as denied:
+        await verify_tenant_access(tenant.id, session, token)
+    assert denied.value.status_code == 403

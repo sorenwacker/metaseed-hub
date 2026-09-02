@@ -71,7 +71,9 @@ async def verify_tenant_access(
 ) -> Tenant:
     """Verify user has access to tenant and return it.
 
-    A user has access to a tenant if their keycloak_id matches the tenant slug.
+    A user has access to a tenant if their keycloak_id matches the tenant slug
+    and their account still exists (soft-deleted users are nonexistent to
+    every authorization path).
 
     Args:
         tenant_id: ID of the tenant to verify.
@@ -89,6 +91,12 @@ async def verify_tenant_access(
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # The tenant is derived from the token's subject hash, so it says nothing
+    # about whether the account still exists. A soft-deleted user must not
+    # keep tenant access for as long as their token stays valid.
+    if await live_user(session, user) is None:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Get user's tenant
     user_tenant = await get_tenant_for_user(session, user)
