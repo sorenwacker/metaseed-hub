@@ -55,6 +55,10 @@ The dead cookies are deleted when the issuer explicitly refuses the refresh toke
 
 The header is set on responses from the hub app, which is where authenticated HTML is served. Static assets are mounted on the parent app in `main.py` and keep their own caching.
 
+## Running locally
+
+`make dev` starts the Postgres and Keycloak containers, migrates the database to head, and serves the hub with reload on port 7001. After migrating it runs `alembic check`, which compares the live schema with the models and stops the start if they differ. A database that reports the head revision but lacks a column the models declare, which is what a dump restored over a newer stamp produces, then fails at startup with the missing column named, rather than as an internal server error on whichever page first touches it. Repair such a database by hand with the statement the migration would have run, then start again.
+
 ## Dataset persistence
 
 `dataset.data` (JSONB) stores a `{profile, version, spec_hash, tree: [...]}` envelope. The `{profile, version, tree}` part is produced by metaseed's `MetaseedClient.serialize(format="tree")`; each tree node carries `id`, `entity_type`, `label`, `data`, and `children`.

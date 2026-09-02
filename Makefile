@@ -25,6 +25,7 @@ setup-keycloak:
 
 db-migrate: db-wait
 	uv run alembic upgrade head
+	uv run alembic check
 
 dev: up db-migrate
 	uv run uvicorn metaseed_hub.main:app --reload --host 0.0.0.0 --port 7001
