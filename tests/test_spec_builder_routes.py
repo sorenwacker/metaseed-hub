@@ -26,6 +26,7 @@ from metaseed_hub.models import SpecDraft, Tenant, User
 from metaseed_hub.ui.spec_builder.access import DraftContext, load_state_for_draft
 from metaseed_hub.ui.spec_builder.routes.comment_routes import register_comment_routes
 from metaseed_hub.ui.spec_builder.routes.entity_routes import register_entity_routes
+from metaseed_hub.ui.spec_builder.routes.field_routes import register_field_routes
 from metaseed_hub.ui.spec_builder.routes.rule_routes import register_rule_routes
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from tests.factories import make_spec_draft, make_tenant, make_user
@@ -231,3 +232,86 @@ class TestEntityDeleteCleanup:
         assert all(
             "Sample" not in str(rule.get("applies_to")) for rule in stored["validation_rules"]
         )
+
+
+def _field_form(**overrides: str) -> dict[str, object]:
+    """Every form field of update_field, so a direct call does not hit the
+    FastAPI Form sentinel defaults."""
+    values: dict[str, object] = {
+        "name": "renamed",
+        "field_type": "string",
+        "required": False,
+        "description": "",
+        "ontology_term": "",
+        "ontologies": "",
+        "codename": "",
+        "items": "",
+        "parent_ref": "",
+        "pattern": "",
+        "min_length": "",
+        "max_length": "",
+        "minimum": "",
+        "maximum": "",
+        "min_items": "",
+        "max_items": "",
+        "enum_values": "",
+        "unique_within": "",
+        "reference": "",
+    }
+    values.update(overrides)
+    return values
+
+
+class TestMalformedInputIsAFormErrorNotA500:
+    """Client-controlled route input must never reach the database or the enum
+    parser as a 500 that also leaves the cached draft half-mutated."""
+
+    async def test_an_unknown_field_type_is_a_form_error(self, session: AsyncSession) -> None:
+        draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+        ctx = await _context(session, draft, tenant, owner)
+        endpoint = _endpoint(register_field_routes, "/entity/{entity_name}/field/{idx}", "PUT")
+        response = await endpoint(
+            request=_request("PUT"),
+            entity_name="Study",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(field_type="not-a-type"),
+        )
+        assert response.status_code == 200
+        assert ctx.spec.entities["Study"].fields[0].name == "samples", "the field is untouched"
+        assert ctx.spec.entities["Study"].fields[0].type is FieldType.LIST
+
+    async def test_a_rename_error_does_not_leak_the_new_description(
+        self, session: AsyncSession
+    ) -> None:
+        """update_entity wrote description/ontology_term before validating the
+        rename, so a rejected rename still mutated the cached entity."""
+        draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+        ctx = await _context(session, draft, tenant, owner)
+        endpoint = _endpoint(register_entity_routes, "/entity/{name}", "PUT")
+        response = await endpoint(
+            request=_request("PUT"),
+            name="Study",
+            ctx=ctx,
+            session=session,
+            new_name="Sample",  # already exists -> rejected
+            description="leaked",
+            ontology_term="",
+        )
+        assert response.status_code == 200
+        assert ctx.spec.entities["Study"].description == "study", "description must not change"
+
+
+class TestAMalformedIdIsNotFound:
+    """A UUID column queried with a non-UUID path value raises a DBAPIError 500
+    on Postgres; the address is simply wrong, so it is a 404."""
+
+    async def test_a_non_uuid_draft_id_is_404(self, session: AsyncSession) -> None:
+        from fastapi import HTTPException
+
+        from metaseed_hub.ui.spec_builder.access import require_draft_access
+
+        with pytest.raises(HTTPException) as exc:
+            await require_draft_access(session, "not-a-uuid", "also-not")
+        assert exc.value.status_code == 404

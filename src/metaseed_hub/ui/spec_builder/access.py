@@ -31,6 +31,22 @@ logger = logging.getLogger(__name__)
 _UNSET_REVISION: Any = object()
 
 
+def _is_uuid(value: str) -> bool:
+    """Whether ``value`` is a syntactic UUID.
+
+    ``SpecDraft.id`` and ``Spec.id`` are UUID columns; querying them with a
+    path segment that is not a UUID raises a DBAPIError 500 on Postgres. A
+    malformed id is a wrong address, so callers turn a False here into a 404.
+    """
+    from uuid import UUID
+
+    try:
+        UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
+
+
 class SpecInUseError(Exception):
     """A published spec cannot be withdrawn while datasets are built on it.
 
@@ -127,6 +143,8 @@ async def can_edit_spec(
     Its author, the account it lives in, or anyone it has been shared with in
     an edit-capable role: :func:`metaseed_hub.sharing.role_of` decides.
     """
+    if not _is_uuid(spec_id):
+        return False
     result = await session.execute(
         select(Spec).where(Spec.id == spec_id, Spec.deleted_at.is_(None))
     )
@@ -215,6 +233,8 @@ async def require_draft_access(
         HTTPException: 404 if the draft does not exist, 403 if the caller may
             not access it.
     """
+    if not _is_uuid(draft_id):
+        raise HTTPException(status_code=404, detail="Draft not found")
     result = await session.execute(select(SpecDraft).where(SpecDraft.id == draft_id))
     draft = result.scalar_one_or_none()
     if draft is None:
@@ -242,6 +262,8 @@ async def load_state_for_draft(
     Raises:
         HTTPException 404 if draft not found, 403 if not accessible
     """
+    if not _is_uuid(draft_id):
+        raise HTTPException(status_code=404, detail="Draft not found")
     result = await session.execute(
         select(SpecDraft).options(selectinload(SpecDraft.tenant)).where(SpecDraft.id == draft_id)
     )

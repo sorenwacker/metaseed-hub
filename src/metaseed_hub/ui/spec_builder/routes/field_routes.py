@@ -204,11 +204,15 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 if i != idx and existing.name == new_name:
                     error = f"Field '{new_name}' already exists"
                     break
-        # Parse constraints before mutating the field, so malformed numeric input
-        # surfaces as a friendly form error instead of a 500 and leaves the field
-        # unchanged.
+        # Parse the field type and constraints before mutating the field, so a
+        # client-supplied value outside the enum or malformed numeric input
+        # surfaces as a friendly form error instead of a 500 and leaves the
+        # field unchanged.
+        parsed_type = None
+        parsed_constraints = None
         if not error:
             try:
+                parsed_type = form_data.get_field_type()
                 parsed_constraints = form_data.get_constraints()
             except ValueError as exc:
                 error = str(exc)
@@ -229,7 +233,8 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         field = entity.fields[idx]
         field.name = new_name
-        field.type = form_data.get_field_type()
+        assert parsed_type is not None  # set whenever error is None
+        field.type = parsed_type
         field.required = form_data.required
         field.description = form_data.description.strip()
         field.ontology_term = form_data.ontology_term.strip() or None

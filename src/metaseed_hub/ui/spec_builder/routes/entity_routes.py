@@ -137,9 +137,9 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
             raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
 
         entity = ctx.spec.entities[name]
-        entity.description = description.strip()
-        entity.ontology_term = ontology_term.strip() or None
-
+        # The rename is validated before any field is written: assigning the
+        # description or ontology term first left a rejected rename with the
+        # cached entity already mutated.
         new_name = new_name.strip()
         final_name = name
         if new_name and new_name != name:
@@ -200,6 +200,9 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
                 elif isinstance(rule.applies_to, list) and name in rule.applies_to:
                     rule.applies_to = [new_name if e == name else e for e in rule.applies_to]
 
+        # Applied only now that the rename (if any) succeeded.
+        entity.description = description.strip()
+        entity.ontology_term = ontology_term.strip() or None
         ctx.builder.mark_changed()
         await ctx.save(session)
 
