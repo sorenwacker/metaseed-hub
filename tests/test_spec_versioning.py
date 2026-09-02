@@ -293,6 +293,24 @@ class TestMalformedStoredVersions:
         assert "1.0.0" in body
         assert "MAJOR.MINOR" in body
 
+    def test_a_hostile_stored_version_cannot_script_the_error_page(self) -> None:
+        """The problem text embeds the stored value, and the stored value is
+        whatever the spec author wrote; rendered unescaped it runs in the
+        viewer's browser."""
+        from metaseed_hub.ui.spec_builder.versioning import (
+            SpecVersionError,
+            handle_spec_version_error,
+        )
+
+        response = handle_spec_version_error(
+            _request("GET"),
+            SpecVersionError(version="<script>alert(1)</script>", subject="cinema"),
+        )
+
+        body = response.body.decode()
+        assert "<script>" not in body
+        assert "&lt;script&gt;" in body
+
     def test_the_handler_is_registered_on_the_app(self) -> None:
         from metaseed_hub.main import create_app
         from metaseed_hub.ui.spec_builder.versioning import SpecVersionError

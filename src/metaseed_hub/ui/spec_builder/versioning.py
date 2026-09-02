@@ -21,6 +21,7 @@ See `docs/spec-builder/publishing.md`.
 
 from __future__ import annotations
 
+import html
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -108,7 +109,7 @@ def handle_spec_version_error(request: Request, exc: Exception) -> Response:
     return HTMLResponse(
         "<div class='notification notification-error'>"
         "<strong>This specification's version needs fixing before it can be "
-        f"opened.</strong><p>{exc.problem}</p>"
+        f"opened.</strong><p>{html.escape(exc.problem)}</p>"
         "<p>Correct it under Profile Settings in the draft editor, or ask the "
         "person who published it to.</p>"
         "</div>",
