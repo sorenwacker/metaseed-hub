@@ -111,6 +111,29 @@ async def test_import_into_existing_defaults_untyped_to_root_entity(
     assert [n.entity_type for n in state.nodes_by_id.values()] == ["Investigation"]
 
 
+async def test_import_of_a_top_level_list_is_not_silently_dropped(
+    session: AsyncSession,
+) -> None:
+    """A file whose top level is a list of entities -- the natural shape of an
+    entity export -- only matched the isinstance(data, dict) branch, so it
+    imported nothing and still reported success."""
+    dataset, token = await _dataset_with_caller(session)
+    payload = yaml.safe_dump(
+        [
+            {"_type": "Investigation", "title": "First"},
+            {"_type": "Investigation", "title": "Second"},
+        ]
+    ).encode()
+    response = await dataset_import_into_existing(
+        _csrf_request(), dataset.id, session, token, file=_upload(payload, "list.yaml")
+    )
+    assert response.status_code == 200
+    assert "imported 2" in response.body.decode().lower()
+    await session.refresh(dataset)
+    state = await ensure_dataset_facade(dataset, session)
+    assert len(state.nodes_by_id) == 2
+
+
 async def test_parse_error_is_escaped(session: AsyncSession) -> None:
     """Parse exceptions embed file excerpts, so their text must be escaped."""
     dataset, token = await _dataset_with_caller(session)

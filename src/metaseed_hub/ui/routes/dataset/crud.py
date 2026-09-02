@@ -1,6 +1,7 @@
 """Dataset create, import, delete, and example-loading routes."""
 
 import copy
+import json
 import logging
 from html import escape
 from json import JSONDecodeError
@@ -760,10 +761,12 @@ async def dataset_delete(
     except Exception as e:
         logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)
         await session.rollback()
-        error_msg = str(e).replace('"', '\\"')
+        # json.dumps, not f-string interpolation: the exception text is not
+        # ours to shape, and hand-escaping only quotes broke the JSON on a
+        # backslash or a newline. The detail stays in the log, not the header.
         response = Response(status_code=200)
-        response.headers["HX-Trigger"] = (
-            f'{{"showToast": {{"message": "Delete failed: {error_msg}", "type": "error"}}}}'
+        response.headers["HX-Trigger"] = json.dumps(
+            {"showToast": {"message": "Delete failed. The error has been logged.", "type": "error"}}
         )
         return response
 

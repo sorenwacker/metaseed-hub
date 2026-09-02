@@ -97,6 +97,30 @@ async def test_dataset_delete_soft_deletes_and_keeps_related_rows(
     assert await session.get(Comment, comment_id) is not None
 
 
+async def test_a_delete_failure_emits_valid_json_in_the_toast_header(
+    session: AsyncSession,
+) -> None:
+    """The failure toast was f-string-interpolated with only quotes escaped, so
+    a backslash or newline in the error made the HX-Trigger header invalid JSON.
+    It is json.dumps of a fixed message now; the detail stays in the log."""
+    import json
+    from unittest.mock import patch
+
+    token, db_user = await _caller_with_tenant(session)
+    tenant = await session.get(Tenant, db_user.tenant_id)
+    dataset = make_dataset(tenant=tenant, name="ds-fail")
+    session.add(dataset)
+    await session.commit()
+    boom = RuntimeError('back\\slash "quote"')
+    with patch.object(type(dataset), "soft_delete", side_effect=boom):
+        response = await crud_module.dataset_delete(
+            request=_csrf_request(), dataset_id=dataset.id, session=session, user=token
+        )
+    payload = json.loads(response.headers["HX-Trigger"])  # must not raise
+    assert payload["showToast"]["type"] == "error"
+    assert "back" not in payload["showToast"]["message"], "the raw error must not reach the header"
+
+
 # --- H2: get_dataset_for_user excludes soft-deleted datasets -----------------
 
 

@@ -809,7 +809,11 @@ async def dataset_import_into_existing(
                 status_code=400,
             )
 
-        if isinstance(data, dict):
+        if isinstance(data, list):
+            # A bare list of entities, the natural shape of an entity export;
+            # without this branch it matched nothing and imported silently zero.
+            entities_by_type = group_entities_by_type(data, root_entity)
+        elif isinstance(data, dict):
             if "entities" in data:
                 entities_by_type = group_entities_by_type(data["entities"], root_entity)
             else:
