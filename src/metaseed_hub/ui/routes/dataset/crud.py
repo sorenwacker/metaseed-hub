@@ -546,7 +546,10 @@ async def dataset_import_source(
     if not client.serialize().get("entities"):
         return HTMLResponse(
             f"<div class='notification error'>Nothing was found for "
-            f"'{escape(value.strip())}'. Check the identifier and try again.</div>",
+            f"'{escape(value.strip())}'. The archive returned no records of the kind "
+            "this importer reads: either the identifier is wrong, or the record "
+            "exists but holds no such data (ENA imports sequencing runs, so an "
+            "assembly project with no runs imports as nothing).</div>",
             status_code=404,
         )
 

@@ -36,6 +36,8 @@ The hub fetches the public metadata and builds the dataset's entities from it. M
 
 While the fetch runs, the control shows an *Importing* indicator and its button is disabled, so a second click cannot start a second import. The fetch runs on a worker thread, not on the request loop: an archive that answers slowly holds up that one import, not every other page the hub is serving. Each importer gives up after its own timeout (30 seconds for ENA) and the control then reports the failure in place.
 
+An identifier the archive resolves to no records of the kind the importer reads is reported as such, and the dataset is left untouched. This is not only a mistyped identifier: a record can exist and still hold nothing to import. The ENA importer reads sequencing runs, so a genome assembly project such as `PRJNA10719`, which ENA lists but which has no runs, imports as nothing.
+
 The control appears only while the dataset has no entities, and the import is refused if any exist, because it replaces the whole entity tree rather than merging into it. To pull a repository record into a dataset you have already started, create a new dataset for it instead.
 
 Which repositories are on offer comes from metaseed's adapter registry, so the list above grows when metaseed adds an importer, without a hub change.

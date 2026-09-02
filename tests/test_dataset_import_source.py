@@ -190,6 +190,9 @@ async def test_an_import_that_found_nothing_says_so(session: AsyncSession) -> No
     assert response.status_code == 404
     body = response.body.decode().lower()
     assert "nothing" in body or "no data" in body or "not found" in body
+    # Reported again with a real accession: PRJNA10719 exists at ENA but is an
+    # assembly project with no runs, and "check the identifier" was wrong advice.
+    assert "no runs" in body or "holds no" in body or "of the kind" in body
 
 
 async def test_an_import_that_found_nothing_leaves_the_dataset_alone(
