@@ -1,12 +1,12 @@
 <!-- Overview Panel with Tabs -->
 <div class="dataset-overview">
-    <div class="overview-header">
-        <p class="overview-hint">Select an entity from the sidebar to edit{% if not tree_data %}, or create one using the buttons above{% endif %}.</p>
-    </div>
-
     <!-- Tab Navigation -->
     <div class="overview-tabs">
-        <button class="overview-tab active" data-tab="history" onclick="switchOverviewTab('history')">
+        <button class="overview-tab active" data-tab="overview" onclick="switchOverviewTab('overview')">
+            Entities
+            {% if overview.rows %}<span class="tab-count">{{ overview.rows|length }}</span>{% endif %}
+        </button>
+        <button class="overview-tab" data-tab="history" onclick="switchOverviewTab('history')">
             History
         </button>
         <button class="overview-tab" data-tab="comments" onclick="switchOverviewTab('comments')">
@@ -14,8 +14,37 @@
         </button>
     </div>
 
+    {# Entities tab: what is in the dataset, before any entity is selected.
+       Each row opens the same form the sidebar tree does. #}
+    <section class="overview-tab-content active" id="tab-overview" data-testid="entity-overview">
+        {% if overview.rows %}
+        <ul class="entity-overview-counts">
+            {% for entity_type, count in overview.counts %}
+            <li><span class="entity-type-badge">{{ entity_type }}</span> <strong data-testid="entity-count-{{ entity_type }}">{{ count }}</strong></li>
+            {% endfor %}
+        </ul>
+        <table class="data-table entity-overview-table">
+            <thead><tr><th>Type</th><th>Entity</th></tr></thead>
+            <tbody>
+            {% for row in overview.rows %}
+            <tr>
+                <td><span class="entity-type-badge">{{ row.entity_type }}</span></td>
+                <td style="padding-left: calc(var(--space-md) + {{ row.depth }} * var(--space-lg))">
+                    <a href="#" class="entity-name"
+                       hx-get="/hub/datasets/{{ dataset.id }}/entity/{{ row.id }}"
+                       hx-target="#editor">{{ row.label }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="overview-hint">No entities yet. Create one with the buttons in the sidebar, or import a file or a repository record.</p>
+        {% endif %}
+    </section>
+
     <!-- History Tab -->
-    <div class="overview-tab-content active" id="tab-history">
+    <div class="overview-tab-content" id="tab-history">
         <div id="versions-list"
              hx-get="/hub/datasets/{{ dataset.id }}/versions"
              hx-trigger="load"

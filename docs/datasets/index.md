@@ -21,9 +21,8 @@ The editor has three areas:
 
 | Area | Contents |
 |------|----------|
-| Left sidebar | The **entity tree** and **+ &lt;Entity&gt;** buttons for entity types not yet added |
-| Center | The form for the entity currently selected |
-| Right panel | **Overview**, **History**, **Comments**, and **Sharing** tabs |
+| Left sidebar | **+ &lt;Entity&gt;** buttons for entity types not yet added, the dataset actions, and two tabs: **Entities** (the entity tree) and **Sharing** |
+| Center | The [entity overview](entities.md#the-entity-overview) with **History** and **Comments** tabs when no entity is selected; otherwise the form for the selected entity |
 
 From the sidebar you can also **Validate** the dataset, open the **Graph** view, **Import** into the dataset, **Export** it, and **Delete** it.
 

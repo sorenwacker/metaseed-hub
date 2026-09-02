@@ -2,8 +2,9 @@
    specification drafts and published specifications: the rules are the same,
    so the interface is too. #}
 {# The tab badge lives outside this panel; it is updated out of band on every
-   swap, so it never shows a count from page load after a share. #}
-<span id="sharing-count" class="tab-badge" hx-swap-oob="true" data-testid="sharing-count">{{ members|length }}</span>
+   swap, so it never shows a count from page load after a share. It counts the
+   other people: the viewer's own row made every dataset look shared. #}
+<span id="sharing-count" class="tab-badge" hx-swap-oob="true" data-testid="sharing-count">{{ shared_with }}</span>
 {% if error %}
 <div class="alert alert-error" data-testid="sharing-error">{{ error }}</div>
 {% endif %}

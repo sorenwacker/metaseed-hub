@@ -16,7 +16,7 @@ Datasets, specification drafts and published specifications are shared the same 
 
 The person who creates a dataset, a draft, or a published specification is its first owner, recorded as a membership the moment it is created, on every path: the web interface, the REST API, the MCP tools, a hub push from metaseed, and an import. Ownership is a membership like any other, so it can be handed over. Every page, the REST API, and the MCP tools read one rule for who may do what: an explicit membership decides; failing that, the creator owns the item; failing that, the person whose account the item lives in owns it. An account belongs to one person, so that last rule is the item's home, not a group grant. Datasets created before memberships were recorded at creation were given their account's user as owner when the rule arrived; where that user already held a lesser role on the dataset, the role was raised to owner rather than duplicated.
 
-Only an owner can add someone, change a role, or remove access. Anyone can remove themselves, which is how you leave something shared with you.
+The number on the **Sharing** tab is how many other people have access: it leaves you out, so an item nobody else can reach shows no number. Only an owner can add someone, change a role, or remove access. Anyone can remove themselves, which is how you leave something shared with you.
 
 ### Handing something over
 

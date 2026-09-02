@@ -6,6 +6,10 @@ Entities are the structural records inside a dataset — for example *Investigat
 
 The left sidebar shows the dataset's entities as a hierarchy. Click an entity to open its form in the center pane. Entity types that the profile allows but you have not added yet appear as **+ &lt;Entity&gt;** buttons in the sidebar.
 
+## The entity overview
+
+Opening a dataset shows its entities in the center pane before any is selected: a count per entity type, then every entity as a link in tree order with its type. Clicking a link opens that entity's form, the same as clicking it in the sidebar. A dataset with no entities says so and points to the sidebar buttons and the import controls. The overview sits in an **Entities** tab beside **History** and **Comments**; it is the tab that is open on arrival.
+
 ## Adding an entity
 
 1. Click **+ &lt;Entity&gt;** in the sidebar (for a root entity) or the add control on a parent entity (for a nested one).

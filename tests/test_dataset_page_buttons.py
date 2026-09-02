@@ -10,43 +10,14 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.main import create_app
-from tests.conftest import _test_database_url
-from tests.factories import make_dataset, make_tenant, make_user
-
-
-@pytest.fixture
-async def app_db(session):
-    """The app-wide connection the routes open their own sessions from."""
-    from metaseed_hub.database import db
-
-    await db.connect(_test_database_url())
-    yield
-    await db.disconnect()
 
 
 def _user() -> TokenUser:
     return TokenUser(sub="kc-1", email="u@example.org", name="U", roles=[], entitlements=[])
-
-
-@pytest.fixture
-async def ena_dataset(session: AsyncSession):
-    from metaseed_hub.ui.dependencies import tenant_slug_for
-
-    tenant = make_tenant(slug=tenant_slug_for("kc-1"))
-    session.add(tenant)
-    await session.flush()
-    user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
-    session.add(user)
-    dataset = make_dataset(tenant=tenant, profile="ena", version="1.0")
-    session.add(dataset)
-    await session.commit()
-    return dataset
 
 
 def _page(dataset_id: str) -> str:

@@ -4,6 +4,7 @@ import os
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -142,3 +143,30 @@ def app_templates() -> Any:
         ]
     )
     return templates
+
+
+@pytest.fixture
+async def app_db(session):
+    """The app-wide connection the routes open their own sessions from."""
+    from metaseed_hub.database import db
+
+    await db.connect(_test_database_url())
+    yield
+    await db.disconnect()
+
+
+@pytest.fixture
+async def ena_dataset(session):
+    """An empty ena dataset in the account of the user rendered-page tests sign in as."""
+    from metaseed_hub.ui.dependencies import tenant_slug_for
+    from tests.factories import make_dataset, make_tenant, make_user
+
+    tenant = make_tenant(slug=tenant_slug_for("kc-1"))
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
+    session.add(user)
+    dataset = make_dataset(tenant=tenant, profile="ena", version="1.0")
+    session.add(dataset)
+    await session.commit()
+    return dataset

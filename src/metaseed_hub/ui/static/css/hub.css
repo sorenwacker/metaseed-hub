@@ -6133,6 +6133,28 @@ a.start-option-card:hover {
     flex: 1;
 }
 
+/* Entity overview: counts per type, then every entity in tree order */
+.entity-overview-counts {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-lg);
+    margin: 0 0 var(--space-md);
+    padding: 0;
+    font-size: 0.875rem;
+    color: var(--clr-ink-light);
+}
+
+.entity-overview-table .entity-name {
+    color: var(--clr-ink);
+    text-decoration: none;
+}
+
+.entity-overview-table .entity-name:hover {
+    color: var(--clr-primary);
+    text-decoration: underline;
+}
+
 /* Overview Tabs */
 .overview-tabs {
     display: flex;

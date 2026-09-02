@@ -97,6 +97,7 @@ async def _panel(
         "partials/members_panel.html",
         {
             "members": members,
+            "shared_with": sum(1 for m in members if str(m.user_id) != str(viewer_id)),
             "kind": resource.kind,
             "resource_id": resource_id,
             "viewer_id": viewer_id,

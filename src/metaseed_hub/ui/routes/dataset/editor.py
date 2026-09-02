@@ -182,6 +182,7 @@ async def dataset_editor(
             "state": ctx["state"],
             "root_types": root_types,
             "tree_data": ctx["tree_data"],
+            "overview": entity_overview(ctx["tree_data"]),
             "entity_descriptions": ctx["entity_descriptions"],
             "seek_supported": profile_supports_seek(dataset.profile, dataset.version),
             "connection": await connection_for_user(session, user),
@@ -251,6 +252,37 @@ async def dataset_root_buttons(
     )
 
 
+def entity_overview(tree_data: list[dict[str, Any]]) -> dict[str, Any]:
+    """Flatten the entity tree for the overview the center pane opens on.
+
+    Args:
+        tree_data: Nested tree as ``get_tree_data_from_nodes`` builds it.
+
+    Returns:
+        ``counts``: ``[(entity_type, n), ...]`` in order of first appearance;
+        ``rows``: every entity in tree order with its depth, for indentation.
+    """
+    counts: dict[str, int] = {}
+    rows: list[dict[str, Any]] = []
+
+    def walk(items: list[dict[str, Any]], depth: int) -> None:
+        for item in items:
+            entity_type = item.get("entity_type") or "Entity"
+            counts[entity_type] = counts.get(entity_type, 0) + 1
+            rows.append(
+                {
+                    "id": item.get("id"),
+                    "label": item.get("label") or "Unnamed",
+                    "entity_type": entity_type,
+                    "depth": depth,
+                }
+            )
+            walk(item.get("children") or [], depth + 1)
+
+    walk(tree_data, 0)
+    return {"counts": list(counts.items()), "rows": rows}
+
+
 @router.get("/{dataset_id}/overview", response_class=HTMLResponse)
 async def dataset_overview(
     request: Request,
@@ -271,6 +303,7 @@ async def dataset_overview(
         context={
             "dataset": dataset,
             "tree_data": tree_data,
+            "overview": entity_overview(tree_data),
         },
     )
 
