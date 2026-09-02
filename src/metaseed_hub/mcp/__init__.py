@@ -727,11 +727,14 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
 
             # The MCP caller is already a database User; save_dataset_state only
             # reads .keycloak_id off it, which both user shapes carry.
-            # A legacy raw payload (no envelope) is about to be migrated to the
-            # canonical form, and nothing has ever versioned it: snapshot it
-            # first or the overwrite is unrecoverable. Canonically-stored data
-            # needs no snapshot — save_dataset_state versions each new state.
-            if dataset.data and "tree" not in dataset.data and data != dataset.data:
+            # Whatever is stored is about to be replaced: snapshot it first or
+            # the overwrite is unrecoverable. This must not depend on the
+            # envelope — the entity tools write the canonical tree straight
+            # into the row and version only the state before THEIR edit, so
+            # "canonical data is already versioned" was false and one save
+            # erased a tool-built state for good. An occasional duplicate
+            # version is the acceptable cost of never losing one.
+            if dataset.data and data != dataset.data:
                 await _snapshot(session, dataset, user)
 
             await save_dataset_state(session, dataset, state, user)

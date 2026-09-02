@@ -137,6 +137,41 @@ class TestHardening:
         ]
         assert "keep me" in titles
 
+    async def test_a_state_built_by_entity_tools_survives_an_overwrite(
+        self, server, session: AsyncSession
+    ) -> None:
+        """The entity tools write the canonical tree straight into the row and
+        version only the state BEFORE their edit, while save_dataset skipped
+        its own snapshot for canonical payloads on the premise that every
+        canonical state was already versioned. A state built by create_entity
+        therefore existed only in the row, and one save_dataset call erased it
+        with no way back."""
+        from sqlalchemy import select
+
+        from metaseed_hub.database import db
+        from metaseed_hub.models import DatasetVersion
+
+        tenant, _user, secret, _token = await _user_with_token(
+            session, slug="hard0003", email="h3@example.org"
+        )
+        session.add(
+            make_dataset(tenant=tenant, name="built-by-tools", profile="miappe", version="1.1")
+        )
+        await session.commit()
+        create = await _tool(server, "create_entity")
+        save = await _tool(server, "save_dataset")
+        with _calling_with(secret):
+            await create("built-by-tools", "Investigation", {"title": "only in the row"})
+            await save("built-by-tools", {"entities": []})
+        async with db.session_factory() as check:
+            versions = (await check.execute(select(DatasetVersion))).scalars().all()
+        titles = [
+            e.get("data", {}).get("title") or e.get("title")
+            for v in versions
+            for e in (v.data.get("tree") or v.data.get("entities") or [])
+        ]
+        assert "only in the row" in titles, "the pre-overwrite state is not recoverable"
+
     async def test_an_unchanged_save_does_not_pile_up_versions(
         self, server, session: AsyncSession
     ) -> None:
