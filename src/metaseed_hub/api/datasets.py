@@ -223,8 +223,12 @@ async def create_dataset(
     # a profile it has not pushed yet gets the refusal, not a broken record.
     if dataset_data.data:
         dataset.data = await _validated_data(dataset, dataset_data.data, session)
-    session.add(dataset)
+    # Resolve the creator before the dataset is pending: live_user runs a query
+    # that would autoflush a half-built dataset, and if that flush fails (an
+    # FK, a name clash) the whole transaction aborts, poisoning the session for
+    # every later request that shares it.
     creator = await live_user(session, _user)
+    session.add(dataset)
     await record_creator(session, resource_for("dataset"), dataset, creator.id if creator else None)
     await session.commit()
     await session.refresh(dataset)
