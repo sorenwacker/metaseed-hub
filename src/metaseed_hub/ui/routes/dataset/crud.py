@@ -13,6 +13,7 @@ from metaseed.adapters import Action  # lightweight by design: no plugin imports
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
+from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.access import live_user
 from metaseed_hub.models import (
@@ -422,7 +423,10 @@ async def create_dataset_from_accession(
         LookupError: If no accession importer is registered for ``profile``.
         ValueError: If the importer resolved ``accession`` to nothing.
     """
-    client = run_source_import(profile, accession)
+    # The importer is blocking HTTP against a public archive that can take
+    # many seconds to answer. On the event loop that stalled every other
+    # request the hub was serving for the whole fetch.
+    client = await run_in_threadpool(run_source_import, profile, accession)
     if not client.serialize().get("entities"):
         # Creating an empty dataset named after an accession that resolved to
         # nothing leaves the user to discover the failure themselves. Distinct
@@ -515,7 +519,8 @@ async def dataset_import_source(
         )
 
     try:
-        client = run_source_import(dataset.profile, value.strip())
+        # Off the event loop: see create_dataset_from_accession.
+        client = await run_in_threadpool(run_source_import, dataset.profile, value.strip())
     except LookupError:
         # dataset.profile is a draft's name for spec-backed datasets, so it is
         # text its author chose. Escaped like _import_failure_message does.

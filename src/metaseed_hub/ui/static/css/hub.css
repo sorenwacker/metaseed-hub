@@ -6380,6 +6380,35 @@ a.start-option-card:hover {
     to { transform: rotate(360deg); }
 }
 
+/* Source-repository import: shown by htmx only while the request is in flight
+   (hx-indicator), so a slow archive is visibly "working" rather than silent. */
+.import-source-progress {
+    display: none;
+    margin-top: var(--space-xs);
+    color: var(--clr-ink-light);
+    font-size: 0.75rem;
+}
+
+.import-source-progress.htmx-request {
+    display: block;
+}
+
+.import-source-progress .loading-text {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.import-source-progress .loading-text::before {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--clr-border);
+    border-top-color: var(--clr-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 .comments-list {
     margin-bottom: var(--space-md);
     min-height: 60px;

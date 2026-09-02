@@ -66,6 +66,8 @@
                   hx-post="/hub/datasets/{{ dataset.id }}/import-source"
                   hx-swap="innerHTML"
                   hx-target="#import-source-result"
+                  hx-indicator="#import-source-progress"
+                  hx-disabled-elt="find button"
                   data-testid="form-import-source">
                 <label for="import-source-value">{{ import_option.input_label }}</label>
                 <input type="text"
@@ -76,6 +78,9 @@
                        required>
                 <button type="submit" class="btn btn-sm" data-testid="btn-import-source">{{ import_option.label }}</button>
             </form>
+            <div id="import-source-progress" class="htmx-indicator import-source-progress" role="status" aria-live="polite">
+                <span class="loading-text">Importing&hellip; fetching metadata from the archive.</span>
+            </div>
             <div id="import-source-result"></div>
             {% endif %}
             {% if export_options %}

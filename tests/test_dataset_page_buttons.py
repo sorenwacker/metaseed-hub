@@ -72,3 +72,18 @@ async def test_another_profiles_exporter_is_not_offered(ena_dataset, app_db) -> 
     # offered the PRIDE exporter.
     html = _page(ena_dataset.id)
     assert 'data-testid="btn-export-pride"' not in html
+
+
+async def test_the_source_import_shows_progress_and_blocks_a_second_click(
+    ena_dataset, app_db
+) -> None:
+    """Reported: no sign the ENA import was running, so the button got clicked
+    again. htmx toggles the indicator for the request's duration and disables
+    the button, both declared on the form."""
+    html = _page(ena_dataset.id)
+    assert 'hx-indicator="#import-source-progress"' in html
+    assert 'id="import-source-progress"' in html
+    assert 'data-testid="form-import-source"' in html
+    form_start = html.index('data-testid="form-import-source"')
+    form = html[html.rfind("<form", 0, form_start) : html.index("</form>", form_start)]
+    assert "hx-disabled-elt" in form

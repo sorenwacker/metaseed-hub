@@ -353,3 +353,29 @@ async def _db_user(session: AsyncSession, token) -> object:
 
     found = await session.execute(select(User).where(User.keycloak_id == token.keycloak_id))
     return found.scalar_one()
+
+
+async def test_the_importer_runs_off_the_event_loop(session: AsyncSession) -> None:
+    """Reported: importing an ENA study froze the whole hub for its duration.
+
+    The importer is synchronous HTTP against a public archive that can take
+    many seconds to answer. Called on the event loop it stalls every other
+    request; it has to run on a worker thread.
+    """
+    import threading
+
+    dataset, token = await _dataset(session)
+    loop_thread = threading.get_ident()
+    seen: list[int] = []
+
+    def _records_thread(accession: str, **_kw: object) -> MetaseedClient:
+        seen.append(threading.get_ident())
+        return _fake_pride_importer(accession)
+
+    with patch("metaseed.pride.import_accession", _records_thread):
+        response = await dataset_import_source(
+            _csrf_request(), dataset.id, session, token, value="PXD000001"
+        )
+
+    assert response.status_code == 200
+    assert seen and seen[0] != loop_thread, "the importer ran on the event loop"

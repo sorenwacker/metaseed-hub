@@ -161,3 +161,24 @@ async def test_save_dataset_state_records_version_author(session):
     )
     assert versions, "a version should be created"
     assert versions[0].created_by_id == db_user.id
+
+
+async def test_the_importer_runs_off_the_event_loop(session):
+    """Same fix as the in-dataset import: the archive fetch is blocking HTTP and
+    must not stall the loop that serves every other request."""
+    import threading
+
+    tenant = await _add(session, make_tenant())
+    loop_thread = threading.get_ident()
+    seen: list[int] = []
+
+    def _records_thread(accession, **_kw):
+        seen.append(threading.get_ident())
+        return _fake_importer(accession)
+
+    with patch("metaseed.metabolights.import_accession", _records_thread):
+        await create_dataset_from_accession(
+            session, tenant.id, "imported", "metabolights", "MTBLS0000"
+        )
+
+    assert seen and seen[0] != loop_thread, "the importer ran on the event loop"
