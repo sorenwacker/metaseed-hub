@@ -120,6 +120,24 @@ async def test_pushing_a_revised_profile_updates_the_callers_draft_in_place(
     assert len((await session.execute(select(SpecDraft))).scalars().all()) == 1
 
 
+async def test_pushing_a_bumped_version_updates_the_draft_not_a_500(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    """Draft names are unique per user; the lookup keyed on (name, version)
+    missed the existing draft when the version was bumped, and the insert then
+    hit the unique index as an unhandled IntegrityError."""
+    import re
+
+    bumped = re.sub(r"^version:.*$", 'version: "2.0"', PROFILE_YAML, flags=re.MULTILINE)
+    async with _build_client(session, caller) as client:
+        first = await client.post("/api/specs", json={"yaml": PROFILE_YAML})
+        second = await client.post("/api/specs", json={"yaml": bumped})
+    assert first.status_code == 201, first.text
+    assert second.status_code == 200, second.text
+    draft = (await session.execute(select(SpecDraft))).scalar_one()
+    assert draft.version == "2.0"
+
+
 async def test_publishing_is_explicit_and_lands_for_everyone(
     session: AsyncSession, caller: TokenUser
 ) -> None:

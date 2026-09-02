@@ -200,20 +200,27 @@ async def _push_draft(
     digest = content_hash(spec)
     state = SpecBuilderState()
     state.spec = spec
+    # By name alone: draft names are unique per (tenant, user), so matching on
+    # the version as well missed the existing draft when a push bumped it, and
+    # the insert below then hit the unique index as an unhandled 500.
     draft = (
         await session.execute(
             select(SpecDraft).where(
                 SpecDraft.user_id == caller.id,
                 SpecDraft.name == spec.name,
-                SpecDraft.version == spec.version,
             )
         )
     ).scalar_one_or_none()
     if draft is not None:
         current = _draft_spec(draft)
-        if current is not None and content_hash(current) == digest:
+        if (
+            current is not None
+            and draft.version == spec.version
+            and content_hash(current) == digest
+        ):
             response.status_code = status.HTTP_200_OK
             return _draft_summary(draft)
+        draft.version = spec.version
         draft.spec_data = state.to_dict()
         await session.commit()
         await session.refresh(draft)
