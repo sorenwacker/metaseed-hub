@@ -4,7 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.49.0] - 260903
+
 ### Fixed
+- **Security and correctness fixes from a full codebase review** (see docs/REVIEW.md):
+  - Pushing a profile whose draft exists under a bumped version now updates the draft instead of a 500; the lookup matches by name.
+  - A dataset state built by the MCP entity tools survives a `save_dataset` overwrite: the previous contents are snapshotted before every differing write.
+  - The spec-version error page, and the adapter-export download filename, no longer carry unescaped or unsanitised user text.
+  - `verify_tenant_access` treats a soft-deleted account as nonexistent, closing the one credential path that outlived a deleted user on the REST API.
+  - Malformed spec-builder route input is a form error or a 404, never a 500 that leaves the cached draft half-mutated (unknown field type, rename clash, non-UUID id).
+  - A dataset delete failure emits valid JSON in its toast header; an import file whose top level is a list of entities is no longer silently dropped.
+  - Imports order parent entity types before the types they contain, and report nested children they could not create instead of swallowing them.
+  - The draft-save conflict guard locks the row, so two concurrent saves cannot both pass the check; unpublishing a specification dedupes the draft name so it cannot collide.
+  - Shared rules used once rather than forked: the caller and tenant lookups, the identifier-inference rule, and the add-field constraint-completeness guard.
 - A Matomo image bump now also updates Matomo itself: the image keeps the application in a volume its entrypoint refreshes only on first install, so a recreated container served the old application under the new tag. The container-update script syncs the image's files over the volume and runs the schema update whenever the versions differ.
 
 ## [0.48.0] - 260831
