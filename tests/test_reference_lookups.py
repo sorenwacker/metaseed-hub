@@ -48,10 +48,15 @@ class TestTheTableOffersTheLookup:
 
         assert 'data-lookup-url="/hub/datasets/{{ dataset_id }}/lookup/' in markup
 
-    def test_only_reference_cells_become_lookups(self) -> None:
+    def test_reference_and_ontology_cells_become_lookups(self) -> None:
+        """A cell gets the lookup-input class, and so the autocomplete, when the
+        column names another entity (a reference) or is an ontology term."""
         markup = TABLE.read_text()
 
-        assert "{% if reference_fields.get(col) %} lookup-input{% endif %}" in markup
+        assert (
+            "{% if reference_fields.get(col) or col in ontology_fields %} lookup-input{% endif %}"
+            in markup
+        )
 
 
 class TestTheEndpointIsScoped:
