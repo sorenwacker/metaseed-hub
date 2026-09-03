@@ -207,6 +207,7 @@ def _build_single_entity_table(
         "nested_entity_type": item_type,
         "required_columns": list(required_columns),
         "reference_fields": _reference_fields(helper),
+        "ontology_fields": _ontology_fields(helper),
         "is_single_entity": True,
     }
 
@@ -295,7 +296,24 @@ def _build_entity_list_table(
         "inherited_columns": list(inherited_columns),
         "required_columns": list(required_columns),
         "reference_fields": _reference_fields(helper),
+        "ontology_fields": _ontology_fields(helper),
     }
+
+
+def _ontology_fields(helper: Any) -> dict[str, str]:
+    """Column -> its ontologies (comma-joined, possibly empty) for ontology columns.
+
+    An ``ontology_term`` field gets the same ontology autocomplete in a table
+    cell that it gets in the full entity form; without this the cell was a plain
+    text box and the lookup the form offers was lost. The value is the ontology
+    prefixes to search, empty when the field names none (search all).
+    """
+    fields: dict[str, str] = {}
+    for fname in getattr(helper, "all_fields", []):
+        info = helper.field_info(fname)
+        if info.get("type") == "ontology_term":
+            fields[fname] = ",".join(info.get("ontologies") or [])
+    return fields
 
 
 def _reference_fields(helper: Any) -> dict[str, dict[str, str]]:

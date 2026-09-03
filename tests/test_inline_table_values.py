@@ -87,3 +87,49 @@ class TestPrimitiveDeleteRerenders:
         assert 'hx-target="#inline-table-' in button
         assert 'hx-swap="outerHTML"' in button
         assert 'hx-swap="delete"' not in button
+
+
+class _OntologyHelper:
+    """A helper whose one field is an ontology_term with declared ontologies."""
+
+    all_fields = ["trait_term"]
+
+    def field_info(self, name: str) -> dict[str, Any]:
+        return {"type": "ontology_term", "ontologies": ["to", "co_321"], "required": False}
+
+
+def test_an_ontology_column_carries_its_lookup_in_the_table() -> None:
+    """An ontology field in a table cell must get the form's ontology lookup, not
+    a plain text box; the table exposes the ontology columns so the template can
+    wire lookup.js to them."""
+    child = _Node("n-1", "ObservedVariable", _Instance({"trait_term": "TO:0001"}))
+    parent = _Node("p-1", "Study", _Instance({}), children=[child])
+    table = _build_entity_list_table(parent, "variables", "ObservedVariable", _OntologyHelper())
+    assert table["ontology_fields"] == {"trait_term": "to,co_321"}
+
+
+def test_a_new_row_ontology_cell_is_wired_for_lookup() -> None:
+    """The "+ Add Row" builder produced plain inputs; an ontology cell in a new
+    row now carries the ontology lookup attributes too."""
+    from metaseed.ui.state import TreeNode
+
+    from metaseed_hub.ui.routes.table_rows import _build_entity_row_html
+
+    node = TreeNode(
+        id="n-1", entity_type="ObservedVariable", instance=None, label="v", parent_id="p-1"
+    )
+    html = _build_entity_row_html(
+        dataset_id="ds-1",
+        field_name="variables",
+        row_idx=0,
+        child_node=node,
+        nested_type="ObservedVariable",
+        columns=["trait_term"],
+        column_types={"trait_term": "ontology_term"},
+        inherited_cols=set(),
+        instance_data={},
+        column_ontologies={"trait_term": "to,co_321"},
+    )
+    assert 'data-lookup-type="ontology"' in html
+    assert "lookup-input" in html
+    assert 'data-ontologies="to,co_321"' in html

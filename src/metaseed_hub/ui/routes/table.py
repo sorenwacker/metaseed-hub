@@ -192,6 +192,8 @@ async def _add_entity_list_row(
             if ref_type == parent_type_lower:
                 inherited_cols.add(col)
 
+    from metaseed_hub.ui.helpers.tables import _ontology_fields
+
     html = _build_entity_row_html(
         dataset_id,
         field_name,
@@ -202,6 +204,7 @@ async def _add_entity_list_row(
         column_types,
         inherited_cols,
         instance_data,
+        column_ontologies=_ontology_fields(nested_helper),
     )
 
     response = HTMLResponse(html)

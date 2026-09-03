@@ -164,6 +164,7 @@ def _build_entity_row_html(
     column_types: dict[str, str],
     inherited_cols: set[str],
     instance_data: dict[str, Any],
+    column_ontologies: dict[str, str] | None = None,
 ) -> str:
     """Build HTML for a new entity table row.
 
@@ -177,6 +178,8 @@ def _build_entity_row_html(
         column_types: Map of column names to types.
         inherited_cols: Set of columns inherited from parent.
         instance_data: Data from the entity instance.
+        column_ontologies: Ontology columns mapped to their ontology prefixes,
+            so a new row's ontology cells get the same lookup the form gives.
 
     Returns:
         HTML string for the table row.
@@ -214,11 +217,26 @@ def _build_entity_row_html(
             display_value = safe_cell_value or "Click to edit"
             placeholder_class = " placeholder" if not cell_value else ""
             post_url = f"/hub/datasets/{dataset_id}/table/{child_node.id}/cell"
+            ontologies = (column_ontologies or {}).get(col)
+            if ontologies is not None:
+                # An ontology cell gets the form's ontology autocomplete: the
+                # lookup-input class and data-lookup-type wire lookup.js to it.
+                data_onto = f' data-ontologies="{escape(ontologies)}"' if ontologies else ""
+                input_html = (
+                    f'<input type="text" class="cell-input lookup-input" name="{col}" '
+                    f'value="{safe_cell_value}" data-lookup-type="ontology"{data_onto} '
+                    f'autocomplete="off" placeholder="Search ontologies..." '
+                    f'hx-post="{post_url}" hx-trigger="change, blur" hx-swap="none">'
+                )
+            else:
+                input_html = (
+                    f'<input type="{input_type}" class="cell-input" name="{col}" '
+                    f'value="{safe_cell_value}" {step} '
+                    f'hx-post="{post_url}" hx-trigger="change, blur" hx-swap="none">'
+                )
             html += f"""<td class="editable-cell" data-col="{col}">
                 <span class="cell-display{placeholder_class}">{display_value}</span>
-                <input type="{input_type}" class="cell-input" name="{col}"
-                       value="{safe_cell_value}" {step}
-                       hx-post="{post_url}" hx-trigger="change, blur" hx-swap="none">
+                {input_html}
             </td>"""
 
     html += f"""<td class="row-actions">
