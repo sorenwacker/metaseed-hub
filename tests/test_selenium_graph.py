@@ -15,9 +15,11 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC  # noqa: N812
-from selenium.webdriver.support.ui import WebDriverWait
+
+pytest.importorskip("selenium")
+from selenium.webdriver.common.by import By  # noqa: E402
+from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
+from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
 from tests.test_selenium_export import BASE, _login, driver  # noqa: F401
 
