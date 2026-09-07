@@ -19,12 +19,18 @@ Re-exported internals:
   ``AppState`` — which stayed correct and stopped improving, so the dropdowns,
   tables and heading descriptions never reached it. The library now builds from
   the facade both applications hold, and the copy is gone.
+- ``workbook_to_payload``: the Excel import, the export's other half. The hub
+  had a copy of this too, and that one was not merely behind but wrong: it never
+  removed the quote the export puts in front of a formula-triggering cell, and
+  never split a scalar list back out of the cell the export joined it into, so
+  every round trip through the hub changed those values.
 """
 
 from pathlib import Path
 
 import metaseed.ui
 from metaseed.ui.services.export import build_workbook_from_facade
+from metaseed.ui.services.import_excel import workbook_to_payload
 from metaseed.ui.state import AppState, TreeNode
 
 _METASEED_UI_DIR = Path(metaseed.ui.__file__).parent
@@ -38,4 +44,5 @@ __all__ = [
     "METASEED_TEMPLATES_DIR",
     "AppState",
     "TreeNode",
+    "workbook_to_payload",
 ]

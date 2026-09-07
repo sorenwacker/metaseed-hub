@@ -517,30 +517,38 @@ class TestMetaseedSerializeContract:
 class TestParseWorkbookSheets:
     """Tests for workbook parsing edge cases."""
 
-    def test_empty_row_tuple_is_skipped(self) -> None:
-        """A row with no cell records must be skipped, not raise IndexError.
+    def test_a_blank_row_between_entities_is_skipped(self) -> None:
+        """A formatted-but-empty row must be skipped, not raise IndexError.
 
-        openpyxl in read_only mode can yield such rows as empty tuples for
-        formatted-but-empty rows, which previously 500ed both import routes.
+        openpyxl in read_only mode yields such rows as empty tuples, which once
+        500ed both import routes. The parsing is metaseed's now, so this asserts
+        the guarantee through a real workbook rather than by standing in for
+        openpyxl, which the hub no longer calls.
         """
-        from unittest.mock import patch
+        from io import BytesIO
+
+        from openpyxl import Workbook
 
         from metaseed_hub.ui.helpers import parse_workbook_sheets
+        from metaseed_hub.ui.metaseed_ui import AppState
 
-        class _FakeSheet:
-            def iter_rows(self, values_only: bool = True):
-                return iter([("title",), ("A",), (), ("B",)])
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Investigation"
+        for row in (["unique_id", "title"], ["0001", "A"], [], ["0002", "B"]):
+            sheet.append(row)
+        buffer = BytesIO()
+        workbook.save(buffer)
 
-        class _FakeWorkbook:
-            sheetnames = ["Investigation"]
+        state = AppState(profile="miappe", version="1.1")
+        result = parse_workbook_sheets(
+            buffer.getvalue(),
+            profile="miappe",
+            version="1.1",
+            facade=state.get_or_create_facade(),
+        )
 
-            def __getitem__(self, name: str) -> _FakeSheet:
-                return _FakeSheet()
-
-        with patch("openpyxl.load_workbook", return_value=_FakeWorkbook()):
-            result = parse_workbook_sheets(b"ignored")
-
-        assert result == {"Investigation": [{"title": "A"}, {"title": "B"}]}
+        assert [e["title"] for e in result["Investigation"]] == ["A", "B"]
 
 
 class TestEntityImportHelpers:

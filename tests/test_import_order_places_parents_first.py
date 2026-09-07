@@ -87,7 +87,10 @@ def test_an_excel_round_trip_keeps_every_file_under_its_run() -> None:
     state = AppState(profile="ena", version="1.0")
     reloaded = state.get_or_create_facade()
     _imported, errors = add_entities_in_order(
-        state, reloaded, parse_workbook_sheets(buffer.getvalue()), "Study"
+        state,
+        reloaded,
+        parse_workbook_sheets(buffer.getvalue(), profile="ena", version="1.0", facade=reloaded),
+        "Study",
     )
 
     assert errors == [], errors[:5]
@@ -105,7 +108,12 @@ def test_the_round_trip_keeps_the_containment_edges() -> None:
 
     state = AppState(profile="ena", version="1.0")
     reloaded = state.get_or_create_facade()
-    add_entities_in_order(state, reloaded, parse_workbook_sheets(buffer.getvalue()), "Study")
+    add_entities_in_order(
+        state,
+        reloaded,
+        parse_workbook_sheets(buffer.getvalue(), profile="ena", version="1.0", facade=reloaded),
+        "Study",
+    )
     after = build_graph(reloaded)
 
     def containment(graph: dict[str, Any]) -> int:
