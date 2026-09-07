@@ -1,7 +1,12 @@
-"""Tests for the dataset graph API's node_id subtree filtering.
+"""Tests for the dataset graph API's node_id focusing.
 
 The graph page links carry ``?node_id=...`` (partials/entity_form.html), but the
 API previously ignored the parameter and always returned the full graph.
+
+These originally asserted descendants only, which is why focusing a leaf was
+expected to return one node and no edges — the defect, written down as the
+requirement. A focused view now carries the containment path down to the entity
+as well; see ``test_graph_neighborhood.py`` for why.
 """
 
 from __future__ import annotations
@@ -33,11 +38,13 @@ _GRAPH = {
 }
 
 
-def test_filter_keeps_node_and_descendants() -> None:
+def test_filter_keeps_node_its_descendants_and_its_ancestors() -> None:
     filtered = _filter_graph_to_subtree(_GRAPH, "child")
 
-    assert [n["id"] for n in filtered["nodes"]] == ["child", "grandchild"]
-    assert filtered["edges"] == [{"from": "child", "to": "grandchild"}]
+    assert [n["id"] for n in filtered["nodes"]] == ["root", "child", "grandchild"]
+    assert "other" not in {n["id"] for n in filtered["nodes"]}
+    assert {"from": "child", "to": "grandchild"} in filtered["edges"]
+    assert {"from": "root", "to": "child"} in filtered["edges"]
     assert filtered["entity_types"] == ["A", "B"]
 
 
@@ -65,14 +72,16 @@ async def _dataset_with_tree(session: AsyncSession) -> tuple[Dataset, TokenUser,
     return dataset, token, study.id
 
 
-async def test_graph_api_filters_to_requested_subtree(session: AsyncSession) -> None:
+async def test_graph_api_draws_the_focused_entity_connected(session: AsyncSession) -> None:
+    """The Study is a leaf here. Focusing it must not return a lone node."""
     dataset, token, study_id = await _dataset_with_tree(session)
 
     response = await dataset_graph_api(dataset.id, session, token, node_id=study_id)
 
     graph = json.loads(response.body)
-    assert [n["id"] for n in graph["nodes"]] == [study_id]
-    assert graph["edges"] == []
+    assert study_id in [n["id"] for n in graph["nodes"]]
+    assert len(graph["nodes"]) == 2, "the Investigation it hangs from is missing"
+    assert len(graph["edges"]) == 1
 
 
 async def test_graph_api_without_node_id_returns_full_graph(session: AsyncSession) -> None:

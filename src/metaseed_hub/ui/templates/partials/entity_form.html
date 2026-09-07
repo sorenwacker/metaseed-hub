@@ -39,7 +39,7 @@
         <h2>{{ "Edit" if node_id else "New" }} {{ entity_type }}</h2>
         {% if node_id %}
         <a href="/hub/datasets/{{ dataset_id }}/graph?node_id={{ node_id }}"
-           class="btn btn-sm" target="_blank" title="View this entity and its children in graph">
+           class="btn btn-sm" target="_blank" title="View this entity in the graph, with what contains it and what it contains">
             View in Graph
         </a>
         {% endif %}

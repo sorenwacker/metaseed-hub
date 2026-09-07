@@ -531,37 +531,61 @@ async def dataset_graph(
 
 
 def _filter_graph_to_subtree(graph_data: dict[str, Any], node_id: str) -> dict[str, Any]:
-    """Restrict graph data to ``node_id`` and its descendants.
+    """Restrict graph data to ``node_id`` in context: its ancestors and what it contains.
 
-    Descendants are found by following edges outward from ``node_id``. An
-    unknown ``node_id`` returns the graph unchanged, so a stale link renders
+    Only *containment* edges are followed. A reference edge (dashed, e.g.
+    ``Sample.study_ref``) points at something that is not a child, and following
+    it walked back up to the study and down into every other branch, so focusing
+    an entity returned the whole graph.
+
+    The ancestors are kept as well as the descendants, because a leaf has no
+    descendants: focusing one — an ENA ``SampleAttribute``, labelled with its
+    ``tag`` — otherwise drew a single node with no edge at all. An entity is
+    only meaningful next to what it hangs from.
+
+    Levels are re-based so the shallowest kept node sits at 0. vis.js lays out
+    hierarchically by level, and a view rooted at a level-2 node was drawn
+    hanging below two empty ranks.
+
+    An unknown ``node_id`` returns the graph unchanged, so a stale link renders
     the whole graph rather than an empty canvas.
 
     Args:
         graph_data: ``build_graph`` output with ``nodes`` and ``edges`` lists.
-        node_id: Root of the subtree to keep.
+        node_id: The entity to focus.
 
     Returns:
-        Graph data with nodes and edges outside the subtree removed.
+        Graph data with nodes and edges outside the focused view removed.
     """
     if node_id not in {n["id"] for n in graph_data["nodes"]}:
         return graph_data
 
+    # Containment only: a reference edge is drawn, never walked.
     children: dict[str, list[str]] = {}
+    parents: dict[str, list[str]] = {}
     for edge in graph_data["edges"]:
+        if edge.get("dashes"):
+            continue
         children.setdefault(edge["from"], []).append(edge["to"])
+        parents.setdefault(edge["to"], []).append(edge["from"])
 
-    keep = {node_id}
-    queue = [node_id]
-    while queue:
-        for child in children.get(queue.pop(), []):
-            if child not in keep:
-                keep.add(child)
-                queue.append(child)
+    def reachable(via: dict[str, list[str]]) -> set[str]:
+        seen = {node_id}
+        queue = [node_id]
+        while queue:
+            for nxt in via.get(queue.pop(), []):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append(nxt)
+        return seen
 
+    keep = reachable(children) | reachable(parents)
+
+    nodes = [n for n in graph_data["nodes"] if n["id"] in keep]
+    shallowest = min((n.get("level", 0) for n in nodes), default=0)
     return {
         **graph_data,
-        "nodes": [n for n in graph_data["nodes"] if n["id"] in keep],
+        "nodes": [{**n, "level": n.get("level", 0) - shallowest} for n in nodes],
         "edges": [e for e in graph_data["edges"] if e["from"] in keep and e["to"] in keep],
     }
 
