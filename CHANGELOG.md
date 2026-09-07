@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The metaseed floor is 0.49.0, so the deployed hub gets what that release fixed: the Excel export's nested cells count real children rather than reporting 0, entity types are presented in containment order, the SEEK sync finds an Extended Metadata Type created from an uploaded TTL and places a grouped field flat when the type has no nested type for its group, and the dataset graph redraws on an inline cell edit. The hub had been pinned to 0.48.0 since that release, so none of it reached the site.
+
 ## [0.49.0] - 260903
 
 ### Fixed

@@ -1247,7 +1247,7 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.48.0"
+version = "0.49.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
@@ -1263,9 +1263,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/18/cd/09b56916a3263dc08462ca2f396c39974a27fee7c7f8ab62cc9296502e86/metaseed-0.48.0.tar.gz", hash = "sha256:76056e3227c16309e27dd05b940b5da05e1310ecfc26ffba880d81ceb100143b", size = 773702, upload-time = "2026-08-29T11:40:32.445Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/d5/9c362ee95e4b683edef937db2686111515fb396df8d412f55ad656cc59ab/metaseed-0.49.0.tar.gz", hash = "sha256:a3361ec093dde0096d7af3b3ea3bb330ae2400c68925a6bdc8be06f02a72a72b", size = 776689, upload-time = "2026-09-03T18:26:31.391Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ce/f2/301d00e27cdff335fa730f5a63460e2bcffbb29e5be6785dc79592628bbd/metaseed-0.48.0-py3-none-any.whl", hash = "sha256:fc7c0660aa0f7f488a4ea856b06c05d8abcddd6fc1af3eeb69291312bdedf256", size = 949087, upload-time = "2026-08-29T11:40:30.588Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/bb/4b132bc8d97d470b130dd8c21d6b9270023b1f26d910cd35cda0330d6d14/metaseed-0.49.0-py3-none-any.whl", hash = "sha256:2b5c6419ea4a5dce57275263e0547d0438dacd7ed6a13f917ac67feba16df7cc", size = 952912, upload-time = "2026-09-03T18:26:29.78Z" },
 ]
 
 [package.optional-dependencies]
@@ -1336,11 +1336,11 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.28,<2" },
-    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.48.0,<1" },
+    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.49.0,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
-    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.3,<4" },
+    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.3,<5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
