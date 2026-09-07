@@ -80,30 +80,60 @@ def _child_types(facade: Any, entity_type: str) -> set[str]:
 
 
 def _containment_order(facade: Any, root_entity: str) -> list[str]:
-    """Entity types ordered so a parent precedes every type it contains.
+    """Entity types ordered so every type follows every type that contains it.
 
-    A child's ``_parent`` is resolved against nodes created earlier in the
-    pass, so a parent has to be processed first. Ordering by ``facade.entities``
-    declaration order guaranteed that only for the root; a grandchild whose
-    parent type was declared later was re-rooted. A breadth-first walk of the
-    containment graph from the root fixes the order; any type the walk does not
-    reach (an orphan, or a cycle) is appended in declaration order so nothing is
-    dropped.
+    A child's ``_parent`` is resolved against nodes created earlier in the pass,
+    so a parent has to be processed first. Declaration order guaranteed that
+    only for the root; a grandchild whose parent type was declared later was
+    re-rooted.
+
+    A breadth-first walk from the root fixed that case but not the general one:
+    it orders by distance from the root, and a type reachable by two containment
+    paths takes the shorter. ENA's ``File`` is contained by ``Run`` and by
+    ``Analysis``, and arrived through ``Analysis`` one step before ``Run`` was
+    processed, so every File belonging to a Run was created while no Run existed
+    yet and was re-rooted — twelve of them in the shipped example.
+
+    This is a topological sort instead: a type is emitted once every type
+    containing it has been. A containment cycle would leave its members
+    unemitted, so whatever the sort cannot place is appended in declaration
+    order — a wrong order beats a dropped type, which would import as an unknown
+    entity type.
+
+    Args:
+        facade: Profile facade listing the valid entity types.
+        root_entity: The profile's root entity type, emitted first.
+
+    Returns:
+        Every declared entity type, exactly once.
     """
+    parents: dict[str, set[str]] = {name: set() for name in facade.entities}
+    for parent in facade.entities:
+        for child in _child_types(facade, parent):
+            if child in parents and child != parent:
+                parents[child].add(parent)
+
     order: list[str] = []
-    seen: set[str] = set()
-    queue = [root_entity] if root_entity in facade.entities else []
-    while queue:
-        current = queue.pop(0)
-        if current in seen:
-            continue
-        seen.add(current)
-        order.append(current)
-        queue.extend(sorted(_child_types(facade, current) - seen))
-    for entity_type in facade.entities:
-        if entity_type not in seen:
-            order.append(entity_type)
-            seen.add(entity_type)
+    placed: set[str] = set()
+    # The root first, then whatever has become placeable, alphabetically so the
+    # order is stable across runs rather than dependent on set iteration.
+    remaining = set(facade.entities)
+    if root_entity in remaining:
+        order.append(root_entity)
+        placed.add(root_entity)
+        remaining.discard(root_entity)
+
+    while True:
+        ready = sorted(name for name in remaining if parents[name] <= placed)
+        if not ready:
+            break
+        for name in ready:
+            order.append(name)
+            placed.add(name)
+        remaining -= set(ready)
+
+    # A containment cycle (or a type only reachable through one) stays unplaced.
+    order.extend(name for name in facade.entities if name not in placed)
     return order
 
 
