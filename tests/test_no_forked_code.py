@@ -218,3 +218,46 @@ def test_every_template_is_rendered_or_included_somewhere() -> None:
         if str(path.relative_to(templates)) not in sources
     ]
     assert not dead, f"templates nothing renders, includes or extends: {dead}"
+
+
+def test_no_module_reads_a_workbook_itself() -> None:
+    """Reading an exported workbook is the library's job, not the hub's.
+
+    The hub had its own parser, and the copy was behind metaseed's in ways that
+    changed data on every round trip: it never removed the quote the export puts
+    in front of a formula-triggering cell, and never split a scalar list back
+    out of the cell the export joined it into. Both were invisible because the
+    hub's own tests only checked that entities arrived, not that their values
+    survived.
+
+    ``read_only`` loading for anything else is still a fork of the same thing:
+    the file format has one reader.
+    """
+    offenders: list[str] = []
+    for path in _python_files():
+        tree = ast.parse(path.read_text())
+        typing_only = _type_checking_lines(tree)
+        for node in ast.walk(tree):
+            if getattr(node, "lineno", None) in typing_only:
+                continue
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("openpyxl"):
+                offenders.append(f"{path.relative_to(HUB_SRC)}: imports {node.module}")
+            elif isinstance(node, ast.Import) and any(
+                alias.name.startswith("openpyxl") for alias in node.names
+            ):
+                offenders.append(f"{path.relative_to(HUB_SRC)}: imports openpyxl")
+
+    assert not offenders, (
+        "these read workbooks themselves rather than asking metaseed's "
+        "workbook_to_payload:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_workbook_parser_delegates_to_the_library() -> None:
+    """Deleting the copy is only half of it; the hub must use the real one."""
+    source = (HUB_SRC / "ui/helpers/uploads.py").read_text()
+
+    assert "workbook_to_payload" in source, (
+        "the hub no longer delegates workbook parsing to the library"
+    )
+    assert "load_workbook" not in source, "workbook reading has crept back into the hub"
