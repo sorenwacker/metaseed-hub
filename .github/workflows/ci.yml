@@ -47,6 +47,13 @@ jobs:
       - name: Set up Python
         run: uv python install 3.13
 
+      - name: Check the lockfile matches pyproject.toml
+        # Both CI and the host deploy install with --frozen, which reads the
+        # lockfile without checking it against the manifest. Without this step a
+        # dependency bound edited in pyproject.toml and not locked ships the old
+        # version silently, in a green build. See issue #141.
+        run: uv lock --check
+
       - name: Install dependencies
         run: uv sync --frozen --all-extras
 
@@ -121,6 +128,13 @@ jobs:
             fi
             sleep 3
           done
+
+      - name: Check the lockfile matches pyproject.toml
+        # Both CI and the host deploy install with --frozen, which reads the
+        # lockfile without checking it against the manifest. Without this step a
+        # dependency bound edited in pyproject.toml and not locked ships the old
+        # version silently, in a green build. See issue #141.
+        run: uv lock --check
 
       - name: Install dependencies
         run: uv sync --frozen --all-extras
