@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.50.1] - 260907
 
 ### Changed
 - The metaseed floor is 0.50.1, so the deployed hub gets what that release fixed: a dataset loaded from a nested document keeps the types its profile declares, rather than holding a date or an integer as the string its serialization wrote; the ENA export emits every entity it was dropping and validates against ENA's SRA schemas; the ISA-Tab investigation file carries every label its sections define; and a PRIDE submission survives a multi-line value and carries every REQUIRED SDRF column.
