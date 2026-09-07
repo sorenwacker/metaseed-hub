@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Home - Metaseed Hub{% endblock %}
+{% block title %}Datasets - Metaseed Hub{% endblock %}
 
 {% block nav %}
-<span class="nav-item active">Home</span>
+{# The global nav calls this page Datasets; the breadcrumb has to agree, or
+   "Home" names two different pages depending on where it is read. #}
+<span class="nav-item active">Datasets</span>
 {% endblock %}
 
 {% block content %}
@@ -45,8 +47,18 @@
                     </svg>
                 </div>
                 <p class="empty-state-title">No datasets yet</p>
-                <p class="empty-state-desc">Create a dataset to start entering metadata.</p>
+                <p class="empty-state-desc">
+                    A dataset is metadata recorded against a standard &mdash; MIAPPE, ISA,
+                    Darwin Core, ENA &mdash; or against one you write yourself. Start from an
+                    empty one, or import an existing record from ENA, PRIDE, MetaboLights or a
+                    BrAPI server and fill in what it is missing.
+                </p>
                 <a href="/hub/datasets/new" class="btn btn-primary">+ New Dataset</a>
+                <p class="empty-state-more">
+                    Not sure which standard fits? <a href="/hub/explore/">Compare them in the
+                    Explorer</a>, or <a href="/hub/spec-builder">build your own</a> when none
+                    does. <a href="/hub/home">What the hub is for</a> walks through all of it.
+                </p>
             </div>
             {% endfor %}
         </div>
