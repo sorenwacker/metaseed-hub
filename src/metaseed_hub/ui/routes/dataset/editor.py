@@ -802,7 +802,12 @@ async def dataset_import_into_existing(
         elif filename.endswith(".json"):
             data = json.loads(content.decode("utf-8"))
         elif filename.endswith((".xlsx", ".xls")):
-            entities_by_type = parse_workbook_sheets(content)
+            entities_by_type = parse_workbook_sheets(
+                content,
+                profile=dataset.profile,
+                version=dataset.version,
+                facade=facade,
+            )
         else:
             return HTMLResponse(
                 "<div class='notification error'>Unsupported file format</div>",

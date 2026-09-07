@@ -144,7 +144,12 @@ def add_entities_in_order(
     for entity_type in entity_order:
         for entity_data in entities_by_type.get(entity_type, []):
             try:
-                parent_key = str(entity_data.get("_parent") or "").strip()
+                # The JSON path carries `_parent`; metaseed's workbook parser
+                # names the same thing `_parent_unique_id`. Both are the
+                # parent's identifier, so both are read.
+                parent_key = str(
+                    entity_data.get("_parent") or entity_data.get("_parent_unique_id") or ""
+                ).strip()
                 parent_node_id = node_by_identifier.get(parent_key)
                 if parent_key and parent_node_id is None:
                     # The child still imports (losing it would be worse), but

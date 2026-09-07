@@ -43,6 +43,7 @@ from metaseed_hub.ui.helpers import (
     read_upload_capped,
     save_dataset_state,
 )
+from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
@@ -252,6 +253,7 @@ async def dataset_import(
     # Parse based on file type. Keep the form-supplied profile/version; the
     # detection below only fills them in when the user did not select them.
     data = None
+    is_workbook = filename.endswith((".xlsx", ".xls"))
 
     try:
         if filename.endswith((".yaml", ".yml")):
@@ -259,21 +261,14 @@ async def dataset_import(
         elif filename.endswith(".json"):
             data = json.loads(content.decode("utf-8"))
         elif filename.endswith((".xlsx", ".xls")):
-            # Excel import - each sheet name = entity type, headers = field names.
-            entities_by_type = parse_workbook_sheets(content)
-
-            # Store entities for later processing
-            data = {"_entities_by_type": entities_by_type}
-
-            # Use first entity of first sheet for root if available
-            if entities_by_type:
-                first_type = list(entities_by_type.keys())[0]
-                if entities_by_type[first_type]:
-                    data.update(entities_by_type[first_type][0])
+            # Parsed once the profile is settled, below: reading a workbook
+            # needs the profile to know what each sheet is, and the profile is
+            # not known until the form's value has been defaulted.
+            data = {}
         else:
             return RedirectResponse("/hub/datasets/new?error=unsupported_format", status_code=302)
 
-        if not data:
+        if not data and not is_workbook:
             return RedirectResponse("/hub/datasets/new?error=empty_file", status_code=302)
 
         # Use provided profile/version, or try to detect from data
@@ -289,6 +284,21 @@ async def dataset_import(
             loader = SpecLoader()
             versions = loader.list_versions(profile)
             version = versions[0] if versions else "1.1"
+
+        if is_workbook:
+            # A facade of the settled profile, only so the parser knows which
+            # sheets are entity types. The dataset's own facade does not exist
+            # yet, and parsing before the row is created keeps an unreadable
+            # upload from leaving an empty dataset behind.
+            probe = AppState(profile=profile, version=version)
+            data = {
+                "_entities_by_type": parse_workbook_sheets(
+                    content,
+                    profile=profile,
+                    version=version,
+                    facade=probe.get_or_create_facade(),
+                )
+            }
 
     except Exception as e:
         logger.exception(f"Failed to parse import file: {e}")
