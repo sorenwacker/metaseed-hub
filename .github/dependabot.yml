@@ -1,0 +1,89 @@
+# One update bot. Renovate was configured here but Dependabot was the bot
+# actually opening pull requests, so the grouping written down was never the
+# grouping in use. See issue #145.
+version: 2
+
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # A major bump of a package whose API this code imports directly is a
+      # migration, not an update. In metaseed a widened mcp bound admitted 2.x,
+      # which had removed the API the code calls; every locked suite stayed
+      # green and it surfaced only at release. These are done deliberately.
+      #
+      # Deliberately NOT a blanket major ignore: Dependabot's ignore rules
+      # suppress security updates too, and cryptography 49 -> 50 was itself a
+      # major that closed a high-severity advisory. Only directly-called
+      # packages are listed, so a transitive security bump still arrives.
+      #
+      # metaseed is absent on purpose: this application is its consumer, and the
+      # floor is raised by hand as part of taking a release, with the lockfile
+      # regenerated in the same commit.
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "starlette"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "alembic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "asyncpg"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "celery"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "websockets"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python-keycloak"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python-jose"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pydantic-settings"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python-multipart"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "uvicorn"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "httpx"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/ansible/roles/metaseed-hub/files"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Amsterdam"
+    open-pull-requests-limit: 5
+    ignore:
+      # A database major is an upgrade with a migration, not a bump.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mariadb"
+        update-types: ["version-update:semver-major"]
