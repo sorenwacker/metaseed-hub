@@ -41,7 +41,10 @@ def _reimport(raw: bytes) -> list[dict]:
     state = AppState(profile="miappe", version="1.1")
     facade = state.get_or_create_facade()
     imported, errors = add_entities_in_order(
-        state, facade, parse_workbook_sheets(raw), "Investigation"
+        state,
+        facade,
+        parse_workbook_sheets(raw, profile="miappe", version="1.1", facade=facade),
+        "Investigation",
     )
     assert imported == 2 and not errors, (imported, errors[:3])
     return MetaseedClient.from_facade(facade).serialize()["entities"]
