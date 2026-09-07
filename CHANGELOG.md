@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- The metaseed floor is 0.49.0, so the deployed hub gets what that release fixed: the Excel export's nested cells count real children rather than reporting 0, entity types are presented in containment order, the SEEK sync finds an Extended Metadata Type created from an uploaded TTL and places a grouped field flat when the type has no nested type for its group, and the dataset graph redraws on an inline cell edit. The hub had been pinned to 0.48.0 since that release, so none of it reached the site.
+- The metaseed floor is 0.50.1, so the deployed hub gets what that release fixed: a dataset loaded from a nested document keeps the types its profile declares, rather than holding a date or an integer as the string its serialization wrote; the ENA export emits every entity it was dropping and validates against ENA's SRA schemas; the ISA-Tab investigation file carries every label its sections define; and a PRIDE submission survives a multi-line value and carries every REQUIRED SDRF column.
 
 ## [0.49.0] - 260903
 
