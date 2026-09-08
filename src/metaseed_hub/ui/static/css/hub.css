@@ -130,7 +130,8 @@ body {
 }
 
 /* Fixed height layout for full-page content (ERD, spec builder) */
-.hub-layout:has(.erd-layout) {
+.hub-layout:has(.erd-layout),
+.hub-layout:has(.dataset-layout) {
     height: 100vh;
     min-height: 0;
     overflow: hidden;
@@ -317,10 +318,19 @@ body {
 .hub-main:has(.spec-view-layout),
 .hub-main:has(.graph-page),
 .hub-main:has(.project-container),
+.hub-main:has(.dataset-layout),
 .hub-main:has(.erd-layout) {
     padding: 0;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+}
+
+/* The dataset page fills the viewport so its three panes scroll on their own:
+   the entity table is long, and without a bounded height the whole page scrolled
+   instead, carrying the sidebar and the graph off the screen. */
+.hub-main .dataset-layout {
+    flex: 1;
     min-height: 0;
 }
 
@@ -5279,16 +5289,26 @@ a.start-option-card:hover {
     gap: var(--space-md);
     min-width: 0;
     min-height: 0;
+    /* Bounded by the layout, so each pane scrolls inside itself rather than the
+       page growing and taking the sidebar and graph with it. */
+    height: 100%;
+    overflow: hidden;
 }
 
 .dataset-panes > .dataset-editor {
     flex: 1 1 0;
     min-width: 0;
+    /* min-height:0 lets a flex item shrink below its content, which is what
+       makes the editor's own overflow:auto take effect. */
+    min-height: 0;
+    height: 100%;
 }
 
 .dataset-panes > .graph-container {
     flex: 1 1 0;
     min-width: 0;
+    min-height: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
