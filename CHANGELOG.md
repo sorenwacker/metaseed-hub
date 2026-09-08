@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.50.4] - 260908
+
+### Fixed
+- **Add Entity, and every other htmx event handler, did nothing on the deployed site.** Eight `hx-on:` attributes across the spec builder and the dataset page were compiled by htmx with `new Function`, which the production Content-Security-Policy forbids. The request itself succeeded — the entity was saved — and only the handler meant to run afterwards threw, so the button appeared inert while the work had already happened. The same broke both comment forms, the validation-rule modal, two redirects after save, and the two SEEK progress notices. They are data attributes now, handled by one delegated listener in `htmx-handlers.js` that evaluates nothing.
+- `tests/test_templates_need_no_eval.py` covers `hx-on` as well as `hx-headers` and `hx-vals`. All three are compiled the same way; only the first two were gated, which is why this survived two rounds of fixes.
+
 ## [0.50.3] - 260908
 
 ### Fixed
