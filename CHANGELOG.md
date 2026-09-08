@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.51.0] - 260908
 
+### Changed
+- The metaseed floor is 0.51.0, so the deployed hub gets one header and one navigation on every page it renders from the library, the explorer's comparison colours, and the escaped `pattern` attribute.
+
 ### Fixed
 - The dataset page fills the viewport, so its three panes scroll on their own. The entity table is long, and scrolling it carried the sidebar and the graph off the screen: the page was never added to the two rules that give a full-height layout a bounded height, so its `height: 100%` resolved against nothing and the editor's `overflow: auto` had nothing to overflow.
 - A `pattern` attribute with a literal hyphen in a character class is escaped, which the RegExp `v` flag requires. The browser rejects the whole pattern otherwise, and the throw breaks unrelated code on the page.
