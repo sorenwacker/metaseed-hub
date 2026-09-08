@@ -1,5 +1,15 @@
 # Metaseed Hub
 
+<div class="grid cards" markdown>
+
+- **Use it** — [the hub](https://metaseed.ewi.tudelft.nl/hub/), signed in with your institutional account
+- **Run it yourself** — [`metaseed` on PyPI](https://pypi.org/project/metaseed/) · [`metaseed-hub` on PyPI](https://pypi.org/project/metaseed-hub/)
+- **Source** — [metaseed-hub](https://github.com/sorenwacker/metaseed-hub) · [metaseed](https://github.com/sorenwacker/metaseed)
+- **The library's documentation** — [metaseed itself](https://sorenwacker.github.io/metaseed/)
+
+</div>
+
+
 Metaseed Hub is a collaborative platform for building standardized research metadata. Teams create **datasets** that follow an established metadata **profile** (MIAPPE, ISA, DiSSCo, Darwin Core, or a custom specification), edit them through schema-driven forms, and share them with collaborators. It is built on [metaseed](https://github.com/sorenwacker/metaseed).
 
 ## What you can do

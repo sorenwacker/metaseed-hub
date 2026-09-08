@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.51.0] - 260908
+
+### Fixed
+- The dataset page fills the viewport, so its three panes scroll on their own. The entity table is long, and scrolling it carried the sidebar and the graph off the screen: the page was never added to the two rules that give a full-height layout a bounded height, so its `height: 100%` resolved against nothing and the editor's `overflow: auto` had nothing to overflow.
+- A `pattern` attribute with a literal hyphen in a character class is escaped, which the RegExp `v` flag requires. The browser rejects the whole pattern otherwise, and the throw breaks unrelated code on the page.
+
+### Changed
+- **The application sends the Content-Security-Policy itself.** nginx set it in production and nothing set it anywhere else, so development, the test client and the Selenium suite all ran against pages with no policy — which is why three separate violations reached the deployed site and stayed there, each behind a green suite. `tests/test_the_production_csp_is_honoured.py` reads the policy from the nginx template so the two cannot drift, and drives a page in a browser failing on any violation.
+- The specification builder names both kinds of edge in its legend — Nested and Reference — where it drew two and explained one, and offers a **Tree** layout beside the force-directed one, using the arrangement the dataset graph already uses.
+- The development warning says what it means and offers the alternative: run metaseed locally. In full before sign-in, where the decision is still the reader's.
+- The documentation uses the application's palette and typefaces, served from the site rather than fetched from Google.
+
 ## [0.50.4] - 260908
 
 ### Fixed

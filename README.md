@@ -8,7 +8,7 @@
 
 Metaseed Hub is the shared, deployed counterpart of [metaseed](https://github.com/sorenwacker/metaseed): a web application where a group creates, edits, shares, and publishes standardized research metadata. Metaseed runs on one machine for one person; the hub runs for a team, with accounts, sharing, and a place to publish specifications.
 
-[Documentation](https://sorenwacker.github.io/metaseed-hub/) · [Live instance](https://metaseed.ewi.tudelft.nl) · [Changelog](CHANGELOG.md)
+[Documentation](https://sorenwacker.github.io/metaseed-hub/) · [Live instance](https://metaseed.ewi.tudelft.nl) · [PyPI](https://pypi.org/project/metaseed-hub/) · [Changelog](CHANGELOG.md)
 
 ## What it does
 
