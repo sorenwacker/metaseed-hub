@@ -42,7 +42,7 @@
                     hx-trigger="change"
                     hx-target="#profile-metadata-panel"
                     hx-include="#profile-metadata-form"
-                    hx-on::after-request="window.location.href='/hub/spec-builder/{{ draft_id }}'">
+                    data-after-request-redirect="/hub/spec-builder/{{ draft_id }}">
                 <option value="">-- Select --</option>
                 {% for name in spec.entities.keys() %}
                 <option value="{{ name }}" {% if name == spec.root_entity %}selected{% endif %}>{{ name }}</option>

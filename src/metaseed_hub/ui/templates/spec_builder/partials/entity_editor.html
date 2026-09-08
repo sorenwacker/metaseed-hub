@@ -158,7 +158,7 @@
         <button class="btn btn-sm btn-danger"
                 hx-delete="/hub/spec-builder/{{ draft_id }}/entity/{{ entity_name }}"
                 hx-swap="none"
-                hx-on::after-request="window.location.href='/hub/spec-builder/{{ draft_id }}'"
+                data-after-request-redirect="/hub/spec-builder/{{ draft_id }}"
                 hx-confirm="Delete entity '{{ entity_name }}'? This will remove all fields and relationships.">
             Delete Entity
         </button>

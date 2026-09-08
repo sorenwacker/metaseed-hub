@@ -135,7 +135,7 @@
                               hx-post="/hub/spec-builder/{{ draft_id }}/comments"
                               hx-target="#spec-comments-list"
                               hx-swap="innerHTML"
-                              hx-on:htmx:after-request="this.reset()">
+                              data-after-request-reset>
                             <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
                             <button type="submit" class="btn btn-sm btn-primary">Post</button>
                         </form>
@@ -238,7 +238,7 @@
         <form hx-post="/hub/spec-builder/{{ draft_id }}/entity"
               hx-target="#editor-content"
               hx-swap="innerHTML"
-              hx-on:htmx:after-request="onEntityAdded(event)">
+              data-after-request-call="onEntityAdded">
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label">Entity Name <span class="required">*</span></label>

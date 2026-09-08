@@ -30,7 +30,11 @@ import pytest
 TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "metaseed_hub" / "ui" / "templates"
 
 #: htmx attributes whose value it evaluates with `new Function`.
-EVAL_ATTRIBUTES = ("hx-headers", "hx-vals")
+#: Attributes htmx compiles with `new Function`. `hx-on:` is the one that
+#: cost the most: the request succeeded and only the handler meant to run
+#: afterwards failed, so "Add Entity" saved the entity and appeared to do
+#: nothing, with the error visible only in a browser console.
+EVAL_ATTRIBUTES = ("hx-headers", "hx-vals", "hx-on")
 
 
 def _templates() -> list[Path]:

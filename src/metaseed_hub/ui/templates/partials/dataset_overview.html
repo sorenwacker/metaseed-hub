@@ -65,7 +65,7 @@
               hx-post="/hub/datasets/{{ dataset.id }}/comments"
               hx-target="#comments-list"
               hx-swap="innerHTML"
-              hx-on:htmx:after-request="this.reset()">
+              data-after-request-reset>
             <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
             <button type="submit" class="btn btn-primary">Post</button>
         </form>

@@ -105,8 +105,8 @@
                page looks dead and people press the button again. #}
             <form id="seek-push-form" hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
                   hx-target="#seek-result" hx-disabled-elt="find button"
-                  hx-on::before-request="document.getElementById('seek-result').innerHTML =
-                      '<div class=\'alert alert-info\' data-testid=\'seek-working\'>Pushing to SEEK. Provisioning the profile and creating records takes a minute or two; this panel reports what happened.</div>'">
+                  data-working-target="seek-result"
+                  data-working-message="Pushing to SEEK. Provisioning the profile and creating records takes a minute or two; this panel reports what happened.">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="sidebar-actions-row" data-testid="seek-panel">
                     <button class="btn btn-sm btn-primary" type="submit"
@@ -117,8 +117,8 @@
                     <button class="btn btn-sm" type="button" data-testid="btn-seek-check"
                             hx-post="/hub/seek/datasets/{{ dataset.id }}/check"
                             hx-target="#seek-result" hx-disabled-elt="this"
-                            hx-on::before-request="document.getElementById('seek-result').innerHTML =
-                                '<div class=\'alert alert-info\' data-testid=\'seek-working\'>Asking SEEK what it has...</div>'"
+                            data-working-target="seek-result"
+                            data-working-message="Asking SEEK what it has..."
                             title="What this SEEK still needs before a push works">Check SEEK</button>
                     <a href="/hub/seek/templates/{{ dataset.profile }}/{{ dataset.version }}"
                        class="btn btn-sm" data-testid="btn-seek-templates" download
