@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.50.3] - 260908
+
+### Fixed
+- **The metaseed floor is 0.50.2, which carries the other half of the request failure.** 0.50.2 fixed the hub's own templates, but the hub serves metaseed's templates and stylesheet too, so a button in the profile picker still evaluated `hx-vals` and the stylesheet still imported webfonts from Google — both blocked by the Content-Security-Policy, both visible in the browser console on the deployed site.
+- `hub.js` and `lookup.js` are requested with the version query every other asset already carried. Without it a browser kept a cached copy indefinitely, so a fix to either script did not reach anyone who had loaded the page before.
+
 ## [0.50.2] - 260908
 
 ### Fixed

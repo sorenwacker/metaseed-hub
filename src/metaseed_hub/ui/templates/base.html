@@ -106,8 +106,8 @@
 
     <div id="notification-container" class="notification-container"></div>
 
-    <script src="/hub/hub-static/js/hub.js"></script>
-    <script src="/static/js/lookup.js"></script>
+    <script src="/hub/hub-static/js/hub.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+    <script src="/static/js/lookup.js?v={{ version_info.version if version_info else 'dev' }}"></script>
     {% block scripts %}{% endblock %}
 
     {# Matomo, only when a site id is configured. Cookieless (disableCookies),
