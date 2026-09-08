@@ -15,11 +15,27 @@ theme:
   # fetched: no third party sees a reader, and the docs match the application.
   font: false
   palette:
-    primary: teal
-    accent: orange
+    # `custom`, not a named colour: a named palette sets the colour variables on
+    # `[data-md-color-primary=...]`, which outranks the `:root` override in
+    # stylesheets/metaseed.css and kept these docs teal.
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
+    # Matching metaseed's: the tab bar is how a reader moves between the top
+    # level sections, and one site having it while the other does not made the
+    # two look like different products.
+    - navigation.tabs
     - navigation.sections
-    - navigation.expand
     - content.code.copy
 
 extra_css:
