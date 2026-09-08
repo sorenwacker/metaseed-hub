@@ -23,7 +23,10 @@
 /* Metaseed Hub Styles - Botanical Theme */
 
 /* Import Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Fraunces:wght@400;500;600&display=swap');
+/* No webfont import: both faces are declared above from files this app
+   serves. The import fetched Google's copy of the same two families,
+   which the production CSP (style-src 'self') blocks, so it only ever
+   produced a console error and a request that could not succeed. */
 
 :root {
     /* Metaseed botanical color palette */

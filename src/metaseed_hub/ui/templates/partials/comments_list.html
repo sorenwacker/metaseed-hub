@@ -23,22 +23,24 @@
             {% set user_liked = likes | selectattr('user_id', 'equalto', current_user_id) | list | length > 0 %}
             {% set user_disliked = dislikes | selectattr('user_id', 'equalto', current_user_id) | list | length > 0 %}
 
+            <input type="hidden" id="dc-like-{{ comment.id }}" name="reaction" value="like">
             <button class="reaction-btn {% if user_liked %}active{% endif %}"
                     hx-post="/hub/datasets/{{ dataset_id }}/comments/{{ comment.id }}/react"
                     hx-target="#comments-list"
                     hx-swap="innerHTML"
-                    hx-vals='{"reaction": "like"}'
+                    hx-include="#dc-like-{{ comment.id }}"
                     title="Like">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="{% if user_liked %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2">
                     <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
                 </svg>
                 {% if likes | length > 0 %}<span class="reaction-count">{{ likes | length }}</span>{% endif %}
             </button>
+            <input type="hidden" id="dc-dislike-{{ comment.id }}" name="reaction" value="dislike">
             <button class="reaction-btn {% if user_disliked %}active{% endif %}"
                     hx-post="/hub/datasets/{{ dataset_id }}/comments/{{ comment.id }}/react"
                     hx-target="#comments-list"
                     hx-swap="innerHTML"
-                    hx-vals='{"reaction": "dislike"}'
+                    hx-include="#dc-dislike-{{ comment.id }}"
                     title="Dislike">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="{% if user_disliked %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2">
                     <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>

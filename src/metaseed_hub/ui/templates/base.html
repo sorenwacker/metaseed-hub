@@ -22,12 +22,20 @@
     <meta name="twitter:image" content="{{ _base }}/hub/hub-static/images/metaseed-logo-800.png">
     <link rel="icon" href="/hub/hub-static/images/metaseed-icon.svg" type="image/svg+xml">
     <script src="/hub/hub-static/js/htmx.min.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+    {# Request headers are set here rather than with hx-headers on <body>.
+       htmx evaluates an hx-headers value with `new Function`, which the
+       production CSP blocks (script-src has no 'unsafe-eval'), so every request
+       raised EvalError and forms silently did nothing -- while local
+       development, which serves no CSP, worked. Registered on `document`
+       immediately after htmx so it is in place before any hx-trigger="load"
+       fires. #}
+    <script src="/hub/hub-static/js/htmx-headers.js?v={{ version_info.version if version_info else 'dev' }}"></script>
     <link rel="stylesheet" href="/static/css/style.css?v={{ version_info.version if version_info else 'dev' }}">
     <link rel="stylesheet" href="/hub/hub-static/css/hub.css?v={{ version_info.version if version_info else 'dev' }}">
     {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
     {% block head %}{% endblock %}
 </head>
-<body hx-headers='{"X-Requested-With": "XMLHttpRequest"{% if csrf_token %}, "X-CSRF-Token": "{{ csrf_token }}"{% endif %}}'>
+<body>
     <div class="hub-layout">
         <header class="hub-header">
             <a href="/hub/home" class="hub-logo">
