@@ -15,23 +15,6 @@ try {
     console.log('BroadcastChannel not supported');
 }
 
-// Debug form submissions
-document.body.addEventListener('htmx:beforeRequest', function(evt) {
-    console.log('HTMX beforeRequest:', evt.detail.elt.tagName, evt.detail.path);
-});
-
-// Debug form validation
-document.addEventListener('submit', function(evt) {
-    console.log('Form submit event:', evt.target.action);
-    const form = evt.target;
-    if (!form.checkValidity()) {
-        console.log('Form is invalid');
-        // Find which fields are invalid
-        form.querySelectorAll(':invalid').forEach(field => {
-            console.log('Invalid field:', field.name, field.validationMessage);
-        });
-    }
-}, true);
 
 // A session that has expired must end on the sign-in page, not in the console.
 // The server answers an htmx request with HX-Redirect, which htmx acts on by
