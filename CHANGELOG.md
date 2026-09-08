@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.50.2] - 260908
+
+### Fixed
+- **Every htmx request failed on the deployed site, so no form did anything.** `hx-headers` sat on `<body>`, and htmx evaluates that value with `new Function`, which the production Content-Security-Policy forbids (`script-src 'self' 'unsafe-inline'`, no `'unsafe-eval'`) — so each request raised `EvalError` and was abandoned before it was sent. Users could not create entities. The headers are set from an `htmx:configRequest` listener now, which needs no eval, so the policy stays strict. The policy is served by nginx and by nothing else, so development, the test client and the Selenium suite all ran against a page without it and the whole suite stayed green; `tests/test_templates_need_no_eval.py` fails on any template attribute htmx evaluates.
+- The comment like and dislike buttons were broken for the same reason, on both datasets and specifications: they carried the reaction in `hx-vals`. The value is a hidden input included with the request now, so the routes read the same form field as before.
+- The stylesheet imported DM Sans and Fraunces from Google Fonts, which `style-src 'self'` blocks. Both faces were already declared from files this application serves, a few lines above the import, so it fetched a second copy of the same two families and could only ever fail. Removed.
+- The browser console no longer carries a line for every htmx request and every form submit; that logging was left from debugging.
+
 ## [0.50.1] - 260907
 
 ### Changed
