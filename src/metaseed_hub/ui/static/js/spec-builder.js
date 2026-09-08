@@ -172,3 +172,46 @@
     window.dropNewEntity = graph.dropNewEntity;
     window.addEntityAtPosition = graph.addEntityAtPosition;
 })();
+
+/* An optional hierarchical layout.
+ *
+ * A specification is a containment tree with a root, so laying it out top-down
+ * says more than a force-directed blob does. It stays a toggle rather than a
+ * replacement, because reference edges make the graph a graph again and force
+ * direction reads those better.
+ *
+ * The configuration is the one the dataset graph already uses (graph.js), so the
+ * two views agree about what a hierarchy looks like.
+ */
+var _hierarchical = false;
+
+function toggleHierarchicalLayout() {
+    var network = window.ERD && window.ERD.getNetwork && window.ERD.getNetwork();
+    if (!network) return;
+
+    _hierarchical = !_hierarchical;
+
+    network.setOptions(_hierarchical
+        ? {
+            layout: {
+                hierarchical: {
+                    enabled: true,
+                    direction: 'UD',
+                    sortMethod: 'directed',
+                    levelSeparation: 120,
+                    nodeSpacing: 180,
+                    treeSpacing: 200
+                }
+            },
+            physics: { enabled: false }
+        }
+        : {
+            layout: { hierarchical: { enabled: false } },
+            physics: { enabled: false }
+        });
+
+    var button = document.getElementById('btn-hierarchical');
+    if (button) button.classList.toggle('active', _hierarchical);
+
+    network.fit({ animation: true });
+}

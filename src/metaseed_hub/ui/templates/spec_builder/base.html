@@ -33,7 +33,9 @@
             {% endif %}
         </div>
         <div class="toolbar-center">
-            <button class="btn btn-sm" onclick="autoLayout()" title="Auto-arrange entities">Layout</button>
+            <button class="btn btn-sm" onclick="autoLayout()" title="Arrange entities by force, which reads references well">Layout</button>
+            <button class="btn btn-sm" id="btn-hierarchical" onclick="toggleHierarchicalLayout()"
+                    title="Arrange entities as the containment tree they describe, root at the top">Tree</button>
             <button class="btn btn-sm" onclick="toggleLeftSidebar()" title="Toggle sidebar">Sidebar</button>
             <button class="btn btn-sm"
                     hx-get="/hub/spec-builder/{{ draft_id }}/preview"
@@ -181,7 +183,8 @@
                 <span class="legend-item"><span class="legend-dot root"></span> Root Entity</span>
                 <span class="legend-item"><span class="legend-dot entity"></span> Entity</span>
                 <span class="legend-item"><span class="legend-dot hidden-legend"></span> Hidden</span>
-                <span class="legend-item"><span class="legend-line"></span> Relationship</span>
+                <span class="legend-item"><span class="legend-line"></span> Nested</span>
+                <span class="legend-item"><span class="legend-line-dashed"></span> Reference</span>
                 <span class="legend-hint">Right-click to hide</span>
                 <span id="hidden-count-badge" class="hidden-badge hidden"></span>
                 <button class="btn btn-sm" onclick="showAllEntities()">Show All</button>
@@ -307,4 +310,9 @@
 <script src="/hub/static/js/spec-builder-core.js"></script>
 <script src="/hub/static/js/ontology-autocomplete.js"></script>
 <script src="/hub/hub-static/js/spec-builder.js"></script>
+<!-- Turns every `title` in the builder into a visible "?" marker with a bubble.
+     metaseed's own builder loads this; the hub's did not, so the guidance a
+     specification carries reached nobody here -- a native tooltip is invisible
+     until hovered for about a second and never appears on touch. -->
+<script src="/hub/static/js/help-markers.js"></script>
 {% endblock %}
