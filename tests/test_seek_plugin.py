@@ -580,8 +580,20 @@ class TestThePushSaysItIsWorking:
     had started, the panel looked dead and the button invited a second press."""
 
     async def test_the_panel_announces_the_wait(self, dataset, app_db) -> None:
+        """The notice is built by `htmx-handlers.js` from these attributes.
+
+        It used to be an `hx-on::before-request` holding the markup inline,
+        which htmx compiled with `new Function` -- rejected by the production
+        Content-Security-Policy, so the notice never appeared there. The text
+        lives in an attribute now and the element is created on send, carrying
+        the same `seek-working` test id at runtime.
+        """
         html = (await _get(f"/hub/datasets/{dataset.id}")).text
-        assert "seek-working" in html, "nothing tells the user a push is running"
+
+        assert 'data-working-target="seek-result"' in html, (
+            "nothing tells the user a push is running"
+        )
+        assert "data-working-message=" in html, "the notice has no text"
         assert "hx-disabled-elt" in html, "the button can be pressed twice"
 
     def test_a_push_that_created_nothing_says_so(self) -> None:
