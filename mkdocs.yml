@@ -9,6 +9,9 @@ copyright: This documentation was generated with Claude Code (AI-generated conte
 
 theme:
   name: material
+  # The typefaces are served from this site, so Google's copies are not
+  # fetched: no third party sees a reader, and the docs match the application.
+  font: false
   palette:
     primary: teal
     accent: orange
@@ -16,6 +19,9 @@ theme:
     - navigation.sections
     - navigation.expand
     - content.code.copy
+
+extra_css:
+  - stylesheets/metaseed.css
 
 nav:
   - Home: index.md

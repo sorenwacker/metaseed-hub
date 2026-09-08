@@ -7028,7 +7028,10 @@ a.start-option-card:hover {
     color: color-mix(in srgb, var(--clr-warning) 80%, var(--clr-ivory));
     white-space: nowrap;
     cursor: help;
+    position: relative;
 }
+
+
 
 @media (max-width: 40rem) {
     .dev-chip {
