@@ -14,6 +14,7 @@ from metaseed_hub.api import api_router
 from metaseed_hub.auth import verify_token
 from metaseed_hub.config import get_settings
 from metaseed_hub.database import db
+from metaseed_hub.security_headers import ContentSecurityPolicyMiddleware
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR as METASEED_STATIC
 from metaseed_hub.websocket import manager
 
@@ -138,6 +139,10 @@ def create_app() -> FastAPI:
     app.state.mcp_server = mcp_server
     app.mount(MCP_PATH, mcp_server.streamable_http_app())
     app.add_middleware(_AcceptMcpWithoutTrailingSlash)
+
+    # The same policy nginx sends, so development and the tests run under the
+    # rules the deployed site enforces rather than none at all.
+    app.add_middleware(ContentSecurityPolicyMiddleware)
 
     app.mount("/hub", hub_app)
 
