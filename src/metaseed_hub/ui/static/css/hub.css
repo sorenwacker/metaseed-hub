@@ -546,7 +546,21 @@ body {
 .empty-state-desc {
     color: var(--clr-ink-light);
     font-size: 0.875rem;
-    margin: 0;
+    /* The card centres its text, which is unreadable across a full-width grid
+       row once the copy is more than one line. */
+    max-width: 52ch;
+    margin: 0 0 var(--space-md) 0;
+}
+
+/* Ways out of the empty state that are not the primary action: comparing
+   standards, or writing one. Quieter than the description so the button stays
+   the obvious next step. */
+.empty-state-more {
+    max-width: 52ch;
+    margin: var(--space-md) 0 0 0;
+    color: var(--clr-ink-light);
+    font-size: 0.8125rem;
+    line-height: 1.6;
 }
 
 /* Ghost button variant */
