@@ -36,7 +36,9 @@ theme:
     # Matching metaseed's: the tab bar is how a reader moves between the top
     # level sections, and one site having it while the other does not made the
     # two look like different products.
-    - navigation.tabs
+    # No tab bar: the hub has eleven top level sections and the bar cannot
+    # show them at any ordinary width -- the last entry simply vanished.
+    # The sidebar is vertical and scrolls, so nothing is hidden.
     - navigation.sections
     - content.code.copy
     # `edit_uri` alone renders nothing; this is what puts the pencil on a page.
@@ -47,6 +49,9 @@ extra_css:
 
 nav:
   - Home: index.md
+  # The library this is built on. Second, not last: with eleven tabs the
+  # bar overflows and the final entry is the one that disappears.
+  - Metaseed: https://sorenwacker.github.io/metaseed/
   - Getting Started: getting-started.md
   - Datasets:
     - Overview: datasets/index.md
@@ -72,8 +77,6 @@ nav:
   - Developer:
     - Architecture: developer/architecture.md
     - API Reference: developer/api.md
-  # The sibling site, on every page rather than only the landing page.
-  - Metaseed: https://sorenwacker.github.io/metaseed/
 
 markdown_extensions:
   - tables
