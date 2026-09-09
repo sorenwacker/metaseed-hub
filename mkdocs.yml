@@ -76,5 +76,10 @@ nav:
 markdown_extensions:
   - tables
   - admonition
+  # Both are needed for markup metaseed's docs already use -- an image with a
+  # width, a figure, a card grid. Without them that markup passes through as
+  # literal text, which is what happened when a block was copied across.
+  - attr_list
+  - md_in_html
   - pymdownx.highlight
   - pymdownx.superfences

@@ -1,3 +1,7 @@
+<figure markdown="span">
+  ![Metaseed Hub](images/metaseed-logo-400.png){ width="200" }
+</figure>
+
 # Metaseed Hub
 
 - **Use it** — [the hub](https://metaseed.ewi.tudelft.nl/hub/), signed in with your institutional account
