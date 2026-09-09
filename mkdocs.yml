@@ -72,6 +72,8 @@ nav:
   - Developer:
     - Architecture: developer/architecture.md
     - API Reference: developer/api.md
+  # The sibling site, on every page rather than only the landing page.
+  - Metaseed: https://sorenwacker.github.io/metaseed/
 
 markdown_extensions:
   - tables
