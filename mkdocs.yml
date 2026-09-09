@@ -1,6 +1,8 @@
 site_name: Metaseed Hub
 site_description: Collaborative metadata management platform
 repo_url: https://github.com/sorenwacker/metaseed-hub
+repo_name: sorenwacker/metaseed-hub
+edit_uri: edit/main/docs/
 
 # Rendered in the footer of every page. AI-generated content must be disclosed
 # as such (EU AI Act transparency); tests/test_docs_ai_disclosure.py gates this
@@ -37,6 +39,8 @@ theme:
     - navigation.tabs
     - navigation.sections
     - content.code.copy
+    # `edit_uri` alone renders nothing; this is what puts the pencil on a page.
+    - content.action.edit
 
 extra_css:
   - stylesheets/metaseed.css
