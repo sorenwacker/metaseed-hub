@@ -1,0 +1,31 @@
+name: Release
+
+# A tag is what deploys this application: the host's timer checks out the newest
+# `v*` tag. It was not, however, creating anything on GitHub -- 167 tags against
+# 4 releases -- so the repository's "latest release" sat at v0.4.65 from June,
+# and the documentation's version badge, which reads that, showed it too.
+#
+# This makes a release from the tag, with notes generated from the commits since
+# the previous one. It publishes nothing: the package goes to PyPI from its own
+# workflow and the deploy is the host's timer.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
