@@ -17,12 +17,15 @@ The profile's entities and fields are drawn as an entity–relationship diagram.
 
 The diagram overlays both profiles and highlights the differences:
 
-| Legend | Meaning |
-|--------|---------|
-| **Common** | Present and unchanged in both profiles |
-| **Added** | Present only in the compared profile |
-| **Removed** | Present only in the base profile |
-| **Modified** | Present in both but with field-level differences |
+| Legend | Colour | Meaning |
+|--------|--------|---------|
+| **Common** | green | Present and unchanged in both profiles |
+| **Added** | blue | Present only in the compared profile |
+| **Removed** | red | Present only in the base profile |
+| **Modified** | amber | Present in both but with field-level differences |
+| **Conflict** | purple | Present in both with incompatible field attributes |
+
+Green means the two profiles agree. The canvas, the legend and the entity panel use the same colours, and every state also carries a glyph (`=` `+` `-` `~` `!`) so the distinction does not depend on colour vision.
 
 ### Entity details
 
