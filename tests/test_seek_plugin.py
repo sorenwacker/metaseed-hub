@@ -319,6 +319,17 @@ class TestTheStoredKeyIsKept:
         html = (await _get(PROFILE)).text
         assert "leave blank to keep it" in html.lower()
 
+    async def test_a_stored_key_shows_stars_in_its_empty_field(
+        self, dataset, app_db, session
+    ) -> None:
+        # The same sign metaseed's Plugins page gives: the key itself is never
+        # sent back, so the stars are what says one is stored.
+        stars = 'placeholder="********"'
+        assert stars not in (await _get(PROFILE)).text
+
+        await _save_settings("https://seek.example.org", _working)
+        assert stars in (await _get(PROFILE)).text
+
 
 class TestChoosingTheProject:
     """The push took the first project the instance returned, so anyone in more
