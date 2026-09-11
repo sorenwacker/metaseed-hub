@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.51.2] - 260911
+
+### Fixed
+- The explorer canvas shows the colours the legend explains. The hub's copy of the explorer page carried its own table of colours per diff state and painted nodes from it, so common entities stayed white while the edges between them turned green, and the filter checkboxes matched edges by hex colour and hid the wrong ones. The page now draws what the server sends through metaseed's shared `explore-graph.js`, and a test holds the template free of colour tables.
+
+### Changed
+- The metaseed floor is 0.51.2, which ships the shared graph script and the complete node and edge styling.
+
 ## [0.51.1] - 260910
 
 ### Fixed
