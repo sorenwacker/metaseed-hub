@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.51.1] - 260910
+
+### Fixed
+- The explorer linked metaseed's stylesheet a second time, without a version query and after the versioned link every page inherits. The unversioned copy is what a browser caches and, being later in the document, it wins the cascade, so the explorer kept the colours from before the 0.51.0 restyle. A test holds the stylesheet to one versioned link in the base template.
+
+### Changed
+- The metaseed floor is 0.51.1, so the comparison canvas paints the colours the legend explains: green for common, blue for added, purple for conflict.
+
 ## [0.51.0] - 260908
 
 ### Changed
