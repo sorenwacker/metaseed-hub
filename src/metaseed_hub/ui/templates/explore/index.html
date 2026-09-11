@@ -5,6 +5,7 @@
 {% block head %}
 <script src="/hub/hub-static/js/vis-network.min.js"></script>
 <script src="/hub/static/js/erd-common.js?v=1"></script>
+<script src="/hub/static/js/explore-graph.js?v=1"></script>
 <script src="/hub/static/js/explore-panel.js?v=3"></script>
 {% endblock %}
 
@@ -150,50 +151,7 @@ const BASE_URL = '{{ base_url }}';
 // Profile versions data from server
 const profileVersions = {{ profile_versions | tojson | safe }};
 
-// Constants
-const SPEC_BUILDER_COLORS = {
-    regular: {
-        background: '#ffffff',
-        border: '#4a7c59',
-        fontColor: '#2c3e35',
-        highlight: { background: '#87a878', border: '#4a7c59' },
-        hover: { background: '#f5f2ed', border: '#4a7c59' }
-    }
-};
-
-const DIFF_COLORS = {
-    unchanged: {
-        background: '#ffffff',
-        border: '#9e9e9e',
-        fontColor: '#333',
-        highlight: { background: '#f5f5f5', border: '#757575' },
-        hover: { background: '#fafafa', border: '#9e9e9e' }
-    },
-    added: {
-        background: '#e8f5e9',
-        border: '#4caf50',
-        fontColor: '#1b5e20',
-        highlight: { background: '#c8e6c9', border: '#388e3c' },
-        hover: { background: '#dcedc8', border: '#4caf50' }
-    },
-    modified: {
-        background: '#fff8e1',
-        border: '#ff9800',
-        fontColor: '#e65100',
-        highlight: { background: '#ffecb3', border: '#f57c00' },
-        hover: { background: '#fff3e0', border: '#ff9800' }
-    },
-    conflict: {
-        background: '#ffebee',
-        border: '#d32f2f',
-        fontColor: '#b71c1c',
-        highlight: { background: '#ffcdd2', border: '#c62828' },
-        hover: { background: '#ffcdd2', border: '#d32f2f' }
-    }
-};
-
-const FONT_CONFIG = { face: 'monospace', size: 12, align: 'left', multi: 'html' };
-const LAYOUT = { nodeBaseHeight: 40, fieldHeight: 16, nodeWidth: 200 };
+// Node and edge styling come from the server; explore-graph.js draws it.
 
 // State
 let currentProfiles = [];
@@ -324,7 +282,7 @@ function initERD(graphData) {
         setTimeout(() => initERD(graphData), 200);
         return;
     }
-    const { nodeData, edgeData } = buildGraphData(graphData);
+    const { nodeData, edgeData } = buildGraphData(graphData, exploreMode);
     const network = ERD.createNetwork(container, nodeData, edgeData);
     network.on('click', params => {
         if (params.nodes.length > 0) selectEntity(params.nodes[0]);
@@ -336,88 +294,7 @@ function initERD(graphData) {
     });
 }
 
-function buildGraphData(graphData) {
-    const nodeData = [];
-    const edgeData = [];
-    const gridCols = Math.ceil(Math.sqrt(graphData.nodes.length));
-    const spacing = 300;
-
-    graphData.nodes.forEach((node, index) => {
-        const nodeConfig = buildNodeConfig(node);
-        nodeConfig.x = (index % gridCols) * spacing;
-        nodeConfig.y = Math.floor(index / gridCols) * spacing;
-        nodeData.push(nodeConfig);
-    });
-
-    graphData.edges.forEach(edge => {
-        const edgeColor = edge.color?.color || '#666666';
-        edgeData.push({
-            from: edge.from,
-            to: edge.to,
-            label: edge.label || '',
-            arrows: { to: { enabled: true, type: 'arrow' } },
-            color: { color: edgeColor, highlight: edgeColor },
-            font: { size: 10, color: '#2c3e35', background: '#faf8f5' },
-            smooth: { type: 'cubicBezier', roundness: 0.4 },
-            width: 2,
-            title: edge.title || ''
-        });
-    });
-    return { nodeData, edgeData };
-}
-
-function buildNodeConfig(node) {
-    const fields = node.data.fields || [];
-    const diffType = node.data.diff_type || 'unchanged';
-    const colors = exploreMode ? SPEC_BUILDER_COLORS.regular : (DIFF_COLORS[diffType] || DIFF_COLORS.unchanged);
-    const label = buildNodeLabel(node.label, fields);
-    const nodeHeight = LAYOUT.nodeBaseHeight + fields.length * LAYOUT.fieldHeight;
-
-    return {
-        id: node.id,
-        label: label,
-        shape: 'box',
-        size: Math.max(nodeHeight, LAYOUT.nodeWidth) / 2,
-        mass: 1 + fields.length * 0.3,
-        font: { ...FONT_CONFIG, color: colors.fontColor },
-        color: {
-            background: colors.background,
-            border: colors.border,
-            highlight: colors.highlight,
-            hover: colors.hover
-        },
-        borderWidth: diffType === 'conflict' ? 3 : 2,
-        margin: 15,
-        shadow: true,
-        data: node.data
-    };
-}
-
-function buildNodeLabel(name, fields) {
-    let label = `<b>${name}</b>\n────────────────`;
-    if (fields.length === 0) {
-        label += '\n<i>(no fields)</i>';
-        return label;
-    }
-    fields.forEach(field => {
-        const req = field.required ? '*' : ' ';
-        const fk = (field.type === 'entity' || field.type === 'list') && field.items ? '→' : ' ';
-        if (exploreMode) {
-            label += `\n${req}${fk} ${field.name}: ${field.type}`;
-        } else {
-            let ind = ' ';
-            if (field.diff_type === 'conflict') ind = '!';
-            else if (field.diff_type === 'added') ind = '+';
-            else if (field.diff_type === 'removed') ind = '-';
-            else if (field.diff_type === 'modified') ind = '~';
-            label += `\n${ind}${req}${fk} ${field.name}: ${field.type}`;
-        }
-    });
-    return label;
-}
-
-// selectEntity and closeEditorPanel come from metaseed's explore-panel.js,
-// with the rules list and the profile block: the panel is the library's.
+// buildGraphData, buildNodeConfig and buildNodeLabel come from explore-graph.js.
 
 function applyFilters() {
     if (!originalGraphData || currentProfiles.length < 2) return;
@@ -439,11 +316,7 @@ function applyFilters() {
     const visibleNodeIds = new Set(filteredNodes.map(n => n.id));
     const filteredEdges = originalGraphData.edges.filter(edge => {
         if (!visibleNodeIds.has(edge.from) || !visibleNodeIds.has(edge.to)) return false;
-        const color = edge.color?.color;
-        if (color === '#666666') return showCommon;
-        if (color === '#4caf50') return showCompare;
-        if (color === '#f44336') return showBase;
-        return true;
+        return edgeIsVisible(edge, { showCommon, showBase, showCompare });
     });
 
     initERD({ nodes: filteredNodes, edges: filteredEdges });
@@ -493,7 +366,7 @@ function showEntity() {
     hiddenEntities.delete(nodeId);
     const originalNode = originalGraphData?.nodes.find(n => n.id === nodeId);
     if (originalNode) {
-        const nodeConfig = buildNodeConfig(originalNode);
+        const nodeConfig = buildNodeConfig(originalNode, exploreMode);
         nodeConfig.opacity = 1;
         ERD.getNodes().update(nodeConfig);
     }
