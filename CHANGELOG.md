@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.51.3] - 260911
+
+### Fixed
+- The explorer's Explore button and Show/Hide toggles sit above the profile's description and its validation rules, which ran long and pushed them off the screen. metaseed 0.51.0 made this change and the hub's copy of the page never received it; a test now holds the order in both.
+
 ## [0.51.2] - 260911
 
 ### Fixed
