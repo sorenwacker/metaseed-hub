@@ -53,11 +53,11 @@
             <input class="form-input" id="seek-api-key" name="api_key" type="password"
                    {% if not connection %}required{% endif %}
                    autocomplete="off" data-testid="seek-api-key"
-                   placeholder="{% if connection %}Stored — leave blank to keep it{% endif %}">
+                   placeholder="{% if connection %}********{% endif %}">
             <p class="form-hint">
                 Created in SEEK under your profile &rarr; API tokens.
                 {% if connection %}
-                Your key is stored; leave this blank to keep it and change only the URL.
+                Your key is stored; leave blank to keep it and change only the URL.
                 {% else %}
                 Saved whether or not the check succeeds, so a wrong URL never costs it.
                 {% endif %}
