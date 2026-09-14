@@ -29,6 +29,16 @@ def test_the_standards_picker_says_where_to_ask_for_a_missing_one() -> None:
     assert ISSUES in page, "the note must link the tracker where profiles are asked for"
 
 
+def test_the_note_comes_before_the_standards_it_qualifies() -> None:
+    """Below the grid it was 1500px down: the reader who needs it is the one
+    who stopped scrolling."""
+    page = _read("dataset_new.html")
+
+    assert page.index('data-testid="missing-profile-note"') < page.index(
+        'class="standards-grid"'
+    ), "the note must be readable without scrolling every standard"
+
+
 def test_the_note_sits_with_the_standards_not_the_other_sources() -> None:
     """Importing a file and published specs are separate answers; the note is
     about the shipped standards, so it belongs in that panel."""
