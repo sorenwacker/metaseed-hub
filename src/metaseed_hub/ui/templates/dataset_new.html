@@ -68,6 +68,13 @@
                     </div>
                     {% endfor %}
                 </div>
+                {# The grid is what metaseed ships; a reader whose standard is
+                   absent had nothing to act on, so say where to ask for it.
+                   The profiles come from metaseed, so its tracker is the one. #}
+                <p class="form-hint" data-testid="missing-profile-note">
+                    Can't find the standard you need?
+                    <a href="https://github.com/sorenwacker/metaseed/issues" target="_blank" rel="noopener">Let us know</a>.
+                </p>
             </div>
 
             <!-- Import Tab -->
