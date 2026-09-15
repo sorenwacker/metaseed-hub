@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.52.0] - 260915
+
+### Added
+- A reader whose standard is not listed is told where to ask. The picker showed only what metaseed ships, with nothing to say about the rest; the note sits above the standards, since below the grid it stood 1500px down and a reader who stopped scrolling never saw it.
+- A stored SEEK key shows as stars, the same sign metaseed's Plugins page gives. A saved key is never sent back to the page, so a configured connection looked exactly like an unconfigured one.
+
+### Fixed
+- The explorer's scripts carry a version the hub keeps current. The hub serves metaseed's `explore-graph.js` and `explore-panel.js` rather than keeping copies, but pins their versions in its own template, and those pins sat at `?v=1` and `?v=3` while the scripts changed — so a user whose browser had the page cached kept drawing the old canvas. The anti-fork gate checks the script paths; a new gate holds every reference to a `?v=` query, which is why this had to be caught by hand.
+
 ## [0.51.3] - 260911
 
 ### Fixed
