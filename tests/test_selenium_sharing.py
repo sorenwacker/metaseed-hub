@@ -141,3 +141,47 @@ def test_a_spec_draft_can_be_shared_with_a_colleague(driver) -> None:
     )
     member_list = driver.find_element(By.ID, "member-list").text
     assert "log in" not in member_list.lower(), member_list
+
+
+# The text a control needs room for, measured with the control's own font.
+# A select also draws its arrow inside the padding box, so it gets that width on
+# top of its text.
+_TEXT_FITS = """
+const el = arguments[0];
+const style = getComputedStyle(el);
+const ctx = document.createElement('canvas').getContext('2d');
+ctx.font = style.font;
+const text = el.tagName === 'SELECT'
+    ? el.options[el.selectedIndex].text.trim()
+    : (el.placeholder || el.textContent.trim());
+const arrow = el.tagName === 'SELECT' ? 16 : 0;
+const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+const room = el.clientWidth - padding - arrow;
+return {text: text, needed: ctx.measureText(text).width, room: room};
+"""
+
+
+def test_the_share_form_shows_its_text_in_full(driver) -> None:
+    """Reported: in the dataset sidebar the email field read "Email c" and the
+    role read "View", because the field, the role and the button were squeezed
+    onto one row."""
+    from tests.test_selenium_graph import _dataset_with_example_data
+
+    dataset_id = _dataset_with_example_data(driver)
+    driver.get(f"{BASE}/hub/datasets/{dataset_id}")
+    sharing_tab = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.sidebar-tab[data-tab="sharing"]'))
+    )
+    driver.execute_script("arguments[0].click();", sharing_tab)
+
+    form = '[data-testid="share-form"]'
+    for selector in (
+        f"{form} input[name='email']",
+        f"{form} select[name='role']",
+        f"{form} button",
+    ):
+        control = WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, selector))
+        )
+        fit = driver.execute_script(_TEXT_FITS, control)
+        assert fit["needed"] <= fit["room"], f"{selector}: {fit}"

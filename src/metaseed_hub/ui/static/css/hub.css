@@ -580,19 +580,24 @@ body {
     color: var(--clr-danger);
 }
 
+/* The panel sits in narrow sidebars: the address gets a line of its own, the
+   role and the button share the next, so neither is cut to a few letters. */
 .member-add {
     display: flex;
-    gap: var(--space-sm);
+    flex-wrap: wrap;
+    gap: var(--space-xs);
     padding-top: var(--space-md);
     border-top: 1px solid var(--clr-border);
 }
 
-.member-add .form-input {
-    flex: 1;
+.member-add input[type="email"] {
+    flex: 1 1 100%;
+    min-width: 0;
 }
 
-.member-add .form-select {
-    width: 110px;
+.member-add select {
+    flex: 1;
+    min-width: 0;
 }
 
 .account-card, .project-card {
@@ -5472,22 +5477,6 @@ a.start-option-card:hover {
     border-radius: var(--radius-sm);
 }
 
-.sidebar-sharing .member-list {
-    padding: 0 var(--space-md) var(--space-sm);
-}
-
-.sidebar-sharing .member-add {
-    display: flex;
-    gap: var(--space-xs);
-    padding: var(--space-sm) var(--space-md);
-    border-top: 1px solid var(--clr-parchment);
-}
-
-.sidebar-sharing .member-add .form-input {
-    flex: 1;
-    min-width: 0;
-}
-
 .member-row {
     display: flex;
     align-items: center;
@@ -6147,16 +6136,6 @@ a.start-option-card:hover {
 
 .sharing-section .member-list {
     margin-bottom: var(--space-md);
-}
-
-.sharing-section .member-add {
-    display: flex;
-    gap: var(--space-xs);
-}
-
-.sharing-section .member-add .form-input {
-    flex: 1;
-    min-width: 0;
 }
 
 /* Editor Error State */
