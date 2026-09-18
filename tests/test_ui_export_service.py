@@ -61,6 +61,20 @@ def test_export_creates_sheet_per_entity_type_with_rows() -> None:
     assert study_row["unique_id"] == "st-1"
 
 
+def test_a_heading_note_says_what_a_valid_value_is() -> None:
+    # The note is metaseed's (0.53.0); the hub's part is to run a version that
+    # writes it, so a person filling in a downloaded sheet sees the pattern and
+    # the rules before import rather than in the validation report after it.
+    workbook = load_workbook(export_to_bytes(_facade_with_tree()))
+
+    headings = {cell.value: cell for cell in workbook["Study"][1]}
+    note = headings["start_date"].comment.text.splitlines()
+
+    assert "Optional · Date and time" in note
+    assert any(line.startswith("Pattern: ") for line in note)
+    assert any(line.startswith("Rules: ") for line in note)
+
+
 def test_export_includes_entities_embedded_in_nested_list_fields() -> None:
     client = MetaseedClient("miappe", "1.1")
     client.create_entity(
