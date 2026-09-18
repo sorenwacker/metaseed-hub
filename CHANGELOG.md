@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.53.0] - 260918
+
+### Added
+- A downloaded Excel sheet's column headings say what a valid value is. The workbook is metaseed's, and 0.53.0 extends the note on each heading from the description to the type in words, the pattern, length, range, allowed values, ontologies, the field a value must match, uniqueness and every profile-level rule naming the field — what a person filling in the sheet otherwise learned from the validation report after import. The hub requires metaseed 0.53.0, and a test reads the note from an exported workbook.
+
 ## [0.52.0] - 260915
 
 ### Added
