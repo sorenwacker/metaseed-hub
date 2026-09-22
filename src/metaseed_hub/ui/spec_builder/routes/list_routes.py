@@ -10,8 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
-from metaseed_hub.models import Spec, SpecDraft, SpecDraftMember, SpecStatus
-from metaseed_hub.sharing import account_owner
+from metaseed_hub.models import Spec, SpecDraft, SpecStatus
+from metaseed_hub.sharing import accessible_ids, account_owner, resource_for
 from metaseed_hub.ui.spec_builder.access import (
     create_new_draft,
     free_draft_name,
@@ -55,12 +55,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         )
         owned_drafts = list(owned_result.scalars().all())
 
-        # Get drafts shared with user
+        # Drafts shared with the user: by membership or a collaboration grant
         shared_result = await session.execute(
             select(SpecDraft)
             .options(selectinload(SpecDraft.tenant))
-            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-            .where(SpecDraftMember.user_id == user_id)
+            .where(SpecDraft.id.in_(await accessible_ids(session, resource_for("draft"), user_id)))
             .order_by(SpecDraft.updated_at.desc())
         )
         shared_drafts = list(shared_result.scalars().all())

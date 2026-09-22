@@ -19,12 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
-from metaseed_hub.models import (
-    Dataset,
-    DatasetMember,
-    SpecDraft,
-    SpecDraftMember,
-)
+from metaseed_hub.models import Dataset, SpecDraft
+from metaseed_hub.sharing import accessible_ids, resource_for
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     DuplicateAccountEmailError,
@@ -51,6 +47,7 @@ from metaseed_hub.ui.routes import (
     init_entity_templates,
     is_admin,
     ontology_router,
+    people_router,
     seek_router,
     sharing_router,
     table_router,
@@ -273,6 +270,7 @@ def create_hub_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(seek_router)
     app.include_router(sharing_router)
+    app.include_router(people_router)
 
     # Add spec builder routes
     spec_builder_router = create_spec_builder_router(templates)
@@ -308,11 +306,13 @@ def create_hub_app() -> FastAPI:
         )
         owned_datasets = list(ds_result.scalars().all())
 
-        # Get datasets shared with this user via DatasetMember
+        # Datasets shared with this user: by membership or a collaboration grant
         shared_ds_result = await session.execute(
             select(Dataset)
-            .join(DatasetMember, DatasetMember.dataset_id == Dataset.id)
-            .where(DatasetMember.user_id == db_user.id, Dataset.deleted_at.is_(None))
+            .where(
+                Dataset.id.in_(await accessible_ids(session, resource_for("dataset"), db_user.id)),
+                Dataset.deleted_at.is_(None),
+            )
             .order_by(Dataset.updated_at.desc())
         )
         shared_datasets = list(shared_ds_result.scalars().all())
@@ -333,11 +333,12 @@ def create_hub_app() -> FastAPI:
         )
         owned_specs = list(spec_result.scalars().all())
 
-        # Get specs shared with this user via SpecDraftMember
+        # Drafts shared with this user: by membership or a collaboration grant
         shared_result = await session.execute(
             select(SpecDraft)
-            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-            .where(SpecDraftMember.user_id == db_user.id)
+            .where(
+                SpecDraft.id.in_(await accessible_ids(session, resource_for("draft"), db_user.id))
+            )
             .order_by(SpecDraft.updated_at.desc())
         )
         shared_specs = list(shared_result.scalars().all())

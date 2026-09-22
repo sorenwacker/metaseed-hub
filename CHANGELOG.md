@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- SRAM collaborations. Each sign-in records the group URNs the identity provider reported, replacing the previous record; the profile lists them under **Your collaborations**. **People** in the header lists, per collaboration, the members who have signed in to the hub, and the sharing panel's email field suggests them. An owner can grant a whole collaboration, or one of its groups, the editor or viewer role on a dataset, a draft or a published specification; the grant is a fallback behind every per-person rule, owner cannot be granted, and items reached through a grant appear on the dataset, builder and explorer lists. A record older than `MEMBERSHIP_MAX_AGE_DAYS` (30) grants nothing and lists nobody until the person signs in again, which bounds how long someone who left a collaboration keeps reaching its items through an access token.
+
 ### Changed
 - A specification draft is one name at one version, not one name. Pushing the next version of a profile from metaseed used to replace the draft of the previous one; it now adds a draft beside it, so an account can hold 1.2 and 1.3 of a profile as drafts at once, as its specs directory does. Creating, importing or cloning a draft is refused only at a name and version already held. An MCP tool's `draft` argument accepts `name@version` when the name alone is ambiguous. Migration `260922_drafts_per_version` rekeys the unique constraint.
 

@@ -98,26 +98,21 @@ async def load_profile_spec(
         accessible to the caller's tenant.
     """
     from metaseed_hub.models import Spec, SpecDraft, SpecStatus
+    from metaseed_hub.sharing import accessible_ids, resource_for
 
     if profile_key.startswith("draft:"):
         if tenant_id is None and user_id is None:
             return None
         draft_id = profile_key[6:]
         # The caller's own tenant, OR a draft shared with them: the catalog
-        # offers drafts via SpecDraftMember across tenants, and offering a
-        # draft the loader then refuses left the picker lying.
-        from metaseed_hub.models import SpecDraftMember
-
+        # offers shared drafts across tenants, and offering a draft the
+        # loader then refuses left the picker lying.
         conditions = []
         if tenant_id is not None:
             conditions.append(SpecDraft.tenant_id == tenant_id)
         if user_id is not None:
-            member = (
-                select(SpecDraftMember.spec_draft_id)
-                .where(SpecDraftMember.user_id == user_id)
-                .scalar_subquery()
-            )
-            conditions.append(SpecDraft.id.in_(member))
+            shared = await accessible_ids(session, resource_for("draft"), user_id)
+            conditions.append(SpecDraft.id.in_(shared))
         result = await session.execute(
             select(SpecDraft).where(SpecDraft.id == draft_id, or_(*conditions))
         )
@@ -216,14 +211,8 @@ async def _build_explore_catalog(
     Returns:
         A tuple of (profiles, profile_versions, profile_display_names).
     """
-    from metaseed_hub.models import (
-        Spec,
-        SpecDraft,
-        SpecDraftMember,
-        SpecStatus,
-        Tenant,
-        User,
-    )
+    from metaseed_hub.models import Spec, SpecDraft, SpecStatus, Tenant, User
+    from metaseed_hub.sharing import accessible_ids, resource_for
     from metaseed_hub.ui.dependencies import tenant_slug_for
 
     # Built-in profiles from SpecLoader
@@ -267,12 +256,12 @@ async def _build_explore_catalog(
     )
     published_specs: list[Spec] = list(specs_result.scalars().all())
 
-    # Drafts shared with the user via SpecDraftMember
+    # Drafts shared with the user: by membership or a collaboration grant
     if db_user:
         shared_result = await session.execute(
-            select(SpecDraft)
-            .join(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-            .where(SpecDraftMember.user_id == db_user.id)
+            select(SpecDraft).where(
+                SpecDraft.id.in_(await accessible_ids(session, resource_for("draft"), db_user.id))
+            )
         )
         shared_drafts = list(shared_result.scalars().all())
         existing_ids = {d.id for d in user_drafts}

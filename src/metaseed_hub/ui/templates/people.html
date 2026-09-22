@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}People - Metaseed Hub{% endblock %}
+
+{% block content %}
+<div>
+    <header class="page-header">
+        <h1>People</h1>
+        <p>Who is in the collaborations you are in, as your identity provider reported them at your last sign-in.</p>
+    </header>
+
+    {% if collaborations %}
+    {% for collaboration, members in collaborations %}
+    <section class="profile-card collaboration-card" data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
+        <h2>{{ collaboration.name }} <span class="collaboration-org">({{ collaboration.organisation }})</span></h2>
+        <p class="form-help">Your groups: {{ collaboration.groups|join(", ") }}</p>
+        <div class="member-list">
+            {% for person in members %}
+            <div class="member-row" data-testid="person-{{ person.email }}">
+                <span class="member-avatar">{{ (person.display_name or person.email)[0]|upper }}</span>
+                <span class="member-name">{{ person.display_name or person.email }}</span>
+                <code class="member-email">{{ person.email }}</code>
+                <span class="member-role">{% if person.last_login_at %}signed in {{ person.last_login_at.strftime("%Y-%m-%d") }}{% else %}never signed in{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="form-help">Only people who have signed in to the hub are listed. SRAM has the full membership.</p>
+    </section>
+    {% endfor %}
+    {% else %}
+    <div class="profile-card" data-testid="no-collaborations">
+        <p>Your identity provider reported no collaboration at your last sign-in, so there is nobody to list. If you have joined one since, sign out and in again.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

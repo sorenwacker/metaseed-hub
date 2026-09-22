@@ -51,8 +51,15 @@
       hx-post="/hub/sharing/{{ kind }}/{{ resource_id }}/members"
       hx-target="#members-panel" hx-swap="innerHTML">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input class="form-input" type="email" name="email" required
+    <input class="form-input" type="email" name="email" required list="people-suggestions"
            data-testid="share-email" placeholder="Email on their profile">
+    {# The people in the viewer's collaborations, so a colleague's address
+       need not be asked for. #}
+    <datalist id="people-suggestions">
+        {% for email, name in people_suggestions %}
+        <option value="{{ email }}">{{ name }}</option>
+        {% endfor %}
+    </datalist>
     <select class="form-input" name="role" data-testid="share-role">
         {% for role in roles %}
         <option value="{{ role.value }}" {% if role.value == 'viewer' %}selected{% endif %}>
@@ -62,4 +69,64 @@
     </select>
     <button class="btn btn-sm btn-primary" type="submit" data-testid="share-submit">Share</button>
 </form>
+{% endif %}
+
+{# A grant reaches everyone in a collaboration, or one of its groups, as a
+   fallback behind the per-person rows above. Never as owner. #}
+<h4 class="members-subheading">Collaborations</h4>
+<div id="grant-list" data-testid="grant-list">
+    {% for grant, name in grants %}
+    <div class="member-row" data-testid="grant-{{ name }}">
+        <span class="member-avatar member-avatar-group">&#9776;</span>
+        <span class="member-name">{{ name }}</span>
+        {% if viewer_is_owner %}
+        <select class="member-role-select" name="role"
+                data-testid="grant-role-{{ name }}"
+                hx-patch="/hub/sharing/{{ kind }}/{{ resource_id }}/collaborations/{{ grant.id }}"
+                hx-target="#members-panel" hx-swap="innerHTML">
+            {% for role in grant_roles %}
+            <option value="{{ role.value }}" {% if grant.role.value == role.value %}selected{% endif %}>
+                {{ role.value|capitalize }}
+            </option>
+            {% endfor %}
+        </select>
+        <button class="btn-icon btn-danger-text"
+                data-testid="revoke-{{ name }}"
+                hx-delete="/hub/sharing/{{ kind }}/{{ resource_id }}/collaborations/{{ grant.id }}"
+                hx-target="#members-panel" hx-swap="innerHTML"
+                hx-confirm="Remove {{ name }}?"
+                title="Remove">&times;</button>
+        {% else %}
+        <span class="member-role">{{ grant.role.value|capitalize }}</span>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="empty-state-inline">Not shared with a collaboration.</p>
+    {% endfor %}
+</div>
+
+{% if viewer_is_owner and collaborations %}
+<form class="member-add" data-testid="grant-form"
+      hx-post="/hub/sharing/{{ kind }}/{{ resource_id }}/collaborations"
+      hx-target="#members-panel" hx-swap="innerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <select class="form-input" name="urn" data-testid="grant-urn">
+        {% for collaboration in collaborations %}
+        <option value="{{ collaboration.urn }}">{{ collaboration.name }} ({{ collaboration.organisation }})</option>
+        {% for group in collaboration.groups %}
+        <option value="{{ collaboration.urn }}:{{ group }}">&nbsp;&nbsp;{{ collaboration.name }} &rsaquo; {{ group }}</option>
+        {% endfor %}
+        {% endfor %}
+    </select>
+    <select class="form-input" name="role" data-testid="grant-role">
+        {% for role in grant_roles %}
+        <option value="{{ role.value }}" {% if role.value == 'viewer' %}selected{% endif %}>
+            {{ role.value|capitalize }}
+        </option>
+        {% endfor %}
+    </select>
+    <button class="btn btn-sm btn-primary" type="submit" data-testid="grant-submit">Share</button>
+</form>
+{% elif viewer_is_owner %}
+<p class="form-help">Your identity provider reported no collaboration at your last sign-in.</p>
 {% endif %}
