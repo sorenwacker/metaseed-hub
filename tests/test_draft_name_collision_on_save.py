@@ -1,8 +1,8 @@
 """Saving a draft must not fail because another draft shares its spec's name.
 
 A draft's row name is rewritten from its spec on every save. Two drafts whose
-specs carry the same name therefore collided on
-``uq_spec_drafts_tenant_user_name``, and the IntegrityError took down saving,
+specs carry the same name and version therefore collided on
+``uq_spec_drafts_tenant_user_name_version``, and the IntegrityError took down saving,
 deleting a field, and importing alike -- the draft became unsavable and the work
 in it unreachable. Seen in production: a user with two drafts of
 ``acdc_metadata_architecture`` could not save either.
@@ -33,8 +33,10 @@ async def _two_drafts_sharing_a_spec_name(session: AsyncSession):
     user = make_user(tenant=tenant, keycloak_id=sub)
     session.add(user)
     await session.flush()
-    first = make_spec_draft(tenant=tenant, user=user, name="shared-spec")
-    second = make_spec_draft(tenant=tenant, user=user, name="shared-spec-other")
+    # Both at the version the saved state declares: a name is only taken at
+    # its version.
+    first = make_spec_draft(tenant=tenant, user=user, name="shared-spec", version="1.0")
+    second = make_spec_draft(tenant=tenant, user=user, name="shared-spec-other", version="1.0")
     session.add_all([first, second])
     await session.commit()
     return user, first, second

@@ -196,27 +196,23 @@ async def _push_draft(
     digest = content_hash(spec)
     state = SpecBuilderState()
     state.spec = spec
-    # By name alone: draft names are unique per (tenant, user), so matching on
-    # the version as well missed the existing draft when a push bumped it, and
-    # the insert below then hit the unique index as an unhandled 500.
+    # A draft is one name at one version, as in the specs directory the push
+    # comes from: the same version updates in place, another version is a
+    # second draft beside it.
     draft = (
         await session.execute(
             select(SpecDraft).where(
                 SpecDraft.user_id == caller.id,
                 SpecDraft.name == spec.name,
+                SpecDraft.version == spec.version,
             )
         )
     ).scalar_one_or_none()
     if draft is not None:
         current = _draft_spec(draft)
-        if (
-            current is not None
-            and draft.version == spec.version
-            and content_hash(current) == digest
-        ):
+        if current is not None and content_hash(current) == digest:
             response.status_code = status.HTTP_200_OK
             return _draft_summary(draft)
-        draft.version = spec.version
         draft.spec_data = state.to_dict()
         await session.commit()
         await session.refresh(draft)
@@ -303,9 +299,10 @@ async def push_spec(
     """Push a profile document into the caller's account.
 
     Without ``publish``, it becomes -- or replaces -- the caller's private
-    draft of that name and version: only the caller sees it, and pushing a
-    revised profile updates it. With ``publish``, it is published for every
-    hub user under the version-bump gate.
+    draft of that name and version: only the caller sees it, pushing the same
+    version again updates it, and another version is a draft beside it. With
+    ``publish``, it is published for every hub user under the version-bump
+    gate.
 
     Returns 201 with what was created, or 200 when the account already held
     exactly this content.

@@ -140,13 +140,20 @@ class SpecDraft(TimestampMixin, Base):
     """User-defined specification drafts in the spec builder.
 
     Stores the working state of a spec being built, allowing users to
-    save progress and resume later. Users can have multiple drafts within
-    a tenant, each with a unique name per user.
+    save progress and resume later. A draft is one name at one version
+    within a user's account, so several versions of a name coexist as
+    drafts, the way a specs directory holds ``<name>/<version>``.
     """
 
     __tablename__ = "spec_drafts"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "user_id", "name", name="uq_spec_drafts_tenant_user_name"),
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "name",
+            "version",
+            name="uq_spec_drafts_tenant_user_name_version",
+        ),
         Index("ix_spec_drafts_tenant_id", "tenant_id"),
         Index("ix_spec_drafts_user_id", "user_id"),
     )

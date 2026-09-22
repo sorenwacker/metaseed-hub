@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- A specification draft is one name at one version, not one name. Pushing the next version of a profile from metaseed used to replace the draft of the previous one; it now adds a draft beside it, so an account can hold 1.2 and 1.3 of a profile as drafts at once, as its specs directory does. Creating, importing or cloning a draft is refused only at a name and version already held. An MCP tool's `draft` argument accepts `name@version` when the name alone is ambiguous. Migration `260922_drafts_per_version` rekeys the unique constraint.
+
 ## [0.53.0] - 260918
 
 ### Added

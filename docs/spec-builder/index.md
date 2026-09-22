@@ -7,6 +7,8 @@ A specification exists in two states:
 - **Draft** — editable; listed under **My Drafts**.
 - **Published** — an immutable released version; listed under **Published Specifications**.
 
+A draft is identified by its name and version within your account, so you can hold several versions of one specification as drafts at once, for instance the version in use and the next one. Creating or importing a second draft at a name and version you already hold is refused; a draft whose name arrives from a template or an import gets a suffix instead.
+
 ## Creating a specification
 
 1. On the Specs page, click **+ New Specification**.

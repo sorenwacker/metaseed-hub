@@ -75,6 +75,8 @@ Each of these reports what is still missing after the change, using the profile'
 | `list_spec_drafts` | Your drafts |
 | `spec_delete_draft` | Remove one of your own drafts |
 
+A tool's `draft` argument is the draft's name. When you hold several versions of that name as drafts, the name alone is ambiguous and the tool says so; name one as `name@version`, for example `cropxr-phenotyping@1.3`.
+
 A specification is a tree: every entity except the root must be linked under a parent by a field on the parent whose type is `list` or `entity` and whose `items` names the child. An unlinked entity is an orphan a dataset can never reach, and `spec_validate` does not flag orphans. The endpoint's instructions carry this workflow (shared with the standalone metaseed MCP server), so connected agents link entities as they build.
 
 #### Editing constraints
@@ -135,7 +137,7 @@ curl -H "Authorization: Bearer msh_your_token" \
   https://metaseed.ewi.tudelft.nl/api/datasets
 ```
 
-Three calls exist for a metaseed instance that pushes and pulls against the hub (see *Pushing and pulling with metaseed-hub* in the metaseed documentation): `GET /api/me` names the account and tenant the token acts in; `GET /api/specs` lists the published specifications and `GET /api/specs/{name}/{version}` returns one as a YAML profile document; `POST /api/specs` with `{"yaml": "..."}` pushes a profile into your account as a **private draft** — only you see it, and pushing a revised document updates it in place; `{"yaml": "...", "publish": true}` publishes it for every hub user instead, under the same version-bump gate the spec builder applies (identical content already published answers 200; a version taken by different content, or below what the change requires, answers 409 with the reason). `POST /api/specs/{id}/unpublish` withdraws a published specification back to a private draft, with the same permissions as the *Unpublish* button. Each entry `GET /api/specs` lists carries `visibility` (`draft` or `published`) and `mine`. `GET`, `POST` and `PATCH` on `/api/datasets` carry datasets both ways.
+Three calls exist for a metaseed instance that pushes and pulls against the hub (see *Pushing and pulling with metaseed-hub* in the metaseed documentation): `GET /api/me` names the account and tenant the token acts in; `GET /api/specs` lists the published specifications and `GET /api/specs/{name}/{version}` returns one as a YAML profile document; `POST /api/specs` with `{"yaml": "..."}` pushes a profile into your account as a **private draft** — only you see it; pushing the same name and version again updates that draft in place, and a new version becomes a second draft beside it; `{"yaml": "...", "publish": true}` publishes it for every hub user instead, under the same version-bump gate the spec builder applies (identical content already published answers 200; a version taken by different content, or below what the change requires, answers 409 with the reason). `POST /api/specs/{id}/unpublish` withdraws a published specification back to a private draft, with the same permissions as the *Unpublish* button. Each entry `GET /api/specs` lists carries `visibility` (`draft` or `published`) and `mine`. `GET`, `POST` and `PATCH` on `/api/datasets` carry datasets both ways.
 
 The hub accepts exactly two credentials: a SRAM access token, which a browser obtains through the sign-in flow, and a token from this page. A token acts for your own data only and never carries administrator rights, whatever your account holds.
 
