@@ -6,7 +6,7 @@ every existing row is: they were all published hub-wide, so a NULL default
 preserves exactly what people can see today.
 
 Revision ID: 260924_spec_audience
-Revises: 260922_collaborations
+Revises: 260924_membership_read_at
 Create Date: 2026-09-24
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "260924_spec_audience"
-down_revision: str | None = "260922_collaborations"
+down_revision: str | None = "260924_membership_read_at"
 branch_labels: str | None = None
 depends_on: str | None = None
 
