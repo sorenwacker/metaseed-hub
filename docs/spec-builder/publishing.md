@@ -25,7 +25,7 @@ A specification has one of three audiences, and publishing is where you choose b
 | **A collaboration** | Every member of that [SRAM collaboration](../collaboration.md#collaborations) |
 | **Everyone** | Every user of this hub |
 
-**Publish** asks which. The list offers the collaborations your identity provider reported at your last sign-in, plus **Everyone**. Publishing to a collaboration is the middle ground a working group needs: the specification is immutable and version-gated like any release, and datasets can be built on it, but it is not announced to the whole hub.
+**Publish** asks which. The list offers the collaborations your identity provider reported at your last sign-in, plus **Everyone**. A collaboration's individual groups are not offered: sharing reaches a group, because a grant is about who may touch one thing, but a release belongs to the collaboration. Publishing to a collaboration is the middle ground a working group needs: the specification is immutable and version-gated like any release, and datasets can be built on it, but it is not announced to the whole hub.
 
 Members of the collaboration see it under **Published Specifications**, can select it as the profile for their datasets, and can fork it into a draft of their own. Everyone else does not see it at all: it is absent from the specifications list, from the profile picker, from the explorer and from the REST and agent interfaces, exactly as if it did not exist.
 

@@ -19,7 +19,7 @@
 
 A publish without an `audience` reaches every user of the hub, which is what publishing has always meant. With one, the specification is released to that collaboration alone: its members see it and can build datasets on it, and for everyone else it is absent from every listing this API offers.
 
-The URNs you may name are the ones `GET /api/me` reports under `collaborations`. Any other is refused with 403. An `audience` sent without `publish` is refused with 422, because a draft is private and is shared with people or a collaboration rather than published to one. Every entry `GET /api/specs` returns carries `audience`: the collaboration a published specification went to, or null for everyone.
+The URNs you may name are the ones `GET /api/me` reports under `collaborations`, and only those: a group URN is refused with 403, because a release is addressed to a collaboration or to the whole hub. Any collaboration you are not in is refused the same way. An `audience` sent without `publish` is refused with 422, because a draft is private and is shared with people or a collaboration rather than published to one. Every entry `GET /api/specs` returns carries `audience`: the collaboration a published specification went to, or null for everyone.
 
 
 ## Hub UI Routes

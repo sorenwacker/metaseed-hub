@@ -63,16 +63,15 @@
                   hx-target="#notification-container"
                   hx-swap="beforeend"
                   hx-confirm="Publish this specification?&#10;&#10;The draft is replaced by the published specification, which cannot be edited in place. You can undo this with Unpublish, which brings it back as a private draft.">
-                <label class="visually-hidden" for="publish-audience">Publish to</label>
-                <select class="form-input form-input-sm" id="publish-audience"
+                {# A release is addressed to a collaboration or to the hub,
+                   never to one of a collaboration's groups. #}
+                <select class="publish-audience" id="publish-audience"
                         name="audience_urn" data-testid="publish-audience"
+                        aria-label="Publish to"
                         title="Who will be able to see this specification">
                     <option value="">Everyone on this hub</option>
                     {% for collaboration in publish_audiences %}
                     <option value="{{ collaboration.urn }}">{{ collaboration.name }} ({{ collaboration.organisation }})</option>
-                    {% for group in collaboration.groups %}
-                    <option value="{{ collaboration.urn }}:{{ group }}">&nbsp;&nbsp;{{ collaboration.name }} &rsaquo; {{ group }}</option>
-                    {% endfor %}
                     {% endfor %}
                 </select>
                 <button class="btn btn-sm btn-success" type="submit"
