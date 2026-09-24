@@ -18,9 +18,11 @@ from metaseed_hub.collaborations import (
     NotInCollaborationError,
     collaborations_of,
     entitled_urns_of,
+    grant_label,
     people_in,
     record_memberships,
 )
+from metaseed_hub.entitlements import entitled_urns
 from metaseed_hub.models import SpecDraft
 from metaseed_hub.sharing import (
     NotAnOwnerError,
@@ -303,3 +305,20 @@ async def test_lists_reach_items_shared_through_a_grant(
 
     assert await accessible_ids(session, resource, colleague.id) == {granted}
     assert await accessible_ids(session, resource, stranger.id) == {private}
+
+
+async def test_the_snapshot_and_a_live_token_yield_the_same_urns(session: AsyncSession) -> None:
+    """One implementation, read twice. The snapshot reader re-derived the
+    collaboration URN with its own loop, so the two could drift apart while
+    both looked right."""
+    _, user = await _person(session, "p4", "p4@example.org")
+    reported = [PHENO, SEQ, OTHER, NOT_A_GROUP]
+    await record_memberships(session, user.id, reported)
+    await session.commit()
+
+    assert await entitled_urns_of(session, user.id) == entitled_urns(reported)
+
+
+async def test_a_grant_is_labelled_by_its_collaboration_not_its_urn() -> None:
+    assert grant_label(CROPXR) == "cropxr"
+    assert grant_label(PHENO) == "cropxr / phenotyping"

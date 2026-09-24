@@ -223,7 +223,7 @@ async def role_of(
     """``user_id``'s role in a resource, or ``None`` if they have none.
 
     This is the one answer every layer reads: the web routes, the REST API,
-    the MCP tools and the spec builder. Three rules, in order:
+    the MCP tools and the spec builder. Four rules, in order:
 
     1. An explicit membership row decides, so a creator given a lesser role
        keeps it.
@@ -277,14 +277,38 @@ async def _granted_role(
     return max(roles, key=_GRANT_RANK.__getitem__) if roles else None
 
 
+async def granting_urns(
+    session: AsyncSession, resource: SharedResource, user_id: str
+) -> dict[str, str]:
+    """Each resource a collaboration grant reaches for ``user_id``, and which one.
+
+    A list page names the collaboration on the card: without it a colleague's
+    dataset appears among your own with nothing to explain why. Where two of
+    the person's groups grant the same resource, the oldest grant wins, so the
+    card does not change wording between requests.
+    """
+    from metaseed_hub.collaborations import entitled_urns_of
+
+    urns = await entitled_urns_of(session, user_id)
+    if not urns:
+        return {}
+    rows = await session.execute(
+        select(resource.grant_column(), resource.grant_model.urn)
+        .where(resource.grant_model.urn.in_(urns))
+        .order_by(resource.grant_model.created_at)
+    )
+    reached: dict[str, str] = {}
+    for resource_id, urn in rows.all():
+        reached.setdefault(str(resource_id), str(urn))
+    return reached
+
+
 async def accessible_ids(session: AsyncSession, resource: SharedResource, user_id: str) -> set[str]:
     """Ids of every resource shared with ``user_id``: by membership or by grant.
 
     What a list page adds to the person's own account: the two ways a thing
     reaches someone whose account it does not live in.
     """
-    from metaseed_hub.collaborations import entitled_urns_of
-
     ids = {
         str(found)
         for found in (
@@ -293,17 +317,7 @@ async def accessible_ids(session: AsyncSession, resource: SharedResource, user_i
             )
         ).scalars()
     }
-    urns = await entitled_urns_of(session, user_id)
-    if urns:
-        ids |= {
-            str(found)
-            for found in (
-                await session.execute(
-                    select(resource.grant_column()).where(resource.grant_model.urn.in_(urns))
-                )
-            ).scalars()
-        }
-    return ids
+    return ids | set(await granting_urns(session, resource, user_id))
 
 
 async def account_owner(session: AsyncSession, tenant_id: str) -> User | None:

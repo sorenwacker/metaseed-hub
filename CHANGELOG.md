@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- On the datasets list and the specifications list, an item reached through a collaboration grant carries the collaboration's name, so a colleague's dataset no longer appears among your own with nothing to explain it.
 - SRAM collaborations. Each sign-in records the group URNs the identity provider reported, replacing the previous record; the profile lists them under **Your collaborations**. **People** in the header lists, per collaboration, the members who have signed in to the hub, and the sharing panel's email field suggests them. An owner can grant a whole collaboration, or one of its groups, the editor or viewer role on a dataset, a draft or a published specification; the grant is a fallback behind every per-person rule, owner cannot be granted, and items reached through a grant appear on the dataset, builder and explorer lists. A record older than `MEMBERSHIP_MAX_AGE_DAYS` (30) grants nothing and lists nobody until the person signs in again, which bounds how long someone who left a collaboration keeps reaching its items through an access token.
 
 ### Changed

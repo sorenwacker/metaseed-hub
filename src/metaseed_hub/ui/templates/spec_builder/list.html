@@ -38,6 +38,11 @@
                     <span title="{{ draft.updated_at }}">
                         Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
                     </span>
+                    {# Why a draft you do not own is in your list. #}
+                    {% if granted_by and granted_by.get(draft.id) %}
+                    <span class="grant-badge" data-testid="granted-by"
+                          title="Shared with your collaboration">{{ granted_by[draft.id] }}</span>
+                    {% endif %}
                 </div>
                 <div class="spec-actions">
                     <a href="/hub/spec-builder/{{ draft.id }}" class="btn btn-sm btn-primary">Edit</a>

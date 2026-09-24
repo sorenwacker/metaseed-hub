@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from starlette.responses import Response
 
 from metaseed_hub.collaborations import collaborations_of, people_in
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_and_user
@@ -17,11 +18,11 @@ router = APIRouter(prefix="/people", tags=["people"])
 
 
 @router.get("", response_class=HTMLResponse)
-async def people(request: Request, session: DbSession, user: CurrentUser) -> HTMLResponse:
+async def people(request: Request, session: DbSession, user: CurrentUser) -> Response:
     """Every collaboration the viewer is in, each with its signed-in members."""
     _tenant, db_user = await ensure_tenant_and_user(session, user)
     collaborations = await collaborations_of(session, db_user.id)
-    return render_template(  # type: ignore[return-value]
+    return render_template(
         request,
         "people.html",
         {

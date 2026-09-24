@@ -10,8 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
+from metaseed_hub.collaborations import grant_label
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus
-from metaseed_hub.sharing import accessible_ids, account_owner, resource_for
+from metaseed_hub.sharing import accessible_ids, account_owner, granting_urns, resource_for
 from metaseed_hub.ui.spec_builder.access import (
     create_new_draft,
     free_draft_name,
@@ -103,6 +104,13 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
                 "specs": specs,
                 "tenant_id": tenant_id,
                 "owners": owners,
+                # Why a draft the caller does not own is in this list.
+                "granted_by": {
+                    draft_id: grant_label(urn)
+                    for draft_id, urn in (
+                        await granting_urns(session, resource_for("draft"), user_id)
+                    ).items()
+                },
             },
         )
 

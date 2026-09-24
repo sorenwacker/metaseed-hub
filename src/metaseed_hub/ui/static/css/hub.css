@@ -7604,3 +7604,12 @@ html, body {
 .collaboration-card {
     margin-bottom: var(--space-lg);
 }
+
+.grant-badge {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-sm);
+    background: var(--clr-surface-alt, #eef2f7);
+    color: var(--clr-ink-light);
+    white-space: nowrap;
+}

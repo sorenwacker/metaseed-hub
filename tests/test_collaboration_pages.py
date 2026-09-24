@@ -191,3 +191,66 @@ async def _tenant_of(session: AsyncSession, user):
     from metaseed_hub.models import Tenant
 
     return await session.get(Tenant, user.tenant_id)
+
+
+async def test_a_granted_dataset_card_names_the_collaboration(
+    session: AsyncSession, app_db
+) -> None:
+    """Without it a colleague's dataset appears in your list unexplained."""
+    _, _, colleague = await _signed_in_people(session)
+    theirs = make_dataset(tenant=await _tenant_of(session, colleague), profile="ena", version="1.0")
+    theirs.name = "granted-card"
+    session.add(theirs)
+    await record_creator(session, resource_for("dataset"), theirs, colleague.id)
+    await session.commit()
+    await add_grant(
+        session,
+        resource_for("dataset"),
+        theirs.id,
+        actor_id=colleague.id,
+        urn=CROPXR,
+        role=Role.VIEWER,
+    )
+
+    html = _get("/hub/")
+
+    card = html[html.index(f'href="/hub/datasets/{theirs.id}"') :]
+    card = card[: card.index("</a>")]
+    assert 'data-testid="granted-by"' in card
+    assert "cropxr" in card
+
+
+async def test_a_granted_draft_card_names_the_collaboration(session: AsyncSession, app_db) -> None:
+    _, _, colleague = await _signed_in_people(session)
+    from metaseed_hub.models import SpecDraft
+
+    draft = SpecDraft(
+        tenant_id=colleague.tenant_id,
+        user_id=colleague.id,
+        name="granted-draft",
+        version="1.0",
+        spec_data={
+            "spec": {
+                "name": "granted-draft",
+                "version": "1.0",
+                "root_entity": "Sample",
+                "entities": {"Sample": {"description": "a sample", "fields": []}},
+            }
+        },
+    )
+    session.add(draft)
+    await record_creator(session, resource_for("draft"), draft, colleague.id)
+    await session.commit()
+    await add_grant(
+        session,
+        resource_for("draft"),
+        draft.id,
+        actor_id=colleague.id,
+        urn=CROPXR,
+        role=Role.VIEWER,
+    )
+
+    html = _get("/hub/spec-builder")
+
+    assert 'data-testid="granted-by"' in html
+    assert "cropxr" in html

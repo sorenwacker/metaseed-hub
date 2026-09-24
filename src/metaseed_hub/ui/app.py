@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, SpecDraft
-from metaseed_hub.sharing import accessible_ids, resource_for
+from metaseed_hub.sharing import accessible_ids, granting_urns, resource_for
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     DuplicateAccountEmailError,
@@ -74,6 +74,21 @@ logger = logging.getLogger("metaseed_hub")
 UI_DIR = Path(__file__).parent
 TEMPLATES_DIR = UI_DIR / "templates"
 STATIC_DIR = UI_DIR / "static"
+
+
+async def _granted_labels(session: AsyncSession, user_id: str) -> dict[str, str]:
+    """Resource id to the collaboration name that reaches it, for the cards.
+
+    Datasets and drafts in one map: their ids are UUIDs, so one lookup serves
+    both templates without a collision.
+    """
+    from metaseed_hub.collaborations import grant_label
+
+    labels: dict[str, str] = {}
+    for kind in ("dataset", "draft"):
+        for resource_id, urn in (await granting_urns(session, resource_for(kind), user_id)).items():
+            labels[resource_id] = grant_label(urn)
+    return labels
 
 
 def create_hub_app() -> FastAPI:
@@ -364,6 +379,9 @@ def create_hub_app() -> FastAPI:
                     ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets
                 },
                 "specs": specs,
+                # Which collaboration reaches each item the person does not own,
+                # so a card can say why it is in their list at all.
+                "granted_by": await _granted_labels(session, db_user.id),
                 "nav_active": "home",
             },
         )

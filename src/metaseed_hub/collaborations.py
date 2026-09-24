@@ -24,6 +24,7 @@ from metaseed_hub.config import get_settings
 from metaseed_hub.entitlements import (
     SRAM_GROUP_PREFIX,
     collaboration_urn,
+    entitled_urns,
     group_urns,
     parse_group,
 )
@@ -101,16 +102,25 @@ async def _fresh_rows(session: AsyncSession, user_id: str) -> list[GroupMembersh
 async def entitled_urns_of(session: AsyncSession, user_id: str) -> set[str]:
     """Every URN a grant may be matched against for this user, from the snapshot.
 
-    Each group contributes its own URN and its collaboration's, the same shape
-    :func:`metaseed_hub.entitlements.entitled_urns` gives for a live token.
+    :func:`metaseed_hub.entitlements.entitled_urns` decides what a set of
+    reported groups entitles someone to; this reads the recorded groups and
+    asks it. Deriving the collaboration URN here as well gave two
+    implementations of one rule, free to drift while both looked right.
     """
-    urns: set[str] = set()
-    for row in await _fresh_rows(session, user_id):
-        group = parse_group(row.urn)
-        if group is not None:
-            urns.add(group.urn)
-            urns.add(collaboration_urn(group))
-    return urns
+    return entitled_urns(row.urn for row in await _fresh_rows(session, user_id))
+
+
+def grant_label(urn: str) -> str:
+    """How a grant is named on a card: the collaboration, and the group if any.
+
+    The organisation is dropped. It is the same for everyone a person shares
+    with in practice, so it adds a word without telling them anything.
+    """
+    group = parse_group(urn)
+    if group is not None:
+        return f"{group.collaboration} / {group.group}"
+    without_prefix = short_name(urn)
+    return without_prefix.split(":", 1)[-1] if ":" in without_prefix else without_prefix
 
 
 async def collaborations_of(session: AsyncSession, user_id: str) -> list[Collaboration]:

@@ -64,7 +64,9 @@ def _entitlement_list(payload: dict[str, Any]) -> list[str]:
     A single-valued claim arrives as a bare string rather than a list, and an
     IdP may omit it entirely.
     """
-    raw = payload.get("eduperson_entitlement") or []
+    from metaseed_hub.entitlements import ENTITLEMENT_CLAIM
+
+    raw = payload.get(ENTITLEMENT_CLAIM) or []
     if isinstance(raw, str):
         return [raw]
     return [value for value in raw if isinstance(value, str)]

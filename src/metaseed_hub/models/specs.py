@@ -44,8 +44,10 @@ class SpecStatus(StrEnum):
 class Spec(TimestampMixin, SoftDeleteMixin, Base):
     """Published specification that belongs to a tenant.
 
-    Represents a finalized specification accessible to all team members
-    within the tenant. Supports versioning for tracking changes.
+    Who may reach one is decided by :func:`metaseed_hub.sharing.role_of`:
+    a membership, its creator, the one person whose account it lives in, or a
+    collaboration grant. An account belongs to one person, so there is no team
+    within a tenant to grant it to. Supports versioning for tracking changes.
     """
 
     __tablename__ = "specs"

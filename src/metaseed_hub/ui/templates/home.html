@@ -35,6 +35,11 @@
                         {% else %}
                         <span class="entity-count entity-count-empty" data-testid="entity-count">No entities</span>
                         {% endif %}
+                        {# Why a dataset you do not own is in your list. #}
+                        {% if granted_by and granted_by.get(dataset.id) %}
+                        <span class="grant-badge" data-testid="granted-by"
+                              title="Shared with your collaboration">{{ granted_by[dataset.id] }}</span>
+                        {% endif %}
                     </div>
                 </a>
             </div>
