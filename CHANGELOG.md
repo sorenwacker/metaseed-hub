@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.54.0] - 260924
 
 ### Added
 - On the datasets list and the specifications list, an item reached through a collaboration grant carries the collaboration's name, so a colleague's dataset no longer appears among your own with nothing to explain it.
