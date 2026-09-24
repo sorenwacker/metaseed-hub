@@ -43,7 +43,13 @@ class SpecPush(BaseModel):
 
     yaml: str
     publish: bool = False
-    """Publish it for every hub user. Off, the push is a private draft."""
+    """Publish it. Off, the push is a private draft."""
+    audience: str | None = None
+    """With ``publish``, the collaboration or group URN to publish it to;
+    absent means every hub user. Meaningless without ``publish``, because a
+    draft is private and is shared per person or per collaboration instead,
+    so the two together are refused rather than silently ignored. The URNs
+    the caller may name are listed by ``GET /api/me``."""
 
 
 class SpecSummary(BaseModel):
@@ -56,7 +62,10 @@ class SpecSummary(BaseModel):
     content_hash: str | None
     tenant_id: str
     visibility: str
-    """``draft`` (the caller's own, private) or ``published`` (every hub user)."""
+    """``draft`` (the caller's own, private) or ``published``."""
+    audience: str | None = None
+    """For a published specification, the collaboration it was published to,
+    or ``None`` for every hub user. Always ``None`` for a draft."""
     mine: bool
     """Whether the caller's account holds it."""
 
@@ -108,6 +117,7 @@ def _spec_summary(spec: Spec, tenant_id: str | None) -> SpecSummary:
         id=spec.id,
         name=spec.name,
         version=spec.version,
+        audience=spec.audience_urn,
         description=spec.description,
         content_hash=spec.content_hash,
         tenant_id=spec.tenant_id,
@@ -248,9 +258,27 @@ async def _push_draft(
 
 
 async def _publish(
-    session: AsyncSession, user: TokenUser, caller: User, spec: Any, response: Response
+    session: AsyncSession,
+    user: TokenUser,
+    caller: User,
+    spec: Any,
+    response: Response,
+    audience: str | None = None,
 ) -> SpecSummary:
-    """Publish ``spec`` for every hub user, under the version-bump gate."""
+    """Publish ``spec`` under the version-bump gate, to ``audience``.
+
+    Raises:
+        HTTPException: 403 when the caller's recorded membership does not put
+            them in ``audience``; publishing to a group one cannot see is
+            refused here as it is in the browser.
+    """
+    from metaseed_hub.collaborations import NotInCollaborationError
+    from metaseed_hub.ui.spec_builder.publishing import audience_for_publisher
+
+    try:
+        audience = await audience_for_publisher(session, caller.id, audience)
+    except NotInCollaborationError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     tenant = await get_tenant_for_user(session, user)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No hub account")
@@ -282,6 +310,7 @@ async def _publish(
     state.spec = spec
     row = Spec(
         tenant_id=tenant.id,
+        audience_urn=audience,
         name=spec.name,
         version=spec.version,
         description=spec.description,
@@ -330,7 +359,17 @@ async def push_spec(
     spec = _parse(push)
     caller = await _caller(session, user)
     if push.publish:
-        return await _publish(session, user, caller, spec, response)
+        return await _publish(session, user, caller, spec, response, push.audience)
+    if push.audience is not None:
+        # Accepting it and storing nothing would tell the caller their choice
+        # took effect. A draft is private; share it instead.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "A draft has no audience: it is private, and is shared with people "
+                "or a collaboration instead. Send publish: true to release it."
+            ),
+        )
     return await _push_draft(session, caller, spec, response)
 
 

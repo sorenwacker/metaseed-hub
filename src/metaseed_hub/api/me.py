@@ -21,6 +21,15 @@ from metaseed_hub.database import get_session
 router = APIRouter()
 
 
+class CollaborationSummary(BaseModel):
+    """One collaboration the caller belongs to, as a client may name it."""
+
+    urn: str
+    name: str
+    organisation: str
+    groups: list[str]
+
+
 class MeResponse(BaseModel):
     """The account and tenant behind the presented credential."""
 
@@ -28,6 +37,10 @@ class MeResponse(BaseModel):
     name: str
     tenant_id: str
     tenant_name: str
+    collaborations: list[CollaborationSummary] = []
+    """The collaborations the caller may publish a specification to. Empty
+    when the identity provider reported none at their last sign-in, or when
+    that record has gone stale."""
 
 
 @router.get("", response_model=MeResponse)
@@ -43,6 +56,26 @@ async def me(
     tenant = await get_tenant_for_user(session, user)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No hub account")
+    # A client cannot offer an audience it has no way to obtain, so the
+    # connection check carries the list.
+    from metaseed_hub.access import live_user
+    from metaseed_hub.collaborations import collaborations_of
+
+    db_user = await live_user(session, user)
+    collaborations = (
+        [
+            CollaborationSummary(
+                urn=c.urn, name=c.name, organisation=c.organisation, groups=list(c.groups)
+            )
+            for c in await collaborations_of(session, db_user.id)
+        ]
+        if db_user is not None
+        else []
+    )
     return MeResponse(
-        email=user.email, name=user.name, tenant_id=tenant.id, tenant_name=tenant.name
+        email=user.email,
+        name=user.name,
+        tenant_id=tenant.id,
+        tenant_name=tenant.name,
+        collaborations=collaborations,
     )
