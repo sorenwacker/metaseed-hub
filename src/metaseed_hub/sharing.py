@@ -20,6 +20,10 @@ editor
     Changes the content, not who may see it.
 viewer
     Reads.
+
+A collaboration grant gives everyone in an SRAM collaboration (or one of its
+groups) the editor or viewer role on a resource, as a fallback behind every
+per-person rule; :mod:`metaseed_hub.collaborations` says who is in one.
 """
 
 from __future__ import annotations
@@ -90,13 +94,16 @@ class SharedResource:
         kind: The word in the URL, and how a resource is named in messages.
         model: The resource's mapped class.
         member_model: The membership table's mapped class.
-        foreign_key: Column on ``member_model`` naming the resource.
+        grant_model: The collaboration grant table's mapped class.
+        foreign_key: Column on ``member_model`` and ``grant_model`` naming the
+            resource.
         title_of: The resource's human name, for messages.
     """
 
     kind: str
     model: type[Any]
     member_model: type[Any]
+    grant_model: type[Any]
     foreign_key: str
     title_of: Any
     # The column naming who made the thing, where the model has one. Creation
@@ -109,6 +116,9 @@ class SharedResource:
     def owns_column(self) -> Any:
         return getattr(self.member_model, self.foreign_key)
 
+    def grant_column(self) -> Any:
+        return getattr(self.grant_model, self.foreign_key)
+
     def creator_of(self, resource: Any) -> str | None:
         """The id of whoever created ``resource``, if the model records one."""
         if self.creator_column is None:
@@ -120,9 +130,12 @@ class SharedResource:
 def _resources() -> dict[str, SharedResource]:
     from metaseed_hub.models import (
         Dataset,
+        DatasetCollaborationGrant,
         DatasetMember,
         Spec,
+        SpecCollaborationGrant,
         SpecDraft,
+        SpecDraftCollaborationGrant,
         SpecDraftMember,
         SpecMember,
     )
@@ -132,6 +145,7 @@ def _resources() -> dict[str, SharedResource]:
             kind="dataset",
             model=Dataset,
             member_model=DatasetMember,
+            grant_model=DatasetCollaborationGrant,
             foreign_key="dataset_id",
             title_of=lambda resource: resource.name,
         ),
@@ -139,6 +153,7 @@ def _resources() -> dict[str, SharedResource]:
             kind="draft",
             model=SpecDraft,
             member_model=SpecDraftMember,
+            grant_model=SpecDraftCollaborationGrant,
             foreign_key="spec_draft_id",
             title_of=lambda resource: resource.name,
             creator_column="user_id",
@@ -147,6 +162,7 @@ def _resources() -> dict[str, SharedResource]:
             kind="spec",
             model=Spec,
             member_model=SpecMember,
+            grant_model=SpecCollaborationGrant,
             creator_column="created_by_id",
             foreign_key="spec_id",
             title_of=lambda resource: f"{resource.name} {resource.version}",
@@ -207,15 +223,16 @@ async def role_of(
     """``user_id``'s role in a resource, or ``None`` if they have none.
 
     This is the one answer every layer reads: the web routes, the REST API,
-    the MCP tools and the spec builder. Three rules, in order:
+    the MCP tools and the spec builder. Four rules, in order:
 
     1. An explicit membership row decides, so a creator given a lesser role
        keeps it.
     2. Failing that, whoever created the resource owns it, where the model
        records a creator.
     3. Failing that, the person whose account the resource lives in owns it.
-       An account belongs to one person, so this is the resource's home, not
-       a group grant.
+       An account belongs to one person, so this is the resource's home.
+    4. Failing that, a collaboration grant matching the person's recorded
+       SRAM membership gives its role: the one group rule, and a fallback.
     """
     result = await session.execute(
         select(resource.member_model.role).where(
@@ -235,7 +252,72 @@ async def role_of(
     holder = await account_owner(session, str(found.tenant_id))
     if holder is not None and holder.id == user_id:
         return Role.OWNER
-    return None
+    return await _granted_role(session, resource, resource_id, user_id)
+
+
+#: Which of two granted roles counts when a person is in several granted groups.
+_GRANT_RANK = {Role.VIEWER: 0, Role.EDITOR: 1}
+
+
+async def _granted_role(
+    session: AsyncSession, resource: SharedResource, resource_id: str, user_id: str
+) -> Role | None:
+    """The best role any collaboration grant gives ``user_id``, or None."""
+    from metaseed_hub.collaborations import entitled_urns_of
+
+    urns = await entitled_urns_of(session, user_id)
+    if not urns:
+        return None
+    result = await session.execute(
+        select(resource.grant_model.role).where(
+            resource.grant_column() == resource_id, resource.grant_model.urn.in_(urns)
+        )
+    )
+    roles = [Role(role) for role in result.scalars().all()]
+    return max(roles, key=_GRANT_RANK.__getitem__) if roles else None
+
+
+async def granting_urns(
+    session: AsyncSession, resource: SharedResource, user_id: str
+) -> dict[str, str]:
+    """Each resource a collaboration grant reaches for ``user_id``, and which one.
+
+    A list page names the collaboration on the card: without it a colleague's
+    dataset appears among your own with nothing to explain why. Where two of
+    the person's groups grant the same resource, the oldest grant wins, so the
+    card does not change wording between requests.
+    """
+    from metaseed_hub.collaborations import entitled_urns_of
+
+    urns = await entitled_urns_of(session, user_id)
+    if not urns:
+        return {}
+    rows = await session.execute(
+        select(resource.grant_column(), resource.grant_model.urn)
+        .where(resource.grant_model.urn.in_(urns))
+        .order_by(resource.grant_model.created_at)
+    )
+    reached: dict[str, str] = {}
+    for resource_id, urn in rows.all():
+        reached.setdefault(str(resource_id), str(urn))
+    return reached
+
+
+async def accessible_ids(session: AsyncSession, resource: SharedResource, user_id: str) -> set[str]:
+    """Ids of every resource shared with ``user_id``: by membership or by grant.
+
+    What a list page adds to the person's own account: the two ways a thing
+    reaches someone whose account it does not live in.
+    """
+    ids = {
+        str(found)
+        for found in (
+            await session.execute(
+                select(resource.owns_column()).where(resource.member_model.user_id == user_id)
+            )
+        ).scalars()
+    }
+    return ids | set(await granting_urns(session, resource, user_id))
 
 
 async def account_owner(session: AsyncSession, tenant_id: str) -> User | None:
@@ -395,4 +477,111 @@ async def remove_member(
         raise LastOwnerError("leave" if actor_id == user_id else "remove them")
 
     await session.delete(member)
+    await session.commit()
+
+
+class OwnerGrantError(SharingError):
+    """A collaboration cannot own: ownership is what the last-owner rule guards."""
+
+    def __init__(self) -> None:
+        super().__init__("A collaboration can be an editor or a viewer, not an owner.")
+
+
+async def grants_of(session: AsyncSession, resource: SharedResource, resource_id: str) -> list[Any]:
+    """Every collaboration grant on one resource, oldest first."""
+    result = await session.execute(
+        select(resource.grant_model)
+        .where(resource.grant_column() == resource_id)
+        .order_by(resource.grant_model.created_at)
+    )
+    return list(result.scalars().all())
+
+
+def _grantable(role: Role) -> Role:
+    if role is Role.OWNER:
+        raise OwnerGrantError
+    return role
+
+
+async def add_grant(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    *,
+    actor_id: str,
+    urn: str,
+    role: Role,
+) -> Any:
+    """Give a collaboration or group a role, or change the one it has.
+
+    The actor must own the resource and, as of their last sign-in, be in the
+    collaboration: handing a thing to a group one cannot see is refused.
+
+    Raises:
+        NotAnOwnerError: If the actor does not own the resource.
+        OwnerGrantError: If ``role`` is owner.
+        metaseed_hub.collaborations.NotInCollaborationError: If the actor's
+            snapshot does not put them in ``urn``.
+    """
+    from metaseed_hub.collaborations import NotInCollaborationError, entitled_urns_of
+
+    await _require_owner(session, resource, resource_id, actor_id)
+    _grantable(role)
+    if urn not in await entitled_urns_of(session, actor_id):
+        raise NotInCollaborationError(urn)
+    existing = (
+        await session.execute(
+            select(resource.grant_model).where(
+                resource.grant_column() == resource_id, resource.grant_model.urn == urn
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.role = role
+        await session.commit()
+        return existing
+    grant = resource.grant_model(**{resource.foreign_key: resource_id}, urn=urn, role=role)
+    session.add(grant)
+    await session.commit()
+    return grant
+
+
+async def _owned_grant(
+    session: AsyncSession, resource: SharedResource, resource_id: str, grant_id: str
+) -> Any:
+    grant = await session.get(resource.grant_model, grant_id)
+    if grant is None or str(getattr(grant, resource.foreign_key)) != str(resource_id):
+        raise SharingError("That collaboration has no access here.")
+    return grant
+
+
+async def set_grant_role(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    *,
+    actor_id: str,
+    grant_id: str,
+    role: Role,
+) -> Any:
+    """Change what one collaboration grant allows."""
+    await _require_owner(session, resource, resource_id, actor_id)
+    grant = await _owned_grant(session, resource, resource_id, grant_id)
+    grant.role = _grantable(role)
+    await session.commit()
+    return grant
+
+
+async def remove_grant(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    *,
+    actor_id: str,
+    grant_id: str,
+) -> None:
+    """Take a collaboration's access away."""
+    await _require_owner(session, resource, resource_id, actor_id)
+    grant = await _owned_grant(session, resource, resource_id, grant_id)
+    await session.delete(grant)
     await session.commit()

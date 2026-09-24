@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # Admin access (SRAM entitlement or role name)
     admin_role: str = "admin"
 
+    # How long a user's recorded SRAM group membership stays trusted after the
+    # sign-in that recorded it. Older snapshots grant nothing and list nobody,
+    # so someone who left a collaboration stops reaching its items through an
+    # access token without anyone acting.
+    membership_max_age_days: int = 30
+
     @property
     def using_default_secret_key(self) -> bool:
         """Return True when the insecure development secret key is still in use."""

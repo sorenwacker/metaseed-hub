@@ -61,3 +61,7 @@ Removing a specification does not affect datasets already created against it. Th
 ## Security warnings
 
 If the application is running with the default development `SECRET_KEY`, the dashboard shows a warning banner. Set a strong `SECRET_KEY` in the deployment environment to clear it; the secret is used to sign CSRF tokens.
+
+## Collaboration membership
+
+The hub records each user's SRAM group membership at sign-in and trusts that record for `MEMBERSHIP_MAX_AGE_DAYS` (30 by default). A record older than that grants no access through a [collaboration grant](collaboration.md#collaborations) and lists nobody on **People** until the person signs in again. Lower it where membership changes often; raise it where people sign in rarely and rely on access tokens.

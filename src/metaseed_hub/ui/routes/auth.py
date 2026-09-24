@@ -200,14 +200,20 @@ async def _after_sign_in(session: "AsyncSession", token_user: "TokenUser") -> st
     Returns:
         The path to redirect them to.
     """
+    from metaseed_hub.collaborations import record_memberships
     from metaseed_hub.ui.dependencies import ensure_tenant_and_user
     from metaseed_hub.ui.routes.admin import record_login
 
     # Provision before stamping: record_login needs a row to write to, and for
     # a first-time user there is none until this runs, so their very first
     # sign-in went unrecorded and the admin directory read "Never".
-    await ensure_tenant_and_user(session, token_user)
+    _, db_user = await ensure_tenant_and_user(session, token_user)
     await record_login(session, token_user)
+    # The identity provider states group membership here and nowhere else;
+    # the snapshot is what People and collaboration grants read until the
+    # next sign-in.
+    await record_memberships(session, db_user.id, token_user.entitlements)
+    await session.commit()
     return await _post_login_landing(session, token_user)
 
 
@@ -396,6 +402,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
     if not user:
         raise AuthRequiredError()
 
+    from metaseed_hub.collaborations import collaborations_of
     from metaseed_hub.ui.services.seek_connection import connection_for_user
 
     _, db_user = await ensure_tenant_and_user(session, user)
@@ -424,6 +431,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "specs_needing_new_owner": blocking_specs,
             "delete_error": request.query_params.get("error"),
             "api_tokens": await active_tokens(session, db_user),
+            "collaborations": await collaborations_of(session, db_user.id),
             # Shown once, immediately after minting, and never retrievable
             # again: read from the one-shot cookie and expired below.
             "new_token": new_token,

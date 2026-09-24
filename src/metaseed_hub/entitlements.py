@@ -1,9 +1,12 @@
 """Reading a user's group membership from their identity provider.
 
-Membership comes from the IdP and is never stored here: Keycloak in development,
-SRAM in production, with the dev Keycloak configured to emit what SRAM emits so
-both are one code path with a different issuer. Persisting the list would create
-a copy that goes stale between logins.
+Membership is stated by the IdP at sign-in: Keycloak in development, SRAM in
+production, with the dev Keycloak configured to emit what SRAM emits so both
+are one code path with a different issuer. This module only reads and parses
+that statement. :mod:`metaseed_hub.collaborations` records the parsed result
+per user and bounds how long it is trusted, because an access token carries no
+entitlements at all and because listing a collaboration's people needs
+everyone's membership, not just the caller's.
 
 SRAM puts membership in the ``eduperson_entitlement`` claim, as URNs shaped::
 

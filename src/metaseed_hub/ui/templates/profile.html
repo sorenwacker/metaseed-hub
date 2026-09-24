@@ -56,6 +56,24 @@
         </div>
 
         <div class="profile-section">
+            <h2>Your collaborations</h2>
+            {% if collaborations %}
+            <p>Recorded from your identity provider at your last sign-in. <a href="/hub/people">People</a> lists who else is in them.</p>
+            <ul class="collaboration-list">
+                {% for collaboration in collaborations %}
+                <li data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
+                    <strong>{{ collaboration.name }}</strong> ({{ collaboration.organisation }})
+                    <span class="collaboration-groups">{{ collaboration.groups|join(", ") }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            <p class="form-help">As of {{ collaborations[0].seen_at.strftime("%Y-%m-%d %H:%M") }} UTC.</p>
+            {% else %}
+            <p data-testid="no-collaborations">Your identity provider reported no collaboration at your last sign-in.</p>
+            {% endif %}
+        </div>
+
+        <div class="profile-section">
             <h2>Access tokens</h2>
             <p>
                 A token lets a tool act as you where a browser login is not possible —

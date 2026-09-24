@@ -9,6 +9,12 @@ string-name relationships and Alembic autogenerate see the full schema.
 from metaseed_hub.sharing import Role
 
 from .base import Base, _enum_values
+from .collaborations import (
+    DatasetCollaborationGrant,
+    GroupMembership,
+    SpecCollaborationGrant,
+    SpecDraftCollaborationGrant,
+)
 from .comments import (
     Comment,
     CommentReaction,
@@ -35,16 +41,20 @@ __all__ = [
     "Comment",
     "CommentReaction",
     "Dataset",
+    "DatasetCollaborationGrant",
     "DatasetMember",
     "DatasetVersion",
     "ErrorEvent",
+    "GroupMembership",
     "ReactionType",
     "SeekConnection",
     "SoftDeleteMixin",
     "Spec",
+    "SpecCollaborationGrant",
     "SpecComment",
     "SpecCommentReaction",
     "SpecDraft",
+    "SpecDraftCollaborationGrant",
     "SpecDraftMember",
     "SpecMember",
     "SpecStatus",

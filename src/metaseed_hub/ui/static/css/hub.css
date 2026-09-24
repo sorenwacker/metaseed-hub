@@ -7565,3 +7565,51 @@ html, body {
 .seek-status-ok { color: var(--color-success, #2f6f4f); }
 .seek-status-bad { color: var(--color-danger, #a33); }
 .seek-status-none { color: var(--color-text-muted, #777); }
+
+/* Collaborations: the grant rows on the sharing panel, and the People page. */
+.members-subheading {
+    margin: var(--space-lg) 0 var(--space-xs);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--clr-ink-light);
+}
+
+.member-avatar-group {
+    font-size: 0.8rem;
+}
+
+.member-email {
+    font-size: 0.8rem;
+    color: var(--clr-ink-light);
+}
+
+.collaboration-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--space-sm);
+}
+
+.collaboration-list li {
+    padding: var(--space-xs) 0;
+}
+
+.collaboration-groups,
+.collaboration-org {
+    color: var(--clr-ink-light);
+    font-size: 0.85rem;
+    margin-left: var(--space-xs);
+}
+
+.collaboration-card {
+    margin-bottom: var(--space-lg);
+}
+
+.grant-badge {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-sm);
+    background: var(--clr-surface-alt, #eef2f7);
+    color: var(--clr-ink-light);
+    white-space: nowrap;
+}

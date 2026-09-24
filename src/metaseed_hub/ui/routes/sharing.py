@@ -18,16 +18,26 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from metaseed_hub.auth import TokenUser
+from metaseed_hub.collaborations import (
+    NotInCollaborationError,
+    collaborations_of,
+    people_in,
+    short_name,
+)
 from metaseed_hub.sharing import (
     Role,
     SharedResource,
     SharingError,
+    add_grant,
     add_member,
+    grants_of,
     may_see_members,
     members_of,
+    remove_grant,
     remove_member,
     resource_for,
     role_of,
+    set_grant_role,
     set_role,
 )
 from metaseed_hub.ui.dependencies import DbSession, require_user
@@ -92,18 +102,30 @@ async def _panel(
 ) -> HTMLResponse:
     """The members list as the asking person may see and act on it."""
     members = await members_of(session, resource, resource_id)
+    grants = await grants_of(session, resource, resource_id)
+    collaborations = await collaborations_of(session, viewer_id)
+    suggestions: dict[str, str] = {}
+    for collaboration in collaborations:
+        for person in await people_in(session, collaboration.urn, viewer_id=viewer_id):
+            if str(person.id) != str(viewer_id):
+                suggestions[person.email] = person.display_name or person.email
     return render_template(  # type: ignore[return-value]
         request,
         "partials/members_panel.html",
         {
             "members": members,
-            "shared_with": sum(1 for m in members if str(m.user_id) != str(viewer_id)),
+            "grants": [(grant, short_name(grant.urn)) for grant in grants],
+            "collaborations": collaborations,
+            "people_suggestions": sorted(suggestions.items()),
+            "shared_with": sum(1 for m in members if str(m.user_id) != str(viewer_id))
+            + len(grants),
             "kind": resource.kind,
             "resource_id": resource_id,
             "viewer_id": viewer_id,
             "viewer_is_owner": await role_of(session, resource, resource_id, viewer_id)
             is Role.OWNER,
             "roles": list(Role),
+            "grant_roles": [Role.EDITOR, Role.VIEWER],
             "error": error,
         },
     )
@@ -196,6 +218,88 @@ async def remove(
     error = None
     try:
         await remove_member(session, resource, resource_id, actor_id=viewer_id, user_id=member_id)
+    except SharingError as exc:
+        error = str(exc)
+    return await _panel(request, session, resource, resource_id, viewer_id, error=error)
+
+
+@router.post("/{kind}/{resource_id}/collaborations", response_class=HTMLResponse)
+async def grant(
+    request: Request,
+    kind: str,
+    resource_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    urn: str = Form(...),
+    role: str = Form(Role.VIEWER.value),
+    csrf_token: str | None = Form(None),
+) -> HTMLResponse:
+    """Give everyone in a collaboration, or one of its groups, a role."""
+    _check_csrf(request, csrf_token)
+    resource = _resource_or_404(kind)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
+    error = None
+    try:
+        await add_grant(
+            session,
+            resource,
+            resource_id,
+            actor_id=viewer_id,
+            urn=urn,
+            role=_role_or_refuse(role),
+        )
+    except (SharingError, NotInCollaborationError) as exc:
+        error = str(exc)
+    return await _panel(request, session, resource, resource_id, viewer_id, error=error)
+
+
+@router.patch("/{kind}/{resource_id}/collaborations/{grant_id}", response_class=HTMLResponse)
+async def change_grant(
+    request: Request,
+    kind: str,
+    resource_id: str,
+    grant_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    role: str = Form(...),
+    csrf_token: str | None = Form(None),
+) -> HTMLResponse:
+    """Change what one collaboration may do."""
+    _check_csrf(request, csrf_token)
+    resource = _resource_or_404(kind)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
+    error = None
+    try:
+        await set_grant_role(
+            session,
+            resource,
+            resource_id,
+            actor_id=viewer_id,
+            grant_id=grant_id,
+            role=_role_or_refuse(role),
+        )
+    except SharingError as exc:
+        error = str(exc)
+    return await _panel(request, session, resource, resource_id, viewer_id, error=error)
+
+
+@router.delete("/{kind}/{resource_id}/collaborations/{grant_id}", response_class=HTMLResponse)
+async def revoke_grant(
+    request: Request,
+    kind: str,
+    resource_id: str,
+    grant_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    csrf_token: str | None = Form(None),
+) -> HTMLResponse:
+    """Take a collaboration's access away."""
+    _check_csrf(request, csrf_token)
+    resource = _resource_or_404(kind)
+    viewer_id = await _seen_or_404(session, resource, resource_id, user)
+    error = None
+    try:
+        await remove_grant(session, resource, resource_id, actor_id=viewer_id, grant_id=grant_id)
     except SharingError as exc:
         error = str(exc)
     return await _panel(request, session, resource, resource_id, viewer_id, error=error)

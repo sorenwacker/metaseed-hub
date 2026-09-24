@@ -20,7 +20,7 @@ Pages are never served from the browser's cache, so going back, or returning to 
 
 ### Your profile
 
-The profile page (avatar → **Your Profile**) shows the account information read from your OIDC token: name, email, subject ID, and any roles. The email shown under **Sharing** is the address collaborators use to share datasets with you, and they may type it in any capitalisation. See [how an email is resolved](collaboration.md#how-an-email-is-resolved).
+The profile page (avatar → **Your Profile**) shows the account information read from your OIDC token: name, email, subject ID, and any roles. The email shown under **Sharing** is the address collaborators use to share datasets with you, and they may type it in any capitalisation. See [how an email is resolved](collaboration.md#how-an-email-is-resolved). **Your collaborations** lists the SRAM collaborations and groups recorded at your last sign-in; see [Collaborations](collaboration.md#collaborations) for what the hub does with them.
 
 ## Create your first dataset
 
