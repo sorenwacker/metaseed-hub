@@ -402,7 +402,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
     if not user:
         raise AuthRequiredError()
 
-    from metaseed_hub.collaborations import collaborations_of
+    from metaseed_hub.collaborations import collaborations_of, membership_state
     from metaseed_hub.ui.services.seek_connection import connection_for_user
 
     _, db_user = await ensure_tenant_and_user(session, user)
@@ -432,6 +432,8 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "delete_error": request.query_params.get("error"),
             "api_tokens": await active_tokens(session, db_user),
             "collaborations": await collaborations_of(session, db_user.id),
+            # Never asked is not the same as asked and told nothing.
+            "membership_state": await membership_state(session, db_user.id),
             # Shown once, immediately after minting, and never retrievable
             # again: read from the one-shot cookie and expired below.
             "new_token": new_token,

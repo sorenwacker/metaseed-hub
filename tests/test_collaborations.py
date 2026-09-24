@@ -127,7 +127,7 @@ async def test_collaborations_group_the_snapshot_by_collaboration(session: Async
         organisation="tudelft",
         name="cropxr",
         groups=["phenotyping", "sequencing"],
-        seen_at=found[0].seen_at,
+        read_at=found[0].read_at,
     )
 
 

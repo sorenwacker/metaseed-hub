@@ -24,7 +24,12 @@ URN_LENGTH = 512
 
 
 class GroupMembership(Base):
-    """One SRAM group URN the identity provider reported for a user, and when."""
+    """One SRAM group URN the identity provider reported for a user.
+
+    When it was reported is not here: an empty reading has no rows to carry a
+    time, and that reading is exactly the one worth telling apart from never
+    having asked. ``User.memberships_read_at`` holds it.
+    """
 
     __tablename__ = "group_memberships"
     __table_args__ = (Index("ix_group_memberships_urn", "urn"),)
@@ -33,9 +38,6 @@ class GroupMembership(Base):
         UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     urn: Mapped[str] = mapped_column(String(URN_LENGTH), primary_key=True)
-    seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
 
 
 class CollaborationGrantMixin:

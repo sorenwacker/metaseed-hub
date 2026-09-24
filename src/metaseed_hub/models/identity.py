@@ -83,6 +83,15 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
         nullable=True,
     )
 
+    # When the hub last read this person's group membership from their identity
+    # provider. Null means never, which is not the same as "they are in
+    # nothing": a session older than the feature had no reading taken, and
+    # telling that person their provider reported none would be false.
+    memberships_read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
     # passive_deletes: the child FKs are ON DELETE CASCADE, so let the database

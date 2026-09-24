@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from starlette.responses import Response
 
-from metaseed_hub.collaborations import collaborations_of, people_in
+from metaseed_hub.collaborations import collaborations_of, membership_state, people_in
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_and_user
 from metaseed_hub.ui.render import render_template
 
@@ -28,6 +28,7 @@ async def people(request: Request, session: DbSession, user: CurrentUser) -> Res
         {
             "user": user,
             "nav_active": "people",
+            "membership_state": await membership_state(session, db_user.id),
             "collaborations": [
                 (c, await people_in(session, c.urn, viewer_id=db_user.id)) for c in collaborations
             ],

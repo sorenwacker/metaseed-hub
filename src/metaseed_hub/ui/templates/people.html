@@ -28,8 +28,9 @@
     </section>
     {% endfor %}
     {% else %}
-    <div class="profile-card" data-testid="no-collaborations">
-        <p>Your identity provider reported no collaboration at your last sign-in, so there is nobody to list. If you have joined one since, sign out and in again.</p>
+    <div class="profile-card">
+        {% include "partials/no_collaborations.html" %}
+        <p class="form-help">Without a collaboration there is nobody to list here.</p>
     </div>
     {% endif %}
 </div>

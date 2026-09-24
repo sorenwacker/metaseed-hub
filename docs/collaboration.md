@@ -44,11 +44,21 @@ The hosted hub authenticates through SURF Research Access Management (SRAM), whe
 
 ### Your collaborations
 
-The hub does not keep its own list of who is in which collaboration. Each time you sign in, it records the group URNs your identity provider reported and when, replacing whatever it recorded at your previous sign-in. This snapshot is what the hub knows about your collaborations until you next sign in, and your [profile](getting-started.md#your-profile) lists it under **Your collaborations** with the time it was taken.
+The hub does not keep its own list of who is in which collaboration. It takes a reading: the group URNs your identity provider reported, and when it read them. A sign-in takes one and replaces whatever was there, so leaving every collaboration takes effect at your next sign-in. Opening any page also takes one when there is none or it has gone stale, which is what saves a session older than this feature from never having one. Your [profile](getting-started.md#your-profile) lists the result under **Your collaborations** with the time it was read.
 
 The snapshot exists because two things cannot be answered from the sign-in token alone. Listing the people in a collaboration needs everyone's membership, not just yours. And a request made with an access token, which is how metaseed and MCP clients call the hub, carries no entitlements at all, so without the snapshot a dataset shared with your collaboration would be invisible to those clients.
 
-A snapshot older than the configured limit (`MEMBERSHIP_MAX_AGE_DAYS`, 30 by default) is not trusted: it no longer grants access and no longer lists you among a collaboration's people. Signing in again refreshes it. This bounds how long someone who has left a collaboration keeps reaching its items through an access token.
+A reading older than the configured limit (`MEMBERSHIP_MAX_AGE_DAYS`, 30 by default) is not trusted: it no longer grants access and no longer lists you among a collaboration's people. This bounds how long someone who has left a collaboration keeps reaching its items through an access token.
+
+Seeing no collaboration means one of three things, and the page says which:
+
+| What you see | What it means |
+|---|---|
+| The hub has not read your collaborations | No reading has been taken. Sign out and in again. |
+| The reading is too old to trust | It grants nothing until it is taken again. |
+| Your identity provider reported none | A reading was taken and named no group. |
+
+An access token carries no group membership at all, which is why the reading exists; a request made with one therefore never takes a reading, and never clears the one you have.
 
 ### People in your collaborations
 

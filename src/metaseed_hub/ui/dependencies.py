@@ -28,6 +28,7 @@ from metaseed_hub.access import (
     verify_tenant_access as verify_tenant_access,
 )
 from metaseed_hub.auth import TokenUser, verify_token
+from metaseed_hub.collaborations import refresh_memberships
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, Tenant, User
 from metaseed_hub.ui.helpers import (
@@ -244,6 +245,13 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
             tenant_id=tenant.id,
         )
         session.add(db_user)
+
+    # Take a reading of the caller's collaborations when there is none or it
+    # has gone stale. The sign-in callback was the only place one was taken,
+    # and a token refresh does not re-run it, so a long-lived session never
+    # got one. Does nothing for a credential that carries no entitlements.
+    await session.flush()
+    await refresh_memberships(session, db_user.id, user.entitlements)
 
     # Commit unconditionally: a newly created tenant must be persisted even when
     # the user already exists, otherwise it is rolled back when the session
