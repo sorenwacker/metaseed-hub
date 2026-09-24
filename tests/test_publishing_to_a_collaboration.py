@@ -325,3 +325,33 @@ async def test_the_specs_page_names_the_audience(session: AsyncSession, app_db) 
     assert "cropxr" in html
     assert 'data-testid="audience-for-all"' in html
     assert "Everyone" in html
+
+
+# --- a collaboration, never one of its groups -------------------------------
+
+
+async def test_publishing_names_a_collaboration_not_a_group(session: AsyncSession, app_db) -> None:
+    """Sharing reaches a group; publishing does not. A release belongs to the
+    collaboration, so its groups are not offered and are refused if named."""
+    from metaseed_hub.collaborations import NotInCollaborationError
+    from metaseed_hub.ui.spec_builder.publishing import audience_for_publisher
+
+    _tenant, author = await _person(session, "group-publisher", [PHENO])
+
+    assert await audience_for_publisher(session, author.id, CROPXR) == CROPXR
+    with pytest.raises(NotInCollaborationError, match="group"):
+        await audience_for_publisher(session, author.id, PHENO)
+
+
+async def test_the_editor_offers_collaborations_without_their_groups(
+    session: AsyncSession, app_db
+) -> None:
+    tenant, author = await _person(session, "editor-groups", [PHENO])
+    draft = await _draft_owned_by(session, tenant, author, "to-publish-groups")
+
+    html = _page(f"/hub/spec-builder/{draft.id}", author.keycloak_id)
+
+    picker = html[html.index('data-testid="publish-audience"') :]
+    picker = picker[: picker.index("</select>")]
+    assert f'value="{CROPXR}"' in picker
+    assert f'value="{PHENO}"' not in picker

@@ -7647,6 +7647,20 @@ html, body {
 .spec-count {
     font-size: 0.75rem;
     color: var(--clr-ink-light);
+}
+
+/* The card's own divider and spacing belong to the card, not to each version
+   inside it: left alone they drew a line beside every date. */
+.spec-version-row .spec-meta {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.spec-version-row .spec-version {
+    margin: 0;
+}
+
 /* Who a published specification was published to. */
 .audience-badge {
     font-size: 0.72rem;
@@ -7663,11 +7677,16 @@ html, body {
     gap: var(--space-xs);
 }
 
-.visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
+/* Sized to its content, not to the toolbar: .form-input is width 100%, which
+   in a flex row made the control demand the whole bar and wrap the buttons
+   onto a line of their own. */
+.publish-audience {
+    max-width: 16rem;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.8125rem;
+    border: 1px solid var(--clr-parchment);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    color: var(--clr-ink);
+    background: white;
 }

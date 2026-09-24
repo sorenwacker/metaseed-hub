@@ -59,8 +59,8 @@ if TYPE_CHECKING:
 class NotInCollaborationError(Exception):
     """Only members see a collaboration's people or hand it their items."""
 
-    def __init__(self, urn: str) -> None:
-        super().__init__(f"You are not in {short_name(urn)}, as of your last sign-in.")
+    def __init__(self, urn: str, *, reason: str | None = None) -> None:
+        super().__init__(reason or f"You are not in {short_name(urn)}, as of your last sign-in.")
 
 
 @dataclass(frozen=True)
@@ -189,6 +189,17 @@ def grant_label(urn: str) -> str:
         return f"{group.collaboration} / {group.group}"
     without_prefix = short_name(urn)
     return without_prefix.split(":", 1)[-1] if ":" in without_prefix else without_prefix
+
+
+async def collaboration_urns_of(session: AsyncSession, user_id: str) -> set[str]:
+    """The collaborations ``user_id`` is in, without their groups.
+
+    Sharing reaches a group, because a grant is about who may touch one thing.
+    Publishing does not: a release belongs to the collaboration, and a
+    specification visible to one group of it but not another is a distinction
+    nobody asked the hub to keep.
+    """
+    return {c.urn for c in await collaborations_of(session, user_id)}
 
 
 async def collaborations_of(session: AsyncSession, user_id: str) -> list[Collaboration]:
