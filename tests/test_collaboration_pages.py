@@ -109,10 +109,15 @@ async def test_people_lists_the_signed_in_members_of_each_collaboration(
 async def test_people_says_so_when_you_are_in_no_collaboration(
     session: AsyncSession, app_db
 ) -> None:
+    """A reading was taken and named nothing, which is not the same as no
+    reading having been taken; see test_membership_is_recorded_when_asked."""
     tenant = make_tenant(slug=tenant_slug_for("kc-1"))
     session.add(tenant)
     await session.flush()
-    session.add(make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org"))
+    user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
+    session.add(user)
+    await session.flush()
+    await record_memberships(session, user.id, [])
     await session.commit()
 
     html = _get("/hub/people")

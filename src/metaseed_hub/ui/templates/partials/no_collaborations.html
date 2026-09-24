@@ -1,0 +1,19 @@
+{# Why a person sees no collaboration. Never asked is not the same as asked
+   and told nothing, and only one of them is fixed by signing in again. #}
+{% if membership_state == "never_read" %}
+<p data-testid="memberships-never-read">
+    The hub has not yet read your collaborations. That happens when you sign in,
+    and your session is older than this feature, so please sign in again:
+    <a href="/hub/auth/logout">sign out</a> and back in.
+</p>
+{% elif membership_state == "stale" %}
+<p data-testid="memberships-stale">
+    What the hub read about your collaborations is too old to trust, so it
+    grants nothing. <a href="/hub/auth/logout">Sign out</a> and back in to
+    refresh it.
+</p>
+{% else %}
+<p data-testid="no-collaborations">
+    Your identity provider reported no collaboration when the hub last asked.
+</p>
+{% endif %}

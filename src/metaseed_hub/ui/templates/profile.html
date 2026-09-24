@@ -67,9 +67,9 @@
                 </li>
                 {% endfor %}
             </ul>
-            <p class="form-help">As of {{ collaborations[0].seen_at.strftime("%Y-%m-%d %H:%M") }} UTC.</p>
+            <p class="form-help">As of {{ collaborations[0].read_at.strftime("%Y-%m-%d %H:%M") }} UTC.</p>
             {% else %}
-            <p data-testid="no-collaborations">Your identity provider reported no collaboration at your last sign-in.</p>
+            {% include "partials/no_collaborations.html" %}
             {% endif %}
         </div>
 
