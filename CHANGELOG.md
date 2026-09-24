@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The collaboration picker on the **Sharing** tab is readable in a narrow sidebar. Two selects and a button abreast cut a real collaboration name to "metas" and the role to "Viewe"; the collaboration now takes a line of its own, as the address does in the form above it.
 
+### Changed
+- **My Drafts** groups the versions of one specification into a single card, newest version first, instead of one card per version. Holding several versions of a profile is ordinary now that a draft is keyed by name and version; eight CropXR drafts filled the page with six repetitions of three titles. A version that is not two numbers sorts last rather than breaking the list.
+
 ## [0.54.0] - 260924
 
 ### Added

@@ -9,6 +9,8 @@ A specification exists in two states:
 
 A draft is identified by its name and version within your account, so you can hold several versions of one specification as drafts at once, for instance the version in use and the next one. Creating or importing a second draft at a name and version you already hold is refused; a draft whose name arrives from a template or an import gets a suffix instead.
 
+**My Drafts** groups the versions of one specification together, newest first, under a single card. A profile with three versions in progress is one entry in the list rather than three cards carrying the same title, which is what made a list of a few specifications unreadable.
+
 ## Creating a specification
 
 1. On the Specs page, click **+ New Specification**.
