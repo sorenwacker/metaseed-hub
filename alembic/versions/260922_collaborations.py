@@ -7,7 +7,7 @@ the editor or viewer role on a dataset, a draft or a published specification;
 one table per kind so the database drops a grant with the thing it is on.
 
 Revision ID: 260922_collaborations
-Revises: 260828_dataset_creators_own
+Revises: 260922_drafts_per_version
 Create Date: 2026-09-22
 """
 
@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "260922_collaborations"
-down_revision: str | None = "260828_dataset_creators_own"
+down_revision: str | None = "260922_drafts_per_version"
 branch_labels: str | None = None
 depends_on: str | None = None
 
