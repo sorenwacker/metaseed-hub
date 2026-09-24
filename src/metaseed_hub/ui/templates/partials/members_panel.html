@@ -110,7 +110,7 @@
       hx-post="/hub/sharing/{{ kind }}/{{ resource_id }}/collaborations"
       hx-target="#members-panel" hx-swap="innerHTML">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <select class="form-input" name="urn" data-testid="grant-urn">
+    <select class="form-input grant-audience" name="urn" data-testid="grant-urn">
         {% for collaboration in collaborations %}
         <option value="{{ collaboration.urn }}">{{ collaboration.name }} ({{ collaboration.organisation }})</option>
         {% for group in collaboration.groups %}

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- The collaboration picker on the **Sharing** tab is readable in a narrow sidebar. Two selects and a button abreast cut a real collaboration name to "metas" and the role to "Viewe"; the collaboration now takes a line of its own, as the address does in the form above it.
+
 ## [0.54.0] - 260924
 
 ### Added
