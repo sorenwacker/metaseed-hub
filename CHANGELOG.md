@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.56.0] - 260924
 
 ### Fixed
 - A grouped draft card is as tall as its own versions, and each version row carries none of the card's dividers or spacing. A specification with two versions trailed the empty height of one with three, and a rule was drawn beside every date and above every pair of buttons.
