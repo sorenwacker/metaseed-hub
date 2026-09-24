@@ -25,33 +25,41 @@
     <!-- Drafts Section -->
     <section class="spec-section">
         <h2>My Drafts</h2>
-        {% if drafts %}
+        {% if draft_groups %}
         <div class="spec-grid">
-            {% for draft in drafts %}
-            <div class="spec-card draft">
+            {# One card per specification; its versions are rows inside it. #}
+            {% for group in draft_groups %}
+            <div class="spec-card draft" data-testid="draft-group-{{ group.name }}">
                 <div class="spec-card-header">
                     <span class="spec-badge draft">Draft</span>
-                </div>
-                <h3 class="spec-name">{{ draft|spec_label }}</h3>
-                <p class="spec-version">v{{ draft.version }}</p>
-                <div class="spec-meta">
-                    <span title="{{ draft.updated_at }}">
-                        Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
-                    </span>
-                    {# Why a draft you do not own is in your list. #}
-                    {% if granted_by and granted_by.get(draft.id) %}
-                    <span class="grant-badge" data-testid="granted-by"
-                          title="Shared with your collaboration">{{ granted_by[draft.id] }}</span>
+                    {% if group.drafts|length > 1 %}
+                    <span class="spec-count">{{ group.drafts|length }} versions</span>
                     {% endif %}
                 </div>
-                <div class="spec-actions">
-                    <a href="/hub/spec-builder/{{ draft.id }}" class="btn btn-sm btn-primary">Edit</a>
-                    <button class="btn btn-sm btn-danger"
-                            hx-delete="/hub/spec-builder/{{ draft.id }}"
-                            hx-confirm="Delete this draft?"
-                            hx-target="closest .spec-card"
-                            hx-swap="outerHTML">Delete</button>
+                <h3 class="spec-name">{{ group.label }}</h3>
+                {% for draft in group.drafts %}
+                <div class="spec-version-row" data-testid="draft-version-{{ group.name }}-{{ draft.version }}">
+                    <div class="spec-version-facts">
+                        <span class="spec-version">v{{ draft.version }}</span>
+                        <span class="spec-meta" title="{{ draft.updated_at }}">
+                            Updated {{ draft.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                        </span>
+                        {# Why a draft you do not own is in your list. #}
+                        {% if granted_by and granted_by.get(draft.id) %}
+                        <span class="grant-badge" data-testid="granted-by"
+                              title="Shared with your collaboration">{{ granted_by[draft.id] }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="spec-actions">
+                        <a href="/hub/spec-builder/{{ draft.id }}" class="btn btn-sm btn-primary">Edit</a>
+                        <button class="btn btn-sm btn-danger"
+                                hx-delete="/hub/spec-builder/{{ draft.id }}"
+                                hx-confirm="Delete {{ group.label }} v{{ draft.version }}?"
+                                hx-target="closest .spec-version-row"
+                                hx-swap="outerHTML">Delete</button>
+                    </div>
                 </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>

@@ -7622,3 +7622,29 @@ html, body {
     color: var(--clr-ink-light);
     white-space: nowrap;
 }
+
+/* A drafts card holds one specification; each of its versions is a row. */
+.spec-version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-xs) 0;
+    border-top: 1px solid var(--clr-border);
+}
+
+.spec-version-row:first-of-type {
+    border-top: none;
+}
+
+.spec-version-facts {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.spec-count {
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}

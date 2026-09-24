@@ -17,6 +17,7 @@ from metaseed_hub.ui.spec_builder.access import (
     create_new_draft,
     free_draft_name,
 )
+from metaseed_hub.ui.spec_builder.grouping import group_by_specification
 from metaseed_hub.ui.spec_builder_helpers import (
     clone_spec,
     create_empty_spec,
@@ -100,7 +101,9 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             request,
             "spec_builder/list.html",
             {
-                "drafts": drafts,
+                # Grouped by specification: several versions of one profile are
+                # ordinary, and one card each made the list unreadable.
+                "draft_groups": group_by_specification(drafts),
                 "specs": specs,
                 "tenant_id": tenant_id,
                 "owners": owners,
