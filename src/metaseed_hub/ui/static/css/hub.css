@@ -600,6 +600,15 @@ body {
     min-width: 0;
 }
 
+/* The collaboration name is the long one, and there are two selects rather
+   than one here, so it takes the line the address takes in the form above.
+   Three controls abreast in a sidebar cut it to "metas" and the role to
+   "Viewe". */
+.member-add .grant-audience {
+    flex: 1 1 100%;
+    text-overflow: ellipsis;
+}
+
 .account-card, .project-card {
     background: white;
     border: 1px solid rgba(26, 58, 47, 0.08);
