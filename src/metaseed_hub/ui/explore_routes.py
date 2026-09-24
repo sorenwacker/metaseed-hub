@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
 from metaseed.specs.merge import DiffVisualizer, SpecComparator
 from metaseed.specs.schema import ProfileSpec
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
@@ -104,7 +104,7 @@ async def load_profile_spec(
     if profile_key.startswith("draft:"):
         if tenant_id is None and user_id is None:
             return None
-        draft_id = profile_key[6:]
+        wanted = profile_key[6:]
         # The caller's own tenant, OR a draft shared with them: the catalog
         # offers shared drafts across tenants, and offering a draft the
         # loader then refuses left the picker lying.
@@ -114,9 +114,15 @@ async def load_profile_spec(
         if user_id is not None:
             shared = await accessible_ids(session, resource_for("draft"), user_id)
             conditions.append(SpecDraft.id.in_(shared))
-        result = await session.execute(
-            select(SpecDraft).where(SpecDraft.id == draft_id, or_(*conditions))
+        # The key names the specification and the version selector beside it
+        # chooses which draft; a key holding an id is what earlier pages sent,
+        # and still resolves.
+        identifies = (
+            SpecDraft.id == wanted
+            if _is_uuid(wanted)
+            else and_(SpecDraft.name == wanted, SpecDraft.version == version)
         )
+        result = await session.execute(select(SpecDraft).where(identifies, or_(*conditions)))
         draft = result.scalar_one_or_none()
         if draft and draft.spec_data:
             spec_data = _extract_spec_data(draft.spec_data)
@@ -203,6 +209,25 @@ async def _db_user_id_of(session: AsyncSession, user: Any) -> str | None:
     return db_user.id if db_user else None
 
 
+def _is_uuid(value: str) -> bool:
+    """Whether ``value`` is a draft id rather than a specification name."""
+    from uuid import UUID
+
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Order ``MAJOR.MINOR`` numerically, so 1.10 follows 1.3 rather than 1.1."""
+    parts = version.split(".")
+    if not all(part.isdigit() for part in parts):
+        return (-1,)
+    return tuple(int(part) for part in parts)
+
+
 async def _build_explore_catalog(
     session: AsyncSession, user: Any
 ) -> tuple[list[str], dict[str, list[str]], dict[str, str]]:
@@ -275,15 +300,25 @@ async def _build_explore_catalog(
             if draft.id not in existing_ids:
                 user_drafts.append(draft)
 
+    # One entry per specification, not per version: a draft is one name at one
+    # version, so three versions produced three identical entries beside a
+    # version selector holding one version each.
     for draft in user_drafts:
-        draft_key = f"draft:{draft.id}"
-        profiles.append(draft_key)
-        profile_versions[draft_key] = [draft.version]
+        draft_key = f"draft:{draft.name}"
+        if draft_key not in profile_versions:
+            profiles.append(draft_key)
+            profile_versions[draft_key] = []
+        if draft.version not in profile_versions[draft_key]:
+            profile_versions[draft_key].append(draft.version)
         display_name = draft.name
         if draft.spec_data:
             spec_data = _extract_spec_data(draft.spec_data)
             display_name = spec_data.get("display_name") or spec_data.get("name") or draft.name
         profile_display_names[draft_key] = f"{display_name} (Draft)"
+
+    for versions in profile_versions.values():
+        # Oldest first: the picker selects the last as the default.
+        versions.sort(key=_version_key)
 
     for spec in published_specs:
         spec_key = f"spec:{spec.id}"

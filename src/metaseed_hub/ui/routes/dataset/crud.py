@@ -6,13 +6,15 @@ import logging
 from html import escape
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
+from uuid import UUID
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from metaseed.adapters import Action  # lightweight by design: no plugin imports
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
@@ -92,6 +94,52 @@ def _no_example_message(profile: str, version: str, *, found: bool) -> str:
     """
     what = "example file found for" if found else "example available for"
     return f"No {what} {escape(str(profile))} v{escape(str(version))}"
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    """Order ``MAJOR.MINOR`` numerically, so 1.10 follows 1.3 rather than 1.1."""
+    parts = version.split(".")
+    if not all(part.isdigit() for part in parts):
+        return (-1,)
+    return tuple(int(part) for part in parts)
+
+
+async def draft_for_choice(
+    session: AsyncSession,
+    profile: str,
+    version: str,
+    tenant_id: str,
+    user_id: str,
+) -> SpecDraft | None:
+    """The draft a picker choice names, or None when it reaches none.
+
+    ``profile`` is ``draft:`` followed by the specification's name, with
+    ``version`` choosing between that name's drafts; a key holding an id is
+    what earlier pages sent, and still resolves.
+
+    Scoped to what the caller may reach, matching the picker: owned by their
+    tenant or shared with them. An unscoped lookup would let a person bind
+    their dataset to another account's draft.
+    """
+    wanted = profile.removeprefix("draft:")
+    try:
+        UUID(wanted)
+    except ValueError:
+        identifies = and_(SpecDraft.name == wanted, SpecDraft.version == version)
+    else:
+        identifies = SpecDraft.id == wanted
+    found = await session.execute(
+        select(SpecDraft)
+        .outerjoin(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
+        .where(
+            identifies,
+            or_(
+                SpecDraft.tenant_id == tenant_id,
+                SpecDraftMember.user_id == user_id,
+            ),
+        )
+    )
+    return found.scalars().first()
 
 
 @router.get("/new", response_class=HTMLResponse)
@@ -178,20 +226,32 @@ async def dataset_new(
             seen_ids.add(draft.id)
             drafts.append(draft)
 
+    # One entry per specification, not per version: the version selector beside
+    # the picker is what chooses between them, and three versions of a profile
+    # otherwise read as three identical entries.
+    by_name: dict[str, dict[str, Any]] = {}
     for draft in drafts:
-        if draft.name:
-            spec_data = draft.spec_data or {}
-            profiles_data.append(
-                {
-                    "name": f"draft:{draft.id}",
-                    "display_name": f"{draft.name} (Draft)",
-                    "description": spec_data.get("description", ""),
-                    "root_entity": spec_data.get("root_entity", "Investigation"),
-                    "versions": [draft.version],
-                    "latest_version": draft.version,
-                    "source": "draft",
-                }
-            )
+        if not draft.name:
+            continue
+        spec_data = draft.spec_data or {}
+        entry = by_name.get(draft.name)
+        if entry is None:
+            entry = {
+                "name": f"draft:{draft.name}",
+                "display_name": f"{draft.name} (Draft)",
+                "description": spec_data.get("description", ""),
+                "root_entity": spec_data.get("root_entity", "Investigation"),
+                "versions": [],
+                "latest_version": draft.version,
+                "source": "draft",
+            }
+            by_name[draft.name] = entry
+            profiles_data.append(entry)
+        if draft.version not in entry["versions"]:
+            entry["versions"].append(draft.version)
+    for entry in by_name.values():
+        entry["versions"].sort(key=_version_key)
+        entry["latest_version"] = entry["versions"][-1]
 
     # Every published spec, from any account, offered as a starting point:
     # publishing is what makes a specification available to other people.
@@ -645,25 +705,10 @@ async def dataset_create(
     # Check if using a draft spec
     spec_draft_id = None
     if profile.startswith("draft:"):
-        spec_draft_id = profile.replace("draft:", "")
-        # Resolve the draft only if it is accessible to this user, matching the
-        # scoping in dataset_new: owned by the caller's tenant or shared via
-        # SpecDraftMember. An unscoped lookup would let a user bind their dataset
-        # to another tenant's draft spec.
-        draft_result = await session.execute(
-            select(SpecDraft)
-            .outerjoin(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-            .where(
-                SpecDraft.id == spec_draft_id,
-                or_(
-                    SpecDraft.tenant_id == tenant.id,
-                    SpecDraftMember.user_id == db_user.id,
-                ),
-            )
-        )
-        draft = draft_result.scalars().first()
+        draft = await draft_for_choice(session, profile, version, tenant.id, db_user.id)
         if draft is None:
             return RedirectResponse("/hub/?error=draft_not_found", status_code=302)
+        spec_draft_id = draft.id
         profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
         version = draft.version
 
