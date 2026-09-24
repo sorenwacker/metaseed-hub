@@ -18,6 +18,7 @@ from metaseed.logging import OneLineFormatter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from metaseed_hub.audience import audience_label
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, SpecDraft
 from metaseed_hub.sharing import accessible_ids, granting_urns, resource_for
@@ -257,6 +258,7 @@ def create_hub_app() -> FastAPI:
     # A profile's slug alone reads as a typo ("jerm"); show its display
     # name when that is the same name, differently cased.
     templates.env.filters["spec_label"] = spec_label
+    templates.env.filters["audience_label"] = audience_label
 
     # Initialize templates for route modules
     init_dataset_templates(templates)

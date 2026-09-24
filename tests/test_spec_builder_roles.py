@@ -226,6 +226,7 @@ class TestOwnerOnlyRoutes:
                 draft_id=draft.id,
                 session=session,
                 user_ctx=(members[Role.VIEWER].id, tenant.id),
+                audience_urn="",
             )
         assert err.value.status_code == 403
         drafts = (await session.execute(select(SpecDraft))).scalars().all()
@@ -239,6 +240,7 @@ class TestOwnerOnlyRoutes:
             draft_id=draft.id,
             session=session,
             user_ctx=(members[Role.OWNER].id, tenant.id),
+            audience_urn="",
         )
         specs = (await session.execute(select(Spec))).scalars().all()
         assert len(specs) == 1
@@ -288,6 +290,7 @@ class TestForkPublishing:
             draft_id=fork.id,
             session=session,
             user_ctx=(forker.id, forker_tenant.id),
+            audience_urn="",
         )
 
         published = (
@@ -324,6 +327,7 @@ class TestPublishKeepsDatasetsBound:
             draft_id=draft.id,
             session=session,
             user_ctx=(owner.id, tenant.id),
+            audience_urn="",
         )
 
         spec = (await session.execute(select(Spec))).scalars().one()
@@ -343,6 +347,7 @@ class TestPublishKeepsDatasetsBound:
             draft_id=draft.id,
             session=session,
             user_ctx=(owner.id, tenant.id),
+            audience_urn="",
         )
 
         # A second draft in the same tenant, same name and version.
@@ -359,6 +364,7 @@ class TestPublishKeepsDatasetsBound:
             draft_id=draft2.id,
             session=session,
             user_ctx=(owner.id, tenant.id),
+            audience_urn="",
         )
 
         body = response.body.decode()

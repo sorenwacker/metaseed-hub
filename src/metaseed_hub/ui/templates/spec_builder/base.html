@@ -56,12 +56,28 @@
                     hx-target="#notification-container"
                     hx-swap="beforeend"
                     title="Save draft">Save</button>
-            <button class="btn btn-sm btn-success"
-                    hx-post="/hub/spec-builder/{{ draft_id }}/publish"
-                    hx-target="#notification-container"
-                    hx-swap="beforeend"
-                    hx-confirm="Publish this specification?&#10;&#10;It becomes visible to EVERY user of this hub, and anyone can use it as the profile for their datasets or fork it.&#10;&#10;This draft is replaced by the published specification. You can undo this with Unpublish, which brings it back as a private draft."
-                    title="Publish specification">Publish</button>
+            {# Publishing asks who it is for. A confirm dialog cannot carry a
+               choice, so the audience is a control beside the button. #}
+            <form class="publish-form"
+                  hx-post="/hub/spec-builder/{{ draft_id }}/publish"
+                  hx-target="#notification-container"
+                  hx-swap="beforeend"
+                  hx-confirm="Publish this specification?&#10;&#10;The draft is replaced by the published specification, which cannot be edited in place. You can undo this with Unpublish, which brings it back as a private draft.">
+                <label class="visually-hidden" for="publish-audience">Publish to</label>
+                <select class="form-input form-input-sm" id="publish-audience"
+                        name="audience_urn" data-testid="publish-audience"
+                        title="Who will be able to see this specification">
+                    <option value="">Everyone on this hub</option>
+                    {% for collaboration in publish_audiences %}
+                    <option value="{{ collaboration.urn }}">{{ collaboration.name }} ({{ collaboration.organisation }})</option>
+                    {% for group in collaboration.groups %}
+                    <option value="{{ collaboration.urn }}:{{ group }}">&nbsp;&nbsp;{{ collaboration.name }} &rsaquo; {{ group }}</option>
+                    {% endfor %}
+                    {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-success" type="submit"
+                        title="Publish specification">Publish</button>
+            </form>
         </div>
     </div>
 

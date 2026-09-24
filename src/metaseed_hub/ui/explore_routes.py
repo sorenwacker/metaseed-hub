@@ -97,6 +97,7 @@ async def load_profile_spec(
         Tuple of (display_name, ProfileSpec) or None if not found or not
         accessible to the caller's tenant.
     """
+    from metaseed_hub.audience import visible_specs
     from metaseed_hub.models import Spec, SpecDraft, SpecStatus
     from metaseed_hub.sharing import accessible_ids, resource_for
 
@@ -124,15 +125,17 @@ async def load_profile_spec(
         return None
 
     elif profile_key.startswith("spec:"):
-        # A published specification is readable by anyone, which is what
-        # publishing means. Drafts above stay scoped to the caller's account:
-        # those are the private form and must not be reachable by id.
+        # A published specification is readable by whoever it was published
+        # to: everyone, or one collaboration. Drafts above stay scoped to the
+        # caller's account: those are the private form and must not be
+        # reachable by id.
         spec_id = profile_key[5:]
         result = await session.execute(
             select(Spec).where(
                 Spec.id == spec_id,
                 Spec.status == SpecStatus.PUBLISHED,
                 Spec.deleted_at.is_(None),
+                await visible_specs(session, user_id),
             )
         )
         db_spec = result.scalar_one_or_none()
@@ -211,6 +214,7 @@ async def _build_explore_catalog(
     Returns:
         A tuple of (profiles, profile_versions, profile_display_names).
     """
+    from metaseed_hub.audience import visible_specs
     from metaseed_hub.models import Spec, SpecDraft, SpecStatus, Tenant, User
     from metaseed_hub.sharing import accessible_ids, resource_for
     from metaseed_hub.ui.dependencies import tenant_slug_for
@@ -246,12 +250,14 @@ async def _build_explore_catalog(
         )
         user_drafts = list(drafts_result.scalars().all())
 
-    # Published specs are readable by anyone -- that is what publishing means --
-    # so they are offered even to a user whose Tenant row does not exist yet.
+    # Published specs are readable by whoever they were published to:
+    # everyone, or one collaboration. Offered even to a user whose Tenant
+    # row does not exist yet.
     specs_result = await session.execute(
         select(Spec).where(
             Spec.status == SpecStatus.PUBLISHED,
             Spec.deleted_at.is_(None),
+            await visible_specs(session, db_user.id if db_user else None),
         )
     )
     published_specs: list[Spec] = list(specs_result.scalars().all())

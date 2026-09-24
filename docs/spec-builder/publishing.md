@@ -13,15 +13,35 @@ When a draft is ready, click **Publish** in the editor. Publishing creates an im
 
 A published specification cannot be edited in place — this keeps datasets that reference it stable.
 
-Publishing shares the specification with **every user of the hub**. A draft is the private form, visible only to you and anyone you shared it with; publishing is what makes a specification available to other people, who can then view it, fork it, and select it as the profile for their own datasets.
-
 Publishing consumes the draft: the draft is removed and the published specification takes its place. Use **Unpublish** to withdraw it and get the draft back.
+
+### Who can see it
+
+A specification has one of three audiences, and publishing is where you choose between the last two.
+
+| Audience | Who sees it |
+|---|---|
+| **Draft** | You, and anyone the draft is [shared](../collaboration.md#sharing-and-roles) with |
+| **A collaboration** | Every member of that [SRAM collaboration](../collaboration.md#collaborations) |
+| **Everyone** | Every user of this hub |
+
+**Publish** asks which. The list offers the collaborations your identity provider reported at your last sign-in, plus **Everyone**. Publishing to a collaboration is the middle ground a working group needs: the specification is immutable and version-gated like any release, and datasets can be built on it, but it is not announced to the whole hub.
+
+Members of the collaboration see it under **Published Specifications**, can select it as the profile for their datasets, and can fork it into a draft of their own. Everyone else does not see it at all: it is absent from the specifications list, from the profile picker, from the explorer and from the REST and agent interfaces, exactly as if it did not exist.
+
+The audience is read from the membership recorded at each person's last sign-in, and a record older than the configured limit is not trusted, so someone who has left the collaboration loses sight of it without anyone acting. See [Your collaborations](../collaboration.md#your-collaborations).
+
+### Widening or narrowing the audience
+
+A published specification shows **Change audience** to its owner. Moving from a collaboration to **Everyone** widens it; moving the other way narrows it, and a dataset already built on it by someone outside the new audience keeps working, because a dataset records the specification it was built on rather than asking each time who may see it.
+
+Narrowing does not retract anything already copied: someone who forked the specification while they could see it keeps their fork. Treat the audience as who may find it from now on, not as a secret.
 
 ## The version bump gate
 
 A profile version is `MAJOR.MINOR`. MAJOR means a dataset that validated under the previous version may fail under the new one; MINOR means every dataset valid under the previous version stays valid. Which changes are breaking, and why there is no patch component, is defined by metaseed — see [Profile versioning](https://sorenwacker.github.io/metaseed/api/schema-specs/#profile-versioning).
 
-Publishing is the release event, so this is where the hub checks that the version you declared matches what actually changed. When a draft's profile name matches a specification already published in the same account, the hub compares the draft against the **latest published version** of that name and works out the bump the content requires:
+Publishing is the release event, so this is where the hub checks that the version you declared matches what actually changed. The gate is per account, whatever the audience: a name and version already published from your account is never replaced, whether it went to a collaboration or to everyone. When a draft's profile name matches a specification already published in the same account, the hub compares the draft against the **latest published version** of that name and works out the bump the content requires:
 
 - **A sufficient bump is published unchanged.** Declaring 2.0 for a breaking change, or 1.2 for a compatible one, publishes normally. Declaring a larger bump than required is allowed — a MAJOR bump for a purely compatible change is a judgement call, not an error.
 - **An insufficient bump is refused.** Publishing stops, nothing is written, and the draft is left exactly as it was. The message lists the breaking changes it found (for example `Sample.tissue became required`) and names the version to declare instead.

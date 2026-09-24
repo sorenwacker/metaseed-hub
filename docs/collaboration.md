@@ -66,6 +66,10 @@ An access token carries no group membership at all, which is why the reading exi
 
 The email field on the **Sharing** tab suggests these people as you type, so sharing with a colleague no longer means asking them for the address on their profile.
 
+### Publishing to a collaboration
+
+A specification can be published so that only a collaboration's members see it, which is the middle ground between a private draft and a release to the whole hub. See [Who can see it](spec-builder/publishing.md#who-can-see-it).
+
 ### Sharing with a collaboration
 
 On the **Sharing** tab, under **Collaborations**, an owner can grant a whole collaboration a role. The choice lists the collaborations the owner is in. A grant gives every member of the collaboration the role **Editor** or **Viewer**; **Owner** cannot be granted to a collaboration, because ownership is what lets a person share, hand over and delete, and an item whose owners are "whoever is in a group this month" cannot keep the [last-owner rule](#handing-something-over). An owner can change a grant's role or remove it.
