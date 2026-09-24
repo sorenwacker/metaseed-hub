@@ -87,3 +87,23 @@ async def test_a_version_that_is_not_two_numbers_still_lists(
     groups = group_by_specification(drafts)
 
     assert [d.version for d in groups[0].drafts] == ["1.0", "draft-two"]
+
+
+def test_a_version_row_carries_none_of_the_cards_own_dividers() -> None:
+    """The card's rules and spacing belong to the card. Left alone they drew a
+    line beside every date and above every pair of buttons."""
+    from pathlib import Path
+
+    css = Path("src/metaseed_hub/ui/static/css/hub.css").read_text()
+
+    for inherited in (".spec-meta", ".spec-version", ".spec-actions"):
+        assert f".spec-version-row {inherited} {{" in css, inherited
+
+
+def test_a_card_is_as_tall_as_its_own_versions() -> None:
+    from pathlib import Path
+
+    css = Path("src/metaseed_hub/ui/static/css/hub.css").read_text()
+
+    grid = css[css.index(".spec-grid {") : css.index("}", css.index(".spec-grid {"))]
+    assert "align-items: start" in grid

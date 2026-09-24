@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- A grouped draft card is as tall as its own versions, and each version row carries none of the card's dividers or spacing. A specification with two versions trailed the empty height of one with three, and a rule was drawn beside every date and above every pair of buttons.
 - The specifications stylesheet had an unclosed rule, so every rule after it was nested inside it and ignored: the publish control lost its layout and wrapped the toolbar, a label meant to be hidden was shown, and each draft version row carried the card's divider beside its date. A gate now fails when a block does not close or a rule is left nested.
 - Publishing names a collaboration or the whole hub, never one of a collaboration's groups. The groups were offered in the picker and accepted by the REST contract; a release belongs to the collaboration, while sharing still reaches a group.
 
