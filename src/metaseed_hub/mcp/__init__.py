@@ -31,6 +31,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from metaseed.agent.mcp.server import SPEC_BUILDING_INSTRUCTIONS
 from sqlalchemy import select
 
+from metaseed_hub.audience import visible_specs
 from metaseed_hub.auth import verify_token as verify_oidc_token
 from metaseed_hub.database import db
 from metaseed_hub.mcp._entity_tools import register_entity_tools
@@ -417,11 +418,15 @@ async def _published_spec(
     profile: str,
     version: str,
     prefer_tenant: str | None = None,
+    *,
+    for_user_id: str | None = None,
 ) -> Spec | None:
     """The published specification a profile name and version refer to, if any.
 
-    Publishing shares a specification with every user of the hub, so the lookup
-    is deliberately not scoped to the caller's tenant. Matched case-insensitively
+    Publishing shares a specification with whoever it was published to, so the
+    lookup is not scoped to the caller's tenant but is scoped to what they may
+    see: a specification published to a collaboration they are not in does not
+    exist for them. Matched case-insensitively
     because datasets store the lowercased profile name while list_profiles
     reports the name as published.
 
@@ -445,6 +450,7 @@ async def _published_spec(
             Spec.version == version,
             Spec.status == SpecStatus.PUBLISHED,
             Spec.deleted_at.is_(None),
+            await visible_specs(session, for_user_id),
         )
         .order_by(*ordering)
     )
@@ -456,6 +462,8 @@ async def _profile_spec(
     profile: str,
     version: str,
     prefer_tenant: str | None = None,
+    *,
+    for_user_id: str | None = None,
 ) -> Any:
     """The ``ProfileSpec`` behind a profile name: built-in first, then published.
 
@@ -474,7 +482,9 @@ async def _profile_spec(
             )
         return loader.load_profile(version=version, profile=profile.lower())
 
-    published = await _published_spec(session, profile, version, prefer_tenant)
+    published = await _published_spec(
+        session, profile, version, prefer_tenant, for_user_id=for_user_id
+    )
     if published is None:
         raise ValueError(
             f"No profile named {profile!r} with version {version!r}. "
@@ -646,7 +656,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             spec_id: str | None = None
             if profile.lower() in SpecLoader().list_profiles():
                 # Validates the profile and version; loading is the check.
-                await _profile_spec(session, profile, version, prefer_tenant=user.tenant_id)
+                await _profile_spec(
+                    session,
+                    profile,
+                    version,
+                    prefer_tenant=user.tenant_id,
+                    for_user_id=user.id,
+                )
                 profile = profile.lower()
             else:
                 published = await _published_spec(
@@ -803,9 +819,15 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             for name in loader.list_profiles()
         ]
 
-        async with _caller() as (session, _user):
+        async with _caller() as (session, user):
             result = await session.execute(
-                select(Spec).where(Spec.status == SpecStatus.PUBLISHED, Spec.deleted_at.is_(None))
+                select(Spec).where(
+                    Spec.status == SpecStatus.PUBLISHED,
+                    Spec.deleted_at.is_(None),
+                    # A specification published to a collaboration is absent
+                    # for everyone else, here as on every page.
+                    await visible_specs(session, user.id),
+                )
             )
             published = [
                 {"name": s.name, "versions": [s.version], "source": "published"}
@@ -825,7 +847,13 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             version: The profile version.
         """
         async with _caller() as (session, _user):
-            spec = await _profile_spec(session, profile, version, prefer_tenant=_user.tenant_id)
+            spec = await _profile_spec(
+                session,
+                profile,
+                version,
+                prefer_tenant=_user.tenant_id,
+                for_user_id=_user.id,
+            )
             return json.dumps(
                 {
                     "name": spec.name,

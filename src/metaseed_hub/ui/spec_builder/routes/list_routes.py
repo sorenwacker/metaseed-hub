@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
+from metaseed_hub.audience import visible_specs
 from metaseed_hub.collaborations import grant_label
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus
 from metaseed_hub.sharing import accessible_ids, account_owner, granting_urns, resource_for
@@ -84,6 +85,9 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             .where(
                 Spec.deleted_at.is_(None),
                 Spec.status == SpecStatus.PUBLISHED,
+                # A specification published to a collaboration is absent for
+                # everyone else, not listed and then refused.
+                await visible_specs(session, user_id),
             )
             .order_by(Spec.updated_at.desc())
         )

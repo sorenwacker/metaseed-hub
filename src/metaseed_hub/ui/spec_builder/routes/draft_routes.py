@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
+from metaseed_hub.collaborations import NotInCollaborationError, collaborations_of
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
 from metaseed_hub.sharing import account_owner
 from metaseed_hub.ui.helpers import validate_csrf_token
@@ -35,6 +36,7 @@ from metaseed_hub.ui.spec_builder.access import (
     delete_draft as delete_draft_row,
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
+from metaseed_hub.ui.spec_builder.publishing import audience_for_publisher
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
 from metaseed_hub.ui.spec_builder_helpers import (
@@ -123,6 +125,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "draft_owner": draft_owner,
                 "current_user_id": user_id,
                 "is_current_user_owner": is_current_user_owner,
+                # Publishing asks who it is for; the list is what this person
+                # may choose, so it cannot offer a group they are not in.
+                "publish_audiences": await collaborations_of(session, user_id),
             },
         )
 
@@ -189,8 +194,9 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         draft_id: str,
         session: SessionDep,
         user_ctx: UserContextDep,
+        audience_urn: str = Form(""),
     ) -> HTMLResponse:
-        """Publish a draft as a spec."""
+        """Publish a draft as a spec, to a collaboration or to everyone."""
         user_id, _tenant_id = user_ctx
         builder, draft = await load_state_for_draft(session, draft_id, user_id)
 
@@ -232,8 +238,18 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                     {"refusal": refusal},
                 )
 
+        try:
+            audience = await audience_for_publisher(session, user_id, audience_urn)
+        except NotInCollaborationError as exc:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/save_result.html",
+                {"error": str(exc)},
+            )
+
         spec = Spec(
             tenant_id=draft.tenant_id,
+            audience_urn=audience,
             name=builder.spec.name,
             version=builder.spec.version,
             description=builder.spec.description,

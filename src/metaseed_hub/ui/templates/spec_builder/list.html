@@ -79,6 +79,9 @@
             <div class="spec-card published">
                 <div class="spec-card-header">
                     <span class="spec-badge published">Published</span>
+                    {# Who can see it: everyone, or one collaboration. #}
+                    <span class="audience-badge" data-testid="audience-{{ spec.name }}"
+                          title="Who can see this specification">{{ spec.audience_urn|audience_label }}</span>
                 </div>
                 <h3 class="spec-name">{{ spec|spec_label }}</h3>
                 <p class="spec-version">v{{ spec.version }}</p>

@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.access import get_tenant_for_user, live_user
+from metaseed_hub.audience import visible_specs
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
@@ -60,8 +61,16 @@ class SpecSummary(BaseModel):
     """Whether the caller's account holds it."""
 
 
-def _published() -> Select[tuple[Spec]]:
-    return select(Spec).where(Spec.status == SpecStatus.PUBLISHED, Spec.deleted_at.is_(None))
+def _published(audience: Any) -> Select[tuple[Spec]]:
+    """Published specifications the caller may see.
+
+    ``audience`` comes from :func:`metaseed_hub.audience.visible_specs`: a
+    specification published to a collaboration is absent for everyone else,
+    rather than listed and then refused.
+    """
+    return select(Spec).where(
+        Spec.status == SpecStatus.PUBLISHED, Spec.deleted_at.is_(None), audience
+    )
 
 
 async def _caller(session: AsyncSession, user: TokenUser) -> User:
@@ -121,7 +130,11 @@ async def list_specs(
             .order_by(SpecDraft.name, SpecDraft.version)
         )
     ).scalars()
-    published = (await session.execute(_published().order_by(Spec.name, Spec.version))).scalars()
+    published = (
+        await session.execute(
+            _published(await visible_specs(session, caller.id)).order_by(Spec.name, Spec.version)
+        )
+    ).scalars()
     return [_draft_summary(d) for d in drafts] + [
         _spec_summary(s, caller.tenant_id) for s in published
     ]
@@ -157,7 +170,9 @@ async def get_spec(
         rows = list(
             (
                 await session.execute(
-                    _published().where(Spec.name == name, Spec.version == version)
+                    _published(await visible_specs(session, caller.id)).where(
+                        Spec.name == name, Spec.version == version
+                    )
                 )
             ).scalars()
         )
@@ -241,7 +256,7 @@ async def _publish(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No hub account")
     digest = content_hash(spec)
     existing = await session.execute(
-        _published().where(
+        _published(await visible_specs(session, caller.id)).where(
             Spec.tenant_id == tenant.id, Spec.name == spec.name, Spec.version == spec.version
         )
     )
@@ -342,7 +357,11 @@ async def unpublish(
     )
 
     caller = await _caller(session, user)
-    spec = (await session.execute(_published().where(Spec.id == spec_id))).scalar_one_or_none()
+    spec = (
+        await session.execute(
+            _published(await visible_specs(session, caller.id)).where(Spec.id == spec_id)
+        )
+    ).scalar_one_or_none()
     if spec is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specification not found")
     if not await can_edit_spec(session, caller.id, spec.id):

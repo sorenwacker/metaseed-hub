@@ -63,6 +63,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index("ix_specs_audience_urn", "audience_urn"),
         Index("ix_specs_tenant_id", "tenant_id"),
         Index("ix_specs_created_by_id", "created_by_id"),
     )
@@ -84,6 +85,11 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     # "sha256:" plus 64 hex digits. Nullable because a row whose stored spec
     # cannot be deserialized has no hash to record, and pretending otherwise
     # would give it a name that identifies nothing.
+    # NULL means every user of the hub. A SRAM collaboration or group URN
+    # means only its members see it: the middle ground between a private
+    # draft and a hub-wide release. Read through metaseed_hub.audience, never
+    # compared directly, so one rule governs every listing.
+    audience_urn: Mapped[str | None] = mapped_column(String(512), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(71), nullable=True)
     status: Mapped[SpecStatus] = mapped_column(
         Enum(SpecStatus, values_callable=_enum_values),

@@ -161,6 +161,7 @@ class TestAdvisoriesDoNotBlockPublishing:
             draft_id=draft.id,
             session=session,
             user_ctx=(owner.id, tenant.id),
+            audience_urn="",
         )
 
         assert "published successfully" in response.body.decode()

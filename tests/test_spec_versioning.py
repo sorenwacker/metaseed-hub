@@ -127,7 +127,9 @@ async def _draft(session: AsyncSession, tenant, user, spec: ProfileSpec) -> Spec
 async def _publish(session: AsyncSession, draft: SpecDraft, user) -> str:
     """Drive the publish route and return the rendered body."""
     publish = _endpoint("/{draft_id}/publish", "POST")
-    response = await publish(_request(), draft.id, session, (user.id, draft.tenant_id))
+    response = await publish(
+        _request(), draft.id, session, (user.id, draft.tenant_id), audience_urn=""
+    )
     return response.body.decode()
 
 

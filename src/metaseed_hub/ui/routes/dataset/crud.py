@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.access import live_user
+from metaseed_hub.audience import visible_specs
 from metaseed_hub.models import (
     Dataset,
     Spec,
@@ -200,6 +201,7 @@ async def dataset_new(
         .where(
             Spec.deleted_at.is_(None),
             Spec.status == SpecStatus.PUBLISHED,
+            await visible_specs(session, db_user.id),
         )
         .order_by(Spec.updated_at.desc())
     )
@@ -676,6 +678,8 @@ async def dataset_create(
                 Spec.id == spec_id,
                 Spec.status == SpecStatus.PUBLISHED,
                 Spec.deleted_at.is_(None),
+                # Hidden on the picker is not hidden if the id still works.
+                await visible_specs(session, db_user.id),
             )
         )
         published = spec_result.scalar_one_or_none()

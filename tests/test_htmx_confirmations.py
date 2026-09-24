@@ -44,11 +44,16 @@ def test_no_htmx_control_relies_on_onclick_confirm() -> None:
     )
 
 
-def test_publishing_is_still_confirmed() -> None:
-    """Removing the broken guard must not leave publishing unguarded — it now
-    shares the specification with every user."""
+def test_publishing_is_still_confirmed_and_asks_who_for() -> None:
+    """Removing the broken guard must not leave publishing unguarded. It no
+    longer always means every user, so the audience is an explicit choice
+    rather than a warning: the confirmation covers what is irreversible about
+    publishing, and the control covers who will see it."""
     base = (TEMPLATES / "spec_builder" / "base.html").read_text()
 
     publish = next(t for t in TAG.findall(base) if "/publish" in t)
     assert "hx-confirm" in publish
-    assert "EVERY user" in publish
+    assert "draft is replaced" in publish
+    # The audience control is inside the form, which TAG does not capture.
+    assert 'name="audience_urn"' in base
+    assert "Everyone on this hub" in base

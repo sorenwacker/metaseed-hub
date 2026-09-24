@@ -7647,4 +7647,27 @@ html, body {
 .spec-count {
     font-size: 0.75rem;
     color: var(--clr-ink-light);
+/* Who a published specification was published to. */
+.audience-badge {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-sm);
+    background: var(--clr-surface-alt, #eef2f7);
+    color: var(--clr-ink-light);
+    white-space: nowrap;
+}
+
+.publish-form {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
 }
