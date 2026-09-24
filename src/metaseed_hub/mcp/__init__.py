@@ -357,23 +357,33 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
 
 
 async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraft:
-    """The caller's own spec draft, by name.
+    """The caller's own spec draft, by name, or by ``name@version``.
 
-    Scoped to the user, not only the tenant: draft names are unique per user
-    (``uq_spec_drafts_tenant_user_name``), so a tenant-wide lookup could match
-    several drafts and would let one user edit another's.
+    Scoped to the user, not only the tenant, so one user cannot edit
+    another's. A draft is one name at one version, so a person holding two
+    versions of a name is asked to say which rather than getting either.
     """
-    result = await session.execute(
-        select(SpecDraft).where(
-            SpecDraft.tenant_id == user.tenant_id,
-            SpecDraft.user_id == user.id,
-            SpecDraft.name == name,
-        )
-    )
-    draft = result.scalar_one_or_none()
-    if draft is None:
+    wanted_version: str | None = None
+    if "@" in name:
+        name, wanted_version = name.rsplit("@", 1)
+    conditions = [
+        SpecDraft.tenant_id == user.tenant_id,
+        SpecDraft.user_id == user.id,
+        SpecDraft.name == name,
+    ]
+    if wanted_version is not None:
+        conditions.append(SpecDraft.version == wanted_version)
+    result = await session.execute(select(SpecDraft).where(*conditions).order_by(SpecDraft.version))
+    drafts = list(result.scalars().all())
+    if not drafts:
         raise ValueError(f"No specification draft named {name!r} in your account")
-    return draft
+    if len(drafts) > 1:
+        versions = ", ".join(d.version for d in drafts)
+        raise ValueError(
+            f"You hold several drafts named {name!r}: versions {versions}. "
+            f"Name one as {name}@<version>."
+        )
+    return drafts[0]
 
 
 @asynccontextmanager

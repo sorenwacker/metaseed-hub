@@ -359,8 +359,12 @@ class TestSpecClone:
             await clone("no-such-profile", "1.0")
 
     async def test_a_name_collision_is_a_clean_error(self, server, session: AsyncSession) -> None:
+        """A name is taken at its version: cloning miappe 1.1 beside a draft
+        of another version is fine, cloning it again is the refusal."""
         secret = await _drafting(server, session, slug="clo00006", name="miappe")
         clone = await _tool(server, "spec_clone")
+        with _calling_with(secret):
+            await clone("miappe", "1.1")
         with _calling_with(secret), pytest.raises(ValueError, match="already exists"):
             await clone("miappe", "1.1")
 

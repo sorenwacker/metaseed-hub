@@ -164,12 +164,17 @@ async def test_a_plain_colleague_may_not_withdraw_someone_elses_spec(
 async def test_withdrawing_over_a_draft_of_the_same_name_does_not_collide(
     session: AsyncSession,
 ) -> None:
-    """Draft names are unique per (tenant, user). Unpublishing a spec whose name
-    matches a draft the author already holds hit the unique index; the withdrawn
-    spec now comes back under a collision-avoiding name."""
+    """A draft is one name at one version per user. Unpublishing a spec whose
+    name and version match a draft the author already holds hit the unique
+    index; the withdrawn spec now comes back under a collision-avoiding name."""
     tenant, author, _colleague, spec = await _published(session)
-    # A draft the author already holds under the spec's own name.
-    session.add(make_spec_draft(tenant=tenant, user=author, name=spec.name, version="9.9"))
+    # A draft the author already holds at the spec's own name and the version
+    # its document declares, which is what the withdrawn draft comes back as.
+    session.add(
+        make_spec_draft(
+            tenant=tenant, user=author, name=spec.name, version=spec.spec_data["spec"]["version"]
+        )
+    )
     await session.commit()
     clashing = spec.name
 

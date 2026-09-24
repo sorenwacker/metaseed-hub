@@ -158,12 +158,17 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         # a decision, so a clash there is reported rather than silently renamed.
         if not name.strip():
             draft_name = await free_draft_name(
-                session, user_id=user_id, tenant_id=tenant_id, wanted=draft_name
+                session,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                wanted=draft_name,
+                version=spec.version,
             )
 
-        # One draft name per user (uq_spec_drafts_tenant_user_name). Reusing a
-        # name is an ordinary mistake, so name it instead of letting the
-        # IntegrityError surface as "Error creating specification".
+        # One draft per name and version per user
+        # (uq_spec_drafts_tenant_user_name_version). Reusing one is an
+        # ordinary mistake, so name it instead of letting the IntegrityError
+        # surface as "Error creating specification".
         try:
             draft = await create_new_draft(
                 session,
@@ -178,8 +183,9 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             # Plain text: the create page posts this with fetch and shows the
             # body, so the reason reaches the user instead of a generic alert.
             return PlainTextResponse(
-                f"You already have a specification named '{draft_name}'. "
-                "Pick a different name, or open the existing one.",
+                f"You already have a specification named '{draft_name}' at version "
+                f"{spec.version}. Pick a different name or version, or open the "
+                "existing one.",
                 status_code=409,
             )
 
@@ -263,7 +269,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         # Importing the same specification twice is ordinary; the second must
         # not be refused because the first took the name.
         draft_name = await free_draft_name(
-            session, user_id=user_id, tenant_id=tenant_id, wanted=draft_name
+            session, user_id=user_id, tenant_id=tenant_id, wanted=draft_name, version=spec.version
         )
 
         draft = await create_new_draft(
@@ -297,7 +303,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             user_id=user_id,
             tenant_id=tenant_id,
             name=await free_draft_name(
-                session, user_id=user_id, tenant_id=tenant_id, wanted=spec.name
+                session,
+                user_id=user_id,
+                tenant_id=tenant_id,
+                wanted=spec.name,
+                version=spec.version,
             ),
             spec=spec,
             template_source=(profile, version),

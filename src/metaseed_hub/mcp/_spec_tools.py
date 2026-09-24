@@ -168,15 +168,15 @@ async def _new_named_draft(
     spec: Any,
     template_source: tuple[str, str] | None = None,
 ) -> SpecDraft:
-    """Create a draft holding ``spec``, under a name free in the caller's account.
+    """Create a draft holding ``spec``, at a name and version free in the account.
 
     The one draft-creation path of this module, shared by spec_create,
-    spec_import_yaml, and spec_clone so the name-uniqueness rule cannot drift
-    between them. Scoped to the user like ``_owned_draft``: draft names are
-    unique per user, so someone else's draft must not block the name.
+    spec_import_yaml, and spec_clone so the uniqueness rule cannot drift
+    between them. Scoped to the user like ``_owned_draft``: a draft is one
+    name at one version per user, so someone else's draft must not block it.
 
     Raises:
-        ValueError: If the caller already has a draft by that name.
+        ValueError: If the caller already has a draft at that name and version.
     """
     from metaseed_hub.ui.spec_builder.access import create_new_draft
 
@@ -185,10 +185,11 @@ async def _new_named_draft(
             SpecDraft.tenant_id == user.tenant_id,
             SpecDraft.user_id == user.id,
             SpecDraft.name == name,
+            SpecDraft.version == spec.version,
         )
     )
     if existing.scalar_one_or_none() is not None:
-        raise ValueError(f"A draft named {name!r} already exists")
+        raise ValueError(f"A draft named {name!r} at version {spec.version} already exists")
 
     return await create_new_draft(
         session,
