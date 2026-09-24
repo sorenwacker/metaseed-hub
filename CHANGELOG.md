@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.57.0] - 260924
+
+### Fixed
+- A profile picker names a specification once and lets the version selector beside it choose the draft. Three versions of a profile appeared as three identical entries with nothing to tell them apart. Both the explorer catalog and the New Dataset page are covered; a key holding a draft id still resolves.
+
 ## [0.56.0] - 260924
 
 ### Fixed
