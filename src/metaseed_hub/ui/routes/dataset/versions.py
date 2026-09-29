@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
@@ -283,6 +283,12 @@ async def restore_dataset_version(
             status_code=404,
         )
 
+    from metaseed_hub.ui.helpers.dataset_state import lock_dataset_for_write, record_version
+
+    # Serialised with every other writer, and re-read, so the comparison below
+    # and the version number are against what the previous writer committed.
+    await lock_dataset_for_write(session, dataset)
+
     # Restoring the state the dataset already holds would add a version whose
     # diff is empty and change nothing, which reads as a broken button. Say so
     # instead.
@@ -298,25 +304,9 @@ async def restore_dataset_version(
     db_user = user_result.scalar_one_or_none()
     user_id = db_user.id if db_user else None
 
-    # Restore the data (this will create a new version)
     from sqlalchemy.orm.attributes import flag_modified
 
-    # Get next version number
-    max_result = await session.execute(
-        select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
-            DatasetVersion.dataset_id == dataset_id
-        )
-    )
-    max_version = max_result.scalar() or 0
-
-    # Create new version with restored data
-    new_version = DatasetVersion(
-        dataset_id=dataset_id,
-        version_number=max_version + 1,
-        data=version.data,
-        created_by_id=user_id,
-    )
-    session.add(new_version)
+    await record_version(session, dataset, version.data, user_id)
 
     # Update dataset
     dataset.data = version.data

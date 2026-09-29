@@ -41,7 +41,6 @@ from metaseed_hub.mcp._rule_tools import register_rule_tools
 from metaseed_hub.mcp._spec_tools import register_spec_tools
 from metaseed_hub.models import (
     Dataset,
-    DatasetVersion,
     Spec,
     SpecDraft,
     SpecStatus,
@@ -149,33 +148,6 @@ logger = logging.getLogger("metaseed_hub")
 # An agent can generate a lot of text. A dataset far past this is a mistake or a
 # runaway loop, and refusing is kinder than letting it bloat the row.
 MAX_DATASET_BYTES = 5 * 1024 * 1024
-
-
-async def _snapshot(session: AsyncSession, dataset: Dataset, user: User) -> None:
-    """Record the dataset's current contents as a version, before overwriting.
-
-    An agent replaces a whole dataset in one call. Without a snapshot that is
-    unrecoverable, and the person whose data it is has no way back -- so every
-    write through this endpoint leaves the previous state in the same version
-    history the web UI shows.
-    """
-    from sqlalchemy import func
-
-    max_version = (
-        await session.execute(
-            select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
-                DatasetVersion.dataset_id == dataset.id
-            )
-        )
-    ).scalar() or 0
-    session.add(
-        DatasetVersion(
-            dataset_id=dataset.id,
-            version_number=max_version + 1,
-            data=dataset.data,
-            created_by_id=user.id,
-        )
-    )
 
 
 async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[str, Any]:
@@ -323,12 +295,16 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     from sqlalchemy.orm.attributes import flag_modified
 
     from metaseed_hub.ui.helpers import make_json_serializable
+    from metaseed_hub.ui.helpers.dataset_state import lock_dataset_for_write, record_version
     from metaseed_hub.ui.helpers.load_report import unloadable_node_refusal
     from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
     # The block below rewrites the whole stored payload from what loaded, so a
     # node that did not load is deleted by an edit that never mentioned it.
     # Refusing here is the only place that catches every editing tool at once.
+    # Writers on one dataset are serialised on its row; the load below then
+    # holds what the previous writer committed.
+    await lock_dataset_for_write(session, dataset)
     skipped: list[SkippedNode] = []
     client = await _loaded_client(session, dataset, on_skip=skipped.append)
     if skipped:
@@ -351,7 +327,10 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
             f"That edit takes the dataset to {size} bytes; the limit is {MAX_DATASET_BYTES}."
         )
     if data != dataset.data:
-        await _snapshot(session, dataset, user)
+        # The previous contents become a version first: an agent can replace a
+        # whole dataset in one call, and without that the person whose data it
+        # is has no way back.
+        await record_version(session, dataset, dataset.data, user.id)
     dataset.data = data
     flag_modified(dataset, "data")
     await session.commit()
@@ -704,9 +683,14 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             # skipped all three.
             from metaseed_hub.ui.helpers.dataset_state import (
                 ensure_dataset_facade,
+                lock_dataset_for_write,
+                record_version,
                 save_dataset_state,
             )
 
+            # Serialised with every other writer; the snapshot and the
+            # comparison below then read what the previous writer committed.
+            await lock_dataset_for_write(session, dataset)
             previous = dataset.data
             dataset.data = data  # in memory only, for the load below
             skipped: list[Any] = []
@@ -747,7 +731,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             # erased a tool-built state for good. An occasional duplicate
             # version is the acceptable cost of never losing one.
             if dataset.data and data != dataset.data:
-                await _snapshot(session, dataset, user)
+                await record_version(session, dataset, dataset.data, user.id)
 
             await save_dataset_state(session, dataset, state, user)
             logger.info("mcp: %s saved dataset %r (%d bytes)", user.email, name, size)
