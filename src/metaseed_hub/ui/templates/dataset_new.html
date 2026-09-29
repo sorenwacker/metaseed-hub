@@ -14,6 +14,10 @@
         <h1>Create Dataset</h1>
     </header>
 
+    {% if error_message %}
+    <div class="alert alert-error" role="alert" data-testid="new-dataset-error">{{ error_message }}</div>
+    {% endif %}
+
     <div class="new-dataset-form">
         <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
         <input type="hidden" id="tenant-id" value="{{ tenant_id }}">
