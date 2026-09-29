@@ -28,7 +28,7 @@ claude mcp add --transport http metaseed-hub https://metaseed.ewi.tudelft.nl/hub
 | `whoami` | Which account the token acts as |
 | `list_datasets` | Your datasets |
 | `get_dataset` | A dataset's stored contents |
-| `create_dataset` | A new, empty dataset |
+| `create_dataset` | A new, empty dataset; refused with a message when you already have a dataset of that name |
 | `save_dataset` | Replace a dataset's contents |
 | `validate_dataset` | Check a dataset against its profile and list what is missing |
 | `delete_dataset` | Remove a dataset (soft — it is not erased) |

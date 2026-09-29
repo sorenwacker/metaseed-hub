@@ -6,9 +6,9 @@
 |--------|------|-------------|
 | GET | `/api/me` | The account and tenant the token acts in, and the collaborations a publish may be addressed to |
 | GET | `/api/datasets` | The caller's datasets in a tenant (`?tenant_id=`) |
-| POST | `/api/datasets` | Create a dataset |
+| POST | `/api/datasets` | Create a dataset; 409 when the tenant already has a dataset of that name |
 | GET | `/api/datasets/{id}` | One dataset with its entities |
-| PATCH | `/api/datasets/{id}` | Replace a dataset's name or entities |
+| PATCH | `/api/datasets/{id}` | Replace a dataset's name or entities; 409 when the new name is taken |
 | DELETE | `/api/datasets/{id}` | Soft-delete a dataset |
 | GET | `/api/specs` | Published specifications |
 | GET | `/api/specs/{name}/{version}` | One published specification as YAML |
