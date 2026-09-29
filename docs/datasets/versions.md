@@ -2,6 +2,8 @@
 
 Metaseed Hub records a new version of a dataset every time you save a change. Versions let you review what changed, compare two points in time, and revert.
 
+Saves to one dataset are applied one after another, in the order the server receives them, also when two people, or a person and an agent, save at the same moment. Each save starts from what the previous one wrote, so simultaneous edits to different fields are both kept and each gets its own version. A save that arrives while another is in progress waits for it; in normal use the wait is not noticeable.
+
 ## Viewing history
 
 Open a dataset and select the **History** tab in the right panel. Each version is listed as `v1`, `v2`, and so on, with its timestamp, author, and a short summary of the change (for example, entities added or removed).
