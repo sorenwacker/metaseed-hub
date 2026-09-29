@@ -22,6 +22,8 @@ Opening a dataset shows its entities in the center pane before any is selected: 
 2. The form groups **Required Fields** (marked with `*`) and **Optional Fields**, which are collapsed by default.
 3. Edit the values and click **Save**. Each save records a new [version](versions.md).
 
+A value the profile does not accept, such as text in a number field or an ORCID entered as a URL where the profile expects the bare identifier, is saved as typed rather than rejected or discarded. The form shows the problem as a warning after saving. Cells in inline tables, bulk edits and pasted blocks are saved as typed in the same way, without a warning; the problem is reported the next time you run [validation](#validating).
+
 Some fields are constrained to ontology terms. These provide a search box; see [Ontology lookup](../reference/ontology-lookup.md).
 
 ## Related entities and inline tables
@@ -64,7 +66,7 @@ Where a pasted grid does not match the table, it is clipped rather than reshaped
 - Values falling past the last row or last column of the table are dropped. Paste does not create rows — add them with **+ Add Row** first.
 - Values falling on a parent-reference column are dropped, and the remaining values keep their positions rather than shifting into the gap.
 
-A value that is not valid for its column — a word pasted into a number column — is stored as typed rather than silently discarded, and shows up in the next [validation](#validating) run.
+A value that is not valid for its column is stored as typed, as described under [Editing an entity](#editing-an-entity).
 
 ## Validating
 

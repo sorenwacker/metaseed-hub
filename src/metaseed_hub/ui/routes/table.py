@@ -16,6 +16,7 @@ from metaseed_hub.models import Dataset
 from metaseed_hub.ui.dependencies import OptionalUser, get_dataset_state_for_mutation
 from metaseed_hub.ui.forms import parse_form_field
 from metaseed_hub.ui.helpers import build_inline_tables, save_dataset_state
+from metaseed_hub.ui.helpers.tree import add_entity_node, update_entity_node
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.routes.table_rows import (
@@ -81,12 +82,9 @@ async def add_table_row(
         if nested_type.lower() in PRIMITIVE_TYPES:
             row_idx, current_list = _handle_primitive_list_row(parent_node, field_name)
 
-            # Update parent instance with new list (use model_construct to skip validation)
             update_data = parent_node.instance.model_dump(exclude_none=True)
             update_data[field_name] = current_list
-            model_class = parent_helper.model
-            updated_instance = model_class.model_construct(**update_data)
-            state.update_node(parent_node_id, updated_instance)
+            update_entity_node(state, parent_node_id, update_data, parent_helper)
 
             # Save to database
             await save_dataset_state(session, dataset, state, user)
@@ -149,16 +147,8 @@ async def _add_entity_list_row(
     # Generate default values for required fields
     default_values = _get_default_values(nested_helper, parent_node, parent_identifier)
 
-    # Create instance with defaults (use model_construct to skip validation)
-    model_class = nested_helper.model
-    instance = model_class.model_construct(**default_values)
-
-    # Add the child through the facade (skip_validation lets an incomplete draft
-    # row persist). This writes to the facade -- the source of truth -- rather
-    # than only the TreeNode cache, so the row is not lost on save. add_node also
-    # keeps the cache consistent and returns the wrapper for rendering.
-    child_node = state.add_node(
-        nested_type, instance, parent_id=parent_node_id, skip_validation=True
+    child_node = add_entity_node(
+        state, nested_type, default_values, parent_id=parent_node_id, helper=nested_helper
     )
 
     # Save to database
@@ -180,8 +170,8 @@ async def _add_entity_list_row(
 
     # Get instance data for cell values
     instance_data = {}
-    if hasattr(instance, "model_dump"):
-        instance_data = instance.model_dump(exclude_none=True)
+    if hasattr(child_node.instance, "model_dump"):
+        instance_data = child_node.instance.model_dump(exclude_none=True)
 
     # Determine inherited columns (reference to parent)
     parent_type_lower = parent_node.entity_type.lower()
@@ -272,9 +262,7 @@ async def update_table_cell(
         except ValueError:
             current_values[field_name] = raw_str
 
-    model_class = helper.model
-    instance = model_class.model_construct(**current_values)
-    state.update_node(node_id, instance)
+    update_entity_node(state, node_id, current_values, helper)
     await save_dataset_state(session, dataset, state, user)
 
     return Response(
@@ -329,10 +317,7 @@ async def update_primitive_list_item(
     current_list[idx] = new_value
     current_values[field_name] = current_list
 
-    # Create updated instance (skip validation)
-    model_class = helper.model
-    instance = model_class.model_construct(**current_values)
-    state.update_node(node_id, instance)
+    update_entity_node(state, node_id, current_values, helper)
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)
@@ -422,10 +407,7 @@ async def delete_primitive_list_item(
     current_list.pop(idx)
     current_values[field_name] = current_list
 
-    # Create updated instance (skip validation)
-    model_class = helper.model
-    instance = model_class.model_construct(**current_values)
-    state.update_node(node_id, instance)
+    update_entity_node(state, node_id, current_values, helper)
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)
@@ -513,10 +495,7 @@ async def update_single_entity_field(
     else:
         current_values[field_name] = nested_data
 
-    # Create updated parent instance (skip validation)
-    model_class = helper.model
-    instance = model_class.model_construct(**current_values)
-    state.update_node(node_id, instance)
+    update_entity_node(state, node_id, current_values, helper)
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)
@@ -571,10 +550,7 @@ async def delete_single_entity_field(
     if field_name in current_values:
         del current_values[field_name]
 
-    # Create updated parent instance (skip validation)
-    model_class = helper.model
-    instance = model_class.model_construct(**current_values)
-    state.update_node(node_id, instance)
+    update_entity_node(state, node_id, current_values, helper)
 
     # Save to database
     await save_dataset_state(session, dataset, state, user)

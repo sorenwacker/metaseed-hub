@@ -75,6 +75,32 @@ def add_entity_node(
     return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
 
 
+def update_entity_node(
+    state: AppState,
+    node_id: str,
+    data: dict[str, Any],
+    helper: Any,
+) -> TreeNode | None:
+    """Replace an entity node's values through the facade without validation.
+
+    The counterpart of :func:`add_entity_node`: the values are stored as given,
+    even where the profile would reject them, and validation reports them later.
+    Validating here raised on a value the user had just typed -- or on one the
+    entity already held -- so the edit ended in a 500 and was lost.
+
+    Args:
+        state: AppState holding the node.
+        node_id: ID of the node to update.
+        data: The entity's complete field values after the edit.
+        helper: Entity helper for the node's entity type.
+
+    Returns:
+        The updated TreeNode, or None if the node does not exist.
+    """
+    instance = helper.model.model_construct(**data)
+    return state.update_node(node_id, instance, skip_validation=True)
+
+
 class CacheDesyncError(RuntimeError):
     """The TreeNode cache holds nodes that are missing from the facade.
 
