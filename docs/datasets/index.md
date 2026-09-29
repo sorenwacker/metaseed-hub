@@ -13,6 +13,8 @@ Open **Datasets** in the header. **My Datasets** shows each dataset with its pro
 3. Optionally enable example data to populate the dataset with a worked example.
 4. Click **Create**.
 
+A dataset name is unique within your account, and a deleted dataset keeps its name. A name you already use, or one held by a dataset you deleted, is refused and nothing is created; the form stays open and says why, so you can choose another name. The same applies when you import a file or a repository record. When creating a dataset fails for another reason, such as an accession that resolves to nothing, the form says that instead.
+
 To start from a file instead of an empty profile, use the **Import File** tab. See [Importing and exporting](import-export.md).
 
 ## The dataset editor

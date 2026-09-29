@@ -20,7 +20,7 @@ from metaseed_hub.access import (
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
-from metaseed_hub.sharing import record_creator, resource_for
+from metaseed_hub.repositories import datasets as dataset_repository
 
 router = APIRouter()
 
@@ -210,26 +210,36 @@ async def create_dataset(
     if name_error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
 
-    dataset = Dataset(
-        tenant_id=dataset_data.tenant_id,
-        name=dataset_data.name,
-        profile=dataset_data.profile,
-        version=dataset_data.version,
-        data=dataset_data.data,
-    )
     # The same check PATCH applies: a payload the profile cannot place -- or a
     # profile this hub does not have -- must not become a row the UI then
     # truncates or cannot open. A metaseed instance pushing a dataset built on
     # a profile it has not pushed yet gets the refusal, not a broken record.
-    if dataset_data.data:
-        dataset.data = await _validated_data(dataset, dataset_data.data, session)
+    # The check reads only the target's tenant, profile and version.
+    data = dataset_data.data
+    if data:
+        proposed = Dataset(
+            tenant_id=dataset_data.tenant_id,
+            profile=dataset_data.profile,
+            version=dataset_data.version,
+        )
+        data = await _validated_data(proposed, data, session)
     # Resolve the creator before the dataset is pending: live_user runs a query
     # that would autoflush a half-built dataset, and if that flush fails (an
     # FK, a name clash) the whole transaction aborts, poisoning the session for
     # every later request that shares it.
     creator = await live_user(session, _user)
-    session.add(dataset)
-    await record_creator(session, resource_for("dataset"), dataset, creator.id if creator else None)
+    try:
+        dataset = await dataset_repository.create_dataset(
+            session,
+            tenant_id=dataset_data.tenant_id,
+            name=dataset_data.name,
+            profile=dataset_data.profile,
+            version=dataset_data.version,
+            creator_id=creator.id if creator else None,
+            data=data,
+        )
+    except dataset_repository.DuplicateDatasetNameError as refused:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(refused)) from refused
     await session.commit()
     await session.refresh(dataset)
     return dataset
@@ -284,7 +294,12 @@ async def update_dataset(
         name_error = AsyncDatasetRepository.validate_name(dataset_data.name)
         if name_error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
-        dataset.name = dataset_data.name
+        try:
+            await dataset_repository.rename_dataset(session, dataset, dataset_data.name)
+        except dataset_repository.DuplicateDatasetNameError as refused:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(refused)
+            ) from refused
     if dataset_data.data is not None:
         dataset.data = await _validated_data(dataset, dataset_data.data, session)
 

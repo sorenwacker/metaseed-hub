@@ -13,7 +13,6 @@ from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from metaseed.adapters import Action  # lightweight by design: no plugin imports
 from sqlalchemy import and_, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
@@ -27,7 +26,7 @@ from metaseed_hub.models import (
     SpecDraftMember,
     SpecStatus,
 )
-from metaseed_hub.sharing import record_creator, resource_for
+from metaseed_hub.repositories.datasets import DuplicateDatasetNameError, create_dataset
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -51,6 +50,28 @@ from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 from ._router import router
+
+# What the New Dataset form says for each ``?error=`` code a creation route
+# redirects with. Without these the form came back empty and said nothing; the
+# test suite fails when a route redirects with a code that has no entry here.
+NEW_DATASET_ERRORS: dict[str, str] = {
+    "duplicate_name": "You already have a dataset with that name. Choose another name.",
+    "name_held_by_deleted": "A dataset you deleted still holds that name. Choose another name.",
+    "file_too_large": "The file is too large to import.",
+    "unsupported_format": "That file format is not supported. Use JSON, YAML or Excel.",
+    "empty_file": "The file is empty.",
+    "parse_error": "The file could not be read. Check that it is valid JSON, YAML or Excel.",
+    "no_importer": "No importer is installed for this profile.",
+    "import_empty": "Nothing was found for that accession.",
+    "import_failed": "The import failed. Check the accession and try again.",
+}
+
+
+def _duplicate_name_redirect(refused: DuplicateDatasetNameError) -> RedirectResponse:
+    """Back to the form, saying which kind of clash it was."""
+    code = "name_held_by_deleted" if refused.held_by_deleted else "duplicate_name"
+    return RedirectResponse(f"/hub/datasets/new?error={code}", status_code=302)
+
 
 if TYPE_CHECKING:
     from metaseed import MetaseedClient
@@ -276,6 +297,7 @@ async def dataset_new(
             "profiles": profiles_data,
             "user_specs": user_specs,
             "nav_active": "home",
+            "error_message": NEW_DATASET_ERRORS.get(request.query_params.get("error", "")),
         },
     )
 
@@ -367,22 +389,18 @@ async def dataset_import(
         return RedirectResponse("/hub/datasets/new?error=parse_error", status_code=302)
 
     # Create dataset
-    dataset = Dataset(
-        tenant_id=tenant.id,
-        name=name,
-        profile=profile,
-        version=version,
-        data={},
-    )
-    session.add(dataset)
-    await record_creator(session, resource_for("dataset"), dataset, db_user.id)
     try:
-        await session.commit()
-    except IntegrityError:
-        # A tenant may not have two datasets with the same name; surface this as a
-        # redirect rather than an unhandled 500.
-        await session.rollback()
-        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
+        dataset = await create_dataset(
+            session,
+            tenant_id=tenant.id,
+            name=name,
+            profile=profile,
+            version=version,
+            creator_id=db_user.id,
+        )
+    except DuplicateDatasetNameError as refused:
+        return _duplicate_name_redirect(refused)
+    await session.commit()
     await session.refresh(dataset)
 
     # Try to import entities from data
@@ -510,17 +528,15 @@ async def create_dataset_from_accession(
         # from LookupError above so the caller does not blame a missing importer.
         raise ValueError(f"Nothing was found for '{accession}'")
 
-    dataset = Dataset(
+    creator = await live_user(session, user) if user is not None else None
+    dataset = await create_dataset(
+        session,
         tenant_id=tenant_id,
         name=name,
         profile=client.profile,
         version=client.version,
-        data={},
+        creator_id=creator.id if creator else None,
     )
-    session.add(dataset)
-    creator = await live_user(session, user) if user is not None else None
-    await record_creator(session, resource_for("dataset"), dataset, creator.id if creator else None)
-    await session.flush()
 
     state = await ensure_dataset_facade(dataset, session)
     state.profile = client.profile
@@ -666,9 +682,8 @@ async def dataset_import_accession(
         # The importer ran but the accession resolved to nothing -- a typo, not
         # a missing importer.
         return RedirectResponse("/hub/datasets/new?error=import_empty", status_code=302)
-    except IntegrityError:
-        await session.rollback()
-        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
+    except DuplicateDatasetNameError as refused:
+        return _duplicate_name_redirect(refused)
     except Exception:
         # A failed fetch (bad accession, database down) must not 500 the page.
         logger.exception("Accession import failed for %s:%s", profile, accession)
@@ -733,23 +748,20 @@ async def dataset_create(
         profile = published.name.lower()  # Lowercase to match ProfileFacade
         version = published.version
 
-    dataset = Dataset(
-        tenant_id=tenant.id,
-        name=name,
-        profile=profile,
-        version=version,
-        spec_draft_id=spec_draft_id,
-        spec_id=spec_id,
-        data={},
-    )
-    session.add(dataset)
-    await record_creator(session, resource_for("dataset"), dataset, db_user.id)
     try:
-        await session.commit()
-    except IntegrityError:
-        # A tenant may not have two datasets with the same name.
-        await session.rollback()
-        return RedirectResponse("/hub/datasets/new?error=duplicate_name", status_code=302)
+        dataset = await create_dataset(
+            session,
+            tenant_id=tenant.id,
+            name=name,
+            profile=profile,
+            version=version,
+            creator_id=db_user.id,
+            spec_draft_id=spec_draft_id,
+            spec_id=spec_id,
+        )
+    except DuplicateDatasetNameError as refused:
+        return _duplicate_name_redirect(refused)
+    await session.commit()
     await session.refresh(dataset)
 
     # Load example data if requested

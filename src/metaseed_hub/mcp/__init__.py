@@ -47,7 +47,7 @@ from metaseed_hub.models import (
     SpecStatus,
     User,
 )
-from metaseed_hub.sharing import record_creator, resource_for
+from metaseed_hub.repositories import datasets as dataset_repository
 from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token, token_from_header
 
 if TYPE_CHECKING:
@@ -635,24 +635,6 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
         from metaseed.specs.loader import SpecLoader
 
         async with _caller() as (session, user):
-            # Checked without the deleted_at filter: the unique constraint
-            # uq_datasets_tenant_name is not scoped to deleted_at, so a
-            # soft-deleted row still holds the name and an insert would fail
-            # with an IntegrityError the agent cannot act on.
-            existing = await session.execute(
-                select(Dataset).where(
-                    Dataset.tenant_id == user.tenant_id,
-                    Dataset.name == name,
-                )
-            )
-            held = existing.scalar_one_or_none()
-            if held is not None:
-                if held.is_deleted:
-                    raise ValueError(
-                        f"The name {name!r} is held by a deleted dataset; choose a different name"
-                    )
-                raise ValueError(f"A dataset named {name!r} already exists")
-
             spec_id: str | None = None
             if profile.lower() in SpecLoader().list_profiles():
                 # Validates the profile and version; loading is the check.
@@ -679,16 +661,20 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 profile = published.name.lower()
                 version = published.version
 
-            dataset = Dataset(
-                tenant_id=user.tenant_id,
-                name=name,
-                profile=profile,
-                version=version,
-                spec_id=spec_id,
-                data={},
-            )
-            session.add(dataset)
-            await record_creator(session, resource_for("dataset"), dataset, user.id)
+            # A taken name, including one a soft-deleted dataset holds, is
+            # refused with a message the agent can act on.
+            try:
+                await dataset_repository.create_dataset(
+                    session,
+                    tenant_id=user.tenant_id,
+                    name=name,
+                    profile=profile,
+                    version=version,
+                    creator_id=user.id,
+                    spec_id=spec_id,
+                )
+            except dataset_repository.DuplicateDatasetNameError as refused:
+                raise ValueError(str(refused)) from refused
             await session.commit()
             return json.dumps({"name": name, "profile": profile, "version": version})
 
