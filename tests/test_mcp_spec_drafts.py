@@ -238,7 +238,10 @@ class TestSpecImportYaml:
 
         assert created["name"] == "Renamed Import"
         spec = await _spec_of("Renamed Import")
-        assert spec["name"] == "RoundTrip", "the draft name does not rewrite the spec"
+        # One name: a draft's row name is rewritten from its spec's name on
+        # every save, so a spec keeping "RoundTrip" would have renamed the
+        # draft away from its address on the first edit.
+        assert spec["name"] == "Renamed Import"
 
     async def test_a_name_collision_is_a_clean_error(self, server, session: AsyncSession) -> None:
         """Same rule as spec_create: draft names are unique per user."""

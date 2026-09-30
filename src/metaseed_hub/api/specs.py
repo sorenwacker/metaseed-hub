@@ -238,9 +238,12 @@ async def _push_draft(
         if current is not None and content_hash(current) == digest:
             response.status_code = status.HTTP_200_OK
             return _draft_summary(draft)
-        draft.spec_data = state.to_dict()
-        await session.commit()
-        await session.refresh(draft)
+        from metaseed_hub.ui.spec_builder.access import save_state_to_draft
+
+        # Saved the way a browser save is, against the revision this request
+        # read: a save landing between that read and this write is refused,
+        # not overwritten.
+        await save_state_to_draft(session, state, draft, expected_revision=draft.updated_at)
         response.status_code = status.HTTP_200_OK
         return _draft_summary(draft)
     draft = SpecDraft(
