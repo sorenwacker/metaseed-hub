@@ -98,16 +98,28 @@ class OIDCAuth:
         if self._oidc_config is not None:
             return self._oidc_config
 
+        # The one fetch of the discovery document: the route module kept a
+        # second implementation with its own cache, which is how the two came
+        # to differ on the timeout and the wording of the failure.
+        discovery_url = self._settings.oidc_discovery_url
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(self._settings.oidc_discovery_url)
+                response = await client.get(discovery_url, timeout=10.0)
                 response.raise_for_status()
                 self._oidc_config = response.json()
                 return self._oidc_config
-            except httpx.HTTPError as e:
+            except httpx.HTTPStatusError as e:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"Failed to fetch OIDC discovery: {e}",
+                    detail=(
+                        f"OIDC discovery failed: {e.response.status_code} from {discovery_url}"
+                    ),
+                ) from e
+            except httpx.HTTPError as e:
+                # Covers connect errors, timeouts, and all other transport failures.
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"OIDC provider not reachable at {self._settings.effective_issuer}",
                 ) from e
 
     async def get_jwks(self) -> dict[str, list[dict[str, str]]]:

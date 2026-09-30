@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
     from metaseed_hub.auth import TokenUser
 
+from metaseed_hub.auth import get_oidc_auth
 from metaseed_hub.config import get_settings
 from metaseed_hub.models import ApiToken
 from metaseed_hub.tokens import active_tokens
@@ -69,40 +70,17 @@ def _next_after_login(candidate: str | None, *, default: str) -> str:
     return candidate
 
 
-# OIDC discovery cache
-_oidc_config: dict[str, Any] | None = None
-
-
 async def get_oidc_config() -> dict[str, Any]:
-    """Fetch and cache OIDC discovery configuration.
+    """The provider's discovery document, through the one cache.
+
+    A delegation, not an implementation: ``OIDCAuth.get_oidc_config`` fetches,
+    caches and maps failures to 503. This module once carried a second copy
+    with a module-global cache of its own.
 
     Raises:
-        HTTPException: If OIDC provider is unreachable or misconfigured.
+        HTTPException: 503 if the provider is unreachable or misconfigured.
     """
-    global _oidc_config
-    if _oidc_config is not None:
-        return _oidc_config
-
-    settings = get_settings()
-    discovery_url = settings.oidc_discovery_url
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(discovery_url, timeout=10.0)
-            response.raise_for_status()
-            _oidc_config = response.json()
-            return _oidc_config
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"OIDC discovery failed: {e.response.status_code} from {discovery_url}",
-        )
-    except httpx.HTTPError:
-        # Covers connect errors, timeouts, and all other transport failures.
-        raise HTTPException(
-            status_code=503,
-            detail=f"OIDC provider not reachable at {settings.effective_issuer}",
-        )
+    return await get_oidc_auth(get_settings()).get_oidc_config()
 
 
 @router.get("/login")

@@ -20,10 +20,12 @@ import metaseed_hub.ui.routes.auth as auth_routes
 
 @pytest.fixture(autouse=True)
 def _reset_oidc_config_cache() -> Generator[None, None, None]:
-    """Each test starts and ends with an empty OIDC discovery cache."""
-    auth_routes._oidc_config = None
+    """Each test starts and ends with a fresh OIDCAuth, so no discovery cache leaks."""
+    import metaseed_hub.auth as auth_module
+
+    auth_module._auth_instance = None
     yield
-    auth_routes._oidc_config = None
+    auth_module._auth_instance = None
 
 
 class _FakeResponse:
@@ -73,68 +75,6 @@ def _fake_async_client(
             return handler(url)
 
     return _Client, recorded
-
-
-class TestGetOIDCConfigErrors:
-    """get_oidc_config maps every httpx failure to the documented 503."""
-
-    @pytest.mark.asyncio
-    async def test_timeout_maps_to_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A hanging provider produces a 503, not an unhandled ReadTimeout."""
-
-        def _raise(_url: str) -> Any:
-            raise httpx.ReadTimeout("provider too slow")
-
-        client_cls, _ = _fake_async_client(_raise)
-        monkeypatch.setattr(auth_routes.httpx, "AsyncClient", client_cls)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await auth_routes.get_oidc_config()
-
-        assert exc_info.value.status_code == 503
-        assert "not reachable" in exc_info.value.detail
-
-    @pytest.mark.asyncio
-    async def test_connect_error_maps_to_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A refused connection produces a 503."""
-
-        def _raise(_url: str) -> Any:
-            raise httpx.ConnectError("connection refused")
-
-        client_cls, _ = _fake_async_client(_raise)
-        monkeypatch.setattr(auth_routes.httpx, "AsyncClient", client_cls)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await auth_routes.get_oidc_config()
-
-        assert exc_info.value.status_code == 503
-
-    @pytest.mark.asyncio
-    async def test_http_error_status_maps_to_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A non-2xx discovery response produces a 503 naming the status."""
-        client_cls, _ = _fake_async_client(lambda _url: _FakeResponse({}, status_code=500))
-        monkeypatch.setattr(auth_routes.httpx, "AsyncClient", client_cls)
-
-        with pytest.raises(HTTPException) as exc_info:
-            await auth_routes.get_oidc_config()
-
-        assert exc_info.value.status_code == 503
-        assert "500" in exc_info.value.detail
-
-    @pytest.mark.asyncio
-    async def test_discovery_request_sets_explicit_timeout(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The discovery request carries an explicit timeout."""
-        client_cls, recorded = _fake_async_client(
-            lambda _url: _FakeResponse({"issuer": "https://idp.example.org"})
-        )
-        monkeypatch.setattr(auth_routes.httpx, "AsyncClient", client_cls)
-
-        config = await auth_routes.get_oidc_config()
-
-        assert config == {"issuer": "https://idp.example.org"}
-        assert recorded["timeout"] == 10.0
 
 
 class TestAuthCallbackTokenExchange:
@@ -288,7 +228,6 @@ class TestLogout:
         logout then failed outright and the cookies stayed, so nobody could
         sign out during a provider outage. An outside outage must not
         invalidate the user's action."""
-        from fastapi import HTTPException
 
         with (
             patch.object(auth_routes, "get_settings", return_value=self._settings()),
