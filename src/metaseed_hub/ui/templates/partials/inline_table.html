@@ -34,7 +34,7 @@
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
+                    <th{% if column_notes and column_notes.get(col) %} title="{{ column_notes[col] }}"{% endif %}>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
                     {% endfor %}
                     {% if columns|length > 0 %}
                     <th style="width: 60px;">Actions</th>

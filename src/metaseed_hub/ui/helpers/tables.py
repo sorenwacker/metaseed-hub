@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
+from metaseed_hub.ui.metaseed_ui import AppState, TreeNode, heading_note
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -166,6 +166,7 @@ def _build_single_entity_table(
     field_name: str,
     item_type: str,
     helper: Any,
+    profile_spec: Any = None,
 ) -> dict[str, Any]:
     """Build table data for a single entity field.
 
@@ -206,6 +207,7 @@ def _build_single_entity_table(
         "column_types": column_types,
         "nested_entity_type": item_type,
         "required_columns": list(required_columns),
+        "column_notes": _column_notes(helper, columns, profile_spec),
         "reference_fields": _reference_fields(helper),
         "ontology_fields": _ontology_fields(helper),
         "is_single_entity": True,
@@ -217,6 +219,7 @@ def _build_entity_list_table(
     field_name: str,
     item_type: str,
     helper: Any,
+    profile_spec: Any = None,
 ) -> dict[str, Any]:
     """Build table data for a list of entities field.
 
@@ -295,6 +298,7 @@ def _build_entity_list_table(
         "nested_entity_type": item_type,
         "inherited_columns": list(inherited_columns),
         "required_columns": list(required_columns),
+        "column_notes": _column_notes(helper, display_columns, profile_spec),
         "reference_fields": _reference_fields(helper),
         "ontology_fields": _ontology_fields(helper),
     }
@@ -331,6 +335,36 @@ def _reference_fields(helper: Any) -> dict[str, dict[str, str]]:
     }
 
 
+def _profile_spec_of(facade: Any) -> Any:
+    """The dataset's ProfileSpec: the supplied one, else loaded by name, else None."""
+    supplied = getattr(facade, "profile_spec", None)
+    if supplied is not None:
+        return supplied
+    from metaseed.specs.loader import SpecLoader
+
+    try:
+        return SpecLoader().load_profile(facade.version, facade.profile)
+    except Exception:
+        return None
+
+
+def _column_notes(helper: Any, columns: list[str], profile_spec: Any) -> dict[str, str]:
+    """Column -> what to tell someone hovering over its heading.
+
+    The note the exported Excel heading carries, from metaseed's one builder,
+    so the editor and the export cannot say different things about a field.
+    """
+    from metaseed.specs.schema import applies_to_entity
+
+    fields = {f.name: f for f in getattr(getattr(helper, "spec", None), "fields", None) or []}
+    rules = (
+        [r for r in profile_spec.validation_rules if applies_to_entity(r.applies_to, helper.name)]
+        if profile_spec is not None
+        else []
+    )
+    return {col: heading_note(col, fields[col], rules) for col in columns if col in fields}
+
+
 def build_inline_tables(
     state: AppState,
     node_id: str,
@@ -356,6 +390,7 @@ def build_inline_tables(
 
     node = state.nodes_by_id[node_id]
     facade = state.get_or_create_facade()
+    profile_spec = _profile_spec_of(facade)
     inline_tables: dict[str, dict[str, Any]] = {}
 
     # Primitive types that are not entities
@@ -406,11 +441,11 @@ def build_inline_tables(
         # Dispatch to appropriate handler
         if is_single_entity:
             inline_tables[field_name] = _build_single_entity_table(
-                node, field_name, item_type, helper
+                node, field_name, item_type, helper, profile_spec=profile_spec
             )
         else:
             inline_tables[field_name] = _build_entity_list_table(
-                node, field_name, item_type, helper
+                node, field_name, item_type, helper, profile_spec=profile_spec
             )
 
     return inline_tables
