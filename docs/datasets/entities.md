@@ -33,7 +33,7 @@ When an entity contains a collection of nested entities, the form shows a **Rela
 - Click **+ Add Row** to add a nested entity.
 - Edit cells inline, or open a row for the full form.
 - Hover a column heading for the field's description and what a valid value is: required or optional, the type, pattern, range, allowed values, what it must refer to, and the rules that name it. It is the note the exported Excel heading carries, built the same way.
-- Remove a row with its delete control.
+- Remove a row with its delete control. Rows are positional, so the table is redrawn after a removal and every remaining row keeps addressing its own item — including rows added since the page was opened.
 
 ### Filling several cells at once
 
