@@ -14,6 +14,8 @@ a different one.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager as AsyncContextManager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +27,11 @@ from starlette.responses import Response
 
 from metaseed_hub.models import ErrorEvent, User
 
+#: Opens a database session as an async context manager.
+SessionFactory = Callable[[], AsyncContextManager[AsyncSession]]
+#: Identifies the signed-in caller of a request, or None.
+CallerResolver = Callable[[Request], Awaitable[Any]]
+
 logger = logging.getLogger("metaseed_hub")
 
 # Long enough to investigate a report that arrives days later, short enough that
@@ -35,10 +42,15 @@ RETENTION = timedelta(days=30)
 _MAX_MESSAGE = 2000
 
 
-async def record_error(session: AsyncSession, request: Request, exc: BaseException) -> None:
+async def record_error(
+    session: AsyncSession,
+    request: Request,
+    exc: BaseException,
+    resolve_caller: CallerResolver | None = None,
+) -> None:
     """Store one unhandled error. Never raises."""
     try:
-        user_id = await _caller_id(session, request)
+        user_id = await _caller_id(session, request, resolve_caller)
         session.add(
             ErrorEvent(
                 method=request.method,
@@ -56,12 +68,14 @@ async def record_error(session: AsyncSession, request: Request, exc: BaseExcepti
         logger.exception("Could not record an error event")
 
 
-async def _caller_id(session: AsyncSession, request: Request) -> str | None:
+async def _caller_id(
+    session: AsyncSession, request: Request, resolve_caller: CallerResolver | None
+) -> str | None:
     """The database id of the signed-in caller, or None if not identifiable."""
+    if resolve_caller is None:
+        return None
     try:
-        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
-
-        token_user = await get_current_user_from_cookie(request)
+        token_user = await resolve_caller(request)
         if token_user is None:
             return None
         result = await session.execute(
@@ -73,18 +87,29 @@ async def _caller_id(session: AsyncSession, request: Request) -> str | None:
 
 
 class ErrorRecordingMiddleware(BaseHTTPMiddleware):
-    """Record unhandled exceptions, then let them propagate unchanged."""
+    """Record unhandled exceptions, then let them propagate unchanged.
+
+    The session factory and the caller resolver are supplied by whoever adds
+    the middleware (``ui/app.py``): this module used to import the UI layer
+    and the global database from inside its methods, a top-level module
+    reaching down into the layers above it, which no caller could substitute.
+    """
+
+    def __init__(
+        self, app: Any, session_factory: SessionFactory, resolve_caller: CallerResolver
+    ) -> None:
+        super().__init__(app)
+        self._session_factory = session_factory
+        self._resolve_caller = resolve_caller
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
         """Pass the request through, recording anything that escapes it."""
         try:
             return await call_next(request)  # type: ignore[no-any-return]
         except Exception as exc:
-            from metaseed_hub.database import db
-
             try:
-                async with db.session_factory() as session:
-                    await record_error(session, request, exc)
+                async with self._session_factory() as session:
+                    await record_error(session, request, exc, self._resolve_caller)
             except Exception:
                 logger.exception("Could not open a session to record an error event")
             raise

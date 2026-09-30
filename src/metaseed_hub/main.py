@@ -16,7 +16,7 @@ from metaseed_hub.config import get_settings
 from metaseed_hub.database import db
 from metaseed_hub.security_headers import ContentSecurityPolicyMiddleware
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR as METASEED_STATIC
-from metaseed_hub.websocket import manager
+from metaseed_hub.websocket import WebSocketManager
 
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "tokens are forgeable. Set SECRET_KEY (openssl rand -base64 48)."
         )
     await db.connect(settings.database_url, echo=settings.debug)
+    manager: WebSocketManager = app.state.manager
     await manager.connect_redis()
 
     # The MCP app is mounted, and a mounted sub-app's lifespan is not run by the
@@ -83,6 +84,10 @@ def create_app() -> FastAPI:
         Configured FastAPI application.
     """
     settings = get_settings()
+    # Composed here, with its Redis URL, and kept on the app: the lifespan
+    # and the websocket endpoint below find it there, and a test substitutes
+    # it on the app instead of patching a module-level instance.
+    manager = WebSocketManager(redis_url=settings.redis_url)
 
     app = FastAPI(
         title="Metaseed Hub",
@@ -137,6 +142,7 @@ def create_app() -> FastAPI:
     mcp_server = create_mcp_server()
     # Kept on app.state so the lifespan above can start its session manager.
     app.state.mcp_server = mcp_server
+    app.state.manager = manager
     app.mount(MCP_PATH, mcp_server.streamable_http_app())
     app.add_middleware(_AcceptMcpWithoutTrailingSlash)
 

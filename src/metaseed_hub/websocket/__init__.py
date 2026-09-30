@@ -11,8 +11,6 @@ from uuid import uuid4
 import redis.asyncio as redis
 from fastapi import WebSocket, WebSocketDisconnect
 
-from metaseed_hub.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 
@@ -88,8 +86,14 @@ class WebSocketManager:
     # busier idle loop.
     _LISTEN_READ_TIMEOUT = 0.1
 
-    def __init__(self) -> None:
-        """Initialize the WebSocket manager."""
+    def __init__(self, redis_url: str | None = None) -> None:
+        """Initialize the WebSocket manager.
+
+        Args:
+            redis_url: Where the shared state lives. Supplied by the app that
+                composes the manager; None runs single-instance, in memory.
+        """
+        self._redis_url = redis_url
         self._rooms: dict[str, Room] = {}
         self._redis: redis.Redis | None = None
         self._pubsub: redis.client.PubSub | None = None
@@ -108,8 +112,9 @@ class WebSocketManager:
         and delivers them to this instance's local connections, which is how
         broadcasts fan out across multiple application instances.
         """
-        settings = get_settings()
-        self._redis = redis.from_url(settings.redis_url)  # type: ignore[no-untyped-call]
+        if not self._redis_url:
+            return
+        self._redis = redis.from_url(self._redis_url)  # type: ignore[no-untyped-call]
         self._pubsub = self._redis.pubsub()
         self._listener_task = asyncio.create_task(self._listen())
         self._heartbeat_task = asyncio.create_task(self._presence_heartbeat())
@@ -503,13 +508,8 @@ class WebSocketManager:
             await self.leave_room(project_id, connection_id)
 
 
-# Global manager instance
-manager = WebSocketManager()
-
-
 __all__ = [
     "Connection",
     "Room",
     "WebSocketManager",
-    "manager",
 ]

@@ -116,7 +116,10 @@ class TestAuthCallbackTokenExchange:
             ),
         ):
             response = await auth_routes.auth_callback(
-                self._request_with_state("state-1"), code="the-code", state="state-1"
+                self._request_with_state("state-1"),
+                session=Mock(),
+                code="the-code",
+                state="state-1",
             )
 
         assert isinstance(response, RedirectResponse)
@@ -144,7 +147,10 @@ class TestAuthCallbackTokenExchange:
             ),
         ):
             response = await auth_routes.auth_callback(
-                self._request_with_state("state-1"), code="the-code", state="state-1"
+                self._request_with_state("state-1"),
+                session=Mock(),
+                code="the-code",
+                state="state-1",
             )
 
         assert isinstance(response, RedirectResponse)
@@ -169,7 +175,10 @@ class TestAuthCallbackTokenExchange:
             ),
         ):
             response = await auth_routes.auth_callback(
-                self._request_with_state("state-1"), code="the-code", state="state-1"
+                self._request_with_state("state-1"),
+                session=Mock(),
+                code="the-code",
+                state="state-1",
             )
 
         assert recorded["timeout"] == 10.0
