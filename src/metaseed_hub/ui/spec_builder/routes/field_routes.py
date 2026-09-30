@@ -49,25 +49,34 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
             )
 
         entity = ctx.spec.entities[entity_name]
-        for f in entity.fields:
-            if f.name == name:
-                return templates.TemplateResponse(
-                    request,
-                    "spec_builder/partials/entity_editor.html",
-                    {
-                        "draft_id": ctx.draft.id,
-                        "spec": ctx.spec,
-                        "entity_name": entity_name,
-                        "entity": entity,
-                        "editing_field_idx": None,
-                        "field_types": [t.value for t in FieldType],
-                        "error": f"Field '{name}' already exists",
-                    },
-                )
+        error = next(
+            (f"Field '{name}' already exists" for f in entity.fields if f.name == name), None
+        )
+        # Parsed before the field is built, as the update route does: the
+        # type is client input, and an unknown one was a 500 here.
+        try:
+            parsed_type = FieldType(field_type)
+        except ValueError:
+            parsed_type = None
+            error = error or f"Unknown field type '{field_type}'"
+        if error or parsed_type is None:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/entity_editor.html",
+                {
+                    "draft_id": ctx.draft.id,
+                    "spec": ctx.spec,
+                    "entity_name": entity_name,
+                    "entity": entity,
+                    "editing_field_idx": None,
+                    "field_types": [t.value for t in FieldType],
+                    "error": error,
+                },
+            )
 
         new_field = FieldSpec(
             name=name,
-            type=FieldType(field_type),
+            type=parsed_type,
             required=False,
             description="",
         )

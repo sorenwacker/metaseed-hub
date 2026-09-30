@@ -57,19 +57,27 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
             session: Database session
             user_id: Database User.id (not keycloak_id)
         """
-        # Get top-level comments (no parent) with nested relationships
+        # The whole thread in one query, then assembled here, as the dataset
+        # panel does. Eager loading stopped one level down while the template
+        # recurses without bound and reads ``replies`` on every reply, so a
+        # reply to a reply was a lazy load on the AsyncSession: MissingGreenlet,
+        # a 500 from every route that returns this panel.
         result = await session.execute(
             select(SpecComment)
-            .where(SpecComment.spec_draft_id == draft_id, SpecComment.parent_id.is_(None))
-            .options(
-                selectinload(SpecComment.user),
-                selectinload(SpecComment.reactions),
-                selectinload(SpecComment.replies).selectinload(SpecComment.user),
-                selectinload(SpecComment.replies).selectinload(SpecComment.reactions),
-            )
+            .where(SpecComment.spec_draft_id == draft_id)
+            .options(selectinload(SpecComment.user), selectinload(SpecComment.reactions))
             .order_by(SpecComment.created_at.desc())
         )
-        comments = list(result.scalars().all())
+        every = list(result.scalars().all())
+        children: dict[str, list[SpecComment]] = {}
+        for comment in every:
+            if comment.parent_id:
+                children.setdefault(str(comment.parent_id), []).append(comment)
+        for comment in every:
+            # Set on the loaded instances, so the template never triggers a
+            # load at any depth.
+            comment.__dict__["replies"] = children.get(str(comment.id), [])
+        comments = [c for c in every if c.parent_id is None]
 
         return templates.TemplateResponse(
             request,

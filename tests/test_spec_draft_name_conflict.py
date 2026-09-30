@@ -126,3 +126,32 @@ async def test_a_name_the_user_typed_is_still_refused(session: AsyncSession) -> 
     )
 
     assert second.status_code == 409
+
+
+async def test_a_template_that_cannot_be_loaded_is_reported_not_replaced_by_an_empty_draft(
+    session: AsyncSession,
+) -> None:
+    """The form path swallowed the ValueError and created an empty draft with
+    no template source and no message; the clone route reports the same
+    failure. The user chose a template, so the failure is theirs to see."""
+    from sqlalchemy import select
+
+    from metaseed_hub.models import SpecDraft
+
+    tenant, user = await _account(session)
+    create = _create_endpoint()
+
+    response = await create(
+        request=Mock(),
+        session=session,
+        user_ctx=(user.id, tenant.id),
+        name="",
+        template="no-such-profile:9.9",
+    )
+
+    assert response.status_code == 404
+    assert b"no-such-profile" in response.body
+    drafts = (
+        await session.execute(select(SpecDraft).where(SpecDraft.user_id == user.id))
+    ).scalars()
+    assert list(drafts) == [], "no empty draft in its place"
