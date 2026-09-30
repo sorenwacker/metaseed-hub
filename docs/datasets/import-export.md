@@ -6,7 +6,7 @@ You can create a dataset from an existing file, import data into an open dataset
 
 ### When creating a dataset
 
-On the **+ New Dataset** screen, open the **Import File** tab and provide a file. Metaseed Hub reads the entities from the file and creates a dataset from them. Supported inputs include ISA-JSON, YAML, and Excel.
+On the **+ New Dataset** screen, open the **Import File** tab and provide a file. Metaseed Hub reads the entities from the file and creates a dataset from them. Supported inputs include ISA-JSON, YAML, and Excel. The profile list on this tab offers the same choices as the **New** tab — the built-in standards, your drafts and the published specifications you may see — and a dataset imported against a draft or a published specification is bound to it exactly as one created from the **New** tab is.
 
 ### Into an existing dataset
 

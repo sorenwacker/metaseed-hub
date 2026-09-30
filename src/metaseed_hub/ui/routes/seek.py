@@ -40,6 +40,7 @@ from metaseed_hub.ui.dependencies import (
 )
 from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
 from metaseed_hub.ui.render import render_template
+from metaseed_hub.ui.security import validate_csrf_or_error
 from metaseed_hub.ui.services.seek_connection import connection_for_user, tenant_for_user
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,7 @@ async def seek_settings_save(
     user: SeekUser,
     url: str = Form(...),
     api_key: str = Form(""),
+    csrf_token: str | None = Form(None),
 ) -> Response:
     """Check the connection against SEEK, and store it either way.
 
@@ -195,6 +197,7 @@ async def seek_settings_save(
     with something to fix in SEEK. Whatever the outcome, what was typed is
     saved with the result recorded, so a failed check never costs the key.
     """
+    validate_csrf_or_error(request, csrf_token)
     from metaseed.seek import client_from_settings
 
     url = url.strip().rstrip("/")
@@ -244,8 +247,11 @@ async def seek_settings_save(
 
 
 @router.post("/settings/check")
-async def seek_settings_check(session: DbSession, user: SeekUser) -> Response:
+async def seek_settings_check(
+    request: Request, session: DbSession, user: SeekUser, csrf_token: str | None = Form(None)
+) -> Response:
     """Re-run the check against the stored connection, without retyping the key."""
+    validate_csrf_or_error(request, csrf_token)
     connection = await connection_for_user(session, user)
     if connection is None:  # nothing stored yet — the form is where to start
         return RedirectResponse(url=SETTINGS_URL, status_code=303)
@@ -331,9 +337,14 @@ async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Resp
 
 @router.post("/project")
 async def seek_choose_project(
-    session: DbSession, user: SeekUser, project_id: str = Form(...)
+    request: Request,
+    session: DbSession,
+    user: SeekUser,
+    project_id: str = Form(...),
+    csrf_token: str | None = Form(None),
 ) -> Response:
     """Set which SEEK project this person's pushes go to."""
+    validate_csrf_or_error(request, csrf_token)
     connection = await connection_for_user(session, user)
     if connection is None:
         return _back("Configure your SEEK connection first.")
@@ -352,7 +363,11 @@ async def seek_choose_project(
 
 @router.post("/datasets/{dataset_id}/check", response_class=HTMLResponse)
 async def seek_readiness(
-    request: Request, dataset_id: str, session: DbSession, user: SeekUser
+    request: Request,
+    dataset_id: str,
+    session: DbSession,
+    user: SeekUser,
+    csrf_token: str | None = Form(None),
 ) -> Response:
     """Report what this SEEK still needs before a push of this dataset works.
 
@@ -361,6 +376,7 @@ async def seek_readiness(
     not be installed, and the connection may simply be unreachable. Naming
     which one saves reading a push failure backwards.
     """
+    validate_csrf_or_error(request, csrf_token)
     dataset = await get_dataset_for_user(dataset_id, session, user)
     if not profile_supports_seek(dataset.profile, dataset.version):
         return _panel(
@@ -415,6 +431,7 @@ async def seek_push(
     session: DbSession,
     user: SeekUser,
     downloadable: bool = Form(False),
+    csrf_token: str | None = Form(None),
 ) -> Response:
     """Provision the profile on SEEK and push the dataset.
 
@@ -422,6 +439,7 @@ async def seek_push(
     ISA-JSON export requires. Off, SEEK's own default applies and the records
     stay private to the key's person.
     """
+    validate_csrf_or_error(request, csrf_token)
     dataset = await get_dataset_for_user(dataset_id, session, user)
     # Before the connection: no SEEK account makes an unmappable profile work,
     # and "configure your connection first" would send someone to fix the wrong

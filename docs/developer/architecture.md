@@ -51,6 +51,8 @@ The dead cookies are deleted when the issuer explicitly refuses the refresh toke
 
 `next` is carried to the identity provider in the `metaseed_oauth_next` cookie rather than a query parameter, because the callback URL is registered with the provider and cannot vary. It is accepted only as a same-origin absolute path (`/hub/...`, no scheme, no `//` prefix), so it cannot become an open redirect; anything else falls back to `_post_login_landing`.
 
+Every state-changing POST validates the double-submit CSRF token (`validate_csrf_or_error` in `ui/security.py`, or `validate_csrf_token` behind it) before doing any work; the app-wide Origin guard is not a substitute, because it passes when the `Origin` header is absent. The SEEK routes were the one router that skipped it. `tests/test_csrf.py` names the routes that must answer 403 to a request without a token, and a new mutating route joins that list.
+
 ### Why authenticated pages are never cached
 
 `NoStoreMiddleware` puts `Cache-Control: no-store` on every hub response. Without it the redirects above are unreachable: a browser serves history navigations — the back button, a restored tab, a reopened window — from its own cache without asking the server, so the last authenticated page keeps rendering after the session behind it has gone. What the user then sees is their dataset list, drawn from a snapshot, with every link on it leading to a sign-in page; and a dataset page restored the same way loads its panels through `hx-trigger="load"`, each of which now answers 401, leaving an empty editor. `no-store` also keeps the page out of the back/forward cache, so the browser re-asks and the redirect happens.
