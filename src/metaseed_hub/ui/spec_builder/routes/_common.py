@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
 from metaseed_hub.database import get_session
+from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+from metaseed_hub.ui.helpers import set_csrf_cookie
+from metaseed_hub.ui.render import standard_context
 from metaseed_hub.ui.spec_builder.access import (
     DraftContext,
     get_draft_context,
@@ -66,26 +69,16 @@ async def render_with_context(
     template: str,
     context: dict[str, Any],
 ) -> Response:
-    """Render template with version info, nav_active, and user included."""
-    from metaseed_hub.ui.dependencies import get_current_user_from_cookie
-    from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
-    from metaseed_hub.ui.render import get_version_info
-
-    context["version_info"] = get_version_info()
+    """Render a spec-builder template with the standard context and the user."""
     context["nav_active"] = "spec-builder"
     if "user" not in context:
         context["user"] = await get_current_user_from_cookie(request)
-    # Spec-builder templates render state-changing forms (Unpublish), so they
-    # need the token the double-submit check compares against. Without it the
-    # hidden field renders empty and every such form is rejected.
-    context["csrf_token"] = get_or_create_csrf_token(request)
-    from metaseed_hub.config import get_settings
-
-    _settings = get_settings()
-    context.setdefault("matomo_url", _settings.matomo_url)
-    context.setdefault("matomo_site_id", _settings.matomo_site_id)
+    # The standard context carries the CSRF token the spec builder's
+    # state-changing forms (Unpublish) post, and base_url; this function once
+    # kept its own copy of the list, without base_url.
+    csrf_token = standard_context(request, context)
     response = templates.TemplateResponse(request, template, context)
-    set_csrf_cookie(request, response, context["csrf_token"])
+    set_csrf_cookie(request, response, csrf_token)
     return response
 
 

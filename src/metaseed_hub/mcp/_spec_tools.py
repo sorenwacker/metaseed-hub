@@ -134,9 +134,9 @@ def _loaded_spec(row: SpecDraft, draft: str) -> Any:
     Raises:
         ValueError: If the row holds no specification.
     """
-    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+    from metaseed_hub.ui.spec_builder.access import state_of
 
-    state = SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
+    state = state_of(row)
     if state.spec is None:
         raise ValueError(f"Draft {draft!r} holds no specification")
     return state.spec
@@ -804,13 +804,11 @@ def register_spec_tools(  # noqa: C901
         """
         from metaseed.specs.builder import SpecBuilder
 
-        from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+        from metaseed_hub.ui.spec_builder.access import state_of
 
         async with caller() as (session, user):
             row = await owned_draft(session, user, draft)
-            state = (
-                SpecBuilderState.from_dict(row.spec_data) if row.spec_data else SpecBuilderState()
-            )
+            state = state_of(row)
             if state.spec is None:
                 return json.dumps(
                     {

@@ -349,18 +349,18 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
     Returns:
         Configured APIRouter.
     """
-    from metaseed_hub.ui.helpers import get_or_create_csrf_token
-    from metaseed_hub.ui.render import get_version_info
+    from metaseed_hub.ui.helpers import set_csrf_cookie
+    from metaseed_hub.ui.render import standard_context
 
     router = APIRouter(prefix="/explore", tags=["explore"])
 
     def render(request: Request, template: str, context: dict[str, Any]) -> Response:
-        """Render template with version info, nav_active, and csrf_token."""
-        context["version_info"] = get_version_info()
+        """Render an explorer template with the standard context."""
         context["nav_active"] = "explore"
-        context["csrf_token"] = get_or_create_csrf_token(request)
-        context["request"] = request
-        return templates.TemplateResponse(request, template, context)
+        csrf_token = standard_context(request, context)
+        response = templates.TemplateResponse(request, template, context)
+        set_csrf_cookie(request, response, csrf_token)
+        return response
 
     @router.get("/", response_model=None)
     async def explore_index(

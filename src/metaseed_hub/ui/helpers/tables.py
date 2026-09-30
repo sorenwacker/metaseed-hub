@@ -61,7 +61,7 @@ def build_entity_form_context(
     inherited_field = None
     if parent_id and parent_id in state.nodes_by_id:
         parent_node = state.nodes_by_id[parent_id]
-        inherited_field = f"{parent_node.entity_type.lower()}_id"
+        inherited_field = parent_reference_field(parent_node.entity_type)
 
     # Separate required, optional, and nested fields (excluding inherited field)
     required_fields = [

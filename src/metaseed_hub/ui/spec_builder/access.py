@@ -244,6 +244,26 @@ async def require_draft_access(
     return draft
 
 
+def state_of(source: Any) -> SpecBuilderState:
+    """The ``SpecBuilderState`` a draft or specification row holds.
+
+    The one loader: the ``from_dict``-or-empty sequence was written eight
+    times across the spec-builder routes, the REST spec routes and the MCP
+    tools, and three copies is how one stops handling an empty row. An empty
+    row is an empty state whose ``spec`` is None; callers decide whether that
+    is an error for them.
+
+    Args:
+        source: A ``SpecDraft`` or ``Spec`` row, the ``spec_data`` mapping
+            itself, or None for a row that holds nothing.
+
+    Returns:
+        The state, empty when the row holds nothing.
+    """
+    data = source if source is None or isinstance(source, dict) else source.spec_data
+    return SpecBuilderState.from_dict(data) if data else SpecBuilderState()
+
+
 async def load_state_for_draft(
     session: AsyncSession,
     draft_id: str,
@@ -283,10 +303,7 @@ async def load_state_for_draft(
     if cached_state is not None and state_cache.revision(draft_id) == draft.updated_at:
         return cached_state, draft
 
-    if draft.spec_data:
-        state = SpecBuilderState.from_dict(draft.spec_data)
-    else:
-        state = SpecBuilderState()
+    state = state_of(draft)
 
     state_cache.set(draft_id, state, revision=draft.updated_at)
     return state, draft
@@ -554,7 +571,7 @@ async def unpublish_spec(
     if in_use:
         raise SpecInUseError(spec.name, spec.version, in_use)
 
-    builder = SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
+    builder = state_of(spec)
     if builder.spec is None:
         raise ValueError(f"Spec {spec.id} holds no specification to restore")
 

@@ -144,6 +144,32 @@ def get_templates() -> Jinja2Templates:
     return _templates
 
 
+def standard_context(request: Request, context: dict[str, Any]) -> str:
+    """Fill the context every page needs and return the CSRF token to set.
+
+    One place for the CSRF token, the request, the version, the analytics
+    settings and ``base_url``: the spec builder and the explorer each kept a
+    copy of this list that omitted ``base_url``, so their pages emitted the
+    template's hard-coded production URL on a local instance.
+
+    Args:
+        request: The request being answered.
+        context: The template context, filled in place.
+
+    Returns:
+        The CSRF token, for :func:`set_csrf_cookie` on the response.
+    """
+    csrf_token = get_or_create_csrf_token(request)
+    context["csrf_token"] = csrf_token
+    context["request"] = request
+    context["version_info"] = get_version_info()
+    settings = get_settings()
+    context["matomo_url"] = settings.matomo_url
+    context["matomo_site_id"] = settings.matomo_site_id
+    context["base_url"] = settings.app_url
+    return csrf_token
+
+
 def render_template(
     request: Request,
     name: str,
@@ -167,15 +193,7 @@ def render_template(
         RuntimeError: If templates not initialized.
     """
     templates = get_templates()
-
-    csrf_token = get_or_create_csrf_token(request)
-    context["csrf_token"] = csrf_token
-    context["request"] = request
-    context["version_info"] = get_version_info()
-    settings = get_settings()
-    context["matomo_url"] = settings.matomo_url
-    context["matomo_site_id"] = settings.matomo_site_id
-    context["base_url"] = settings.app_url
+    csrf_token = standard_context(request, context)
 
     response = templates.TemplateResponse(
         request=request,

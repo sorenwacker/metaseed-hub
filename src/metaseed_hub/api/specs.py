@@ -27,6 +27,7 @@ from metaseed_hub.audience import visible_specs
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
+from metaseed_hub.ui.spec_builder.access import state_of
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
 from metaseed_hub.ui.spec_builder_helpers import parse_spec_from_yaml, spec_to_yaml
@@ -95,7 +96,7 @@ async def _caller(session: AsyncSession, user: TokenUser) -> User:
 
 
 def _draft_spec(draft: SpecDraft) -> Any:
-    return SpecBuilderState.from_dict(draft.spec_data).spec if draft.spec_data else None
+    return state_of(draft).spec
 
 
 def _draft_summary(draft: SpecDraft) -> SpecSummary:
@@ -190,7 +191,7 @@ async def get_spec(
         candidates = own or rows
         if candidates:
             spec_data = candidates[0].spec_data
-    spec = SpecBuilderState.from_dict(spec_data).spec if spec_data else None
+    spec = state_of(spec_data).spec
     if spec is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specification not found")
     return Response(content=spec_to_yaml(spec), media_type="application/x-yaml")
@@ -305,7 +306,7 @@ async def _publish(
         )
     previous = await latest_published_spec(session, tenant_id=tenant.id, name=spec.name)
     if previous is not None and previous.spec_data:
-        previous_spec = SpecBuilderState.from_dict(previous.spec_data).spec
+        previous_spec = state_of(previous).spec
         refusal = bump_refusal(previous_spec, spec) if previous_spec is not None else None
         if refusal is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=refusal.message)

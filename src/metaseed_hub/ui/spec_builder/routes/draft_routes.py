@@ -31,6 +31,7 @@ from metaseed_hub.ui.spec_builder.access import (
     load_state_for_draft,
     require_owner_role,
     save_state_to_draft,
+    state_of,
     unpublish_spec,
 )
 from metaseed_hub.ui.spec_builder.access import (
@@ -38,7 +39,6 @@ from metaseed_hub.ui.spec_builder.access import (
 )
 from metaseed_hub.ui.spec_builder.cache import state_cache
 from metaseed_hub.ui.spec_builder.publishing import audience_for_publisher
-from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
 from metaseed_hub.ui.spec_builder_helpers import (
     create_empty_spec,
@@ -226,7 +226,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             session, tenant_id=draft.tenant_id, name=builder.spec.name
         )
         if previous is not None and previous.spec_data:
-            previous_spec = SpecBuilderState.from_dict(previous.spec_data).spec
+            previous_spec = state_of(previous).spec
             refusal = (
                 bump_refusal(previous_spec, builder.spec) if previous_spec is not None else None
             )
@@ -362,9 +362,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         # signed-in user, which is what publishing it means. Editing and
         # unpublishing still go through can_edit_spec, so only its author or a
         # tenant admin can change it.
-        builder = (
-            SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
-        )
+        builder = state_of(spec)
 
         return await render(
             request,
@@ -410,9 +408,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         # Anyone may fork a published specification; that is the point of
         # publishing one. No tenant check, and the copy is created below in the
         # forker's own account rather than the original author's.
-        builder = (
-            SpecBuilderState.from_dict(spec.spec_data) if spec.spec_data else SpecBuilderState()
-        )
+        builder = state_of(spec)
 
         if builder.spec is None:
             raise HTTPException(status_code=400, detail="Invalid spec data")

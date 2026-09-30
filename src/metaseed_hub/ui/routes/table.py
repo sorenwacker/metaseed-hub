@@ -173,16 +173,13 @@ async def _add_entity_list_row(
     if hasattr(child_node.instance, "model_dump"):
         instance_data = child_node.instance.model_dump(exclude_none=True)
 
-    # Determine inherited columns (reference to parent)
-    parent_type_lower = parent_node.entity_type.lower()
-    inherited_cols = set()
-    for col in columns:
-        if col.endswith("_id"):
-            ref_type = col[:-3]
-            if ref_type == parent_type_lower:
-                inherited_cols.add(col)
+    # The column that references the parent, named by the one rule the table
+    # renderer greys it out by; this route used to rebuild the name by hand.
+    from metaseed_hub.ui.helpers.tables import _ontology_fields, parent_reference_field
 
-    from metaseed_hub.ui.helpers.tables import _ontology_fields
+    inherited_cols = {
+        col for col in columns if col == parent_reference_field(parent_node.entity_type)
+    }
 
     html = _build_entity_row_html(
         dataset_id,
