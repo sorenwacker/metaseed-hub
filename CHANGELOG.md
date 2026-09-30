@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.1] - 260930
+
+### Fixed
+- A dataset created or replaced through the API is stored in the hub's own form, a tree stamped with its specification hash, like every dataset saved in the web interface. It was stored as sent, so a dataset pushed from a metaseed instance showed "No entities" on its card and the drift check had no provenance for it.
+
 ## [0.58.0] - 260930
 
 ### Fixed

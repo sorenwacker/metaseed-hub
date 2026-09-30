@@ -8,6 +8,7 @@ and the authenticated user dependency overridden, verifying that:
 - delete performs a soft delete rather than removing the row.
 """
 
+import json
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -357,7 +358,11 @@ async def test_validation_does_not_rewrite_the_stored_payload(
         )
     assert patched.status_code == 200, patched.text
     row = (await session.execute(select(Dataset))).scalar_one()
-    assert row.data == payload
+    # The caller's dict is untouched and the row holds plain JSON -- the hub's
+    # own tree form, not the payload as sent (see test_api_stores_the_canonical_tree).
+    assert payload["entities"][1]["_parent_unique_id"] == "I1"
+    json.dumps(row.data)
+    assert "tree" in row.data
 
 
 @pytest.mark.asyncio
