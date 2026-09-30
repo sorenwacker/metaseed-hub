@@ -38,7 +38,6 @@ from metaseed_hub.ui.helpers import (
     add_entities_in_order,
     add_entity_node,
     create_nested_nodes,
-    ensure_dataset_facade,
     ensure_dataset_facade_for_write,
     group_entities_by_type,
     parse_workbook_sheets,
@@ -411,7 +410,7 @@ async def dataset_import(
 
         # The dataset was just created empty, so this yields a fresh state whose
         # facade is the authoritative store for the imported entities.
-        state = await ensure_dataset_facade(dataset, session)
+        state = await ensure_dataset_facade_for_write(dataset, session)
         facade = state.get_or_create_facade()
 
         # Handle different data structures
@@ -538,7 +537,7 @@ async def create_dataset_from_accession(
         creator_id=creator.id if creator else None,
     )
 
-    state = await ensure_dataset_facade(dataset, session)
+    state = await ensure_dataset_facade_for_write(dataset, session)
     state.profile = client.profile
     state.version = client.version
     # Swap in the importer's facade and rebuild caches; do not reset() (it clears).
@@ -785,7 +784,7 @@ async def dataset_create(
 
                 # The dataset was just created empty, so this yields a fresh
                 # state whose facade will hold the example entities.
-                state = await ensure_dataset_facade(dataset, session)
+                state = await ensure_dataset_facade_for_write(dataset, session)
                 facade = state.get_or_create_facade()
 
                 node = add_entity_node(state, root_entity, example_data)

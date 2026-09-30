@@ -228,11 +228,18 @@ async def ensure_dataset_facade_for_write(dataset: Dataset, session: AsyncSessio
         HTTPException: 409 naming the unloadable nodes and the way through.
     """
     from fastapi import HTTPException
+    from sqlalchemy import inspect
 
     from metaseed_hub.ui.helpers.load_report import (
         BROWSER_WAY_THROUGH,
         unloadable_node_refusal,
     )
+
+    # Serialise writers first, so what loads below is what the previous writer
+    # committed. The REST API's payload check loads a transient row that is
+    # never stored; there is no row to lock.
+    if inspect(dataset).persistent:
+        await lock_dataset_for_write(session, dataset)
 
     skipped: list[SkippedNode] = []
     state = await ensure_dataset_facade(
@@ -244,6 +251,62 @@ async def ensure_dataset_facade_for_write(dataset: Dataset, session: AsyncSessio
             detail=unloadable_node_refusal(skipped, BROWSER_WAY_THROUGH),
         )
     return state
+
+
+async def lock_dataset_for_write(session: AsyncSession, dataset: Dataset) -> None:
+    """Hold the dataset row until this transaction ends, then re-read it.
+
+    Every mutation is a read-modify-write of the whole stored tree. Without the
+    lock, two requests that arrived together loaded the same state and the
+    later write replaced the earlier one; both also numbered their version from
+    the same base, so the second insert failed on ``uq_dataset_versions_number``
+    and its edit was lost. ``FOR UPDATE`` blocks a second writer here until the
+    first commits; the refresh then loads what the first wrote, because the row
+    was selected without the lock before this point. Reads never take it.
+
+    Args:
+        session: The request's session; the lock lasts until it commits or closes.
+        dataset: A persisted dataset.
+    """
+    from sqlalchemy import select
+
+    await session.execute(select(Dataset.id).where(Dataset.id == dataset.id).with_for_update())
+    await session.refresh(dataset)
+
+
+async def record_version(
+    session: AsyncSession, dataset: Dataset, data: dict[str, Any], created_by_id: str | None
+) -> DatasetVersion:
+    """Add the next version of ``dataset``, holding ``data``, without committing.
+
+    Numbered ``max + 1``, which is safe only under the row lock every writer
+    holds. This is the one place a ``DatasetVersion`` is constructed, so the
+    numbering cannot be copied somewhere the lock is not.
+
+    Args:
+        session: Database session; the caller commits.
+        dataset: The dataset the version belongs to.
+        data: The stored envelope the version holds.
+        created_by_id: Database id of the author, or None.
+
+    Returns:
+        The pending version.
+    """
+    from sqlalchemy import func, select
+
+    result = await session.execute(
+        select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
+            DatasetVersion.dataset_id == dataset.id
+        )
+    )
+    version = DatasetVersion(
+        dataset_id=dataset.id,
+        version_number=(result.scalar() or 0) + 1,
+        data=data,
+        created_by_id=created_by_id,
+    )
+    session.add(version)
+    return version
 
 
 async def save_dataset_state(
@@ -264,7 +327,7 @@ async def save_dataset_state(
             (``created_by_id``). Optional so background/non-request callers
             can still persist without authorship.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import select
     from sqlalchemy.orm.attributes import flag_modified
 
     from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
@@ -283,22 +346,7 @@ async def save_dataset_state(
 
     # Only create version if data changed
     if new_data != dataset.data:
-        # Get next version number
-        result = await session.execute(
-            select(func.coalesce(func.max(DatasetVersion.version_number), 0)).where(
-                DatasetVersion.dataset_id == dataset.id
-            )
-        )
-        max_version = result.scalar() or 0
-
-        # Create version with new data
-        version = DatasetVersion(
-            dataset_id=dataset.id,
-            version_number=max_version + 1,
-            data=new_data,
-            created_by_id=created_by_id,
-        )
-        session.add(version)
+        await record_version(session, dataset, new_data, created_by_id)
 
     dataset.data = new_data
     flag_modified(dataset, "data")
