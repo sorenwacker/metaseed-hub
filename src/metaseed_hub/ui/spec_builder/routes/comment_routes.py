@@ -132,7 +132,14 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
                     )
                 )
             ).scalar_one_or_none()
-            resolved_parent_id = parent.id if parent else None
+            if parent is None:
+                # Deleted between load and submit, or never in this draft: a
+                # 404 as the dataset route answers, not a new root comment
+                # posted in its place with a 200.
+                return HTMLResponse(
+                    "<div class='error'>Parent comment not found</div>", status_code=404
+                )
+            resolved_parent_id = parent.id
 
         comment = SpecComment(
             spec_draft_id=draft_id,

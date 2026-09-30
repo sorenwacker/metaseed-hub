@@ -74,6 +74,9 @@ def _field_form(**overrides: Any) -> dict[str, Any]:
         "example": "",
         "options": "",
         "dcat": "",
+        "isa_tag": "",
+        "within": "",
+        "reference_scope": "",
     }
     values.update(overrides)
     return values
@@ -235,3 +238,78 @@ class TestDcatIsAPluginNotAGatedFeature:
         )
 
         assert ctx.spec.entities["Investigation"].fields[0].dcat == "dct:issued"
+
+
+class TestIsaTagWithinAndReferenceScope:
+    """The field form shows three controls whose values were silently dropped:
+    ``update_field`` declared none of them, so FastAPI discarded what the
+    form posted, and ``get_field_form`` passed no ``isa_tags`` so the ISA tag
+    select offered nothing but "(unset)". The MCP tool accepted all three -- a
+    capability reachable only from MCP, which the project treats as unfinished.
+    """
+
+    async def test_the_form_offers_the_isa_tags(self, session: AsyncSession) -> None:
+        from metaseed.specs.schema import ISA_TAGS
+
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        form = _endpoint(register_field_routes, "/field/{idx}", "GET")
+        response = await form(request=_request("GET"), entity_name="Investigation", idx=0, ctx=ctx)
+        assert tuple(response.context["isa_tags"]) == ISA_TAGS
+
+    async def test_set_values_are_stored_and_persisted(self, session: AsyncSession) -> None:
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(isa_tag="sample", within="CO_715:0000006", reference_scope="external"),
+        )
+        field = ctx.spec.entities["Investigation"].fields[0]
+        assert (field.isa_tag, field.within, field.reference_scope) == (
+            "sample",
+            "CO_715:0000006",
+            "external",
+        )
+        await session.refresh(ctx.draft)
+        stored = ctx.draft.spec_data["spec"]["entities"]["Investigation"]["fields"][0]
+        assert stored["isa_tag"] == "sample" and stored["within"] == "CO_715:0000006"
+        assert stored["reference_scope"] == "external"
+
+    async def test_empty_values_clear_what_was_set(self, session: AsyncSession) -> None:
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        field = ctx.spec.entities["Investigation"].fields[0]
+        field.isa_tag, field.within, field.reference_scope = "sample", "CO_715:1", "external"
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+        await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(),
+        )
+        assert (field.isa_tag, field.within, field.reference_scope) == (None, None, None)
+
+    async def test_an_unknown_isa_tag_is_a_form_error(self, session: AsyncSession) -> None:
+        """FieldSpec validates the tag at construction only; an assignment of
+        a typo would be stored and rejected later by SEEK as a missing tag."""
+        draft, tenant, owner = await _owned_draft(session)
+        ctx = await _context(session, draft, tenant, owner)
+        update = _endpoint(register_field_routes, "/field/{idx}", "PUT")
+        response = await update(
+            request=_request("PUT"),
+            entity_name="Investigation",
+            idx=0,
+            ctx=ctx,
+            session=session,
+            **_field_form(isa_tag="smaple"),
+        )
+        assert response.status_code == 200
+        assert "smaple" in response.context["error"]
+        assert ctx.spec.entities["Investigation"].fields[0].isa_tag is None

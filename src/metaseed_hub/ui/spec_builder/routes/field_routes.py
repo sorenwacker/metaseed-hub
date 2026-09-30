@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from metaseed.specs.schema import FieldSpec, FieldType
+from metaseed.specs.schema import ISA_TAGS, FieldSpec, FieldType
 
 from metaseed_hub.ui.spec_builder.forms import FieldFormData
 from metaseed_hub.ui.spec_builder_helpers import validate_field_name
@@ -125,6 +125,9 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "field": entity.fields[idx],
                 "field_idx": idx,
                 "field_types": [t.value for t in FieldType],
+                # The template's ISA tag select lists these; without them it
+                # offered nothing but "(unset)".
+                "isa_tags": ISA_TAGS,
                 # The template is metaseed's; it names no URL of its own beyond
                 # this one, which is per-draft and /hub-prefixed here.
                 "entity_url": (f"/hub/spec-builder/{ctx.draft.id}/entity/{entity_name}"),
@@ -171,6 +174,9 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         unit: str = Form(""),
         example: str = Form(""),
         options: str = Form(""),
+        isa_tag: str = Form(""),
+        within: str = Form(""),
+        reference_scope: str = Form(""),
     ) -> HTMLResponse:
         """Update a field."""
         if entity_name not in ctx.spec.entities:
@@ -225,6 +231,12 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 parsed_constraints = form_data.get_constraints()
             except ValueError as exc:
                 error = str(exc)
+        # Checked here, not by assignment below: FieldSpec validates the tag at
+        # construction only, so a typo assigned to an existing field would be
+        # stored and surface later as a SEEK error naming a missing tag.
+        isa_tag_value = isa_tag.strip()
+        if not error and isa_tag_value and isa_tag_value not in ISA_TAGS:
+            error = f"Unknown ISA tag '{isa_tag_value}'; one of {', '.join(ISA_TAGS)}"
         if error:
             return templates.TemplateResponse(
                 request,
@@ -283,6 +295,13 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.tier = tier_value if tier_value in ("required", "recommended", "optional") else None
         field.label = label.strip() or None
         field.unit = unit.strip() or None
+        # The three controls the form shows and this route once dropped: FastAPI
+        # discards form fields a route does not declare, so they did nothing on
+        # save while the MCP tool accepted them.
+        field.isa_tag = isa_tag_value or None
+        field.within = within.strip() or None
+        scope = reference_scope.strip()
+        field.reference_scope = scope if scope in ("dataset", "external") else None
         field.example = example.strip() or None
         field.options = [o.strip() for o in options.split(",") if o.strip()] or None
 
