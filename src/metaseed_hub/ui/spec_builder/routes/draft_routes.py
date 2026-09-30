@@ -180,9 +180,8 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         builder.reset_to_empty(draft.name, draft.version)
 
-        draft.spec_data = builder.to_dict()
-        await session.commit()
-        state_cache.pop(draft_id, None)
+        # Saved the way any save is, against the revision the state was read at.
+        await save_state_to_draft(session, builder, draft)
 
         return RedirectResponse(
             url=f"/hub/spec-builder/{quote(draft_id, safe='')}", status_code=303

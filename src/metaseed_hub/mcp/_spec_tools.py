@@ -191,6 +191,16 @@ async def _new_named_draft(
     if existing.scalar_one_or_none() is not None:
         raise ValueError(f"A draft named {name!r} at version {spec.version} already exists")
 
+    if spec.name != name:
+        # A draft's row name is rewritten from its specification's name on
+        # every save (free_draft_name), so a draft addressed by a name its
+        # spec does not carry would be renamed by its first edit. One name.
+        from metaseed.specs.builder import SpecBuilder
+
+        builder = SpecBuilder.from_spec(spec)
+        builder.set_metadata(name=name)
+        spec = builder.spec
+
     return await create_new_draft(
         session,
         user_id=user.id,
@@ -755,8 +765,8 @@ def register_spec_tools(  # noqa: C901
         """Change the draft's profile-level metadata in place.
 
         Arguments left unset keep their values. Renaming here changes the
-        specification's profile name; the draft keeps the name it is addressed
-        by in these tools.
+        specification's profile name, and the draft is addressed by that new
+        name afterwards; the response carries it.
 
         Args:
             draft: The draft's name in the caller's account.
@@ -781,7 +791,7 @@ def register_spec_tools(  # noqa: C901
                     )
                 )
                 problems = builder.validate()
-            return json.dumps({"draft": draft, "problems": problems})
+            return json.dumps({"draft": row.name, "problems": problems})
 
     @mcp.tool()
     async def spec_status(draft: str) -> str:

@@ -379,11 +379,16 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     -- publishing shares a specification with every user, so it stays a human
     action.
     """
+    from metaseed_hub.ui.spec_builder.access import save_state_to_draft
     from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 
     state = SpecBuilderState.from_dict(draft.spec_data) if draft.spec_data else SpecBuilderState()
     if state.spec is None:
         raise ValueError(f"Draft {draft.name!r} holds no specification to edit")
+    # The revision this copy was read at: a browser save that lands before the
+    # block commits moves it, and the save below then refuses rather than
+    # overwrite that save with this older copy.
+    revision = draft.updated_at
 
     from metaseed.specs.builder import SpecBuilder
 
@@ -391,9 +396,10 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     yield builder
 
     state.spec = builder.spec
-    draft.spec_data = state.to_dict()
-    draft.version = builder.spec.version
-    await session.commit()
+    # Saved the way a browser save is: this context once wrote the column
+    # itself, without the row lock, the revision check or the free-name check,
+    # so a version change onto a version the account held raised IntegrityError.
+    await save_state_to_draft(session, state, draft, expected_revision=revision)
 
 
 async def _profile_spec(
