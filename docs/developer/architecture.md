@@ -103,6 +103,8 @@ A component depends on injected collaborators, never on ones it discovers: whoev
 
 Dependency rule: routes and templates call hub helpers (`ui/helpers/`, `ui/services/`), and the helpers call metaseed's public API (`MetaseedClient`, `ProfileFacade`). Imports of metaseed's internal UI layer (`metaseed.ui`) are allowed only in the designated boundary module `ui/metaseed_ui.py`, which re-exports what the hub still uses: `AppState`/`TreeNode` (the request-scoped entity-tree cache derived from the facade) and the packaged template/static directories. The gate test `tests/test_metaseed_coupling.py` scans every module under `src/metaseed_hub` and fails on any other `metaseed.ui` import.
 
+`ContentSecurityPolicyMiddleware` (`security_headers.py`) sends the same Content-Security-Policy that nginx sends in production, so a policy violation shows up in local and CI runs rather than only on the deployed site; `tests/test_the_csp_matches_production.py` compares the middleware's policy with the one in `ansible/roles/metaseed-hub/templates/nginx.conf.j2` and fails when they drift.
+
 The stylesheet has two gates of its own in `tests/test_stylesheet.py`: no selector is defined twice at the top level of `hub.css` (the second definition used to win silently, by source order), and every class a template uses has a rule in the hub's or the library's stylesheet or is read by a script. Vulture cannot see CSS or templates; these are their vulture.
 
 ## Integration with metaseed

@@ -102,7 +102,7 @@ Neither kind blocks saving or publishing. The tab is a report, not a gate.
 
 ## Saving
 
-Click **Save** to persist draft changes. Each edit to an entity, field, or rule is persisted as you make it; **Save** records the draft as a whole.
+Each edit to an entity, field, or rule is saved as you make it; there is no unsaved state to lose, and the editor shows no "unsaved" marker. **Save** re-checks that the draft has a name and records the draft as a whole, which is what makes it refuse when the draft changed elsewhere since you opened it (below).
 
 A save rewrites the draft's entire specification, so it is refused when the draft has changed elsewhere since you opened it — in another tab, or by a collaborator who has access to it. You get "This spec changed somewhere else since you opened it" rather than a success, because applying your copy would silently discard the other change. Reload the page to pick up the current version and reapply your edit.
 
