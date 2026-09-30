@@ -309,13 +309,80 @@ async def record_version(
     return version
 
 
+async def load_payload_for_write(
+    dataset: Dataset, payload: dict[str, Any], session: AsyncSession
+) -> AppState:
+    """The state a payload loads into under the dataset's profile, ready to save.
+
+    For a write whose contents come from outside the stored row -- a REST
+    ``PATCH``, a version being restored, an agent's ``save_dataset`` -- the
+    payload is loaded into a transient copy of the row, so the same refusal
+    the browser gets for a node the profile cannot place applies, and nothing
+    is stored that cannot be loaded back. The caller then hands the state to
+    :func:`save_dataset_state` with the real row.
+
+    Args:
+        dataset: The row the state will be saved to, for its profile and specs.
+        payload: The stored envelope or flat entity list to load.
+        session: Database session, for draft and published specs.
+
+    Returns:
+        The loaded AppState.
+
+    Raises:
+        HTTPException: 409 naming the nodes that could not be placed.
+        DatasetDataLoadError: If the payload cannot be loaded at all.
+    """
+    import copy
+
+    # A fresh transient row, not a copy of ``dataset``: copying a mapped
+    # instance shares its ORM state. The load rewrites nested dicts into model
+    # objects in place, so it works on a deep copy and the caller's payload is
+    # kept as it was.
+    proposed = Dataset(
+        tenant_id=dataset.tenant_id,
+        profile=dataset.profile,
+        version=dataset.version,
+        spec_id=dataset.spec_id,
+        spec_draft_id=dataset.spec_draft_id,
+        data=copy.deepcopy(payload),
+    )
+    return await ensure_dataset_facade_for_write(proposed, session)
+
+
+async def _latest_version_holds(
+    session: AsyncSession, dataset: Dataset, data: dict[str, Any]
+) -> bool:
+    """Whether the newest recorded version already holds ``data``."""
+    from sqlalchemy import select
+
+    latest = (
+        await session.execute(
+            select(DatasetVersion.data)
+            .where(DatasetVersion.dataset_id == dataset.id)
+            .order_by(DatasetVersion.version_number.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return latest == data
+
+
 async def save_dataset_state(
     session: AsyncSession,
     dataset: Dataset,
     state: AppState,
     user: "TokenUser | User | None" = None,
+    *,
+    max_bytes: int | None = None,
 ) -> None:
     """Save AppState entity tree to database and create a version.
+
+    The only writer of ``dataset.data``: every path that changes a dataset
+    loads what it wants stored into a state and hands it here, so the stored
+    form, the specification stamp and the version history cannot differ by
+    interface. When the contents change and no version row holds the previous
+    contents -- written before this rule existed, or by a path that once
+    wrote the column itself -- they are recorded first, so no state is lost.
 
     Args:
         session: Database session.
@@ -326,7 +393,14 @@ async def save_dataset_state(
             When given, the created version records them as author
             (``created_by_id``). Optional so background/non-request callers
             can still persist without authorship.
+        max_bytes: Refuse, before anything is written, a serialized envelope
+            larger than this; an agent can generate a lot of text.
+
+    Raises:
+        ValueError: If the envelope exceeds ``max_bytes``.
     """
+    import json
+
     from sqlalchemy import select
     from sqlalchemy.orm.attributes import flag_modified
 
@@ -335,6 +409,12 @@ async def save_dataset_state(
     # Stamped here rather than inside serialize_tree: the hash comes from the
     # database row, and serialize_tree only has the in-memory facade.
     new_data = stamp_spec_hash(serialize_tree(state), await dataset_spec_hash(session, dataset))
+    if max_bytes is not None:
+        size = len(json.dumps(new_data).encode())
+        if size > max_bytes:
+            raise ValueError(
+                f"That edit takes the dataset to {size} bytes; the limit is {max_bytes}."
+            )
 
     # Resolve the acting user's database id for version authorship.
     created_by_id: str | None = None
@@ -344,8 +424,11 @@ async def save_dataset_state(
         ).scalar_one_or_none()
         created_by_id = db_user.id if db_user else None
 
-    # Only create version if data changed
     if new_data != dataset.data:
+        if _has_stored_entities(dataset.data) and not await _latest_version_holds(
+            session, dataset, dataset.data
+        ):
+            await record_version(session, dataset, dataset.data, created_by_id)
         await record_version(session, dataset, new_data, created_by_id)
 
     dataset.data = new_data

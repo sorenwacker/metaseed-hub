@@ -1,6 +1,5 @@
 """Dataset CRUD API endpoints."""
 
-import copy
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
@@ -130,26 +129,19 @@ async def _validated_data(
         HTTPException: 409 when a node cannot be placed, 422 when the payload
             is not loadable at all.
     """
-    from metaseed_hub.ui.helpers import make_json_serializable, serialize_tree
-    from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
+    from metaseed_hub.ui.helpers import serialize_tree
     from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
-    # A fresh transient row, not a copy of ``dataset``: copying a mapped
-    # instance shares its ORM state, which on a row not yet persisted left the
-    # session unable to refresh it after the insert. The load also rewrites
-    # nested dicts into model objects in place (an ISA ontology source, a
-    # term), which on the caller's dict left a payload the database could not
-    # store as JSON -- so it works on a deep copy and the original is kept.
-    proposed = Dataset(
-        tenant_id=dataset.tenant_id,
-        profile=dataset.profile,
-        version=dataset.version,
-        spec_id=dataset.spec_id,
-        spec_draft_id=dataset.spec_draft_id,
-        data=copy.deepcopy(data),
-    )
+    state = await _loaded_payload(dataset, data, session)
+    return stamp_spec_hash(serialize_tree(state), await dataset_spec_hash(session, dataset))
+
+
+async def _loaded_payload(dataset: Dataset, data: dict[str, Any], session: AsyncSession) -> Any:
+    """The payload loaded under the dataset's profile, or 409/422 saying why not."""
+    from metaseed_hub.ui.helpers.dataset_state import load_payload_for_write
+
     try:
-        state = await ensure_dataset_facade_for_write(proposed, session)
+        return await load_payload_for_write(dataset, data, session)
     except HTTPException:
         raise
     except Exception as exc:
@@ -157,10 +149,6 @@ async def _validated_data(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Dataset payload could not be loaded: {exc}",
         ) from exc
-    return stamp_spec_hash(
-        make_json_serializable(serialize_tree(state)),
-        await dataset_spec_hash(session, proposed),
-    )
 
 
 @router.get("", response_model=list[DatasetResponse])
@@ -331,7 +319,15 @@ async def update_dataset(
                 status_code=status.HTTP_409_CONFLICT, detail=str(refused)
             ) from refused
     if dataset_data.data is not None:
-        dataset.data = await _validated_data(dataset, dataset_data.data, session)
+        from metaseed_hub.ui.helpers.dataset_state import lock_dataset_for_write, save_dataset_state
+
+        # Serialised with every other writer, then saved the way every other
+        # writer saves: this route once wrote the column itself, without the
+        # lock and without a version, so a client could not revert its push.
+        await lock_dataset_for_write(session, dataset)
+        state = await _loaded_payload(dataset, dataset_data.data, session)
+        await save_dataset_state(session, dataset, state, _user)
+        return dataset
 
     await session.commit()
     await session.refresh(dataset)

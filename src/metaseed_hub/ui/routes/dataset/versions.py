@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 
 from metaseed_hub.models import (
     DatasetVersion,
-    User,
 )
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
@@ -283,7 +282,11 @@ async def restore_dataset_version(
             status_code=404,
         )
 
-    from metaseed_hub.ui.helpers.dataset_state import lock_dataset_for_write, record_version
+    from metaseed_hub.ui.helpers.dataset_state import (
+        load_payload_for_write,
+        lock_dataset_for_write,
+        save_dataset_state,
+    )
 
     # Serialised with every other writer, and re-read, so the comparison below
     # and the version number are against what the previous writer committed.
@@ -299,20 +302,12 @@ async def restore_dataset_version(
             status_code=200,
         )
 
-    # Get user from database
-    user_result = await session.execute(select(User).where(User.keycloak_id == user.sub))
-    db_user = user_result.scalar_one_or_none()
-    user_id = db_user.id if db_user else None
-
-    from sqlalchemy.orm.attributes import flag_modified
-
-    await record_version(session, dataset, version.data, user_id)
-
-    # Update dataset
-    dataset.data = version.data
-    flag_modified(dataset, "data")
-    session.add(dataset)
-    await session.commit()
+    # Saved the way any save is: the version's envelope is loaded and
+    # re-serialized, stamped with the current specification, and recorded as a
+    # new version. Copied verbatim it came back unstamped, or in the legacy
+    # flat shape, and the drift check went silent for a dataset just rewritten.
+    state = await load_payload_for_write(dataset, version.data, session)
+    await save_dataset_state(session, dataset, state, user)
 
     # Return redirect to reload page
     response = HTMLResponse(status_code=200)

@@ -1,6 +1,6 @@
 # Versions and history
 
-Metaseed Hub records a new version of a dataset every time you save a change. Versions let you review what changed, compare two points in time, and revert.
+Metaseed Hub records a new version of a dataset every time you save a change, whether from the web interface, through the API or through an agent. Versions let you review what changed, compare two points in time, and revert.
 
 Saves to one dataset are applied one after another, in the order the server receives them, also when two people, or a person and an agent, save at the same moment. Each save starts from what the previous one wrote, so simultaneous edits to different fields are both kept and each gets its own version. A save that arrives while another is in progress waits for it; in normal use the wait is not noticeable.
 
@@ -16,7 +16,7 @@ Click **Diff** on a version to see the field-level changes it introduced — whi
 
 ## Restoring a version
 
-Click **Restore** on a version to return the dataset to that state. Restoring does not erase later history: it creates a new version whose contents match the chosen one, so the restore itself is reversible.
+Click **Restore** on a version to return the dataset to that state. Restoring does not erase later history: it creates a new version whose contents match the chosen one, so the restore itself is reversible. The restored contents are saved the way any save is, checked against the dataset's current specification, so a version recorded under an older specification is reported by validation like any other data.
 
 ## Soft delete
 

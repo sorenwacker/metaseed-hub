@@ -272,6 +272,29 @@ async def _loaded_client(
     return MetaseedClient.from_facade(state.facade)
 
 
+async def _load_payload(
+    dataset: Dataset, data: dict[str, Any], session: AsyncSession, skipped: list[Any]
+) -> Any:
+    """A payload loaded under the dataset's profile, into a transient copy of the row.
+
+    Collects the nodes the load dropped instead of refusing, because the save
+    tool words its own refusal for an agent.
+    """
+    import copy
+
+    from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
+
+    proposed = Dataset(
+        tenant_id=dataset.tenant_id,
+        profile=dataset.profile,
+        version=dataset.version,
+        spec_id=dataset.spec_id,
+        spec_draft_id=dataset.spec_draft_id,
+        data=copy.deepcopy(data),
+    )
+    return await ensure_dataset_facade(proposed, session, on_skip=skipped.append)
+
+
 @asynccontextmanager
 async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> AsyncIterator[Any]:
     """Yield a client over ``dataset``, then persist what the block changed.
@@ -281,12 +304,14 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     client, and writes back. Wrapping it once means no tool can forget the
     snapshot or the size check.
     """
-    from sqlalchemy.orm.attributes import flag_modified
+    from metaseed import MetaseedClient
 
-    from metaseed_hub.ui.helpers import make_json_serializable
-    from metaseed_hub.ui.helpers.dataset_state import lock_dataset_for_write, record_version
+    from metaseed_hub.ui.helpers.dataset_state import (
+        ensure_dataset_facade,
+        lock_dataset_for_write,
+        save_dataset_state,
+    )
     from metaseed_hub.ui.helpers.load_report import unloadable_node_refusal
-    from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
     # The block below rewrites the whole stored payload from what loaded, so a
     # node that did not load is deleted by an edit that never mentioned it.
@@ -295,34 +320,24 @@ async def _editing(session: AsyncSession, dataset: Dataset, user: User) -> Async
     # holds what the previous writer committed.
     await lock_dataset_for_write(session, dataset)
     skipped: list[SkippedNode] = []
-    client = await _loaded_client(session, dataset, on_skip=skipped.append)
+    state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
     if skipped:
         raise ValueError(unloadable_node_refusal(skipped))
-    yield client
-
-    # Tree format, the hub's canonical storage: the web UI's EntityService
-    # persists serialize(format="tree"), and readers such as the version diff
-    # view consume data["tree"]. A flat write here would make those readers see
-    # an empty dataset. The spec hash is stamped on the same envelope the web
-    # save path stamps, so an agent's write and a person's are indistinguishable
-    # to the drift check.
-    data = stamp_spec_hash(
-        make_json_serializable(client.serialize(format="tree")),
-        await dataset_spec_hash(session, dataset),
-    )
-    size = len(json.dumps(data).encode())
-    if size > MAX_DATASET_BYTES:
+    if state.facade is None:
         raise ValueError(
-            f"That edit takes the dataset to {size} bytes; the limit is {MAX_DATASET_BYTES}."
+            f"The profile {dataset.profile!r} could not be loaded, so this "
+            "dataset cannot be used. Check it with list_profiles."
         )
-    if data != dataset.data:
-        # The previous contents become a version first: an agent can replace a
-        # whole dataset in one call, and without that the person whose data it
-        # is has no way back.
-        await record_version(session, dataset, dataset.data, user.id)
-    dataset.data = data
-    flag_modified(dataset, "data")
-    await session.commit()
+    yield MetaseedClient.from_facade(state.facade)
+
+    # Saved the way every other writer saves: this context once carried its
+    # own copy of the serialize-stamp-version sequence, which had diverged
+    # from the web save path. The size limit is the one MCP-specific part; an
+    # agent can generate a lot of text, and refusing is kinder than letting
+    # it bloat the row. The client edited the facade behind the state's node
+    # cache, so the cache is dropped before the save reads it.
+    state.invalidate_cache()
+    await save_dataset_state(session, dataset, state, user, max_bytes=MAX_DATASET_BYTES)
 
 
 async def _owned_draft(session: AsyncSession, user: User, name: str) -> SpecDraft:
@@ -627,22 +642,15 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
             # version exactly as a browser save would. Writing the raw payload
             # skipped all three.
             from metaseed_hub.ui.helpers.dataset_state import (
-                ensure_dataset_facade,
                 lock_dataset_for_write,
-                record_version,
                 save_dataset_state,
             )
 
-            # Serialised with every other writer; the snapshot and the
-            # comparison below then read what the previous writer committed.
+            # Serialised with every other writer; the comparison below then
+            # reads what the previous writer committed.
             await lock_dataset_for_write(session, dataset)
-            previous = dataset.data
-            dataset.data = data  # in memory only, for the load below
             skipped: list[Any] = []
-            try:
-                state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
-            finally:
-                dataset.data = previous
+            state = await _load_payload(dataset, data, session, skipped)
             if skipped:
                 # Stored, these nodes would vanish on the next load-and-save.
                 # An agent reads the return value, so it is told now.
@@ -666,18 +674,10 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                     "Nothing was saved."
                 )
 
-            # The MCP caller is already a database User; save_dataset_state only
-            # reads .keycloak_id off it, which both user shapes carry.
-            # Whatever is stored is about to be replaced: snapshot it first or
-            # the overwrite is unrecoverable. This must not depend on the
-            # envelope — the entity tools write the canonical tree straight
-            # into the row and version only the state before THEIR edit, so
-            # "canonical data is already versioned" was false and one save
-            # erased a tool-built state for good. An occasional duplicate
-            # version is the acceptable cost of never losing one.
-            if dataset.data and data != dataset.data:
-                await record_version(session, dataset, dataset.data, user.id)
-
+            # The MCP caller is already a database User; save_dataset_state
+            # only reads .keycloak_id off it, which both user shapes carry. It
+            # records the previous contents as a version when no version holds
+            # them, so the overwrite stays recoverable.
             await save_dataset_state(session, dataset, state, user)
             logger.info("mcp: %s saved dataset %r (%d bytes)", user.email, name, size)
 

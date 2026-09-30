@@ -71,10 +71,12 @@ class EntityService:
         session: AsyncSession,
         dataset: Dataset,
         user: "TokenUser | None" = None,
+        for_write: bool = True,
     ):
         self._session = session
         self._dataset = dataset
         self._user = user
+        self._for_write = for_write
         self._client: MetaseedClient | None = None
         self._state: Any | None = None  # AppState, imported lazily
 
@@ -119,6 +121,7 @@ class EntityService:
         from metaseed.api.client import MetaseedClient
 
         from metaseed_hub.ui.helpers.dataset_state import (
+            ensure_dataset_facade,
             ensure_dataset_facade_for_write,
         )
 
@@ -131,7 +134,13 @@ class EntityService:
         # service's former strict load failing with a different error. The
         # duplicated draft/published/builtin resolution and envelope
         # unwrapping lived here too, and fixes had to land twice.
-        state = await ensure_dataset_facade_for_write(self._dataset, self._session)
+        # A route that renders or validates and saves nothing must not take
+        # the dataset row lock: it would queue behind another user's save and
+        # hold writers up for a render. Only the writing routes lock.
+        if self._for_write:
+            state = await ensure_dataset_facade_for_write(self._dataset, self._session)
+        else:
+            state = await ensure_dataset_facade(self._dataset, self._session, require_client=True)
         self._client = MetaseedClient.from_facade(state.facade)
         self._state = state
         return state
