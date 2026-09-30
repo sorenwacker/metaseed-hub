@@ -21,6 +21,7 @@ import pytest
 
 pytest.importorskip("selenium")
 from selenium import webdriver  # noqa: E402
+from selenium.common.exceptions import StaleElementReferenceException  # noqa: E402
 from selenium.webdriver.chrome.options import Options  # noqa: E402
 from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
@@ -136,10 +137,15 @@ def test_a_spec_draft_can_be_shared_with_a_colleague(driver) -> None:
     driver.find_element(By.CSS_SELECTOR, "[data-testid='share-form'] button[type='submit']").click()
 
     # The collaborator must appear in the member list, not a "log in first" toast.
-    WebDriverWait(driver, 20).until(
-        lambda d: invitee_email.split("@")[0] in d.find_element(By.ID, "member-list").text.lower()
-    )
-    member_list = driver.find_element(By.ID, "member-list").text
+    # htmx swaps the list after the submit, so the element found one moment is
+    # stale the next: the wait must tolerate that and look again, or a swap
+    # landing between find and read fails the test (it did, on main and on tags).
+    def member_list_text(d: webdriver.Chrome) -> str:
+        return str(d.find_element(By.ID, "member-list").text)
+
+    settled = WebDriverWait(driver, 20, ignored_exceptions=(StaleElementReferenceException,))
+    settled.until(lambda d: invitee_email.split("@")[0] in member_list_text(d).lower())
+    member_list = settled.until(member_list_text)
     assert "log in" not in member_list.lower(), member_list
 
 
