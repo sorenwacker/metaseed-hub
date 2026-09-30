@@ -17,6 +17,7 @@ from metaseed_hub.ui.dependencies import (
     get_dataset_for_editor,
     get_dataset_for_user,
 )
+from metaseed_hub.ui.helpers.ids import is_uuid
 from metaseed_hub.ui.helpers.tree import count_entities_by_type
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
@@ -212,6 +213,8 @@ async def get_version_diff(
     user: CurrentUser,
 ) -> Response:
     """Get detailed diff for a specific version."""
+    if not is_uuid(version_id):
+        return HTMLResponse("<div class='error'>Version not found</div>", status_code=404)
     await get_dataset_for_user(dataset_id, session, user)
 
     # Get the version
@@ -265,6 +268,10 @@ async def restore_dataset_version(
         validate_csrf_or_error(request)
     except Exception:
         return csrf_error_response()
+    if not is_uuid(version_id):
+        return HTMLResponse(
+            "<div class='notification error'>Version not found</div>", status_code=404
+        )
 
     dataset = await get_dataset_for_editor(dataset_id, session, user)
 

@@ -63,7 +63,22 @@ NEW_DATASET_ERRORS: dict[str, str] = {
     "no_importer": "No importer is installed for this profile.",
     "import_empty": "Nothing was found for that accession.",
     "import_failed": "The import failed. Check the accession and try again.",
+    "import_entities_failed": (
+        "The file was read, but its entities could not be loaded under that profile and "
+        "version. Check that they match the file. Nothing was created."
+    ),
+    "example_failed": "The example data could not be loaded for that profile. Nothing was created.",
 }
+
+
+class EmptySourceImportError(Exception):
+    """The importer ran and the accession resolved to nothing.
+
+    Its own type, not ValueError: json.JSONDecodeError is a ValueError, and
+    so is what an importer raises for a malformed accession, and catching
+    ValueError reported those as an empty result -- sending the user to check
+    the accession when the archive had answered with non-JSON.
+    """
 
 
 def _duplicate_name_redirect(refused: DuplicateDatasetNameError) -> RedirectResponse:
@@ -399,10 +414,12 @@ async def dataset_import(
         )
     except DuplicateDatasetNameError as refused:
         return _duplicate_name_redirect(refused)
-    await session.commit()
+    await session.flush()
     await session.refresh(dataset)
 
-    # Try to import entities from data
+    # The row is not committed until its entities are saved: a file whose
+    # entities cannot be loaded is refused and nothing is created. This block
+    # used to end in ``logger.warning`` and a redirect to an empty dataset.
     try:
         loader = SpecLoader(profile=profile)
         spec = loader.load_profile(version, profile)
@@ -449,12 +466,15 @@ async def dataset_import(
             state.editing_node_id = state.entity_tree[0].id
 
         # Save to database with version history
+        dataset_id = dataset.id
         await save_dataset_state(session, dataset, state, user)
 
-    except Exception as e:
-        logger.warning(f"Could not import entities, dataset created empty: {e}")
+    except Exception:
+        logger.exception("Could not load the imported entities for %s/%s", profile, version)
+        await session.rollback()
+        return RedirectResponse("/hub/datasets/new?error=import_entities_failed", status_code=302)
 
-    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
+    return RedirectResponse(f"/hub/datasets/{dataset_id}", status_code=303)
 
 
 def source_import_action(profile: str) -> Action | None:
@@ -515,7 +535,7 @@ async def create_dataset_from_accession(
 
     Raises:
         LookupError: If no accession importer is registered for ``profile``.
-        ValueError: If the importer resolved ``accession`` to nothing.
+        EmptySourceImportError: If the importer resolved ``accession`` to nothing.
     """
     # The importer is blocking HTTP against a public archive that can take
     # many seconds to answer. On the event loop that stalled every other
@@ -525,7 +545,7 @@ async def create_dataset_from_accession(
         # Creating an empty dataset named after an accession that resolved to
         # nothing leaves the user to discover the failure themselves. Distinct
         # from LookupError above so the caller does not blame a missing importer.
-        raise ValueError(f"Nothing was found for '{accession}'")
+        raise EmptySourceImportError(f"Nothing was found for '{accession}'")
 
     creator = await live_user(session, user) if user is not None else None
     dataset = await create_dataset(
@@ -677,7 +697,7 @@ async def dataset_import_accession(
         )
     except LookupError:
         return RedirectResponse("/hub/datasets/new?error=no_importer", status_code=302)
-    except ValueError:
+    except EmptySourceImportError:
         # The importer ran but the accession resolved to nothing -- a typo, not
         # a missing importer.
         return RedirectResponse("/hub/datasets/new?error=import_empty", status_code=302)
@@ -760,10 +780,13 @@ async def dataset_create(
         )
     except DuplicateDatasetNameError as refused:
         return _duplicate_name_redirect(refused)
-    await session.commit()
+    await session.flush()
     await session.refresh(dataset)
+    dataset_id = dataset.id
 
-    # Load example data if requested
+    # Committed only once the example, when asked for, has loaded: example
+    # data that does not fit is refused and nothing is created, where this
+    # used to log the failure and redirect to an empty dataset.
     logger.info(
         f"dataset_create: load_example={load_example!r}, profile={profile}, version={version}"
     )
@@ -799,10 +822,13 @@ async def dataset_create(
 
                 # Save to database with version history
                 await save_dataset_state(session, dataset, state, user)
-            except Exception as e:
-                logger.exception(f"Failed to load example data: {e}")
+            except Exception:
+                logger.exception("Failed to load example data for %s/%s", profile, version)
+                await session.rollback()
+                return RedirectResponse("/hub/datasets/new?error=example_failed", status_code=302)
 
-    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
+    await session.commit()
+    return RedirectResponse(f"/hub/datasets/{dataset_id}", status_code=303)
 
 
 @router.delete("/{dataset_id}", response_class=HTMLResponse)

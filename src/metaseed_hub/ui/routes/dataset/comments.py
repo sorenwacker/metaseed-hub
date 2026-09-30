@@ -20,6 +20,7 @@ from metaseed_hub.ui.dependencies import (
     DbSession,
     get_dataset_for_user,
 )
+from metaseed_hub.ui.helpers.ids import is_uuid
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
@@ -173,6 +174,8 @@ async def delete_dataset_comment(
         validate_csrf_or_error(request)
     except Exception:
         return csrf_error_response()
+    if not is_uuid(comment_id):
+        return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
 
     await get_dataset_for_user(dataset_id, session, user)
 
@@ -212,6 +215,8 @@ async def react_to_comment(
         validate_csrf_or_error(request)
     except Exception:
         return csrf_error_response()
+    if not is_uuid(comment_id):
+        return HTMLResponse("<div class='error'>Comment not found</div>", status_code=404)
 
     await get_dataset_for_user(dataset_id, session, user)
 

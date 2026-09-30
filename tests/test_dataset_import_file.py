@@ -168,3 +168,60 @@ async def test_load_example_failure_returns_no_traceback(session: AsyncSession) 
     assert "Traceback" not in body
     assert "/internal/path.py" not in body
     assert "Could not load the example dataset" in body
+
+
+async def test_entities_that_cannot_be_loaded_are_refused_not_an_empty_dataset(
+    session: AsyncSession,
+) -> None:
+    """The entity-loading block ended in ``except Exception: logger.warning``
+    and a 303 to the dataset, so a file naming a profile version that does
+    not exist produced an empty dataset with no message."""
+    payload = json.dumps(
+        {"profile": "miappe", "version": "9.9", "entities": [{"_type": "Investigation"}]}
+    ).encode()
+    token = await _caller(session)
+    name = f"unloadable-{uuid4().hex[:6]}"
+
+    response = await dataset_import(
+        _csrf_request(),
+        session,
+        token,
+        file=_upload(payload, "export.json"),
+        name=name,
+        csrf_token=_CSRF,
+    )
+
+    assert response.status_code == 302
+    assert "error=import_entities_failed" in response.headers["location"]
+    rows = (await session.execute(select(Dataset).where(Dataset.name == name))).scalars()
+    assert list(rows) == [], "no empty dataset in its place"
+
+
+async def test_example_data_that_cannot_be_loaded_is_refused_not_an_empty_dataset(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same swallowed block sat under 'Create with example'."""
+    from metaseed_hub.ui.routes.dataset import crud
+
+    def _broken(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("example does not fit the profile")
+
+    monkeypatch.setattr(crud, "add_entity_node", _broken)
+    token = await _caller(session)
+    name = f"broken-example-{uuid4().hex[:6]}"
+
+    response = await crud.dataset_create(
+        _csrf_request(),
+        session,
+        token,
+        name=name,
+        profile="miappe",
+        version="1.1",
+        csrf_token=_CSRF,
+        load_example="true",
+    )
+
+    assert response.status_code == 302
+    assert "error=example_failed" in response.headers["location"]
+    rows = (await session.execute(select(Dataset).where(Dataset.name == name))).scalars()
+    assert list(rows) == [], "no empty dataset in its place"
