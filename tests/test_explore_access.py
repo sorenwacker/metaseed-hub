@@ -208,3 +208,45 @@ async def test_a_shared_draft_loads_for_its_member(session: AsyncSession) -> Non
     )
 
     assert loaded is not None
+
+
+async def test_a_shared_draft_with_the_same_name_and_version_as_an_own_one_loads_the_own(
+    session: AsyncSession,
+) -> None:
+    """The catalog merges own and shared drafts into one ``draft:<name>`` entry
+    with one version list, so the picker can name a key two rows satisfy: the
+    caller's own draft and a draft shared from another tenant, at the same name
+    and version (the unique constraint is per tenant and user). The lookup used
+    ``scalar_one_or_none`` and raised MultipleResultsFound, which reached the
+    user as a 500 from Compare. The caller's own draft is the one meant."""
+    from metaseed.specs.schema import EntityDefSpec
+
+    from metaseed_hub.models import Role, SpecDraftMember
+
+    owner_tenant = make_tenant(slug="col00001")
+    member_tenant = make_tenant(slug="col00002")
+    session.add_all([owner_tenant, member_tenant])
+    await session.flush()
+    owner = make_user(tenant=owner_tenant)
+    member = make_user(tenant=member_tenant, email="member-col@example.org")
+    session.add_all([owner, member])
+    await session.flush()
+    shared = make_spec_draft(
+        tenant=owner_tenant, user=owner, name="twin", version="1.0", spec_data=_spec_data()
+    )
+    own_data = _spec_data()
+    own_data["entities"]["OwnOnly"] = EntityDefSpec(description="mine").model_dump(mode="json")
+    own = make_spec_draft(
+        tenant=member_tenant, user=member, name="twin", version="1.0", spec_data=own_data
+    )
+    session.add_all([shared, own])
+    await session.flush()
+    session.add(SpecDraftMember(spec_draft_id=shared.id, user_id=member.id, role=Role.VIEWER))
+    await session.commit()
+
+    loaded = await load_profile_spec(
+        session, "draft:twin", "1.0", member_tenant.id, user_id=member.id
+    )
+
+    assert loaded is not None
+    assert "OwnOnly" in loaded[1].entities, "the caller's own draft, not the shared twin"

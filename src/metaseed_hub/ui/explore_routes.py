@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
 from metaseed.specs.merge import DiffVisualizer, SpecComparator
 from metaseed.specs.schema import ProfileSpec
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
 
@@ -122,8 +122,19 @@ async def load_profile_spec(
             if _is_uuid(wanted)
             else and_(SpecDraft.name == wanted, SpecDraft.version == version)
         )
-        result = await session.execute(select(SpecDraft).where(identifies, or_(*conditions)))
-        draft = result.scalar_one_or_none()
+        # A name and version can match two rows: the caller's own draft and
+        # one shared from another tenant (the unique constraint is per tenant
+        # and user), and the catalog offers both under one key. The caller's
+        # own draft is the one meant; among shared ones the oldest, so the
+        # answer is deterministic. ``scalar_one_or_none`` raised
+        # MultipleResultsFound here, a 500 from Compare.
+        ordering: list[Any] = [SpecDraft.created_at.asc(), SpecDraft.id.asc()]
+        if tenant_id is not None:
+            ordering.insert(0, case((SpecDraft.tenant_id == tenant_id, 0), else_=1))
+        result = await session.execute(
+            select(SpecDraft).where(identifies, or_(*conditions)).order_by(*ordering)
+        )
+        draft = result.scalars().first()
         if draft and draft.spec_data:
             spec_data = _extract_spec_data(draft.spec_data)
             spec = dict_to_spec(spec_data)

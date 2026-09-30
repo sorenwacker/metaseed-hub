@@ -15,6 +15,8 @@ The profile's entities and fields are drawn as an entity–relationship diagram.
 2. Select a second profile under **Compare Against**.
 3. Click **Compare**.
 
+Both lists hold the built-in standards, the published specifications you may see, and drafts: your own and those shared with you, each shown as `<name> (Draft)` with one entry per name and a version selector beside it. When a draft shared with you has the same name and version as one of your own, the entry loads your own.
+
 The diagram overlays both profiles and highlights the differences:
 
 | Legend | Colour | Meaning |
