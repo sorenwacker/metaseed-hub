@@ -75,7 +75,7 @@ Each of these reports what is still missing after the change, using the profile'
 | `list_spec_drafts` | Your drafts |
 | `spec_delete_draft` | Remove one of your own drafts |
 
-A tool's `draft` argument is the draft's name. When you hold several versions of that name as drafts, the name alone is ambiguous and the tool says so; name one as `name@version`, for example `cropxr-phenotyping@1.3`.
+A tool's `draft` argument is the draft's name. When you hold several versions of that name as drafts, the name alone is ambiguous and the tool says so; name one as `name@version`, for example `cropxr-phenotyping@1.3`. A draft's name is its specification's profile name: the name you give `spec_create`, `spec_import_yaml` or `spec_clone` becomes the profile name, and renaming the profile with `spec_set_metadata` renames the draft, so the response carries the name to address it by from then on. Every draft save, from these tools, from the browser or from a `metaseed hub push`, is checked against the revision the caller read; a save that would overwrite an edit made since is refused and the tool says so.
 
 A specification is a tree: every entity except the root must be linked under a parent by a field on the parent whose type is `list` or `entity` and whose `items` names the child. An unlinked entity is an orphan a dataset can never reach, and `spec_validate` does not flag orphans. The endpoint's instructions carry this workflow (shared with the standalone metaseed MCP server), so connected agents link entities as they build.
 
