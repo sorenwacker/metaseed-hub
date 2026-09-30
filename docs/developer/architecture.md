@@ -119,3 +119,5 @@ Key integrations:
 | Export | `metaseed_hub.ui.services.export` | Excel export over the facade API |
 | Graph | `metaseed_hub.ui.services.graph` | Visualization data via `ProfileFacade.to_graph` |
 | UI internals | `metaseed_hub.ui.metaseed_ui` | Sole boundary to `metaseed.ui` (`AppState`, assets) |
+
+The hub never carries its own copy of a library function: a copy stays correct and stops improving, and every fix must land twice. Version strings are ordered with `metaseed.specs.versioning.version_sort_key` (four hub copies of a `MAJOR.MINOR` key once existed, one of them ordering non-numeric versions differently); a draft's status summary for agents is the library's, so the hub's MCP server and the standalone one report the same shape; renaming an entity in the spec builder goes through `SpecBuilder.rename_entity`, which also rewrites a validation rule's `reference` and keeps the entity's position, where the hand-written rename did neither. The gate test `tests/test_no_forked_code.py` fails when a hub module defines a function the library owns (`LIBRARY_FUNCTIONS`) or builds a workbook itself.
