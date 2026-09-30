@@ -101,9 +101,9 @@ Adding a nested field with `items` also creates the parent's `identifier` field 
 
 `spec_validate` reports two lists. `problems` are defects: the draft does not build, and `valid` is false. `warnings` are advisory — an entity with no declared `is_identifier` whose identifier would be inferred onto an optional free-text field, for instance. A warning does not make a draft invalid, so `valid` stays true and `problems` stays empty; it names something worth deciding on before publishing.
 
-Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, so it stays something you do yourself in the web interface.
+Drafts are private to you. **Publishing is not available to an agent** — it shares a specification with every user of the hub, or with a collaboration, so it stays something you do yourself in the web interface.
 
-Published specifications are included in `list_profiles`, because publishing shares a specification with every user of the hub — an agent can build a dataset against one it did not write.
+Published specifications are included in `list_profiles`: those published to everyone, and those published to a collaboration you are in. Every tool that takes a profile name resolves it for you, the caller, so `list_profiles`, `get_profile_schema`, `get_profile_relationships`, `spec_clone` and `create_dataset` agree on which specifications exist — an agent can build a dataset against one it did not write, and a specification it cannot see does not exist for it in any of them. In the hub's code that is one resolver, `_profile_spec`, whose contract (`mcp/_contracts.py`) carries the caller; `tests/test_mcp_tools_see_collaboration_specs.py` checks the five tools against a specification published to a collaboration.
 
 ### Ontology lookups
 

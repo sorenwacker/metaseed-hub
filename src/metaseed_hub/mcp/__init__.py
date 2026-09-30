@@ -402,6 +402,34 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     await save_state_to_draft(session, state, draft, expected_revision=revision)
 
 
+async def _published_spec_or_refuse(
+    session: AsyncSession,
+    profile: str,
+    version: str,
+    prefer_tenant: str | None = None,
+    *,
+    for_user_id: str | None = None,
+) -> Spec:
+    """The published ``Spec`` row a name and version denote for the caller.
+
+    The one lookup behind every tool that names a published specification:
+    ``create_dataset`` carried its own copy without the caller, so a
+    specification published to a collaboration was listed and then refused.
+
+    Raises:
+        ValueError: If no publication the caller may see matches.
+    """
+    published = await published_spec(
+        session, profile, version, prefer_tenant, for_user_id=for_user_id
+    )
+    if published is None:
+        raise ValueError(
+            f"No profile named {profile!r} with version {version!r}. "
+            "Call list_profiles for what exists."
+        )
+    return published
+
+
 async def _profile_spec(
     session: AsyncSession,
     profile: str,
@@ -427,14 +455,9 @@ async def _profile_spec(
             )
         return loader.load_profile(version=version, profile=profile.lower())
 
-    published = await published_spec(
+    published = await _published_spec_or_refuse(
         session, profile, version, prefer_tenant, for_user_id=for_user_id
     )
-    if published is None:
-        raise ValueError(
-            f"No profile named {profile!r} with version {version!r}. "
-            "Call list_profiles for what exists."
-        )
     from metaseed.specs.schema import ProfileSpec
 
     raw = published.spec_data or {}
@@ -592,14 +615,9 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 )
                 profile = profile.lower()
             else:
-                published = await published_spec(
-                    session, profile, version, prefer_tenant=user.tenant_id
+                published = await _published_spec_or_refuse(
+                    session, profile, version, prefer_tenant=user.tenant_id, for_user_id=user.id
                 )
-                if published is None:
-                    raise ValueError(
-                        f"No profile named {profile!r} with version {version!r}. "
-                        "Call list_profiles for what exists."
-                    )
                 # Mirrors the web UI's dataset_create: the lowercased name plus
                 # spec_id is what ensure_dataset_facade resolves the spec from.
                 spec_id = published.id
