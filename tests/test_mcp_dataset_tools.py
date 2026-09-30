@@ -476,7 +476,7 @@ async def test_a_name_collision_prefers_the_callers_own_published_spec(
     caller could get another tenant's specification. The caller's own tenant
     wins; across other tenants the oldest publication wins, deterministically.
     """
-    from metaseed_hub.mcp import _published_spec
+    from metaseed_hub.specifications import published_spec as _published_spec
     from tests.factories import make_spec
 
     tenant_a, user_a, _sa, _ta = await _user_with_token(

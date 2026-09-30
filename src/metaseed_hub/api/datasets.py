@@ -21,6 +21,7 @@ from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset
 from metaseed_hub.repositories import datasets as dataset_repository
+from metaseed_hub.specifications import UnknownProfileError, resolve_specification
 
 router = APIRouter()
 
@@ -210,32 +211,53 @@ async def create_dataset(
     if name_error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=name_error)
 
-    # The same check PATCH applies: a payload the profile cannot place -- or a
-    # profile this hub does not have -- must not become a row the UI then
-    # truncates or cannot open. A metaseed instance pushing a dataset built on
-    # a profile it has not pushed yet gets the refusal, not a broken record.
-    # The check reads only the target's tenant, profile and version.
-    data = dataset_data.data
-    if data:
-        proposed = Dataset(
-            tenant_id=dataset_data.tenant_id,
-            profile=dataset_data.profile,
-            version=dataset_data.version,
-        )
-        data = await _validated_data(proposed, data, session)
     # Resolve the creator before the dataset is pending: live_user runs a query
     # that would autoflush a half-built dataset, and if that flush fails (an
     # FK, a name clash) the whole transaction aborts, poisoning the session for
     # every later request that shares it.
     creator = await live_user(session, _user)
+
+    # What the name refers to on this hub: an installed profile, a publication
+    # the caller may see, or the caller's own draft. A dataset pushed from a
+    # metaseed instance is built on a profile pushed there first (#177); bound
+    # here the way the web picker binds a draft, so the row loads afterwards.
+    try:
+        spec_id, spec_draft_id = await resolve_specification(
+            session,
+            dataset_data.profile,
+            dataset_data.version,
+            tenant_id=dataset_data.tenant_id,
+            user_id=creator.id if creator else None,
+        )
+    except UnknownProfileError as unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(unknown)
+        ) from unknown
+    profile = dataset_data.profile.lower() if spec_id or spec_draft_id else dataset_data.profile
+
+    # The same check PATCH applies: a payload the profile cannot place must not
+    # become a row the UI then truncates or cannot open. The check reads only
+    # the target's tenant, profile, version and the specification it is bound to.
+    data = dataset_data.data
+    if data:
+        proposed = Dataset(
+            tenant_id=dataset_data.tenant_id,
+            profile=profile,
+            version=dataset_data.version,
+            spec_id=spec_id,
+            spec_draft_id=spec_draft_id,
+        )
+        data = await _validated_data(proposed, data, session)
     try:
         dataset = await dataset_repository.create_dataset(
             session,
             tenant_id=dataset_data.tenant_id,
             name=dataset_data.name,
-            profile=dataset_data.profile,
+            profile=profile,
             version=dataset_data.version,
             creator_id=creator.id if creator else None,
+            spec_id=spec_id,
+            spec_draft_id=spec_draft_id,
             data=data,
         )
     except dataset_repository.DuplicateDatasetNameError as refused:

@@ -47,6 +47,7 @@ from metaseed_hub.models import (
     User,
 )
 from metaseed_hub.repositories import datasets as dataset_repository
+from metaseed_hub.specifications import published_spec
 from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token, token_from_header
 
 if TYPE_CHECKING:
@@ -392,50 +393,6 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     await session.commit()
 
 
-async def _published_spec(
-    session: AsyncSession,
-    profile: str,
-    version: str,
-    prefer_tenant: str | None = None,
-    *,
-    for_user_id: str | None = None,
-) -> Spec | None:
-    """The published specification a profile name and version refer to, if any.
-
-    Publishing shares a specification with whoever it was published to, so the
-    lookup is not scoped to the caller's tenant but is scoped to what they may
-    see: a specification published to a collaboration they are not in does not
-    exist for them. Matched case-insensitively
-    because datasets store the lowercased profile name while list_profiles
-    reports the name as published.
-
-    When two tenants published the same name and version, ``.first()`` on an
-    unordered query handed the caller whichever row the database returned —
-    possibly another tenant's specification. The caller's own tenant wins the
-    collision; across other tenants the oldest publication wins, so the answer
-    is at least deterministic.
-    """
-    from sqlalchemy import case, func
-    from sqlalchemy.sql.elements import ColumnElement
-
-    ordering: list[ColumnElement[Any]] = [Spec.created_at.asc(), Spec.id.asc()]
-    if prefer_tenant is not None:
-        ordering.insert(0, case((Spec.tenant_id == prefer_tenant, 0), else_=1))
-
-    result = await session.execute(
-        select(Spec)
-        .where(
-            func.lower(Spec.name) == profile.lower(),
-            Spec.version == version,
-            Spec.status == SpecStatus.PUBLISHED,
-            Spec.deleted_at.is_(None),
-            await visible_specs(session, for_user_id),
-        )
-        .order_by(*ordering)
-    )
-    return result.scalars().first()
-
-
 async def _profile_spec(
     session: AsyncSession,
     profile: str,
@@ -461,7 +418,7 @@ async def _profile_spec(
             )
         return loader.load_profile(version=version, profile=profile.lower())
 
-    published = await _published_spec(
+    published = await published_spec(
         session, profile, version, prefer_tenant, for_user_id=for_user_id
     )
     if published is None:
@@ -626,7 +583,7 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                 )
                 profile = profile.lower()
             else:
-                published = await _published_spec(
+                published = await published_spec(
                     session, profile, version, prefer_tenant=user.tenant_id
                 )
                 if published is None:
