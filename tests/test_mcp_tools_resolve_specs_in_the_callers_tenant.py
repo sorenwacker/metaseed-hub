@@ -39,8 +39,16 @@ class _RecordingResolver:
         version: str,
         *,
         prefer_tenant: str | None = None,
+        for_user_id: str | None = None,
     ) -> Any:
-        self.calls.append({"profile": profile, "version": version, "prefer_tenant": prefer_tenant})
+        self.calls.append(
+            {
+                "profile": profile,
+                "version": version,
+                "prefer_tenant": prefer_tenant,
+                "for_user_id": for_user_id,
+            }
+        )
         raise _ResolverObservedError
 
 
@@ -87,6 +95,7 @@ async def test_get_profile_relationships_prefers_the_callers_tenant() -> None:
         await mcp.tools["get_profile_relationships"]("miappe", "1.1")
 
     assert resolver.calls[0]["prefer_tenant"] == "tenant-of-the-caller"
+    assert resolver.calls[0]["for_user_id"] == "u-1"
 
 
 @pytest.mark.asyncio
@@ -105,3 +114,4 @@ async def test_spec_clone_prefers_the_callers_tenant() -> None:
         await mcp.tools["spec_clone"]("miappe", "1.1")
 
     assert resolver.calls[0]["prefer_tenant"] == "tenant-of-the-caller"
+    assert resolver.calls[0]["for_user_id"] == "u-1"

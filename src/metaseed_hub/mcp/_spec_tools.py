@@ -293,7 +293,9 @@ def register_spec_tools(  # noqa: C901
 
         async with caller() as (session, user):
             spec = copy.deepcopy(
-                await profile_spec(session, profile, version, prefer_tenant=user.tenant_id)
+                await profile_spec(
+                    session, profile, version, prefer_tenant=user.tenant_id, for_user_id=user.id
+                )
             )
             draft_name = name.strip() or spec.name
             draft = await _new_named_draft(

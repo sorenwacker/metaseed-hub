@@ -89,7 +89,9 @@ def register_profile_tools(
         from metaseed.facade import ProfileFacade
 
         async with caller() as (session, _user):
-            spec = await profile_spec(session, profile, version, prefer_tenant=_user.tenant_id)
+            spec = await profile_spec(
+                session, profile, version, prefer_tenant=_user.tenant_id, for_user_id=_user.id
+            )
 
         facade = ProfileFacade(spec.name, spec=spec)
         hierarchy: dict[str, Any] = {}
