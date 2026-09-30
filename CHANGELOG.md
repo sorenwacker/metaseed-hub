@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.58.2] - 260930
 
 ### Fixed
+- A column heading in an inline table shows the field's description and what a valid value is on hover, the note the exported Excel heading already carried; the heading showed only the name. (#181)
 - The dataset graph draws a reference that names only an entity, such as the `Input` lists of the CropXR profiles, as a dashed edge per value, and the editor's reference pickers offer its targets; both ignored that form, so a CropXR dataset rendered as containment only, with no line from an observation unit to its source, from an assay material to its unit, or from a data file to its material. Comes with metaseed 0.55.2, which also lists and pulls a hub dataset stored as a tree with its entities instead of as empty.
 
 ## [0.58.1] - 260930
