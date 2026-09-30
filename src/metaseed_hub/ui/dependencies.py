@@ -230,6 +230,13 @@ async def ensure_tenant_and_user(session: AsyncSession, user: TokenUser) -> tupl
     # provider sent; uq_users_email relies on the same normalization.
     user_result = await session.execute(select(User).where(User.keycloak_id == user.keycloak_id))
     db_user = user_result.scalar_one_or_none()
+    if db_user is not None and db_user.deleted_at is not None:
+        # A valid token is not proof the account still exists. Resolved by
+        # subject alone, a deleted user kept the home page -- every shared
+        # item listed, memberships re-recorded -- for as long as their cookie
+        # lived. Refused, not re-provisioned: a fresh account under the same
+        # subject would silently resurrect the memberships that stay in place.
+        raise HTTPException(status_code=403, detail="Access denied")
     if not db_user:
         email = normalize_email(user.email)
         # Refuse rather than let uq_users_email raise an IntegrityError on every

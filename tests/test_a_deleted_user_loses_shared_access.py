@@ -18,6 +18,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.access import (
@@ -114,3 +115,33 @@ async def test_a_soft_deleted_user_cannot_pass_the_tenant_gate(session: AsyncSes
     with pytest.raises(HTTPException) as denied:
         await verify_tenant_access(tenant.id, session, token)
     assert denied.value.status_code == 403
+
+
+async def test_a_soft_deleted_user_is_refused_where_accounts_are_resolved(
+    session: AsyncSession,
+) -> None:
+    """ensure_tenant_and_user resolved the account by keycloak_id alone, so a
+    deleted user whose cookie was still valid got the home page: every shared
+    dataset and draft listed, and their collaborations re-recorded. Refused,
+    not re-provisioned: a fresh account under the same subject would silently
+    resurrect the memberships."""
+    from metaseed_hub.ui.dependencies import ensure_tenant_and_user, tenant_slug_for
+
+    sub = f"gone-{uuid4().hex[:8]}"
+    tenant = make_tenant(slug=tenant_slug_for(sub))
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant, keycloak_id=sub)
+    session.add(user)
+    await session.commit()
+    token = TokenUser(sub=sub, email=user.email, name="G", roles=[])
+
+    assert (await ensure_tenant_and_user(session, token))[1].id == user.id
+
+    user.soft_delete()
+    await session.commit()
+    with pytest.raises(HTTPException) as denied:
+        await ensure_tenant_and_user(session, token)
+    assert denied.value.status_code == 403
+    live = await session.execute(select(User).where(User.keycloak_id == sub))
+    assert [u.deleted_at is not None for u in live.scalars()] == [True], "no account re-provisioned"
