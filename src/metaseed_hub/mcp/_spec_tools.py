@@ -462,6 +462,10 @@ def register_spec_tools(  # noqa: C901
             within: An ontology term whose descendants are the values this
                 field takes, e.g. "CO_715:0000006". Scopes a column to one
                 branch rather than a whole ontology.
+            seek_attribute_type: The SEEK Sample Type attribute type the field maps to.
+            seek_controlled_vocab: The SEEK controlled vocabulary the attribute draws its
+                values from.
+            seek_cv_free_text: Whether that controlled vocabulary also accepts free text.
         """
         markers = _markers(
             {
@@ -614,6 +618,11 @@ def register_spec_tools(  # noqa: C901
             label: The human-readable name shown for the field.
             tier: How strongly the field is expected: required, recommended,
                 or optional.
+            isa_tag: The ISA tag the field carries into a SEEK Sample Type attribute.
+            seek_attribute_type: The SEEK Sample Type attribute type the field maps to.
+            seek_controlled_vocab: The SEEK controlled vocabulary the attribute draws its
+                values from.
+            seek_cv_free_text: Whether that controlled vocabulary also accepts free text.
             clear: Constraint names to remove, e.g. ["pattern"]. Constraints
                 only: a marker is unset by passing its own empty value.
         """

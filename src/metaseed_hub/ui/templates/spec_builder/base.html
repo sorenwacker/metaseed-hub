@@ -17,9 +17,7 @@
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ draft.name or "Untitled" }}</span>
 {% endif %}
-{% if has_unsaved_changes %}
-<span class="unsaved-indicator" title="Unsaved changes">*</span>
-{% endif %}
+
 {% endblock %}
 
 {% block content %}

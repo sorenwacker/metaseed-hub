@@ -52,13 +52,6 @@ class Room:
 
 
 SERVER_MESSAGE_TYPES: frozenset[str] = frozenset({"presence"})
-
-#: How often each instance re-stamps its connections into the shared presence
-#: set. An entry older than three beats is a process that stopped refreshing —
-#: crashed or partitioned — and its users age out of presence without any
-#: cleanup handshake.
-PRESENCE_HEARTBEAT_SECONDS = 30
-PRESENCE_STALE_AFTER_SECONDS = PRESENCE_HEARTBEAT_SECONDS * 3
 """Message types only the server may originate.
 
 ``presence`` frames are how clients learn who is in the room; a client frame
@@ -66,6 +59,13 @@ claiming the type would be relayed with a stamped ``sender_id`` but still
 rendered as the room's presence list by every other client. Reserved types are
 dropped before broadcast rather than trusted because they arrived on a socket.
 """
+
+#: How often each instance re-stamps its connections into the shared presence
+#: set. An entry older than three beats is a process that stopped refreshing —
+#: crashed or partitioned — and its users age out of presence without any
+#: cleanup handshake.
+PRESENCE_HEARTBEAT_SECONDS = 30
+PRESENCE_STALE_AFTER_SECONDS = PRESENCE_HEARTBEAT_SECONDS * 3
 
 
 class WebSocketManager:

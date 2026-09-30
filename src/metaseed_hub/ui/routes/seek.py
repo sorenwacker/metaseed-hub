@@ -6,11 +6,10 @@ profiles — a swapped-in derived facade would fail to load on the next request.
 Import arrives when derived specs can be persisted (the spec-draft store is the
 likely home).
 
-Every route requires the ``seek`` feature — membership of the seek group is
-what makes this exist, which is how a plugin is developed in production while
-visible only to its testers. The heavy lifting is metaseed's
-(:mod:`metaseed.seek`); these routes wrap it around the hub's per-user
-connection and dataset model.
+The routes are open to every signed-in user; the connection they configure
+(the API key) is the only gate, and nothing works until it is set. The heavy
+lifting is metaseed's (:mod:`metaseed.seek`); these routes wrap it around the
+hub's per-user connection and dataset model.
 
 The connection is per user because SEEK creates every record as the API key's
 person. The key is encrypted at rest and never rendered back into a page.
@@ -406,8 +405,6 @@ async def seek_readiness(
         logger.info("SEEK readiness check failed: %s", exc)
         return _panel(request, error=_push_failure(exc, connection.url))
 
-    if not present and not missing:
-        return _panel(request, message="This SEEK is ready for a push.")
     if missing:
         return _panel(
             request,

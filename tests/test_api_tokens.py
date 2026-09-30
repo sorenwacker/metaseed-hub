@@ -188,3 +188,19 @@ async def test_a_soft_deleted_users_token_authenticates_as_nobody(
     await session.commit()
 
     assert await authenticate_token(session, secret) is None
+
+
+async def test_an_expired_token_is_not_listed_as_active(session: AsyncSession) -> None:
+    """``active_tokens`` promised "tokens that still work" and filtered only
+    revocation, so an expired token stayed on the profile page as if usable."""
+    from datetime import timedelta
+
+    from metaseed_hub.tokens import active_tokens
+
+    user = await _user(session, "listing@example.org")
+    _secret, expired = await issue_token(session, user, name="old", expires_in_days=1)
+    expired.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    await issue_token(session, user, name="live")
+    await session.commit()
+
+    assert [t.name for t in await active_tokens(session, user)] == ["live"]

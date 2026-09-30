@@ -82,7 +82,6 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         )
         entity.fields.append(new_field)
         ctx.builder.editing_field_idx = len(entity.fields) - 1
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -306,7 +305,6 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
         field.options = [o.strip() for o in options.split(",") if o.strip()] or None
 
         ctx.builder.editing_field_idx = None
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -342,7 +340,6 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         del entity.fields[idx]
         ctx.builder.editing_field_idx = None
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -382,7 +379,6 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 entity.fields[idx - 1],
                 entity.fields[idx],
             )
-            ctx.builder.mark_changed()
             await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -422,7 +418,6 @@ def register_field_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 entity.fields[idx + 1],
                 entity.fields[idx],
             )
-            ctx.builder.mark_changed()
             await ctx.save(session)
 
         return templates.TemplateResponse(

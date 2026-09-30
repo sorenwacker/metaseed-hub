@@ -63,7 +63,6 @@ def register_rule_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         )
         ctx.spec.validation_rules.append(new_rule)
         ctx.builder.editing_rule_idx = len(ctx.spec.validation_rules) - 1
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -188,7 +187,6 @@ def register_rule_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         rule.max_items = parsed_max_items
 
         ctx.builder.editing_rule_idx = None
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -216,7 +214,6 @@ def register_rule_routes(router: APIRouter, templates: Jinja2Templates) -> None:
 
         del ctx.spec.validation_rules[idx]
         ctx.builder.editing_rule_idx = None
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
