@@ -68,4 +68,10 @@ async def test_a_loadable_payload_is_accepted(session: AsyncSession) -> None:
         ],
     }
 
-    assert await _validated_data(dataset, good, session) == good
+    stored = await _validated_data(dataset, good, session)
+
+    # The hub's own form of what loaded, stamped: the node as given, plus the
+    # specification hash the drift check reads. Not the payload as sent.
+    assert stored["tree"][0]["data"]["unique_id"] == "INV-1"
+    assert stored["tree"][0]["entity_type"] == "Investigation"
+    assert stored["spec_hash"].startswith("sha256:")

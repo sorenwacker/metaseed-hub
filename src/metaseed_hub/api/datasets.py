@@ -121,13 +121,18 @@ async def _validated_data(
         session: Database session, for spec drafts.
 
     Returns:
-        ``data`` unchanged, when it loads.
+        The hub's own form of what loaded: the tree ``serialize_tree`` produces,
+        stamped with the specification hash -- the form every web save writes.
+        Storing the payload as sent left a flat ``entities`` list the home
+        cards counted as "No entities" and the drift check could not place.
 
     Raises:
         HTTPException: 409 when a node cannot be placed, 422 when the payload
             is not loadable at all.
     """
+    from metaseed_hub.ui.helpers import make_json_serializable, serialize_tree
     from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade_for_write
+    from metaseed_hub.ui.helpers.spec_hash import dataset_spec_hash, stamp_spec_hash
 
     # A fresh transient row, not a copy of ``dataset``: copying a mapped
     # instance shares its ORM state, which on a row not yet persisted left the
@@ -144,7 +149,7 @@ async def _validated_data(
         data=copy.deepcopy(data),
     )
     try:
-        await ensure_dataset_facade_for_write(proposed, session)
+        state = await ensure_dataset_facade_for_write(proposed, session)
     except HTTPException:
         raise
     except Exception as exc:
@@ -152,7 +157,10 @@ async def _validated_data(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Dataset payload could not be loaded: {exc}",
         ) from exc
-    return data
+    return stamp_spec_hash(
+        make_json_serializable(serialize_tree(state)),
+        await dataset_spec_hash(session, proposed),
+    )
 
 
 @router.get("", response_model=list[DatasetResponse])
