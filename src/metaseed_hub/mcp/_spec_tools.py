@@ -16,6 +16,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from metaseed.agent.mcp.tools.spec_builder import _status as status_summary
 from sqlalchemy import select
 
 from metaseed_hub.mcp._contracts import ProfileSpecResolver
@@ -125,26 +126,6 @@ def _constraints(limits: dict[str, Any]) -> Any | None:
 
     values = _constraint_values(limits)
     return Constraints(**values) if values else None
-
-
-def _status(builder: Any) -> dict[str, Any]:
-    """A summary of a draft's spec: name, version, root, entities, rules.
-
-    The same shape the standalone metaseed server reports, so an agent moving
-    between the two reads the same summary.
-    """
-    spec = builder.spec
-    return {
-        "name": spec.name,
-        "version": spec.version,
-        "display_name": spec.display_name,
-        "root_entity": spec.root_entity,
-        "entities": {
-            entity_name: [f.name for f in entity.fields]
-            for entity_name, entity in spec.entities.items()
-        },
-        "validation_rules": [r.name for r in spec.validation_rules],
-    }
 
 
 def _loaded_spec(row: SpecDraft, draft: str) -> Any:
@@ -807,7 +788,7 @@ def register_spec_tools(  # noqa: C901
         async with caller() as (session, user):
             row = await owned_draft(session, user, draft)
             builder = SpecBuilder.from_spec(_loaded_spec(row, draft))
-            return json.dumps(_status(builder))
+            return json.dumps(status_summary(builder))
 
     @mcp.tool()
     async def spec_validate(draft: str) -> str:

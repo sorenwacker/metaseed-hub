@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from metaseed.specs.builder import SpecBuilder
 from metaseed.specs.schema import EntityDefSpec, FieldType, ValidationRuleSpec
 
 from metaseed_hub.ui.spec_builder_helpers import validate_entity_name
@@ -173,32 +174,14 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
                     },
                 )
 
-            # Rename entity
-            ctx.spec.entities[new_name] = entity
-            del ctx.spec.entities[name]
+            # The library's rename, not a copy of it: the hand-written one had
+            # drifted -- it moved the entity to the end of the mapping and left
+            # a rule's ``reference`` naming the old entity, so the same draft
+            # renamed here and through MCP ended up with different content.
+            SpecBuilder.from_spec(ctx.spec).rename_entity(name, new_name)
             final_name = new_name
-
-            if ctx.spec.root_entity == name:
-                ctx.spec.root_entity = new_name
             if ctx.builder.editing_entity == name:
                 ctx.builder.editing_entity = new_name
-
-            # Update references in all entities
-            for other_entity in ctx.spec.entities.values():
-                for field in other_entity.fields:
-                    if field.items == name:
-                        field.items = new_name
-                    if field.reference and field.reference.startswith(f"{name}."):
-                        field.reference = f"{new_name}.{field.reference[len(name) + 1 :]}"
-                    if field.parent_ref and field.parent_ref.startswith(f"{name}."):
-                        field.parent_ref = f"{new_name}.{field.parent_ref[len(name) + 1 :]}"
-
-            # Update validation rules
-            for rule in ctx.spec.validation_rules:
-                if rule.applies_to == name:
-                    rule.applies_to = new_name
-                elif isinstance(rule.applies_to, list) and name in rule.applies_to:
-                    rule.applies_to = [new_name if e == name else e for e in rule.applies_to]
 
         # Applied only now that the rename (if any) succeeded.
         entity.description = description.strip()
@@ -263,6 +246,10 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
                 if not remaining:
                     continue
                 rule.applies_to = remaining
+            # A rule's ``reference`` names an entity too; fields had theirs
+            # cleared above while rules kept naming the deleted entity.
+            if rule.reference and rule.reference.startswith(f"{name}."):
+                rule.reference = None
             kept_rules.append(rule)
         if len(kept_rules) != len(ctx.spec.validation_rules):
             # Rule indices shifted, so any editing pointer into the old list

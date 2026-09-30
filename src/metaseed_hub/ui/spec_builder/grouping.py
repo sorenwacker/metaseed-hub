@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from metaseed.specs.versioning import version_sort_key
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
@@ -28,21 +30,6 @@ class DraftGroup:
     name: str
     label: str
     drafts: Sequence[Any]
-
-
-def version_key(version: str) -> tuple[int, ...]:
-    """Sort key for a ``MAJOR.MINOR`` version, ordering numerically.
-
-    A string sort puts ``1.10`` before ``1.3``, which reads as the newest
-    version being the oldest. A version that is not numeric sorts before every
-    numeric one, so it lands last under a descending sort rather than raising:
-    the drafts table accepts any string, and a list must not refuse to render
-    what the table accepts.
-    """
-    parts = version.split(".")
-    if not all(part.isdigit() for part in parts):
-        return (-1,)
-    return tuple(int(part) for part in parts)
 
 
 def group_by_specification(drafts: Iterable[Any]) -> list[DraftGroup]:
@@ -64,6 +51,6 @@ def group_by_specification(drafts: Iterable[Any]) -> list[DraftGroup]:
 
     groups = []
     for name, rows in by_name.items():
-        ordered = sorted(rows, key=lambda d: version_key(d.version), reverse=True)
+        ordered = sorted(rows, key=lambda d: version_sort_key(d.version), reverse=True)
         groups.append(DraftGroup(name=name, label=spec_label(ordered[0]), drafts=ordered))
     return sorted(groups, key=lambda g: g.label.lower())

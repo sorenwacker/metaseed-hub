@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from metaseed.specs.loader import SpecLoader
 from metaseed.specs.merge import DiffVisualizer, SpecComparator
 from metaseed.specs.schema import ProfileSpec
+from metaseed.specs.versioning import version_sort_key
 from sqlalchemy import and_, case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
@@ -231,14 +232,6 @@ def _is_uuid(value: str) -> bool:
     return True
 
 
-def _version_key(version: str) -> tuple[int, ...]:
-    """Order ``MAJOR.MINOR`` numerically, so 1.10 follows 1.3 rather than 1.1."""
-    parts = version.split(".")
-    if not all(part.isdigit() for part in parts):
-        return (-1,)
-    return tuple(int(part) for part in parts)
-
-
 async def _build_explore_catalog(
     session: AsyncSession, user: Any
 ) -> tuple[list[str], dict[str, list[str]], dict[str, str]]:
@@ -329,7 +322,7 @@ async def _build_explore_catalog(
 
     for versions in profile_versions.values():
         # Oldest first: the picker selects the last as the default.
-        versions.sort(key=_version_key)
+        versions.sort(key=version_sort_key)
 
     for spec in published_specs:
         spec_key = f"spec:{spec.id}"

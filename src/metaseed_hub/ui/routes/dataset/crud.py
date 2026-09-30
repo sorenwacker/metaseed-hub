@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from metaseed.adapters import Action  # lightweight by design: no plugin imports
+from metaseed.specs.versioning import version_sort_key
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
@@ -135,14 +136,6 @@ def _no_example_message(profile: str, version: str, *, found: bool) -> str:
     return f"No {what} {escape(str(profile))} v{escape(str(version))}"
 
 
-def _version_key(version: str) -> tuple[int, ...]:
-    """Order ``MAJOR.MINOR`` numerically, so 1.10 follows 1.3 rather than 1.1."""
-    parts = version.split(".")
-    if not all(part.isdigit() for part in parts):
-        return (-1,)
-    return tuple(int(part) for part in parts)
-
-
 @router.get("/new", response_class=HTMLResponse)
 async def dataset_new(
     request: Request,
@@ -164,14 +157,8 @@ async def dataset_new(
     for profile_name in loader.list_profiles():
         versions = loader.list_versions(profile_name)
 
-        # Sort versions in descending order (newest first)
-        def version_key(v: str) -> tuple[int, ...]:
-            try:
-                return tuple(int(x) for x in v.split("."))
-            except ValueError:
-                return (0,)
-
-        versions = sorted(versions, key=version_key, reverse=True)
+        # Newest first, ordered numerically (1.10 after 1.9).
+        versions = sorted(versions, key=version_sort_key, reverse=True)
         # Get profile metadata from latest version
         display_name = profile_name
         description = ""
@@ -251,7 +238,7 @@ async def dataset_new(
         if draft.version not in entry["versions"]:
             entry["versions"].append(draft.version)
     for entry in by_name.values():
-        entry["versions"].sort(key=_version_key)
+        entry["versions"].sort(key=version_sort_key)
         entry["latest_version"] = entry["versions"][-1]
 
     # Every published spec, from any account, offered as a starting point:

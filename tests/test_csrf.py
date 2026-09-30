@@ -175,6 +175,8 @@ def test_a_non_ascii_submitted_token_is_a_mismatch_not_an_error() -> None:
     request.headers = {"X-CSRF-Token": "é"}
 
     assert validate_csrf_token(request) is False
+
+
 class TestSeekRoutesRejectMissingCsrf:
     """The SEEK router was the one router whose POSTs skipped the token: only
     the Origin guard covered them, and it passes when the header is absent."""
