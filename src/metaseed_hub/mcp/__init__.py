@@ -379,10 +379,9 @@ async def _building(session: AsyncSession, draft: SpecDraft, user: User) -> Asyn
     -- publishing shares a specification with every user, so it stays a human
     action.
     """
-    from metaseed_hub.ui.spec_builder.access import save_state_to_draft
-    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+    from metaseed_hub.ui.spec_builder.access import save_state_to_draft, state_of
 
-    state = SpecBuilderState.from_dict(draft.spec_data) if draft.spec_data else SpecBuilderState()
+    state = state_of(draft)
     if state.spec is None:
         raise ValueError(f"Draft {draft.name!r} holds no specification to edit")
     # The revision this copy was read at: a browser save that lands before the
