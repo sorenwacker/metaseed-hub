@@ -10,7 +10,7 @@ Metaseed Hub uses OpenID Connect (OIDC) for authentication. The hosted instance 
 2. Click **Login** in the top-right header.
 3. Complete sign-in with your identity provider. You are returned to the dataset list.
 
-Your name and initials appear in the header. Click the avatar to open [Your Profile](#your-profile); click **Logout** to end the session.
+Your name and initials appear in the header. Click the avatar to open [Your Profile](#your-profile); click **Logout** to end the session. Logout ends the hub session even when the identity provider cannot be reached: the hub's own cookies are cleared either way, and the provider's session is ended too when it answers.
 
 ### When your session expires
 

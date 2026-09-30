@@ -245,3 +245,60 @@ def test_access_token_cookie_is_single_sourced() -> None:
     from metaseed_hub.ui import dependencies
 
     assert auth_routes.ACCESS_TOKEN_COOKIE is dependencies.ACCESS_TOKEN_COOKIE
+
+
+class TestLogout:
+    """Logout ends the hub session whether or not the identity provider answers."""
+
+    @staticmethod
+    def _settings() -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(app_url="https://hub.example.org", effective_client_id="hub")
+
+    @staticmethod
+    def _cookies_cleared(response: Any) -> bool:
+        cleared = [h for h in response.headers.getlist("set-cookie") if "max-age=0" in h.lower()]
+        return any(auth_routes.ACCESS_TOKEN_COOKIE in h for h in cleared) and any(
+            auth_routes.REFRESH_TOKEN_COOKIE in h for h in cleared
+        )
+
+    @pytest.mark.asyncio
+    async def test_logout_ends_the_provider_session_when_it_answers(self) -> None:
+        with (
+            patch.object(auth_routes, "get_settings", return_value=self._settings()),
+            patch.object(
+                auth_routes,
+                "get_oidc_config",
+                new=AsyncMock(
+                    return_value={"end_session_endpoint": "https://idp.example.org/logout"}
+                ),
+            ),
+        ):
+            response = await auth_routes.auth_logout(Mock())
+        assert response.status_code == 302
+        assert response.headers["location"].startswith("https://idp.example.org/logout?")
+        assert self._cookies_cleared(response)
+
+    @pytest.mark.asyncio
+    async def test_logout_still_clears_the_session_when_the_provider_is_unreachable(
+        self,
+    ) -> None:
+        """get_oidc_config raises the documented 503 on any transport failure;
+        logout then failed outright and the cookies stayed, so nobody could
+        sign out during a provider outage. An outside outage must not
+        invalidate the user's action."""
+        from fastapi import HTTPException
+
+        with (
+            patch.object(auth_routes, "get_settings", return_value=self._settings()),
+            patch.object(
+                auth_routes,
+                "get_oidc_config",
+                new=AsyncMock(side_effect=HTTPException(status_code=503, detail="idp down")),
+            ),
+        ):
+            response = await auth_routes.auth_logout(Mock())
+        assert response.status_code == 302
+        assert response.headers["location"] == "/hub/"
+        assert self._cookies_cleared(response)

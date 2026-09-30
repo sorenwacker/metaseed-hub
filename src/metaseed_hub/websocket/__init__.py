@@ -457,7 +457,16 @@ class WebSocketManager:
         # must be unique across app instances, not just within this process.
         connection_id = f"{user_id}:{uuid4().hex}"
 
-        await self.join_room(project_id, connection_id, websocket, user_id, user_name)
+        # join_room adds the connection to the room before its Redis and
+        # broadcast steps. A failure there once left the connection in the
+        # room and the shared presence set -- the user shown present until a
+        # later broadcast happened to fail for that socket -- so every failure
+        # after the add ends in leave_room, like a failure in the loop below.
+        try:
+            await self.join_room(project_id, connection_id, websocket, user_id, user_name)
+        except Exception:
+            await self.leave_room(project_id, connection_id)
+            raise
 
         try:
             while True:

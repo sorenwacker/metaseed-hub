@@ -67,7 +67,7 @@ docker exec metaseed-redis redis-server --version
 sudo -u app /app/.venv/bin/python -m metaseed_hub.container_drift
 ```
 
-It exits non-zero and names every container whose running image does not match its pin. The administration dashboard shows the same comparison, so drift is visible without shell access. Drift means the timer has not applied a pin change — either it has not fired since the merge, or it failed; `journalctl -u metaseed-containers.service` says which.
+It exits non-zero and names every container whose running image does not match its pin. The administration dashboard shows the same comparison, so drift is visible without shell access. A side that cannot be read — Docker unreachable, or a compose file that is missing, empty or not a service mapping — is reported as not checked, never as drift: an unreadable side is not evidence that the host is behind. Drift means the timer has not applied a pin change — either it has not fired since the merge, or it failed; `journalctl -u metaseed-containers.service` says which.
 
 ## Compose version requirement
 

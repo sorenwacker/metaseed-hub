@@ -584,7 +584,13 @@ async def auth_logout(request: Request) -> RedirectResponse:
     """Logout and redirect to OIDC provider logout."""
     settings = get_settings()
     hub_base_url = f"{settings.app_url}/hub"
-    oidc_config = await get_oidc_config()
+    try:
+        oidc_config = await get_oidc_config()
+    except HTTPException:
+        # An outage at the provider is not a verdict on the session: the
+        # hub's own cookies go regardless, and only the provider-side sign-out
+        # is skipped. Failing here left users unable to sign out at all.
+        oidc_config = {}
     logout_url = oidc_config.get("end_session_endpoint")
 
     response = RedirectResponse(url="/hub/", status_code=302)

@@ -154,3 +154,24 @@ class TestCsrfTokenSigning:
             headers={"X-CSRF-Token": tampered},
         )
         assert validate_csrf_token(req) is False
+
+
+def test_a_non_ascii_submitted_token_is_a_mismatch_not_an_error() -> None:
+    """``secrets.compare_digest`` on two str values raises TypeError when one
+    carries non-ASCII, and the submitted token is client input (Starlette
+    decodes headers as latin-1). The function promises False on mismatch;
+    raising turned a 403 into a 500 at every caller."""
+    from unittest.mock import Mock
+
+    from metaseed_hub.ui.helpers import (
+        CSRF_TOKEN_COOKIE,
+        get_or_create_csrf_token,
+        validate_csrf_token,
+    )
+
+    issued = get_or_create_csrf_token(Mock(cookies={}))
+    request = Mock()
+    request.cookies = {CSRF_TOKEN_COOKIE: issued}
+    request.headers = {"X-CSRF-Token": "é"}
+
+    assert validate_csrf_token(request) is False

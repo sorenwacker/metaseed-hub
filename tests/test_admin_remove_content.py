@@ -158,3 +158,25 @@ async def test_removal_does_not_touch_another_account(session: AsyncSession) -> 
 
     assert await _owner_sees_datasets(session, tenant_a.id) == []
     assert len(await _owner_sees_datasets(session, tenant_b.id)) == 1
+
+
+async def test_restoring_a_spec_the_owner_has_republished_is_refused_not_a_500(
+    session: AsyncSession,
+) -> None:
+    """``uq_specs_tenant_name_version`` holds for live rows only, so the owner
+    can publish the same name and version again after an admin removal.
+    Restoring the old row then violated it at commit, and the route catches
+    only RemovalError: a 500 where an inline message was promised."""
+    tenant, owner = await _account(session, slug="own00009", email="carol@example.org")
+    old = make_spec(tenant=tenant, created_by=owner, name="twice", version="1.0")
+    session.add(old)
+    await session.commit()
+    await set_removed(session, "spec", old.id, removed=True)
+    session.add(make_spec(tenant=tenant, created_by=owner, name="twice", version="1.0"))
+    await session.commit()
+
+    with pytest.raises(RemovalError, match="published .*twice.*1.0"):
+        await set_removed(session, "spec", old.id, removed=False)
+
+    live = await _owner_sees_specs(session, tenant.id)
+    assert [s.id for s in live] != [old.id], "the newer publication stays"

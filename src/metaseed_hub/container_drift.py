@@ -118,10 +118,20 @@ def read_pins(compose_path: Path = DEFAULT_COMPOSE_PATH) -> Mapping[str, str]:
 
     Raises:
         OSError: If the compose file cannot be read.
+        ValueError: If it is not a compose document: empty, a scalar, or a
+            service that is not a mapping. Unreadable, so the caller reports
+            "not checked" rather than an AttributeError.
     """
     compose = yaml.safe_load(compose_path.read_text())
+    if not isinstance(compose, Mapping):
+        raise ValueError(f"{compose_path} holds no compose mapping")
+    services = compose.get("services") or {}
+    if not isinstance(services, Mapping):
+        raise ValueError(f"{compose_path}: 'services' is not a mapping")
     pins: dict[str, str] = {}
-    for service, spec in (compose.get("services") or {}).items():
+    for service, spec in services.items():
+        if not isinstance(spec, Mapping):
+            raise ValueError(f"{compose_path}: service {service!r} is not a mapping")
         name = spec.get("container_name", service)
         image = spec.get("image")
         if image:
@@ -168,7 +178,7 @@ def compare(pins: PinReader, running: RunningReader) -> DriftReport:
     """
     try:
         pinned_images = pins()
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         return DriftReport(containers=(), unavailable=f"compose file unreadable ({exc})")
 
     try:
