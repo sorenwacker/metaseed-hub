@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.0] - 260930
+
+### Fixed
+- A dataset created through the API, which is what `metaseed hub push-dataset` does, may be built on a profile pushed to the hub: the name is resolved among the installed profiles, then the published specifications the caller may see, then the caller's own drafts, and the dataset is bound to what was found. It was resolved among the installed profiles only, so a dataset on a pushed profile was refused with 422 although the guide promises that flow. (#177)
+
 ## [0.57.0] - 260924
 
 ### Fixed
