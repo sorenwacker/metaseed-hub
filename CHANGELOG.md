@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - A dataset created through the API, which is what `metaseed hub push-dataset` does, may be built on a profile pushed to the hub: the name is resolved among the installed profiles, then the published specifications the caller may see, then the caller's own drafts, and the dataset is bound to what was found. It was resolved among the installed profiles only, so a dataset on a pushed profile was refused with 422 although the guide promises that flow. (#177)
+- A value the profile rejects in an inline table cell, such as an ORCID entered as a URL, is stored as typed, as every other edit is, instead of ending the request in a 500 and being lost; validation reports it. (#172)
+- Creating or importing a dataset under a name you already use, or renaming one onto it, is refused with a message on the form or a 409 from the API instead of a 500, and the New Dataset form shows the reason for every error it is sent back with. (#173)
+- Two edits to one dataset that arrive together are applied one after the other: the later starts from what the earlier wrote and each gets its own version, instead of the second failing on the version number and its edit being lost. (#171)
+- Validate reports what metaseed's validator reports: required fields, the profile's rules, references between entities and declared uniqueness, the same report an agent gets from `validate_dataset`; it used to report wrong types only. Validation runs in a worker thread, so other requests are not held for its duration. A dataset that validated clean may now show issues it always had. (#170)
 
 ## [0.57.0] - 260924
 

@@ -70,7 +70,9 @@ A value that is not valid for its column is stored as typed, as described under 
 
 ## Validating
 
-Click **Validate** to check the dataset against the profile schema. The result lists errors and warnings per entity and field so you can correct them. Validation does not change the data.
+Click **Validate** to check the dataset against its profile. The result lists issues per entity and field so you can correct them. Validation does not change the data.
+
+What is checked is what metaseed's validator checks: field constraints (type, pattern, length, range, allowed values), required fields, the profile's validation rules, references between entities (a study id that names no study in the dataset), and identifiers the profile declares unique. An agent asking through the MCP `validate_dataset` tool gets the same report. Validation runs in the background on the server; on a dataset with thousands of entities it takes seconds, and other pages stay responsive meanwhile.
 
 The result also names any stored entity that could not be loaded — for example one whose entity type the current specification no longer defines. Such an entity is not shown in the tree and is not part of the dataset you are editing, so saving removes it; the validation panel is where you find out before that happens.
 
