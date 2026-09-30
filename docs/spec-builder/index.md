@@ -22,7 +22,7 @@ A draft is identified by its name and version within your account, so you can ho
 
 ## The draft editor
 
-The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth.
+The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth. A reply to a comment that no longer exists — deleted while you were writing — is refused rather than posted as a new top-level comment.
 
 ### Entities
 
@@ -39,6 +39,11 @@ Add fields to an entity with **+ Field**. Each field has:
 | Required | Whether a value is mandatory |
 | Description | Help text |
 | Ontologies | For ontology-constrained fields, the source ontologies |
+| Within Branch | For ontology-constrained fields, the term whose descendants are the allowed values |
+| Reference Resolves | For reference fields, whether the referenced record must be in this dataset or may be held elsewhere |
+| ISA tag | The ISA tag the field carries into a SEEK Sample Type attribute |
+
+Every control the field editor shows is saved when you save the field, and clearing one clears the stored value; the same settings are reachable through the MCP `spec_update_field` tool.
 
 Under **Markers** the field editor carries the declarative annotations a consumer of the specification reads: the identifier and label markers, the completeness tier, a human-readable label, a unit, an example value, allowed values, the ownership marker for relationship fields, and the DCAT property described below.
 
