@@ -30,6 +30,7 @@ from pathlib import Path
 
 import metaseed.ui
 from metaseed.ui.services.export import build_workbook_from_facade
+from metaseed.ui.services.heading_note import heading_note
 from metaseed.ui.services.import_excel import workbook_to_payload
 from metaseed.ui.state import AppState, TreeNode
 
@@ -41,6 +42,7 @@ METASEED_TEMPLATES_DIR = _METASEED_UI_DIR / "templates"
 __all__ = [
     "METASEED_STATIC_DIR",
     "build_workbook_from_facade",
+    "heading_note",
     "METASEED_TEMPLATES_DIR",
     "AppState",
     "TreeNode",
