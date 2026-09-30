@@ -91,6 +91,9 @@ def _cross_referencing_spec() -> ProfileSpec:
             ValidationRuleSpec(name="sample_only", description="", applies_to="Sample"),
             ValidationRuleSpec(name="both", description="", applies_to=["Sample", "Study"]),
             ValidationRuleSpec(name="everyone", description="", applies_to="all"),
+            ValidationRuleSpec(
+                name="sample_exists", description="", applies_to="Study", reference="Sample.id"
+            ),
         ],
     )
 
@@ -222,6 +225,15 @@ class TestEntityDeleteCleanup:
         assert rules["both"].applies_to == ["Study"]
         assert rules["everyone"].applies_to == "all"
 
+    async def test_rule_references_are_cleared(
+        self, deleted_sample: tuple[DraftContext, AsyncSession]
+    ) -> None:
+        """A rule's ``reference`` (``Entity.field``) named the deleted entity
+        on; fields had theirs cleared, rules kept theirs."""
+        ctx, _session = deleted_sample
+        rules = {r.name: r for r in ctx.spec.validation_rules}
+        assert rules["sample_exists"].reference is None
+
     async def test_the_cleanup_is_persisted(
         self, deleted_sample: tuple[DraftContext, AsyncSession]
     ) -> None:
@@ -340,3 +352,57 @@ async def test_an_unknown_field_type_on_add_is_a_form_error(session: AsyncSessio
     assert response.status_code == 200
     assert b"not-a-type" in response.body, "the form names the type it does not know"
     assert len(ctx.spec.entities["Study"].fields) == before, "nothing was added"
+
+
+class TestEntityRenameRewritesEverything:
+    """The web rename was a hand-written copy of ``SpecBuilder.rename_entity``
+    that had drifted: it moved the entity to the end of the mapping (changing
+    the serialized order) and left a rule's ``reference`` naming the old
+    entity, so the same draft renamed through the web editor and through MCP
+    ended up with different content."""
+
+    @pytest.fixture
+    async def renamed(self, session: AsyncSession) -> DraftContext:
+        draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+        ctx = await _context(session, draft, tenant, owner)
+        endpoint = _endpoint(register_entity_routes, "/entity/{name}", "PUT")
+        response = await endpoint(
+            request=_request("PUT"),
+            name="Study",
+            ctx=ctx,
+            session=session,
+            new_name="Trial",
+            description="study",
+            ontology_term="",
+        )
+        assert response.status_code == 200
+        return ctx
+
+    async def test_rule_references_follow_the_rename(self, renamed: DraftContext) -> None:
+        rules = {r.name: r for r in renamed.spec.validation_rules}
+        assert rules["both"].applies_to == ["Sample", "Trial"]
+        assert rules["sample_exists"].applies_to == "Trial"
+
+    async def test_a_rule_reference_to_the_renamed_entity_is_rewritten(
+        self, session: AsyncSession
+    ) -> None:
+        draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+        ctx = await _context(session, draft, tenant, owner)
+        endpoint = _endpoint(register_entity_routes, "/entity/{name}", "PUT")
+        await endpoint(
+            request=_request("PUT"),
+            name="Sample",
+            ctx=ctx,
+            session=session,
+            new_name="Specimen",
+            description="sample",
+            ontology_term="",
+        )
+        rules = {r.name: r for r in ctx.spec.validation_rules}
+        assert rules["sample_exists"].reference == "Specimen.id"
+        fields = {f.name: f for f in ctx.spec.entities["Study"].fields}
+        assert fields["sample_ref"].reference == "Specimen.id"
+
+    async def test_the_entity_keeps_its_position(self, renamed: DraftContext) -> None:
+        assert list(renamed.spec.entities) == ["Trial", "Sample"]
+        assert renamed.spec.root_entity == "Trial"

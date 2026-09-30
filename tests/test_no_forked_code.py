@@ -32,8 +32,12 @@ LIBRARY_FUNCTIONS = frozenset(
     {
         "_escape_formula",
         "_format_cell_value",
+        "_status",
+        "_version_key",
         "build_workbook_from_facade",
         "collect_entities_by_type",
+        "version_key",
+        "version_sort_key",
     }
 )
 
