@@ -257,6 +257,9 @@ def _field_form(**overrides: str) -> dict[str, object]:
         "enum_values": "",
         "unique_within": "",
         "reference": "",
+        "isa_tag": "",
+        "within": "",
+        "reference_scope": "",
     }
     values.update(overrides)
     return values
