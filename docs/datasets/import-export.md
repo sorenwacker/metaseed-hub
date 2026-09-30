@@ -21,6 +21,8 @@ Open a dataset and use **Import** in the sidebar to load entities from a file in
 !!! note
     Imported data is validated against the dataset's profile. Run **Validate** after importing to review any errors or warnings.
 
+A file that reads but whose entities cannot be loaded under the chosen profile and version is refused: the form reports it and no dataset is created. The same holds for the example data of a profile when **Create with example** is ticked.
+
 ### From a public repository
 
 A dataset whose profile has a matching public repository can be filled from that repository directly. While the dataset is still empty, the sidebar shows a field asking for the identifier the repository uses:
@@ -37,6 +39,8 @@ The hub fetches the public metadata and builds the dataset's entities from it. M
 While the fetch runs, the control shows an *Importing* indicator and its button is disabled, so a second click cannot start a second import. The fetch runs on a worker thread, not on the request loop: an archive that answers slowly holds up that one import, not every other page the hub is serving. Each importer gives up after its own timeout (30 seconds for ENA) and the control then reports the failure in place.
 
 An identifier the archive resolves to no records of the kind the importer reads is reported as such, and the dataset is left untouched. This is not only a mistyped identifier: a record can exist and still hold nothing to import. The ENA importer reads sequencing runs, so a genome assembly project such as `PRJNA10719`, which ENA lists but which has no runs, imports as nothing.
+
+An identifier the importer rejects as malformed, or an answer from the archive the importer cannot read, is reported as a failed import, not as an empty result: the two ask for different things of you, checking the identifier against the archive versus trying again later.
 
 The control appears only while the dataset has no entities, and the import is refused if any exist, because it replaces the whole entity tree rather than merging into it. To pull a repository record into a dataset you have already started, create a new dataset for it instead.
 

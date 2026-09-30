@@ -8,7 +8,10 @@ import pytest
 from metaseed import MetaseedClient
 
 from metaseed_hub.models import Dataset
-from metaseed_hub.ui.routes.dataset.crud import create_dataset_from_accession
+from metaseed_hub.ui.routes.dataset.crud import (
+    EmptySourceImportError,
+    create_dataset_from_accession,
+)
 from tests.factories import make_dataset, make_tenant, make_user
 
 pytestmark = pytest.mark.asyncio
@@ -91,12 +94,12 @@ def _empty_importer(_accession, **_kw):
     return MetaseedClient("metabolights", "1.0")
 
 
-async def test_import_that_found_nothing_raises_value_error(session):
+async def test_import_that_found_nothing_raises_empty_source_import_error(session):
     """Distinct from LookupError so the caller does not blame a missing importer."""
     tenant = await _add(session, make_tenant())
     with (
         patch("metaseed.metabolights.import_accession", _empty_importer),
-        pytest.raises(ValueError),
+        pytest.raises(EmptySourceImportError),
     ):
         await create_dataset_from_accession(session, tenant.id, "x", "metabolights", "MTBLS404")
 
@@ -182,3 +185,39 @@ async def test_the_importer_runs_off_the_event_loop(session):
         )
 
     assert seen and seen[0] != loop_thread, "the importer ran on the event loop"
+
+
+async def test_route_reports_an_answer_the_importer_cannot_read_as_import_failed(session):
+    """json.JSONDecodeError is a ValueError, and so is any ValueError an
+    importer raises for a malformed accession; both were reported as an empty
+    result, sending the user to check the accession when the archive answered
+    with non-JSON."""
+    import json
+    from unittest.mock import Mock
+
+    from metaseed_hub.auth import TokenUser
+    from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE, get_or_create_csrf_token
+    from metaseed_hub.ui.routes.dataset.crud import dataset_import_accession
+
+    def _unreadable(*args, **kwargs):
+        raise json.JSONDecodeError("Expecting value", "<html>", 0)
+
+    csrf = get_or_create_csrf_token(Mock(cookies={}))
+    request = Mock()
+    request.cookies = {CSRF_TOKEN_COOKIE: csrf}
+    request.headers = {"X-CSRF-Token": csrf}
+    token = TokenUser(sub="unreadable-import-caller", email="u@example.org", name="U", roles=[])
+
+    with patch("metaseed.metabolights.import_accession", _unreadable):
+        response = await dataset_import_accession(
+            request,
+            session,
+            token,
+            profile="metabolights",
+            accession="MTBLS404",
+            name="unreadable",
+            csrf_token=csrf,
+        )
+
+    assert response.status_code == 302
+    assert "error=import_failed" in response.headers["location"]
