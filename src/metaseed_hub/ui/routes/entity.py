@@ -44,7 +44,7 @@ async def dataset_entity_form(
     """Return form for creating or editing an entity."""
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    service = EntityService(session, dataset, user)
+    service = EntityService(session, dataset, user, for_write=False)
     try:
         state = await service.ensure_state()
     except EntityServiceError as e:
@@ -187,7 +187,7 @@ async def dataset_entity_validate(
         return HTMLResponse("<div class='error-message'>Missing entity type</div>")
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
-    service = EntityService(session, dataset, user)
+    service = EntityService(session, dataset, user, for_write=False)
 
     try:
         state = await service.ensure_state()
@@ -231,7 +231,7 @@ async def dataset_entity_edit(
     """Return form for editing an existing entity."""
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
-    service = EntityService(session, dataset, user)
+    service = EntityService(session, dataset, user, for_write=False)
     try:
         state = await service.ensure_state()
     except EntityServiceError as e:
