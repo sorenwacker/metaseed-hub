@@ -54,7 +54,7 @@ What removal does:
 - Nothing is erased. The row stays in the database with the time of removal, so an administrator can still account for what existed.
 - The response names what was removed — the item's name and the email of the account that owned it — so a mistyped identifier is visible immediately rather than silently removing the wrong thing.
 
-A removal can be undone with **Restore**, using the same identifier. This is the reason removal is a soft delete: an identifier is easy to get wrong, and an irreversible admin action on someone else's data is not.
+A removal can be undone with **Restore**, using the same identifier. This is the reason removal is a soft delete: an identifier is easy to get wrong, and an irreversible admin action on someone else's data is not. A specification cannot be restored while its owner has published the same name and version again since the removal; the response says so, and the newer publication stays.
 
 Removing a specification does not affect datasets already created against it. Those carry their own copy and continue to open and validate; the specification simply can no longer be chosen for new datasets.
 
