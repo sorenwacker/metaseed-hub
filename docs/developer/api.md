@@ -6,7 +6,7 @@
 |--------|------|-------------|
 | GET | `/api/me` | The account and tenant the token acts in, and the collaborations a publish may be addressed to |
 | GET | `/api/datasets` | The caller's datasets in a tenant (`?tenant_id=`) |
-| POST | `/api/datasets` | Create a dataset. `profile` and `version` name an installed profile, else a published specification visible to the caller, else the caller's own draft, and the dataset is bound to what was found; 422 when the hub holds none, 409 when the tenant already has a dataset of that name |
+| POST | `/api/datasets` | Create a dataset, stored in the hub's canonical tree form. `profile` and `version` name an installed profile, else a published specification visible to the caller, else the caller's own draft, and the dataset is bound to what was found; 422 when the hub holds none, 409 when the tenant already has a dataset of that name |
 | GET | `/api/datasets/{id}` | One dataset with its entities |
 | PATCH | `/api/datasets/{id}` | Replace a dataset's name or entities; 409 when the new name is taken |
 | DELETE | `/api/datasets/{id}` | Soft-delete a dataset |
