@@ -16,13 +16,13 @@ A draft is identified by its name and version within your account, so you can ho
 1. On the Specs page, click **+ New Specification**.
 2. Choose how to start:
    - **From Scratch** — an empty specification.
-   - **From Template** — start from a provided template.
+   - **From Template** — start from a provided template. A template that cannot be loaded is reported on the form; no draft is created in its place.
    - **Import YAML** — upload an existing specification file (see [Publishing and sharing](publishing.md#importing-and-exporting-yaml)).
 3. The draft editor opens.
 
 ## The draft editor
 
-The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar.
+The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth.
 
 ### Entities
 

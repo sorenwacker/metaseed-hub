@@ -315,3 +315,25 @@ class TestAMalformedIdIsNotFound:
         with pytest.raises(HTTPException) as exc:
             await require_draft_access(session, "not-a-uuid", "also-not")
         assert exc.value.status_code == 404
+
+
+async def test_an_unknown_field_type_on_add_is_a_form_error(session: AsyncSession) -> None:
+    """The update route parsed the type before touching the field; the add
+    route built ``FieldType(field_type)`` straight from the form, a 500."""
+    draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+    ctx = await _context(session, draft, tenant, owner)
+    endpoint = _endpoint(register_field_routes, "/entity/{entity_name}/field", "POST")
+    before = len(ctx.spec.entities["Study"].fields)
+
+    response = await endpoint(
+        request=_request("POST"),
+        entity_name="Study",
+        ctx=ctx,
+        session=session,
+        name="brand_new",
+        field_type="not-a-type",
+    )
+
+    assert response.status_code == 200
+    assert b"not-a-type" in response.body, "the form names the type it does not know"
+    assert len(ctx.spec.entities["Study"].fields) == before, "nothing was added"

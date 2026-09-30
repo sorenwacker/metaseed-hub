@@ -156,8 +156,16 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             try:
                 spec = clone_spec(profile, version)
                 template_source = (profile, version)
-            except ValueError:
-                spec = create_empty_spec()
+            except ValueError as refused:
+                # The user chose a template; a failure to load it is theirs
+                # to see. Falling back to an empty draft, as this once did,
+                # hid it and left a draft with no template source. Plain
+                # text, as the 409 below: the page posts with fetch and shows
+                # the body.
+                return PlainTextResponse(
+                    f"The template {template!r} could not be loaded: {refused}",
+                    status_code=404,
+                )
         else:
             spec = create_empty_spec()
 
