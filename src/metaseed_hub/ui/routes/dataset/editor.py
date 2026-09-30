@@ -30,6 +30,7 @@ from metaseed_hub.ui.helpers import (
 from metaseed_hub.ui.helpers.load_report import skipped_node_message
 from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
 from metaseed_hub.ui.helpers.text import safe_filename
+from metaseed_hub.ui.helpers.validation_report import validation_issues
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.routes.seek import profile_supports_seek
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
@@ -328,9 +329,8 @@ async def dataset_validate(
     # everything below, including the counts, so the panel has to say so itself.
     skipped: list[SkippedNode] = []
     state = await ensure_dataset_facade(dataset, session, on_skip=skipped.append)
-    facade = state.get_or_create_facade()
 
-    errors = _collect_validation_errors(state, facade)
+    errors = _issues_by_entity(state, await validation_issues(state))
     drift = await spec_drift_message(session, dataset)
     return HTMLResponse(
         _render_validation_results(
@@ -343,50 +343,42 @@ async def dataset_validate(
     )
 
 
-def _collect_validation_errors(state: Any, facade: Any) -> list[dict[str, Any]]:
-    """Re-validate every entity node and return one error record per failing node."""
-    from pydantic import ValidationError
+def _issues_by_entity(state: Any, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group the validator's issues per entity, in the shape the panel renders.
 
-    errors: list[dict[str, Any]] = []
-    for node_id, node in state.nodes_by_id.items():
-        try:
-            helper = getattr(facade, node.entity_type)
-            data = node.instance.model_dump(exclude_none=True) if node.instance else {}
-            # Re-validate by recreating - Pydantic validation runs here
-            helper.create(**data)
-        except ValidationError as e:
-            errors.append(
-                {
-                    "node_id": node_id,
-                    "entity_type": node.entity_type,
-                    "label": node.label,
-                    "errors": [
-                        {"field": ".".join(str(x) for x in err["loc"]), "message": err["msg"]}
-                        for err in e.errors()
-                    ],
-                }
-            )
-        except AttributeError:
-            errors.append(
-                {
-                    "node_id": node_id,
-                    "entity_type": node.entity_type,
-                    "label": node.label,
-                    "errors": [
-                        {"field": "", "message": f"Unknown entity type: {node.entity_type}"}
-                    ],
-                }
-            )
-        except Exception as e:
-            errors.append(
-                {
-                    "node_id": node_id,
-                    "entity_type": node.entity_type,
-                    "label": node.label,
-                    "errors": [{"field": "", "message": str(e)}],
-                }
-            )
-    return errors
+    An issue that names no node the tree holds -- a finding about the dataset
+    as a whole, or about a node that did not load -- is listed under the
+    dataset itself rather than dropped.
+    """
+    grouped: dict[str, dict[str, Any]] = {}
+    for issue in issues:
+        node = state.nodes_by_id.get(issue["entity_id"]) if issue["entity_id"] else None
+        key = node.id if node else ""
+        record = grouped.setdefault(
+            key,
+            {
+                "node_id": key,
+                "entity_type": node.entity_type if node else "Dataset",
+                "label": node.label if node else "",
+                "errors": [],
+            },
+        )
+        record["errors"].append({"field": issue["field"] or "", "message": issue["message"]})
+    return list(grouped.values())
+
+
+def _entity_link(dataset_id: str, err: dict[str, Any]) -> str:
+    """The link that opens the failing entity, or its bare label when there is no node."""
+    import html as html_module
+
+    label = html_module.escape(err["label"] or "")
+    if not err["node_id"]:
+        return f'<span class="entity-link">{label}</span>'
+    return (
+        '<a href="#" class="entity-link"'
+        f' hx-get="/hub/datasets/{dataset_id}/entity/{err["node_id"]}"'
+        f' hx-target="#editor" hx-swap="innerHTML">{label}</a>'
+    )
 
 
 def _render_validation_results(
@@ -421,7 +413,9 @@ def _render_validation_results(
         entity_counts[node.entity_type] = entity_counts.get(node.entity_type, 0) + 1
 
     total = len(state.nodes_by_id)
-    valid_count = total - len(errors)
+    # A record with no node is a finding about the dataset, not a failing entity.
+    failing = sum(1 for e in errors if e["node_id"])
+    valid_count = total - failing
 
     html = '<div class="validation-results">'
 
@@ -455,7 +449,7 @@ def _render_validation_results(
         <div class="validation-summary validation-error">
             <div class="validation-icon">&#10007;</div>
             <div class="validation-summary-text">
-                <strong>{len(errors)} of {total} entities have issues</strong>
+                <strong>{failing} of {total} entities have issues</strong>
                 <p>{valid_count} valid. Fix issues below.</p>
             </div>
         </div>
@@ -482,10 +476,7 @@ def _render_validation_results(
             <div class="validation-error-item">
                 <div class="validation-entity">
                     <span class="entity-type-badge">{html_module.escape(err["entity_type"])}</span>
-                    <a href="#" class="entity-link"
-                       hx-get="/hub/datasets/{dataset_id}/entity/{err["node_id"]}"
-                       hx-target="#editor"
-                       hx-swap="innerHTML">{html_module.escape(err["label"] or "")}</a>
+                    {_entity_link(dataset_id, err)}
                 </div>
                 <ul class="validation-error-list">
             """

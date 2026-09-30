@@ -175,25 +175,13 @@ async def _validation_report(session: AsyncSession, dataset: Dataset) -> dict[st
             ),
         }
 
-    from metaseed import MetaseedClient
+    from metaseed_hub.ui.helpers.validation_report import validation_issues
 
-    # ValidationResult, not a sequence: iterating it raises TypeError, so the
-    # issues are read from .issues. (bool(result) is valid/invalid correctly.)
-    result = MetaseedClient.from_facade(state.facade).validate()
-    issues = list(result.issues)
-    # Passed through as metaseed reports them. The issues are already derived
-    # from the spec -- which field is required, which relationship needs a
-    # minimum -- so re-deriving any of it here would only let the two disagree.
-    # `rule` names the spec rule that failed and is the most actionable part.
-    reported = [
-        {
-            "entity_id": i.entity_id,
-            "field": i.field,
-            "rule": i.rule,
-            "message": i.message,
-        }
-        for i in issues
-    ]
+    # One source for every report: what an agent reads here is what the web
+    # panel shows. `rule` names the spec rule that failed and is the most
+    # actionable part.
+    reported = await validation_issues(state)
+    issues = list(reported)
 
     # Provenance, not a validation failure: the dataset is exactly as valid as
     # metaseed judged it. Reported alongside the issues because it is usually
