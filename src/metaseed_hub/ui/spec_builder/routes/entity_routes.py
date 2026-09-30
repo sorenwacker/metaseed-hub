@@ -18,23 +18,6 @@ __all__ = ["register_entity_routes"]
 def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register entity CRUD routes."""
 
-    @router.get("/{draft_id}/entities", response_class=HTMLResponse)
-    async def get_entities_list(
-        request: Request,
-        ctx: DraftContextDep,
-    ) -> HTMLResponse:
-        """Get the entities list panel."""
-        return templates.TemplateResponse(
-            request,
-            "spec_builder/partials/entities_list.html",
-            {
-                "draft_id": ctx.draft.id,
-                "entities": ctx.spec.entities,
-                "editing_entity": ctx.builder.editing_entity,
-                "root_entity": ctx.spec.root_entity,
-            },
-        )
-
     @router.post("/{draft_id}/entity", response_class=HTMLResponse)
     async def add_entity(
         request: Request,
@@ -77,7 +60,6 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
             fields=[],
         )
         ctx.builder.editing_entity = name
-        ctx.builder.mark_changed()
 
         if not ctx.spec.root_entity:
             ctx.spec.root_entity = name
@@ -186,7 +168,6 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         # Applied only now that the rename (if any) succeeded.
         entity.description = description.strip()
         entity.ontology_term = ontology_term.strip() or None
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -256,8 +237,6 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
             # would reference the wrong rule.
             ctx.spec.validation_rules = kept_rules
             ctx.builder.editing_rule_idx = None
-
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(

@@ -119,7 +119,6 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "tenant": draft.tenant,
                 "spec": builder.spec,
                 "editing_entity": builder.editing_entity,
-                "has_unsaved_changes": builder.has_unsaved_changes,
                 "template_source": builder.template_source,
                 "field_types": [t.value for t in FieldType],
                 "members": members,
@@ -328,8 +327,6 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                 "spec_builder/partials/save_result.html",
                 {"error": "Profile name is required before saving"},
             )
-
-        ctx.builder.mark_saved()
         await ctx.save(session)
 
         return templates.TemplateResponse(
@@ -533,7 +530,6 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
         ctx.spec.description = description.strip()
         ctx.spec.ontology = ontology.strip() or None
         ctx.spec.root_entity = root_entity.strip()
-        ctx.builder.mark_changed()
         await ctx.save(session)
 
         return templates.TemplateResponse(

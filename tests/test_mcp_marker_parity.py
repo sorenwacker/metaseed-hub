@@ -26,3 +26,13 @@ async def test_the_tool_exposes_every_marker_metaseed_defines(server, tool_name:
         f"{tool_name} does not accept {missing}, which metaseed defines. The tool "
         "raises at runtime rather than dropping the marker, so add the parameter."
     )
+
+
+@pytest.mark.parametrize("tool_name", ["spec_add_field", "spec_update_field"])
+async def test_the_tool_documents_every_marker_it_accepts(server, tool_name: str) -> None:
+    """An agent reads the docstring to learn the arguments; a marker the
+    signature accepts but the docstring omits is a parameter it cannot use."""
+    fn = await _tool(server, tool_name)
+    doc = fn.__doc__ or ""
+    undocumented = sorted(name for name in FIELD_MARKER_NAMES if f"{name}:" not in doc)
+    assert not undocumented, f"{tool_name} does not document {undocumented}"

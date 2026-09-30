@@ -9,6 +9,8 @@ This module provides a service layer for entity CRUD operations that:
 Uses MetaseedClient public API exclusively - no internal access needed.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -17,7 +19,10 @@ from metaseed import MetaseedClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
+    from metaseed.facade import ProfileFacade
+
     from metaseed_hub.auth import TokenUser
+    from metaseed_hub.ui.metaseed_ui import AppState, TreeNode
 
 from metaseed_hub.models import Dataset
 from metaseed_hub.ui.helpers import save_dataset_state
@@ -45,7 +50,7 @@ class EntitySaveResult:
 
     success: bool
     node_id: str | None = None
-    node: Any | None = None  # TreeNode, kept as Any to avoid circular import
+    node: TreeNode | None = None
     validation_errors: list[str] = field(default_factory=list)
     error_message: str | None = None
 
@@ -70,7 +75,7 @@ class EntityService:
         self,
         session: AsyncSession,
         dataset: Dataset,
-        user: "TokenUser | None" = None,
+        user: TokenUser | None = None,
         for_write: bool = True,
     ):
         self._session = session
@@ -78,7 +83,7 @@ class EntityService:
         self._user = user
         self._for_write = for_write
         self._client: MetaseedClient | None = None
-        self._state: Any | None = None  # AppState, imported lazily
+        self._state: AppState | None = None
 
     @property
     def client(self) -> MetaseedClient | None:
@@ -86,19 +91,19 @@ class EntityService:
         return self._client
 
     @property
-    def state(self) -> Any | None:
+    def state(self) -> AppState | None:
         """Get the current AppState, if loaded."""
         return self._state
 
     @property
-    def facade(self) -> Any | None:
+    def facade(self) -> ProfileFacade | None:
         """Get the ProfileFacade from the client, if loaded.
 
         Provided for backward compatibility with code that needs facade access.
         """
         return self._client.facade if self._client else None
 
-    async def ensure_state(self) -> Any:
+    async def ensure_state(self) -> AppState:
         """Ensure AppState is loaded with a valid client.
 
         For datasets using draft specs (spec_draft_id) or published specs

@@ -16,7 +16,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.models import ApiToken, User
@@ -126,12 +126,17 @@ async def revoke_token(session: AsyncSession, token: ApiToken) -> None:
 async def active_tokens(session: AsyncSession, user: User) -> list[ApiToken]:
     """The user's tokens that still work, newest first.
 
-    Revoked ones are kept in the database for the audit trail but are not shown
-    back to the user, who can only act on the live ones.
+    Revoked and expired ones are kept in the database for the audit trail but
+    are not shown back to the user, who can only act on the live ones; the
+    listing once filtered revocation alone and showed expired tokens as usable.
     """
     result = await session.execute(
         select(ApiToken)
-        .where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+        .where(
+            ApiToken.user_id == user.id,
+            ApiToken.revoked_at.is_(None),
+            or_(ApiToken.expires_at.is_(None), ApiToken.expires_at > func.now()),
+        )
         .order_by(ApiToken.created_at.desc())
     )
     return list(result.scalars().all())

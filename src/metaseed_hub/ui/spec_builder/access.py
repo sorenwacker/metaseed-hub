@@ -218,8 +218,9 @@ async def require_draft_access(
     """Load a draft, requiring the caller to hold any role on it.
 
     Used to gate reading and commenting on a draft. Access is granted to the
-    draft owner, to explicit members regardless of role, and to any user in
-    the draft's tenant (see ``get_draft_role``).
+    draft's creator, to explicit members regardless of role, to the owner of
+    the account the draft lives in, and through a collaboration grant -- the
+    rules ``role_of`` applies (see ``get_draft_role``).
 
     Args:
         session: Database session.

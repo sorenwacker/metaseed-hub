@@ -1,7 +1,8 @@
 """Admin dashboard routes for system monitoring.
 
 Provides GDPR-compliant aggregated statistics and admin-only user management.
-Access is controlled via ADMIN_ROLE setting (checks user.roles from OIDC token).
+Access is granted by membership of the SRAM admin group named by the ``ADMIN_ROLE``
+setting, matched against the token's entitlements; realm roles grant nothing.
 """
 
 import html

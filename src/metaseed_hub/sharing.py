@@ -97,7 +97,6 @@ class SharedResource:
         grant_model: The collaboration grant table's mapped class.
         foreign_key: Column on ``member_model`` and ``grant_model`` naming the
             resource.
-        title_of: The resource's human name, for messages.
     """
 
     kind: str
@@ -105,7 +104,6 @@ class SharedResource:
     member_model: type[Any]
     grant_model: type[Any]
     foreign_key: str
-    title_of: Any
     # The column naming who made the thing, where the model has one. Creation
     # writes no membership row, so without this its creator has no role and
     # every owner-only control — sharing included — is hidden from them.
@@ -147,7 +145,6 @@ def _resources() -> dict[str, SharedResource]:
             member_model=DatasetMember,
             grant_model=DatasetCollaborationGrant,
             foreign_key="dataset_id",
-            title_of=lambda resource: resource.name,
         ),
         "draft": SharedResource(
             kind="draft",
@@ -155,7 +152,6 @@ def _resources() -> dict[str, SharedResource]:
             member_model=SpecDraftMember,
             grant_model=SpecDraftCollaborationGrant,
             foreign_key="spec_draft_id",
-            title_of=lambda resource: resource.name,
             creator_column="user_id",
         ),
         "spec": SharedResource(
@@ -165,7 +161,6 @@ def _resources() -> dict[str, SharedResource]:
             grant_model=SpecCollaborationGrant,
             creator_column="created_by_id",
             foreign_key="spec_id",
-            title_of=lambda resource: f"{resource.name} {resource.version}",
         ),
     }
 

@@ -65,7 +65,6 @@ class SpecBuilderState:
         editing_field_idx: Index of field being edited within current entity.
         editing_rule_idx: Index of validation rule being edited.
         template_source: Tuple of (profile, version) if cloned from template.
-        has_unsaved_changes: Whether there are unsaved modifications.
     """
 
     spec: ProfileSpec | None = None
@@ -73,7 +72,6 @@ class SpecBuilderState:
     editing_field_idx: int | None = None
     editing_rule_idx: int | None = None
     template_source: tuple[str, str] | None = None
-    has_unsaved_changes: bool = False
 
     def reset_to_empty(self: Self, name: str, version: str) -> None:
         """Reset to an empty spec keyed to a draft, clearing editing pointers.
@@ -94,14 +92,6 @@ class SpecBuilderState:
         self.editing_field_idx = None
         self.editing_rule_idx = None
 
-    def mark_changed(self: Self) -> None:
-        """Mark that unsaved changes exist."""
-        self.has_unsaved_changes = True
-
-    def mark_saved(self: Self) -> None:
-        """Mark that all changes have been saved."""
-        self.has_unsaved_changes = False
-
     def to_dict(self: Self) -> dict[str, Any]:
         """Serialize state to a dict for database storage."""
         return {
@@ -110,7 +100,6 @@ class SpecBuilderState:
             "editing_field_idx": self.editing_field_idx,
             "editing_rule_idx": self.editing_rule_idx,
             "template_source": list(self.template_source) if self.template_source else None,
-            "has_unsaved_changes": self.has_unsaved_changes,
         }
 
     @classmethod
@@ -128,5 +117,4 @@ class SpecBuilderState:
             editing_field_idx=data.get("editing_field_idx"),
             editing_rule_idx=data.get("editing_rule_idx"),
             template_source=template_source,
-            has_unsaved_changes=data.get("has_unsaved_changes", False),
         )

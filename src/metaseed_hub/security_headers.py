@@ -20,7 +20,7 @@ from __future__ import annotations
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 #: Kept identical to `ansible/roles/metaseed-hub/templates/nginx.conf.j2`.
-#: `tests/test_the_production_csp_is_honoured.py` fails if the two drift.
+#: `tests/test_the_csp_matches_production.py` fails if the two drift.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline'; "
