@@ -101,11 +101,16 @@ def _build_primitive_row_html(
                hx-post="{post_url}"
                hx-trigger="change, blur" hx-swap="none">
     </td>"""
+    # The delete route returns the whole re-rendered table, as the template's
+    # button expects: rows are positional, and removing one row leaves every
+    # later row's index pointing at the wrong item. This second copy of the
+    # button kept the bare row removal, so a row added in the current page
+    # session deleted with a stale table behind it.
     html += f"""<td class="row-actions">
         <button type="button" class="btn-icon danger"
                 hx-delete="{post_url}"
-                hx-target="#row-{field_name}-{row_idx}"
-                hx-swap="delete"
+                hx-target="#inline-table-{field_name}"
+                hx-swap="outerHTML"
                 hx-confirm="Delete this item?"
                 title="Delete">&#128465;</button>
     </td></tr>"""

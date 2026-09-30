@@ -7,13 +7,11 @@ from html import escape
 from json import JSONDecodeError
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
-from uuid import UUID
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from metaseed.adapters import Action  # lightweight by design: no plugin imports
-from sqlalchemy import and_, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
@@ -44,11 +42,13 @@ from metaseed_hub.ui.helpers import (
     read_upload_capped,
     save_dataset_state,
 )
+from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
 from ._router import router
+from .profile_choice import ProfileChoiceNotFoundError, resolve_profile_choice
 
 # What the New Dataset form says for each ``?error=`` code a creation route
 # redirects with. Without these the form came back empty and said nothing; the
@@ -68,6 +68,10 @@ NEW_DATASET_ERRORS: dict[str, str] = {
         "version. Check that they match the file. Nothing was created."
     ),
     "example_failed": "The example data could not be loaded for that profile. Nothing was created.",
+    "draft_not_found": "That draft no longer exists in your account. Choose another profile.",
+    "spec_not_found": (
+        "That published specification is no longer available. Choose another profile."
+    ),
 }
 
 
@@ -137,44 +141,6 @@ def _version_key(version: str) -> tuple[int, ...]:
     if not all(part.isdigit() for part in parts):
         return (-1,)
     return tuple(int(part) for part in parts)
-
-
-async def draft_for_choice(
-    session: AsyncSession,
-    profile: str,
-    version: str,
-    tenant_id: str,
-    user_id: str,
-) -> SpecDraft | None:
-    """The draft a picker choice names, or None when it reaches none.
-
-    ``profile`` is ``draft:`` followed by the specification's name, with
-    ``version`` choosing between that name's drafts; a key holding an id is
-    what earlier pages sent, and still resolves.
-
-    Scoped to what the caller may reach, matching the picker: owned by their
-    tenant or shared with them. An unscoped lookup would let a person bind
-    their dataset to another account's draft.
-    """
-    wanted = profile.removeprefix("draft:")
-    try:
-        UUID(wanted)
-    except ValueError:
-        identifies = and_(SpecDraft.name == wanted, SpecDraft.version == version)
-    else:
-        identifies = SpecDraft.id == wanted
-    found = await session.execute(
-        select(SpecDraft)
-        .outerjoin(SpecDraftMember, SpecDraftMember.spec_draft_id == SpecDraft.id)
-        .where(
-            identifies,
-            or_(
-                SpecDraft.tenant_id == tenant_id,
-                SpecDraftMember.user_id == user_id,
-            ),
-        )
-    )
-    return found.scalars().first()
 
 
 @router.get("/new", response_class=HTMLResponse)
@@ -404,6 +370,9 @@ async def dataset_import(
 
     # Create dataset
     try:
+        profile, version, spec_draft_id, spec_id = await resolve_profile_choice(
+            session, profile, version, tenant.id, db_user.id
+        )
         dataset = await create_dataset(
             session,
             tenant_id=tenant.id,
@@ -411,7 +380,11 @@ async def dataset_import(
             profile=profile,
             version=version,
             creator_id=db_user.id,
+            spec_draft_id=spec_draft_id,
+            spec_id=spec_id,
         )
+    except ProfileChoiceNotFoundError as missing:
+        return RedirectResponse(f"/hub/datasets/new?error={missing.code}", status_code=302)
     except DuplicateDatasetNameError as refused:
         return _duplicate_name_redirect(refused)
     await session.flush()
@@ -421,9 +394,10 @@ async def dataset_import(
     # entities cannot be loaded is refused and nothing is created. This block
     # used to end in ``logger.warning`` and a redirect to an empty dataset.
     try:
-        loader = SpecLoader(profile=profile)
-        spec = loader.load_profile(version, profile)
-        root_entity = spec.root_entity or "Investigation"
+        # The dataset's own specification: for a draft- or spec-bound dataset
+        # the built-in loader knows nothing of the profile name.
+        spec = await dataset_profile_spec(session, dataset)
+        root_entity = (spec.root_entity if spec is not None else None) or "Investigation"
 
         # The dataset was just created empty, so this yields a fresh state whose
         # facade is the authoritative store for the imported entities.
@@ -736,37 +710,12 @@ async def dataset_create(
     # Get or create tenant and user
     tenant, db_user = await ensure_tenant_and_user(session, user)
 
-    # Check if using a draft spec
-    spec_draft_id = None
-    if profile.startswith("draft:"):
-        draft = await draft_for_choice(session, profile, version, tenant.id, db_user.id)
-        if draft is None:
-            return RedirectResponse("/hub/?error=draft_not_found", status_code=302)
-        spec_draft_id = draft.id
-        profile = draft.name.lower()  # Lowercase to match ProfileFacade behavior
-        version = draft.version
-
-    # A published specification, chosen from any account: publishing is what
-    # makes one available to other people, so this is not scoped to the caller.
-    # Only PUBLISHED and not withdrawn, so a draft stays unreachable by id.
-    spec_id = None
-    if profile.startswith("spec:"):
-        spec_id = profile.replace("spec:", "")
-        spec_result = await session.execute(
-            select(Spec).where(
-                Spec.id == spec_id,
-                Spec.status == SpecStatus.PUBLISHED,
-                Spec.deleted_at.is_(None),
-                # Hidden on the picker is not hidden if the id still works.
-                await visible_specs(session, db_user.id),
-            )
+    try:
+        profile, version, spec_draft_id, spec_id = await resolve_profile_choice(
+            session, profile, version, tenant.id, db_user.id
         )
-        published = spec_result.scalar_one_or_none()
-        if published is None:
-            return RedirectResponse("/hub/?error=spec_not_found", status_code=302)
-        profile = published.name.lower()  # Lowercase to match ProfileFacade
-        version = published.version
-
+    except ProfileChoiceNotFoundError as missing:
+        return RedirectResponse(f"/hub/?error={missing.code}", status_code=302)
     try:
         dataset = await create_dataset(
             session,

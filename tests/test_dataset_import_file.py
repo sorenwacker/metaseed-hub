@@ -225,3 +225,64 @@ async def test_example_data_that_cannot_be_loaded_is_refused_not_an_empty_datase
     assert "error=example_failed" in response.headers["location"]
     rows = (await session.execute(select(Dataset).where(Dataset.name == name))).scalars()
     assert list(rows) == [], "no empty dataset in its place"
+
+
+async def test_a_file_imported_against_a_draft_binds_the_dataset_to_it(
+    session: AsyncSession,
+) -> None:
+    """The Import File tab offers ``draft:<name>`` choices like the New tab,
+    but the import route took the value verbatim: a dataset with the literal
+    profile ``draft:foo``, no draft binding, and (the load failing) no
+    entities."""
+    from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
+
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+    from tests.factories import make_spec_draft
+
+    sub = f"importer-{uuid4().hex[:8]}"
+    tenant = make_tenant(slug=tenant_slug_for(sub))
+    session.add(tenant)
+    await session.flush()
+    owner = make_user(tenant=tenant, keycloak_id=sub)
+    session.add(owner)
+    await session.flush()
+    spec = ProfileSpec(
+        name="mydraft",
+        version="1.0",
+        root_entity="Investigation",
+        entities={
+            "Investigation": EntityDefSpec(
+                description="root", fields=[FieldSpec(name="title", type=FieldType.STRING)]
+            )
+        },
+    )
+    draft = make_spec_draft(
+        tenant=tenant,
+        user=owner,
+        name="mydraft",
+        version="1.0",
+        spec_data=SpecBuilderState(spec=spec).to_dict(),
+    )
+    session.add(draft)
+    await session.commit()
+    token = TokenUser(sub=sub, email="i@example.org", name="I", roles=[])
+    payload = json.dumps({"entities": [{"_type": "Investigation", "title": "On a draft"}]}).encode()
+    name = f"on-draft-{uuid4().hex[:6]}"
+
+    response = await dataset_import(
+        _csrf_request(),
+        session,
+        token,
+        file=_upload(payload, "export.json"),
+        name=name,
+        profile="draft:mydraft",
+        version="1.0",
+        csrf_token=_CSRF,
+    )
+
+    assert response.status_code == 303, response.headers.get("location")
+    dataset = (await session.execute(select(Dataset).where(Dataset.name == name))).scalar_one()
+    assert dataset.spec_draft_id == draft.id
+    assert dataset.profile == "mydraft"
+    state = await ensure_dataset_facade(dataset, session)
+    assert [n.entity_type for n in state.nodes_by_id.values()] == ["Investigation"]

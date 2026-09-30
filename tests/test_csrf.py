@@ -175,3 +175,56 @@ def test_a_non_ascii_submitted_token_is_a_mismatch_not_an_error() -> None:
     request.headers = {"X-CSRF-Token": "é"}
 
     assert validate_csrf_token(request) is False
+class TestSeekRoutesRejectMissingCsrf:
+    """The SEEK router was the one router whose POSTs skipped the token: only
+    the Origin guard covered them, and it passes when the header is absent."""
+
+    @pytest.mark.asyncio
+    async def test_settings_save(self) -> None:
+        from metaseed_hub.ui.routes import seek as seek_module
+
+        with pytest.raises(HTTPException) as raised:
+            await seek_module.seek_settings_save(
+                request=_no_csrf_request(), session=Mock(), user=Mock(), url="https://s", api_key=""
+            )
+        assert raised.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_settings_check(self) -> None:
+        from metaseed_hub.ui.routes import seek as seek_module
+
+        with pytest.raises(HTTPException) as raised:
+            await seek_module.seek_settings_check(
+                request=_no_csrf_request(), session=Mock(), user=Mock()
+            )
+        assert raised.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_choose_project(self) -> None:
+        from metaseed_hub.ui.routes import seek as seek_module
+
+        with pytest.raises(HTTPException) as raised:
+            await seek_module.seek_choose_project(
+                request=_no_csrf_request(), session=Mock(), user=Mock(), project_id="7"
+            )
+        assert raised.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_readiness(self) -> None:
+        from metaseed_hub.ui.routes import seek as seek_module
+
+        with pytest.raises(HTTPException) as raised:
+            await seek_module.seek_readiness(
+                request=_no_csrf_request(), dataset_id="ds", session=Mock(), user=Mock()
+            )
+        assert raised.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_push(self) -> None:
+        from metaseed_hub.ui.routes import seek as seek_module
+
+        with pytest.raises(HTTPException) as raised:
+            await seek_module.seek_push(
+                request=_no_csrf_request(), dataset_id="ds", session=Mock(), user=Mock()
+            )
+        assert raised.value.status_code == 403

@@ -131,7 +131,7 @@ async def test_creating_a_dataset_binds_the_chosen_version(session: AsyncSession
     from sqlalchemy import select
 
     from metaseed_hub.models import SpecDraft
-    from metaseed_hub.ui.routes.dataset.crud import draft_for_choice
+    from metaseed_hub.ui.routes.dataset.profile_choice import draft_for_choice
 
     tenant, user, _sub = await _drafts(session, ["1.1", "1.3"], name="bindme")
 

@@ -471,7 +471,13 @@ class TestThePanelOnlyAppearsWhereItWorks:
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.post(f"/hub/seek/datasets/{ena.id}/push", data={})
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    f"/hub/seek/datasets/{ena.id}/push",
+                    data={"csrf_token": csrf},
+                    cookies=page.cookies,
+                )
 
         assert "does not describe an ISA structure" in response.text
 
@@ -535,7 +541,13 @@ class TestTheReadinessCheck:
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    f"/hub/seek/datasets/{dataset.id}/check",
+                    data={"csrf_token": csrf},
+                    cookies=page.cookies,
+                )
 
         assert "not installed" in response.text
         assert "templates/default_templates" in response.text
@@ -558,7 +570,13 @@ class TestTheReadinessCheck:
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    f"/hub/seek/datasets/{dataset.id}/check",
+                    data={"csrf_token": csrf},
+                    cookies=page.cookies,
+                )
 
         assert "Ready" in response.text
 
@@ -577,7 +595,13 @@ class TestTheReadinessCheck:
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                response = await client.post(f"/hub/seek/datasets/{dataset.id}/check", data={})
+                page = await client.get(PROFILE)
+                csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+                response = await client.post(
+                    f"/hub/seek/datasets/{dataset.id}/check",
+                    data={"csrf_token": csrf},
+                    cookies=page.cookies,
+                )
 
         assert "not serving SEEK" in response.text
 

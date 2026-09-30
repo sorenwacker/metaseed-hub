@@ -88,6 +88,20 @@ class TestPrimitiveDeleteRerenders:
         assert 'hx-swap="outerHTML"' in button
         assert 'hx-swap="delete"' not in button
 
+    def test_a_freshly_added_row_swaps_the_whole_table_too(self) -> None:
+        """The row ``add_table_row`` returns is built by ``_build_primitive_row_html``,
+        a second copy of the button the template gate could not see. It kept
+        ``hx-swap="delete"``, so deleting a row added in the current page
+        session removed only that row and left every later row's index stale."""
+        from metaseed_hub.ui.routes.table_rows import _build_primitive_row_html
+
+        html = _build_primitive_row_html("ds", "node", "tags", 3, "string")
+        button = html.split("hx-delete=")[1].split("</button>")[0]
+
+        assert 'hx-target="#inline-table-tags"' in button
+        assert 'hx-swap="outerHTML"' in button
+        assert 'hx-swap="delete"' not in button
+
 
 class _OntologyHelper:
     """A helper whose one field is an ontology_term with declared ontologies."""
