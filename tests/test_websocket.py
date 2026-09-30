@@ -361,7 +361,7 @@ async def test_ws_room_authorization_closes_db_session(monkeypatch):
     monkeypatch.setattr(main_module, "verify_token", fake_verify_token)
     monkeypatch.setattr(deps_module, "get_dataset_for_user", fake_get_dataset_for_user)
     monkeypatch.setattr(main_module.db, "_session_factory", lambda: ctx)
-    monkeypatch.setattr(main_module.manager, "handle_connection", fake_handle_connection)
+    monkeypatch.setattr(main_module.app.state.manager, "handle_connection", fake_handle_connection)
 
     ws = _ClosableWebSocket()
     await _websocket_endpoint()(websocket=ws, project_id="proj-1", token="tok")

@@ -198,6 +198,7 @@ async def _after_sign_in(session: "AsyncSession", token_user: "TokenUser") -> st
 @router.get("/callback")
 async def auth_callback(
     request: Request,
+    session: DbSession,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -258,11 +259,9 @@ async def auth_callback(
     # never blocks the redirect, so a bookkeeping failure cannot lock a user out.
     try:
         from metaseed_hub.auth import verify_token
-        from metaseed_hub.database import db
 
         token_user = await verify_token(access_token)
-        async with db.session_factory() as db_session:
-            landing = await _after_sign_in(db_session, token_user)
+        landing = await _after_sign_in(session, token_user)
     except Exception:
         # Never block the redirect: a bookkeeping or provisioning failure must
         # not lock a user out, and the next authenticated page retries both.

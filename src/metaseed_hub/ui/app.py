@@ -27,6 +27,7 @@ from metaseed_hub.ui.dependencies import (
     DuplicateAccountEmailError,
     OptionalUser,
     ensure_tenant_and_user,
+    get_current_user_from_cookie,
     handle_auth_required_error,
     handle_duplicate_account_email,
 )
@@ -209,9 +210,17 @@ def create_hub_app() -> FastAPI:
 
     # Outermost of the two, so it sees anything the request raises. It records
     # and re-raises, leaving the 500 response and the log line unchanged.
+    from metaseed_hub.database import db
     from metaseed_hub.errors import ErrorRecordingMiddleware
 
-    app.add_middleware(ErrorRecordingMiddleware)
+    # The composition root supplies the collaborators; the session factory is
+    # resolved at call time because the database connects in the lifespan,
+    # after the app is built.
+    app.add_middleware(
+        ErrorRecordingMiddleware,
+        session_factory=lambda: db.session_factory(),
+        resolve_caller=get_current_user_from_cookie,
+    )
 
     # Register exception handler for auth redirects
     app.add_exception_handler(AuthRequiredError, handle_auth_required_error)
