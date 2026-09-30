@@ -71,7 +71,7 @@ The first twelve digits appear on the specification's page. Datasets record the 
 On a published specification you can:
 
 - **View** — open it read-only to inspect its entities, fields, and rules.
-- **Fork** — create a new editable draft from it. Forking is how you make a new version of a published specification: edit the fork, then publish it as a new release. The published specification stays in place.
+- **Fork** — create a new editable draft from it. Forking is how you make a new version of a published specification: edit the fork, then publish it as a new release. The published specification stays in place. Forking the same specification again while you still hold the first fork at that name and version gives the new draft a suffixed name, as a second draft from a template does.
 
 ## Who a published specification belongs to
 
