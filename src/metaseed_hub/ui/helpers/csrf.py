@@ -83,6 +83,11 @@ def validate_csrf_token(request: Request, form_token: str | None = None) -> bool
     if not _csrf_signature_valid(cookie_token):
         return False
 
+    # compare_digest refuses non-ASCII str with a TypeError, and the submitted
+    # token is client input (headers decode as latin-1): a mismatch, not a 500.
+    if not token.isascii():
+        return False
+
     # Constant-time comparison to prevent timing attacks
     return secrets.compare_digest(cookie_token, token)
 

@@ -135,3 +135,21 @@ def test_the_command_succeeds_when_docker_cannot_be_reached(tmp_path: Path) -> N
         assert main(["--compose", str(path)]) == 0
     finally:
         module.read_running = original  # type: ignore[assignment]
+
+
+def test_an_empty_compose_file_reports_not_checked(tmp_path: Path) -> None:
+    """``safe_load`` of an empty file is None; ``.get`` on it was an
+    AttributeError that escaped ``compare`` and 500ed the dashboard."""
+    path = tmp_path / "compose.yml"
+    path.write_text("")
+    report = check(path)
+    assert not report.checked
+    assert "compose file unreadable" in report.summary
+
+
+def test_a_null_service_entry_reports_not_checked(tmp_path: Path) -> None:
+    path = tmp_path / "compose.yml"
+    path.write_text("services:\n  db:\n")
+    report = check(path)
+    assert not report.checked
+    assert "compose file unreadable" in report.summary

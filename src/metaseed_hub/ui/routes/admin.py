@@ -317,6 +317,25 @@ async def set_removed(
     if removed:
         item.soft_delete()
     else:
+        if isinstance(item, Spec):
+            # ``uq_specs_tenant_name_version`` holds for live rows only, so
+            # the owner may have published the name and version again since
+            # the removal. Restoring then violated it at commit, a 500 where
+            # an inline message was promised; the newer publication stays.
+            republished = await session.execute(
+                select(Spec.id).where(
+                    Spec.tenant_id == item.tenant_id,
+                    Spec.name == item.name,
+                    Spec.version == item.version,
+                    Spec.deleted_at.is_(None),
+                )
+            )
+            if republished.scalar_one_or_none() is not None:
+                raise RemovalError(
+                    f"The owner has published '{item.name}' at version {item.version} again "
+                    "since the removal; the newer publication stays and the removed one "
+                    "cannot be restored."
+                )
         item.restore()
     await session.commit()
 

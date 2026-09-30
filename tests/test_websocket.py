@@ -639,3 +639,27 @@ class TestPresenceIsGlobal:
         await manager.leave_room("proj-1", "conn-a")
 
         assert await manager.get_presence("proj-1") == []
+
+
+class FailingRedis(FakeRedis):
+    """Redis that is down for the presence write."""
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        raise ConnectionError("redis down")
+
+
+async def test_a_join_that_fails_after_the_connection_is_added_leaves_no_ghost() -> None:
+    """join_room added the connection to the room before the Redis and
+    broadcast steps, and handle_connection called it outside its try, so a
+    failure there left the connection in the room and the presence set: the
+    user was shown present until a later broadcast happened to fail for that
+    socket, and a room with no other member was never cleaned up."""
+    manager = WebSocketManager()
+    manager._redis = FailingRedis()  # type: ignore[assignment]
+    ws = FakeWebSocket()
+
+    with pytest.raises(ConnectionError):
+        await manager.handle_connection(ws, "proj-ghost", "user-1", "User One")  # type: ignore[arg-type]
+
+    room = manager._rooms.get("proj-ghost")
+    assert room is None or not room.connections, "no ghost connection"
