@@ -15,6 +15,7 @@ from metaseed_hub.collaborations import grant_label
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus
 from metaseed_hub.sharing import accessible_ids, account_owner, granting_urns, resource_for
 from metaseed_hub.ui.spec_builder.access import (
+    create_draft_at_a_free_name,
     create_new_draft,
     free_draft_name,
 )
@@ -320,17 +321,11 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-        draft = await create_new_draft(
+        draft = await create_draft_at_a_free_name(
             session,
             user_id=user_id,
             tenant_id=tenant_id,
-            name=await free_draft_name(
-                session,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                wanted=spec.name,
-                version=spec.version,
-            ),
+            name=spec.name,
             spec=spec,
             template_source=(profile, version),
         )

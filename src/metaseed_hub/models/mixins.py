@@ -2,8 +2,13 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, Enum, ForeignKey, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
+
+from metaseed_hub.sharing import Role
+
+from .base import _enum_values
 
 
 class TimestampMixin:
@@ -63,4 +68,31 @@ class SoftDeleteMixin:
         self.deleted_at = None
 
 
-__all__ = ["SoftDeleteMixin", "TimestampMixin"]
+class MemberMixin:
+    """The columns every membership table shares; the subclass names the resource.
+
+    A membership is one user with one role on one shared thing. The user and
+    the role are the same columns on datasets, specifications and drafts; the
+    subclass adds the resource key and the relationships.
+    """
+
+    @declared_attr
+    def user_id(cls) -> Mapped[str]:  # noqa: N805
+        return mapped_column(
+            UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        )
+
+    @declared_attr
+    def role(cls) -> Mapped[Role]:  # noqa: N805
+        return mapped_column(
+            Enum(Role, name="memberrole", values_callable=_enum_values),
+            nullable=False,
+            default=Role.VIEWER,
+        )
+
+    @declared_attr
+    def created_at(cls) -> Mapped[datetime]:  # noqa: N805
+        return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+__all__ = ["MemberMixin", "SoftDeleteMixin", "TimestampMixin"]

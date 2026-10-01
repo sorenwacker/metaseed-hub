@@ -1,3 +1,4 @@
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.13
@@ -30,6 +31,13 @@ repos:
       - id: duplicate-code
         name: duplicate code (single source of truth)
         entry: uv run pylint --disable=all --enable=duplicate-code --min-similarity-lines=8 -j 4 src/metaseed_hub
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+      - id: pytest
+        name: run the structural gates before push (full suite on a tag or METASEED_PUSH_FULL=1)
+        entry: uv run python scripts/pre_push_tests.py
         language: system
         stages: [pre-push]
         pass_filenames: false

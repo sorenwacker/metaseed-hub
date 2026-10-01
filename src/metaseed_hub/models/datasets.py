@@ -1,24 +1,18 @@
 """Datasets, their versions and who may touch them."""
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import (
-    DateTime,
-    Enum,
     ForeignKey,
     Index,
     String,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from metaseed_hub.sharing import Role
-
-from .base import Base, _enum_values
+from .base import Base
 
 if TYPE_CHECKING:
     # Only for annotations: the real links are resolved by name through
@@ -28,7 +22,7 @@ if TYPE_CHECKING:
     from .identity import Tenant, User
     from .specs import Spec, SpecDraft
 
-from .mixins import SoftDeleteMixin, TimestampMixin
+from .mixins import MemberMixin, SoftDeleteMixin, TimestampMixin
 
 
 class Dataset(TimestampMixin, SoftDeleteMixin, Base):
@@ -121,7 +115,7 @@ class DatasetVersion(TimestampMixin, Base):
 #: sites that talk about datasets specifically.
 
 
-class DatasetMember(Base):
+class DatasetMember(MemberMixin, Base):
     """User membership in a dataset with role-based access."""
 
     __tablename__ = "dataset_members"
@@ -135,22 +129,6 @@ class DatasetMember(Base):
         ForeignKey("datasets.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role: Mapped[Role] = mapped_column(
-        Enum(Role, name="memberrole", values_callable=_enum_values),
-        nullable=False,
-        default=Role.VIEWER,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="members")
     user: Mapped["User"] = relationship("User", back_populates="dataset_memberships")
