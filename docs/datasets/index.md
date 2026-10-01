@@ -4,7 +4,18 @@ A **dataset** holds metadata entities organized according to a **profile** speci
 
 ## The dataset list
 
-Open **Datasets** in the header. **My Datasets** shows each dataset with its profile, version, last-updated date, and how many entities it holds; hovering over the count shows the number per entity type. Click a dataset to open the editor.
+Open **Datasets** in the header. The list holds every dataset you own and every one shared with you, in two views you switch between with **Cards** and **Table** above the list; the hub remembers which you used last.
+
+**Cards** show each dataset with its profile, version, last-updated date, and how many entities it holds; hovering over the count shows the number per entity type. A dataset shared with you through a collaboration carries the collaboration's name.
+
+**Table** shows the same datasets one per row, with the columns **Name**, **Profile**, **Version**, **Entities**, **Updated** and **Access**, and is where you find one among many:
+
+- **Search** matches the name, the description and the profile as you type; the list narrows without reloading the page.
+- **Profile** narrows the list to one profile; the choice lists the profiles your datasets use.
+- **Access** narrows the list to datasets you own, datasets shared with you by a person, or datasets reached through a collaboration.
+- Click a column heading to sort by it; click again to reverse. The list arrives sorted by last update, newest first.
+
+The filters live in the page address, so a filtered table can be bookmarked or sent to a colleague, who sees it narrowed the same way over their own datasets. Click a row to open the editor.
 
 ## Creating a dataset
 
