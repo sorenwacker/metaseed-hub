@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import Request
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from starlette.routing import Mount
 
 from metaseed_hub.auth import TokenUser
@@ -52,19 +52,19 @@ async def test_the_explorer_compares_under_the_mount(session) -> None:
 
     # The test database, not the configured one: CI has no "metaseed_hub".
     hub.dependency_overrides[get_session] = _session
-    with (
-        patch(
-            "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
-            AsyncMock(return_value=_TOKEN),
-        ),
-        TestClient(app, base_url="https://test") as client,
+    # An async client on the test's own loop: the sync TestClient runs the app
+    # on another loop and the session fixture refuses to be used from there.
+    with patch(
+        "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+        AsyncMock(return_value=_TOKEN),
     ):
-        page = client.get("/hub/explore/")
-        assert page.status_code == 200, page.text[:300]
-        (base_url,) = re.findall(r"const BASE_URL = '([^']*)'", page.text)
-        assert base_url == "/hub"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+            page = await client.get("/hub/explore/")
+            assert page.status_code == 200, page.text[:300]
+            (base_url,) = re.findall(r"const BASE_URL = \'([^\']*)\'", page.text)
+            assert base_url == "/hub"
 
-        answer = client.post(f"{base_url}/explore/compare", json={"profiles": []})
+            answer = await client.post(f"{base_url}/explore/compare", json={"profiles": []})
 
     assert answer.status_code != 404, "the Explorer posts to a path the app does not serve"
 
