@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.60.1] - unreleased
+## [0.60.1] - 261001
 
 ### Fixed
 - **The admin error list fits the page.** The time no longer wraps, a request path and a message wrap inside their columns, and a message longer than 200 characters is folded with the rest a click away; the table scrolls rather than pushing past its container. The stylesheet had the rules; no template used them.
