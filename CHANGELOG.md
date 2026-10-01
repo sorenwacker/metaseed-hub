@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.59.1] - unreleased
+## [0.59.1] - 261001
 
 ### Fixed
 - The Explorer's **Compare** works again. Release 0.59.0 filled the template variable `base_url` with the instance's absolute URL, where every template uses it as the `/hub` mount prefix, so the Explorer posted its comparison to `https://<host>/explore/compare`, a path outside the mount, and every click answered 404. The prefix and the origin are now two variables, `base_url` and `app_url`, filled by the one context builder, with a test that the Explorer's own fetch URL is a route the application serves.
