@@ -40,6 +40,8 @@ Only the exception type and message are kept — never request bodies or headers
 
 Records are removed automatically 30 days after they occur. Recording never interferes with the error itself: the exception propagates unchanged, so the usual 500 response and the log line are exactly as before, and a failure to record is logged rather than raised.
 
+Every administrator is also [notified](collaboration.md#notifications) of errors, so a failure is seen without anyone visiting the Errors section. Errors are grouped so a spike does not become a flood: the first error of an exception type and request path produces a notification, and further errors with the same type and path within the next hour are added to its count rather than listed again. The notification names the type, the path, the count and the time of the latest, and links to the Errors section.
+
 ## Removing a dataset or specification
 
 An administrator can remove a dataset or a published specification belonging to any user, for content published or created by mistake, or on request from the person who owns it.
