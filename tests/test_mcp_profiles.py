@@ -56,6 +56,7 @@ def _shared_spec_data() -> dict:
     builder = SpecBuilder.empty("SharedSpec", "1.0", description="published for everyone")
     builder.add_entity("Sample", description="One sample")
     builder.add_field("Sample", "name", "string", required=True)
+    builder.add_field("Sample", "tissue", "string", example="leaf")
     builder.set_root_entity("Sample")
     return SpecBuilderState(spec=builder.spec).to_dict()
 
@@ -116,8 +117,24 @@ class TestPublishedSpecs:
 
         assert result["root_entity"] == "Sample"
         fields = result["entities"]["Sample"]["fields"]
-        assert [f["name"] for f in fields] == ["name"]
+        assert [f["name"] for f in fields] == ["name", "tissue"]
         assert fields[0]["required"] is True
+
+    async def test_the_schema_carries_the_example_a_field_declares(
+        self, server, session: AsyncSession
+    ) -> None:
+        """An agent reads the expected form of a value from the schema, so the
+        example a specification gives has to arrive with the field; a field
+        that declares none must not carry an invented one."""
+        secret = await self._published(session, slug="pub00004")
+
+        schema = await _tool(server, "get_profile_schema")
+        with _calling_with(secret):
+            result = json.loads(await schema("SharedSpec", "1.0"))
+
+        fields = {f["name"]: f for f in result["entities"]["Sample"]["fields"]}
+        assert fields["tissue"]["example"] == "leaf"
+        assert "example" not in fields["name"]
 
     async def test_a_dataset_on_a_published_spec_can_be_created_and_edited(
         self, server, session: AsyncSession

@@ -818,6 +818,10 @@ def create_mcp_server(name: str = "metaseed-hub") -> FastMCP:
                                         "required": bool(f.required),
                                         "description": f.description,
                                         "ontology_term": f.ontology_term,
+                                        # Only where the specification gives
+                                        # one: an absent key says "no example",
+                                        # a null would read as a value.
+                                        **({"example": f.example} if f.example is not None else {}),
                                     }
                                     for f in entity.fields
                                 ),

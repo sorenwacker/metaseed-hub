@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
+
 ## [0.59.0] - 261001
 
 Fifteen changes from the 260930 codebase review (docs/REVIEW.md), each with a gate test so the rule it restores cannot erode again.
