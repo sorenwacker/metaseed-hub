@@ -42,10 +42,12 @@ To author a specification, open **Spec builder**, start from scratch, from an ex
 
 ```bash
 uv sync --extra dev             # dependencies
-uv run pre-commit install       # the same checks CI runs, before each commit
+uv run pre-commit install       # the commit checks CI runs, and the push hook
 make test                       # the test suite (needs the containers from make dev)
 uv run pre-commit run --all-files
 ```
+
+A push runs the structural gate tests (`scripts/pre_push_tests.py`: the tests that scan the source, templates and configuration, about fifteen seconds, no database) plus the duplicate-code check; the pull request's CI runs the whole suite against Postgres and is the gate for merging. A push of a release tag runs the full suite locally, because the deploy timer does not wait for the tag's CI; `METASEED_PUSH_FULL=1 git push` asks for it on any push. Prefer that to `--no-verify`, which disables every hook. If an older hand-written `.git/hooks/pre-push` is in place, `uv run pre-commit install -f --hook-type pre-push` replaces it.
 
 The project follows document-driven and test-driven development: a change starts in `docs/`, gets a test, then an implementation. Rules are enforced by tests, not by review.
 
