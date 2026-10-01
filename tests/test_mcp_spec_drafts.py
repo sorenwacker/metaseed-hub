@@ -543,3 +543,46 @@ class TestDraftScoping:
             await create("Private", "1.0")
         with _calling_with(secret_b), pytest.raises(ValueError, match="No specification draft"):
             await add_entity("Private", "Sneaky")
+
+
+class TestALoadedProfileIsNotEditedInPlace:
+    """metaseed parses a profile once per process and hands every caller the
+    same ``ProfileSpec`` (metaseed #311). ``_new_named_draft`` gave a cloned
+    specification the draft's name by editing the object it was handed, so a
+    clone named "Extended" renamed the built-in profile for every later
+    request in the process."""
+
+    async def test_naming_a_draft_leaves_the_given_spec_untouched(
+        self, session: AsyncSession
+    ) -> None:
+        from metaseed.specs.loader import SpecLoader
+
+        from metaseed_hub.mcp._spec_tools import _new_named_draft
+
+        tenant = make_tenant(slug="cpy00001")
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant, email="cpy00001@example.org")
+        session.add(user)
+        await session.commit()
+        spec = SpecLoader().load_profile("1.1", "miappe")
+
+        draft = await _new_named_draft(session, user, "Extended", spec)
+
+        assert draft.name == "Extended"
+        assert draft.spec_data["spec"]["name"] == "Extended"
+        assert spec.name == "miappe", "the loaded profile was edited in place"
+
+    async def test_cloning_does_not_rename_the_built_in_profile(
+        self, server, session: AsyncSession
+    ) -> None:
+        from metaseed.specs.loader import SpecLoader
+
+        _t, _u, secret, _token = await _user_with_token(
+            session, slug="cpy00002", email="cpy00002@example.org"
+        )
+        clone = await _tool(server, "spec_clone")
+        with _calling_with(secret):
+            await clone("miappe", "1.1", "Extended")
+
+        assert SpecLoader().load_profile("1.1", "miappe").name == "miappe"

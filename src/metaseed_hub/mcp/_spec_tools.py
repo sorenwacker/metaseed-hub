@@ -12,6 +12,7 @@ from the package, so the package can import this module without a cycle.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -178,7 +179,11 @@ async def _new_named_draft(
         # spec does not carry would be renamed by its first edit. One name.
         from metaseed.specs.builder import SpecBuilder
 
-        builder = SpecBuilder.from_spec(spec)
+        # A copy: the library hands every caller the same parsed profile
+        # (metaseed parses a file once per process), and from_spec wraps the
+        # object without copying, so naming it here renamed the built-in
+        # profile for every later request.
+        builder = SpecBuilder.from_spec(copy.deepcopy(spec))
         builder.set_metadata(name=name)
         spec = builder.spec
 
