@@ -32,7 +32,7 @@ Users who registered before this column existed show `Never` until their next si
 
 ## Errors
 
-The **Errors** section lists unhandled server errors, newest first, with the time, the request that failed, the exception type and message, and the signed-in user who hit it. A per-day count above the list makes a spike visible without reading every row.
+The **Errors** section lists unhandled server errors, newest first, with the time, the request that failed, the exception type and message, and the signed-in user who hit it. A per-day count above the list makes a spike visible without reading every row. The list fits the page: the time never wraps, a request path and a message wrap inside their columns, and a message longer than a few lines is folded to its first 200 characters with the rest a click away, so a database error carrying its SQL does not push the table off the screen.
 
 These are recorded in the database rather than read from the host's journal, for two reasons: the application runs several worker processes that log separately, and the dashboard has no privilege to read the journal. A stored row also survives a restart.
 
