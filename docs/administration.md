@@ -65,3 +65,12 @@ If the application is running with the default development `SECRET_KEY`, the das
 ## Collaboration membership
 
 The hub records each user's SRAM group membership at sign-in and trusts that record for `MEMBERSHIP_MAX_AGE_DAYS` (30 by default). A record older than that grants no access through a [collaboration grant](collaboration.md#collaborations) and lists nobody on **People** until the person signs in again. Lower it where membership changes often; raise it where people sign in rarely and rely on access tokens.
+
+## SRAM application tokens
+
+Members of the collaborations connected to the Metaseed Hub application in SRAM can create application tokens there and present them to the REST API and the MCP endpoint ([Connecting an agent](mcp.md#getting-a-token)). The hub checks each one against SRAM's introspection endpoint with a credential of its own.
+
+To enable it: in SRAM, as application admin of the Metaseed Hub application, switch on **User token introspection** and create an introspection token; set it as `SRAM_INTROSPECTION_TOKEN` in the hub's environment. `SRAM_INTROSPECTION_URL` is the endpoint (`https://sram.surf.nl/api/tokens/introspect`; the acceptance instance for testing) and `SRAM_INTROSPECTION_CACHE_SECONDS` how long an answer is reused before SRAM is asked again (300 by default; a token SRAM has just revoked keeps working for at most that long). Without `SRAM_INTROSPECTION_TOKEN` the hub refuses SRAM tokens with a message saying they are not enabled, and hub personal access tokens are the non-interactive credential.
+
+Each answer is handled by what SRAM says: a valid token acts as the account whose subject it names and refreshes that account's collaboration reading; `token-expired`, `token-unknown`, `user-suspended` and `token-not-connected` are refused with that reason; a SRAM that cannot be reached, or answers with a server error, is reported as *not checked* (503), never as a refusal. An introspection token SRAM no longer accepts is the administrator's problem, not the user's: it is recorded as an error on this page and the request is answered 503 with a message to that effect.
+

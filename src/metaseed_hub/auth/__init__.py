@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.config import Settings, get_settings
 from metaseed_hub.database import get_session
-from metaseed_hub.tokens import TOKEN_PREFIX, authenticate_token
 
 security = HTTPBearer()
 
@@ -330,31 +329,18 @@ async def get_current_user(
         HTTPException: If neither form authenticates.
     """
     presented = credentials.credentials
+    # One resolver for every credential, shared with the MCP endpoint.
+    from metaseed_hub.bearers import BearerError, resolve_bearer
 
-    # Checked first and by prefix, so an OIDC failure is never reported for what
-    # is plainly a hub token, and a hub token is never sent to the IdP.
-    if presented.startswith(TOKEN_PREFIX):
-        user = await authenticate_token(session, presented)
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="That access token is not valid, has expired, or was revoked.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return TokenUser(
-            sub=user.keycloak_id,
-            email=user.email,
-            name=user.display_name or user.email,
-            # Personal access tokens carry no roles: they act for the user's own
-            # data, and must not confer the admin role an OIDC token can. They
-            # also carry no entitlements — those come from the IdP's userinfo
-            # endpoint, which only an OIDC token can ask — so features gated on
-            # an entitlement are browser-session-only by construction, not by
-            # accident.
-            roles=[],
-        )
-
-    return await auth.verify_token(presented)
+    try:
+        bearer = await resolve_bearer(session, presented, verify_oidc=auth.verify_token)
+    except BearerError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+        ) from exc
+    return bearer.token_user
 
 
 async def verify_token(token: str) -> TokenUser:

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.60.0] - unreleased
+
+### Added
+- **SRAM application tokens.** A member creates a token for the Metaseed Hub application in SRAM and presents it to the REST API or the MCP endpoint; the hub checks it against SRAM's introspection endpoint with its own credential (`SRAM_INTROSPECTION_TOKEN`), so the token is exactly as alive as the person's place in SRAM and stops when SRAM suspends them, their institution withdraws their login, or SRAM's lifetime for it ends. The answer carries the person's current collaborations, so a request made with it refreshes the collaboration reading like a sign-in. Answers are cached for `SRAM_INTROSPECTION_CACHE_SECONDS` (300). A SRAM that cannot be reached is answered 503, *not checked*, never as a refusal; a hub credential SRAM rejects is logged for the administrator and answered 503. A hub personal access token outlives the account it was issued to, which is why the SRAM token is the credential on the hosted hub; hub tokens remain for local instances.
+
+### Changed
+- The REST dependency and the MCP caller decide what a bearer is in one place, `bearers.resolve_bearer`; a gate test keeps it that way.
+
 ## [0.59.1] - 261001
 
 ### Fixed
