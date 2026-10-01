@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.61.0] - unreleased
+
+### Added
+- **A table view of the dataset list**, beside the cards, with search across name, description and profile as you type, a profile filter, an access filter (mine, shared with me, through a collaboration) and sortable columns. The filters live in the page address, so a narrowed table can be bookmarked; the chosen view is remembered.
+
 ## [0.60.1] - 261001
 
 ### Fixed
