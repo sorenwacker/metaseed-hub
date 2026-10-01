@@ -325,6 +325,7 @@ def register_list_routes(router: APIRouter, templates: Jinja2Templates) -> None:
             session,
             user_id=user_id,
             tenant_id=tenant_id,
+            name=spec.name,
             spec=spec,
             template_source=(profile, version),
         )

@@ -416,6 +416,7 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             session,
             user_id=user_id,
             tenant_id=tenant_id,
+            name=spec.name,
             spec=builder.spec,
             source_spec_id=spec.id,
         )

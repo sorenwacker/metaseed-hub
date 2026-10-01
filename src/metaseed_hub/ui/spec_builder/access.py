@@ -585,6 +585,7 @@ async def unpublish_spec(
         session,
         user_id=user_id,
         tenant_id=spec.tenant_id,
+        name=spec.name,
         spec=builder.spec,
         source_spec_id=spec.id,
     )
@@ -595,23 +596,25 @@ async def create_draft_at_a_free_name(
     *,
     user_id: str,
     tenant_id: str,
+    name: str,
     spec: ProfileSpec,
     template_source: tuple[str, str] | None = None,
     source_spec_id: str | None = None,
 ) -> SpecDraft:
-    """Create a draft named after ``spec``, suffixed if the user already holds one.
+    """Create a draft called ``name``, suffixed if the user already holds one.
 
-    Forking, cloning, importing and restoring a specification all name the
-    draft after the specification, and the user may already hold a draft at
-    that name and version: the second fork raised IntegrityError on the unique
-    index. One place picks the free name (see ``free_draft_name``) and creates
-    the draft, so none of the four can forget to.
+    Forking, cloning and restoring a specification all want the draft named
+    after it (the published row's name, or the template's), and the user may
+    already hold a draft at that name and version: the second fork raised
+    IntegrityError on the unique index. One place picks the free name (see
+    ``free_draft_name``) and creates the draft, so none of the three can
+    forget to.
     """
     name = await free_draft_name(
         session,
         user_id=user_id,
         tenant_id=tenant_id,
-        wanted=spec.name,
+        wanted=name,
         version=spec.version,
     )
     return await create_new_draft(
