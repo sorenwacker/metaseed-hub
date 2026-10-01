@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.60.1] - unreleased
+
+### Fixed
+- **A member of a collaboration who is in none of its groups is a member.** SRAM reports membership of the collaboration itself as the collaboration's own URN and adds one URN per group; the hub parsed only the group form, so such a person was missing from **People**, saw no collaboration on their own profile, was not reached by a grant to the collaboration, and could not be published to. Seen on the hosted hub with a member who signed in through eduID.
+
 ## [0.60.0] - 261001
 
 ### Added

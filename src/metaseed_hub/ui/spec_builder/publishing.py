@@ -44,7 +44,8 @@ async def audience_for_publisher(
     )
     from metaseed_hub.entitlements import parse_group
 
-    if parse_group(chosen) is not None:
+    parsed = parse_group(chosen)
+    if parsed is not None and parsed.group is not None:
         raise NotInCollaborationError(
             chosen,
             reason=(

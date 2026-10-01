@@ -10,8 +10,15 @@ everyone's membership, not just the caller's.
 
 SRAM puts membership in the ``eduperson_entitlement`` claim, as URNs shaped::
 
+    urn:mace:surf.nl:sram:group:{organisation}:{collaboration}
     urn:mace:surf.nl:sram:group:{organisation}:{collaboration}:{group}
+    urn:mace:surf.nl:sram:group:tudelft:sramdemo
     urn:mace:surf.nl:sram:group:tudelft:sramdemo:sramdemogroup
+
+The first names membership of the collaboration itself and is sent for every
+member; the second is added per group the person is in. A member in no group
+has the first alone, and must count as a member: production had one who was
+listed nowhere and reached by no grant.
 
 Which features a group may use is *not* here — that is hub state, because
 neither Keycloak nor SRAM models "feature X enabled".
@@ -34,16 +41,18 @@ ENTITLEMENT_CLAIM = "eduperson_entitlement"
 
 
 class SramGroup(NamedTuple):
-    """One SRAM group entitlement, split into its parts.
+    """One SRAM membership entitlement, split into its parts.
 
     ``urn`` is kept because it is what a grant is matched against; the parts are
-    for display and for granting a whole collaboration at once.
+    for display and for granting a whole collaboration at once. ``group`` is
+    ``None`` for the collaboration's own URN: membership of the collaboration,
+    in no particular group.
     """
 
     urn: str
     organisation: str
     collaboration: str
-    group: str
+    group: str | None
 
 
 def group_urns(entitlements: Iterable[str] | None) -> list[str]:
@@ -80,18 +89,20 @@ def parse_group(urn: str) -> SramGroup | None:
         return None
     remainder = urn[len(SRAM_GROUP_PREFIX) :]
     parts = remainder.split(":")
-    if len(parts) != 3 or not all(parts):
+    if len(parts) not in (2, 3) or not all(parts):
         return None
-    organisation, collaboration, group = parts
+    organisation, collaboration = parts[0], parts[1]
+    group = parts[2] if len(parts) == 3 else None
     return SramGroup(urn, organisation, collaboration, group)
 
 
 def groups(entitlements: Iterable[str] | None) -> list[SramGroup]:
-    """Every well-formed SRAM group among ``entitlements``.
+    """Every well-formed SRAM membership among ``entitlements``.
 
-    A URN carrying the prefix but not the three expected parts is dropped, so a
-    malformed entitlement cannot become a group that no grant will ever match
-    while looking like one in the UI.
+    A URN carrying the prefix but neither two nor three parts (an organisation
+    alone, or an identity provider's own marker) is dropped, so a malformed
+    entitlement cannot become a group that no grant will ever match while
+    looking like one in the UI.
     """
     parsed = (parse_group(urn) for urn in group_urns(entitlements))
     return [group for group in parsed if group is not None]
@@ -111,7 +122,8 @@ def entitled_urns(entitlements: Iterable[str] | None) -> set[str]:
     """Everything a grant may be matched against for this user.
 
     Each group contributes both its own URN and its collaboration's, so a grant
-    can be written at either level and matched by plain set membership.
+    can be written at either level and matched by plain set membership; a
+    collaboration-level entitlement contributes the collaboration's URN.
     """
     urns: set[str] = set()
     for group in groups(entitlements):

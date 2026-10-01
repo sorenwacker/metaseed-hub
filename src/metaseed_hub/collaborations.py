@@ -186,7 +186,7 @@ def grant_label(urn: str) -> str:
     """
     group = parse_group(urn)
     if group is not None:
-        return f"{group.collaboration} / {group.group}"
+        return f"{group.collaboration} / {group.group}" if group.group else group.collaboration
     without_prefix = short_name(urn)
     return without_prefix.split(":", 1)[-1] if ":" in without_prefix else without_prefix
 
@@ -213,7 +213,9 @@ async def collaborations_of(session: AsyncSession, user_id: str) -> list[Collabo
             continue
         urn = collaboration_urn(group)
         found = by_urn.get(urn)
-        groups = sorted([*found.groups, group.group]) if found else [group.group]
+        groups = sorted([*found.groups]) if found else []
+        if group.group is not None:
+            groups = sorted([*groups, group.group])
         by_urn[urn] = Collaboration(
             urn=urn,
             organisation=group.organisation,
@@ -227,8 +229,9 @@ async def collaborations_of(session: AsyncSession, user_id: str) -> list[Collabo
 async def people_in(session: AsyncSession, urn: str, *, viewer_id: str) -> list[User]:
     """The live users whose fresh snapshot puts them in collaboration ``urn``.
 
-    Sorted by name, then address. Someone who has never signed in has no
-    snapshot and is not listed; SRAM itself remains the authoritative list.
+    By the collaboration's own URN or by any of its groups. Sorted by name,
+    then address. Someone who has never signed in has no snapshot and is not
+    listed; SRAM itself remains the authoritative list.
 
     Raises:
         NotInCollaborationError: If the viewer's own snapshot does not put
@@ -241,7 +244,7 @@ async def people_in(session: AsyncSession, urn: str, *, viewer_id: str) -> list[
         select(User, GroupMembership.urn)
         .join(GroupMembership, GroupMembership.user_id == User.id)
         .where(
-            GroupMembership.urn.like(f"{urn}:%"),
+            (GroupMembership.urn == urn) | GroupMembership.urn.like(f"{urn}:%"),
             # Someone whose reading has gone stale is not listed, for the same
             # reason it grants them nothing.
             User.memberships_read_at >= _fresh_after(),
