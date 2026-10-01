@@ -46,7 +46,7 @@ The hosted hub authenticates through SURF Research Access Management (SRAM), whe
 
 The hub does not keep its own list of who is in which collaboration. It takes a reading: the group URNs your identity provider reported, and when it read them. A sign-in takes one and replaces whatever was there, so leaving every collaboration takes effect at your next sign-in. Opening any page also takes one when there is none or it has gone stale, which is what saves a session older than this feature from never having one. Your [profile](getting-started.md#your-profile) lists the result under **Your collaborations** with the time it was read.
 
-The snapshot exists because two things cannot be answered from the sign-in token alone. Listing the people in a collaboration needs everyone's membership, not just yours. And a request made with an access token, which is how metaseed and MCP clients call the hub, carries no entitlements at all, so without the snapshot a dataset shared with your collaboration would be invisible to those clients.
+The snapshot exists because two things cannot be answered from the sign-in token alone. Listing the people in a collaboration needs everyone's membership, not just yours. And a request made with a hub personal access token, which is one way metaseed and MCP clients call the hub, carries no entitlements at all, so without the snapshot a dataset shared with your collaboration would be invisible to those clients.
 
 A reading older than the configured limit (`MEMBERSHIP_MAX_AGE_DAYS`, 30 by default) is not trusted: it no longer grants access and no longer lists you among a collaboration's people. This bounds how long someone who has left a collaboration keeps reaching its items through an access token.
 
@@ -58,7 +58,7 @@ Seeing no collaboration means one of three things, and the page says which:
 | The reading is too old to trust | It grants nothing until it is taken again. |
 | Your identity provider reported none | A reading was taken and named no group. |
 
-An access token carries no group membership at all, which is why the reading exists; a request made with one therefore never takes a reading, and never clears the one you have.
+A hub personal access token carries no group membership at all, which is why the reading exists; a request made with one therefore never takes a reading, and never clears the one you have. A [SRAM application token](mcp.md#sram-application-tokens) is different: SRAM answers every check with your current groups, so a request made with one takes a reading like a sign-in does.
 
 ### People in your collaborations
 
