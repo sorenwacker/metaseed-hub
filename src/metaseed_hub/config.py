@@ -19,6 +19,11 @@ DEV_OIDC_CLIENT_ID = "metaseed-hub"
 DEV_OIDC_CLIENT_SECRET = "metaseed-hub-dev-secret"
 
 
+#: Where the hub is mounted on its host. Templates put it in front of every
+#: route; it is not the instance's origin (``Settings.app_url``).
+MOUNT_PREFIX = "/hub"
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 

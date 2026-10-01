@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from metaseed_hub import __version__
 from metaseed_hub.api import api_router
 from metaseed_hub.auth import verify_token
-from metaseed_hub.config import get_settings
+from metaseed_hub.config import MOUNT_PREFIX, get_settings
 from metaseed_hub.database import db
 from metaseed_hub.security_headers import ContentSecurityPolicyMiddleware
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR as METASEED_STATIC
@@ -150,7 +150,7 @@ def create_app() -> FastAPI:
     # rules the deployed site enforces rather than none at all.
     app.add_middleware(ContentSecurityPolicyMiddleware)
 
-    app.mount("/hub", hub_app)
+    app.mount(MOUNT_PREFIX, hub_app)
 
     # Redirect root to hub
     from fastapi.responses import PlainTextResponse, RedirectResponse

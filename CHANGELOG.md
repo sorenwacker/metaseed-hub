@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.59.1] - unreleased
+
+### Fixed
+- The Explorer's **Compare** works again. Release 0.59.0 filled the template variable `base_url` with the instance's absolute URL, where every template uses it as the `/hub` mount prefix, so the Explorer posted its comparison to `https://<host>/explore/compare`, a path outside the mount, and every click answered 404. The prefix and the origin are now two variables, `base_url` and `app_url`, filled by the one context builder, with a test that the Explorer's own fetch URL is a route the application serves.
+- A push runs the structural gate tests in about fifteen seconds instead of the full suite, through the hook the repository now ships; the duplicate-code check that hook declares runs for the first time, and the two duplications it found are gone (one membership mixin, one draft-at-a-free-name helper).
+- A loaded profile is copied before a draft is named after it, so naming cannot edit the shared, cached specification in place.
+
 ## [0.59.0] - 261001
 
 Fifteen changes from the 260930 codebase review (docs/REVIEW.md), each with a gate test so the rule it restores cannot erode again.

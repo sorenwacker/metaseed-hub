@@ -8,7 +8,7 @@
        login), so it carries a clear description and share preview that
        distinguish this Metaseed from the unrelated projects of the same name. #}
     <meta name="description" content="{% block meta_description %}Metaseed Hub is a platform for authoring and validating research metadata against established standards — MIAPPE, ISA, DiSSCo, Darwin Core and ENA — hosted at TU Delft.{% endblock %}">
-    {% set _base = base_url if base_url is defined else 'https://metaseed.ewi.tudelft.nl' %}
+    {% set _base = app_url if app_url is defined else 'https://metaseed.ewi.tudelft.nl' %}
     <link rel="canonical" href="{{ _base }}/hub/">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Metaseed Hub">
