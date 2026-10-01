@@ -20,6 +20,7 @@ from starlette.routing import Mount
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import MOUNT_PREFIX, get_settings
+from metaseed_hub.database import get_session
 from metaseed_hub.main import create_app
 from metaseed_hub.ui.dependencies import get_current_user_from_cookie
 from metaseed_hub.ui.render import standard_context
@@ -45,6 +46,12 @@ async def test_the_explorer_compares_under_the_mount(session) -> None:
     app = create_app()
     hub = next(r.app for r in app.routes if isinstance(r, Mount) and r.path == "/hub")
     hub.dependency_overrides[get_current_user_from_cookie] = lambda: _TOKEN
+
+    async def _session():
+        yield session
+
+    # The test database, not the configured one: CI has no "metaseed_hub".
+    hub.dependency_overrides[get_session] = _session
     with (
         patch(
             "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
