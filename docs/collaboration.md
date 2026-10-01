@@ -54,7 +54,7 @@ You are notified when
 
 - someone shares an item with you, changes your role on it, or removes your access, and when an invitation to you is redeemed at your first sign-in;
 - a collaboration you are in is granted access to an item, or loses it;
-- someone comments on a dataset or draft you own, or replies to a comment of yours;
+- someone comments on a dataset or draft you own, or on a specification you published, or replies to a comment of yours;
 - someone publishes a specification to a collaboration you are in.
 
 You are not notified of your own actions, and one action produces one entry per person it concerns, however many items it touches. A request made with an access token (metaseed, MCP clients) neither reads nor produces notifications; the list is part of the web interface.
@@ -110,7 +110,7 @@ The **Comments** tab provides threaded discussion on a dataset.
 - React to a comment with **Like** or **Dislike**.
 - Delete a comment you authored.
 
-Specification drafts have their own **Comments** tab that works the same way.
+Specification drafts have their own **Comments** tab that works the same way, and so does a published specification: a release can be discussed by everyone who can see it, which is the collaboration it was published to, or every user of the hub. Comments on a release belong to that version: a new version starts with none, and forking a specification into a draft does not carry them over. The people who published it are notified of each comment.
 
 ## Presence
 
