@@ -16,56 +16,36 @@
             <h2 class="section-title">My Datasets</h2>
             <a href="/hub/datasets/new" class="btn btn-primary btn-sm">+ New Dataset</a>
         </div>
-        <div class="project-grid">
-            {% for dataset in datasets %}
-            <div class="project-card">
-                <a href="/hub/datasets/{{ dataset.id }}" class="project-card-link">
-                    <h3>{{ dataset.name }}</h3>
-                    {% if dataset.description %}
-                    <p>{{ dataset.description }}</p>
-                    {% endif %}
-                    <div class="project-meta">
-                        <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
-                        <span class="date">{{ dataset.updated_at.strftime('%Y-%m-%d') }}</span>
-                        {% set counts = entity_counts[dataset.id] %}
-                        {% set total = counts.values()|sum %}
-                        {% if total %}
-                        <span class="entity-count" data-testid="entity-count"
-                              title="{% for entity_type, n in counts.items() %}{{ n }} {{ entity_type }}{{ ', ' if not loop.last }}{% endfor %}">{{ total }} {{ 'entity' if total == 1 else 'entities' }}</span>
-                        {% else %}
-                        <span class="entity-count entity-count-empty" data-testid="entity-count">No entities</span>
-                        {% endif %}
-                        {# Why a dataset you do not own is in your list. #}
-                        {% if granted_by and granted_by.get(dataset.id) %}
-                        <span class="grant-badge" data-testid="granted-by"
-                              title="Shared with your collaboration">{{ granted_by[dataset.id] }}</span>
-                        {% endif %}
-                    </div>
-                </a>
-            </div>
-            {% else %}
-            <div class="empty-state-card">
-                <div class="empty-state-icon">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7z"/>
-                        <path d="M12 4v16M4 12h16"/>
-                    </svg>
-                </div>
-                <p class="empty-state-title">No datasets yet</p>
-                <p class="empty-state-desc">
-                    A dataset is metadata recorded against a standard &mdash; MIAPPE, ISA,
-                    Darwin Core, ENA &mdash; or against one you write yourself. Start from an
-                    empty one, or import an existing record from ENA, PRIDE, MetaboLights or a
-                    BrAPI server and fill in what it is missing.
-                </p>
-                <a href="/hub/datasets/new" class="btn btn-primary">+ New Dataset</a>
-                <p class="empty-state-more">
-                    Not sure which standard fits? <a href="/hub/explore/">Compare them in the
-                    Explorer</a>, or <a href="/hub/spec-builder">build your own</a> when none
-                    does. <a href="/hub/home">What the hub is for</a> walks through all of it.
-                </p>
-            </div>
-            {% endfor %}
+        <form class="dataset-list-controls" method="get" action="/hub/"
+              hx-get="/hub/" hx-target="#dataset-list" hx-swap="innerHTML" hx-push-url="true"
+              hx-trigger="input changed delay:300ms from:find input, change from:find select"
+              data-testid="dataset-list-controls">
+            <input type="hidden" name="view" value="{{ filters.view }}">
+            <input type="hidden" name="sort" value="{{ filters.sort }}">
+            <input type="hidden" name="dir" value="{{ filters.direction }}">
+            <span class="view-toggle" role="group" aria-label="View">
+                <a href="/hub/?view=cards" class="{% if filters.view == 'cards' %}active{% endif %}">Cards</a>
+                <a href="/hub/?view=table" class="{% if filters.view == 'table' %}active{% endif %}">Table</a>
+            </span>
+            {% if filters.view == 'table' %}
+            <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name, description or profile"
+                   aria-label="Search datasets" class="form-input">
+            <select name="profile" aria-label="Profile" class="form-select">
+                <option value="">Every profile</option>
+                {% for profile in profiles %}
+                <option value="{{ profile }}" {% if filters.profile == profile %}selected{% endif %}>{{ profile }}</option>
+                {% endfor %}
+            </select>
+            <select name="access" aria-label="Access" class="form-select">
+                <option value="">Any access</option>
+                <option value="mine" {% if filters.access == 'mine' %}selected{% endif %}>Mine</option>
+                <option value="shared" {% if filters.access == 'shared' %}selected{% endif %}>Shared with me</option>
+                <option value="collaboration" {% if filters.access == 'collaboration' %}selected{% endif %}>Through a collaboration</option>
+            </select>
+            {% endif %}
+        </form>
+        <div id="dataset-list">
+            {% include "partials/dataset_list.html" %}
         </div>
     </section>
 </div>

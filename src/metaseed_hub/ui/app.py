@@ -22,6 +22,14 @@ from metaseed_hub.audience import audience_label
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, SpecDraft
 from metaseed_hub.sharing import accessible_ids, granting_urns, resource_for
+from metaseed_hub.ui.dataset_list import (
+    VIEW_COOKIE,
+    VIEWS,
+    DatasetRow,
+    ListFilters,
+    apply_filters,
+    profiles_of,
+)
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     DuplicateAccountEmailError,
@@ -377,25 +385,50 @@ def create_hub_app() -> FastAPI:
                 seen_ids.add(spec.id)
                 specs.append(spec)
 
-        return render_template(
-            request=request,
-            name="home.html",
-            context={
-                "user": user,
-                "tenant": tenant,
-                "datasets": datasets,
-                # What each card says about size: the tree is already loaded
-                # with the row, so counting it costs no further query.
-                "entity_counts": {
-                    ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets
-                },
-                "specs": specs,
-                # Which collaboration reaches each item the person does not own,
-                # so a card can say why it is in their list at all.
-                "granted_by": await _granted_labels(session, db_user.id),
-                "nav_active": "home",
-            },
+        # Which collaboration reaches each item the person does not own,
+        # so a card can say why it is in their list at all.
+        granted_by = await _granted_labels(session, db_user.id)
+        owned_ids = {ds.id for ds in owned_datasets}
+        # What each card says about size: the tree is already loaded with the
+        # row, so counting it costs no further query.
+        entity_counts = {ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets}
+        rows = [
+            DatasetRow(
+                dataset=ds,
+                entities=sum(entity_counts[ds.id].values()),
+                access="mine"
+                if ds.id in owned_ids
+                else ("collaboration" if granted_by.get(ds.id) else "shared"),
+                collaboration=granted_by.get(ds.id),
+            )
+            for ds in datasets
+        ]
+        filters = ListFilters.from_query(
+            request.query_params, remembered=request.cookies.get(VIEW_COOKIE)
         )
+        context = {
+            "user": user,
+            "tenant": tenant,
+            "datasets": datasets,
+            "entity_counts": entity_counts,
+            "rows": apply_filters(rows, filters),
+            "profiles": profiles_of(rows),
+            "filters": filters,
+            "specs": specs,
+            "granted_by": granted_by,
+            "nav_active": "home",
+        }
+        # A search or a filter arrives from the page itself and wants only the
+        # list back; a plain visit wants the page.
+        is_fragment = request.headers.get("HX-Request") == "true"
+        response = render_template(
+            request=request,
+            name="partials/dataset_list.html" if is_fragment else "home.html",
+            context=context,
+        )
+        if request.query_params.get("view") in VIEWS:
+            response.set_cookie(VIEW_COOKIE, filters.view, max_age=365 * 24 * 3600, samesite="lax")
+        return response
 
     @app.get("/home", response_class=Response)
     async def overview_home(request: Request, user: OptionalUser) -> Response:

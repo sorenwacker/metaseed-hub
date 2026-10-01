@@ -496,6 +496,97 @@ body {
     margin-bottom: var(--space-md);
 }
 
+/* The dataset list's controls: view toggle, then search and filters when the
+   table is shown. One row that wraps on a narrow screen. */
+.dataset-list-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+}
+
+.dataset-list-controls input[type="search"] {
+    flex: 1 1 16rem;
+    min-width: 12rem;
+}
+
+.view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.view-toggle a {
+    padding: var(--space-xs) var(--space-md);
+    color: var(--clr-ink-light);
+    text-decoration: none;
+}
+
+.view-toggle a.active {
+    background: var(--clr-ink);
+    color: var(--clr-paper);
+}
+
+.dataset-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--clr-paper);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+
+.dataset-table th,
+.dataset-table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+    border-bottom: 1px solid var(--clr-border-light);
+    vertical-align: top;
+}
+
+.dataset-table th a {
+    color: var(--clr-ink-light);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+}
+
+.dataset-table th a.sorted::after {
+    content: " \2191";
+}
+
+.dataset-table th a.sorted.desc::after {
+    content: " \2193";
+}
+
+.dataset-table tbody tr:hover {
+    background: var(--clr-parchment);
+}
+
+.dataset-table-name {
+    font-weight: 500;
+}
+
+.dataset-table-description {
+    display: block;
+    color: var(--clr-ink-light);
+    font-size: 0.85rem;
+}
+
+.dataset-table-number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.dataset-table-date {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 .section-header .section-title {
     margin: 0;
     padding: 0;
