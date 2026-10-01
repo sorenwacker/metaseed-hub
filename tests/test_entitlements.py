@@ -60,12 +60,26 @@ class TestParsing:
     def test_something_that_is_not_a_group_urn_is_not_one(self) -> None:
         assert parse_group("urn:mace:terena.org:tcs:personal-user") is None
 
-    def test_a_urn_missing_a_part_is_dropped_rather_than_half_parsed(self) -> None:
+    def test_membership_in_the_collaboration_itself_is_a_group_without_a_group(self) -> None:
+        # SRAM reports a member of a collaboration by the collaboration's own
+        # URN, and adds a group URN per group they are in. A member in no
+        # group has only the first, and was invisible everywhere.
+        parsed = parse_group(f"{SRAM_GROUP_PREFIX}tudelft:sramdemo")
+        assert parsed is not None
+        assert (parsed.organisation, parsed.collaboration, parsed.group) == (
+            "tudelft",
+            "sramdemo",
+            None,
+        )
+        assert groups(_entitlements(f"{SRAM_GROUP_PREFIX}tudelft:sramdemo")) == [parsed]
+
+    def test_a_malformed_urn_is_dropped_rather_than_half_parsed(self) -> None:
         # A malformed entitlement must not become a group that no grant will
         # ever match while still appearing in the UI as though it could.
-        assert parse_group(f"{SRAM_GROUP_PREFIX}tudelft:sramdemo") is None
+        assert parse_group(f"{SRAM_GROUP_PREFIX}tudelft") is None
         assert parse_group(f"{SRAM_GROUP_PREFIX}tudelft::group") is None
-        assert groups(_entitlements(f"{SRAM_GROUP_PREFIX}tudelft:sramdemo")) == []
+        assert parse_group(f"{SRAM_GROUP_PREFIX}surf-ram#sram.surf.nl") is None
+        assert groups(_entitlements(f"{SRAM_GROUP_PREFIX}tudelft")) == []
 
 
 class TestWhatAGrantIsMatchedAgainst:
@@ -81,6 +95,10 @@ class TestWhatAGrantIsMatchedAgainst:
         entitled = entitled_urns(_entitlements(TUDELFT))
         assert ADMINS not in entitled
         assert f"{SRAM_GROUP_PREFIX}myorg:myco" not in entitled
+
+    def test_a_member_in_no_group_is_matched_by_the_collaboration_grant(self) -> None:
+        collaboration = f"{SRAM_GROUP_PREFIX}tudelft:sramdemo"
+        assert entitled_urns(_entitlements(collaboration)) == {collaboration}
 
     def test_a_user_in_no_group_matches_nothing(self) -> None:
         assert entitled_urns(_entitlements()) == set()

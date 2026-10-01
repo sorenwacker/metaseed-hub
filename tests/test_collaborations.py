@@ -322,3 +322,27 @@ async def test_the_snapshot_and_a_live_token_yield_the_same_urns(session: AsyncS
 async def test_a_grant_is_labelled_by_its_collaboration_not_its_urn() -> None:
     assert grant_label(CROPXR) == "cropxr"
     assert grant_label(PHENO) == "cropxr / phenotyping"
+
+
+async def test_a_member_in_no_group_is_a_member(session: AsyncSession) -> None:
+    """Production had a metaseed collaboration member whose reading held only
+    the collaboration's URN: absent from People, from their own profile and
+    from every collaboration grant."""
+    from metaseed_hub.collaborations import collaborations_of, people_in
+
+    tenant = make_tenant(slug="nogroup01")
+    session.add(tenant)
+    await session.flush()
+    lone = make_user(tenant=tenant, email="lone@example.org", keycloak_id="kc-lone")
+    grouped = make_user(tenant=tenant, email="grouped@example.org", keycloak_id="kc-grouped")
+    session.add_all([lone, grouped])
+    await session.commit()
+    await record_memberships(session, lone.id, [CROPXR])
+    await record_memberships(session, grouped.id, [CROPXR, PHENO])
+    await session.commit()
+
+    assert [c.urn for c in await collaborations_of(session, lone.id)] == [CROPXR]
+    assert (await collaborations_of(session, lone.id))[0].groups == []
+    listed = {u.email for u in await people_in(session, CROPXR, viewer_id=lone.id)}
+    assert listed == {"lone@example.org", "grouped@example.org"}
+    assert CROPXR in await entitled_urns_of(session, lone.id)
