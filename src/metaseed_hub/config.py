@@ -83,6 +83,17 @@ class Settings(BaseSettings):
     # access token without anyone acting.
     membership_max_age_days: int = 30
 
+    # SRAM application tokens: members create them in SRAM for this
+    # application, and the hub checks each against SRAM's introspection
+    # endpoint with this credential (the application's introspection token).
+    # Empty, and SRAM tokens are refused as not enabled; hub personal access
+    # tokens remain the non-interactive credential, as on a local instance.
+    sram_introspection_token: str = ""
+    sram_introspection_url: str = "https://sram.surf.nl/api/tokens/introspect"
+    # How long an answer is reused before SRAM is asked again. A token SRAM
+    # has just revoked keeps working for at most this long.
+    sram_introspection_cache_seconds: int = 300
+
     @property
     def using_default_secret_key(self) -> bool:
         """Return True when the insecure development secret key is still in use."""
