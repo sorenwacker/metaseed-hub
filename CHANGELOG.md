@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.59.0] - 261001
+
+Fifteen changes from the 260930 codebase review (docs/REVIEW.md), each with a gate test so the rule it restores cannot erode again.
+
+### Fixed
+- A dataset is written by one function whichever way it is saved: the REST `PATCH`, a version restore and an agent's edits now take the row lock and record a version like the web interface, and a state written before any version existed is recorded before it is replaced. A draft is saved by one function too: an agent's edit that started before a browser save is refused instead of silently overwriting it, and changing a draft's version onto one you already hold takes a free name instead of failing.
+- A specification published to a collaboration exists for its members in every MCP tool; `get_profile_relationships`, `spec_clone` and `create_dataset` answered "No profile named" for one that `list_profiles` had just listed.
+- Comparing in the Explorer when a draft shared with you has the same name and version as one of your own loads your own instead of failing.
+- A soft-deleted account is refused wherever accounts are resolved, including the home page, instead of being served or re-provisioned.
+- Fourteen ordinary actions that ended in a 500 or were silently swallowed now answer: a reply to a reply in spec comments, forking a published specification twice, an unknown field type, a template that cannot be loaded, a file whose entities cannot be loaded under the chosen profile (nothing is created, the form says why), example data that does not fit, an archive answer the importer cannot read (reported as a failed import, not an empty result), malformed comment and version ids, logout while the identity provider is unreachable, restoring a removed specification its owner has republished, a websocket join that fails half-way, an empty compose file on the admin dashboard, and a non-ASCII CSRF token.
+- A file imported against a draft or a published specification is bound to it as a dataset created from the New tab is; the import stored the literal picker value and no binding.
+- Deleting a row added in the current page session redraws the whole table, so the remaining rows keep addressing their own items; the SEEK forms validate the CSRF token every other form validates.
+- The field editor saves ISA tag, Within Branch and Reference Resolves, which it showed but discarded, and offers the ISA tags; a reply to a spec comment that no longer exists is refused instead of posted as a new top-level comment.
+- Renaming an entity in the spec builder rewrites a validation rule's reference and keeps the entity's position, as the MCP rename always did; deleting an entity clears a rule reference to it.
+- Spec-builder and Explorer pages carry the configured base URL instead of the template's hard-coded production address.
+- Expired API tokens are no longer listed as active on the profile page.
+
+### Changed
+- A draft created by an agent carries the name it is addressed by as its specification's profile name, and renaming the specification renames the draft; the response carries the new name.
+- The spec builder no longer shows an "unsaved changes" marker: every edit is saved as it is made, and Save re-checks the name and records the draft as a whole.
+- Version strings are ordered by metaseed's `version_sort_key` everywhere; OIDC discovery is fetched and cached once; the error recorder, the sign-in callback and the websocket manager take their collaborators from the application that composes them.
+
 ## [0.58.2] - 260930
 
 ### Fixed
