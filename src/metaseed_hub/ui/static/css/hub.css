@@ -6822,6 +6822,14 @@ a.start-option-card:hover {
     max-width: 40rem;
 }
 
+.admin-error-text summary {
+    cursor: pointer;
+}
+
+.admin-error-when {
+    white-space: nowrap;
+}
+
 .admin-error-request {
     overflow-wrap: anywhere;
     max-width: 20rem;

@@ -1,0 +1,21 @@
+{# One recorded error. The time never wraps; the request and the message wrap
+   inside their columns; a message longer than a few lines is folded to its
+   first 200 characters, the rest a click away, so a database error carrying
+   its SQL does not push the table off the page. #}
+<tr>
+    <td class="admin-error-when">{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td class="admin-error-request"><code>{{ e.method }} {{ e.path }}</code></td>
+    <td class="admin-error-text">
+        <strong>{{ e.exception_type }}</strong>:
+        {% if e.message|length > 200 %}
+        <details>
+            <summary>{{ e.message[:200] }}…</summary>
+            {{ e.message }}
+        </details>
+        {% else %}
+        {{ e.message }}
+        {% endif %}
+    </td>
+    {# Null when the caller was not identified, or the account was deleted. #}
+    <td>{{ e.user.email if e.user else '-' }}</td>
+</tr>

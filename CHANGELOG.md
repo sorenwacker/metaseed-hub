@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [0.60.1] - unreleased
 
 ### Fixed
+- **The admin error list fits the page.** The time no longer wraps, a request path and a message wrap inside their columns, and a message longer than 200 characters is folded with the rest a click away; the table scrolls rather than pushing past its container. The stylesheet had the rules; no template used them.
 - **A member of a collaboration who is in none of its groups is a member.** SRAM reports membership of the collaboration itself as the collaboration's own URN and adds one URN per group; the hub parsed only the group form, so such a person was missing from **People**, saw no collaboration on their own profile, was not reached by a grant to the collaboration, and could not be published to. Seen on the hosted hub with a member who signed in through eduID.
 
 ## [0.60.0] - 261001

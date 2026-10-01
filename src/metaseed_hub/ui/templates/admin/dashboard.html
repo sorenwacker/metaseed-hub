@@ -281,6 +281,7 @@
             </tbody>
         </table>
         {% endif %}
+        <div class="admin-table-scroll">
         <table class="admin-table admin-table-full">
             <thead>
                 <tr>
@@ -292,16 +293,11 @@
             </thead>
             <tbody>
                 {% for e in recent_errors %}
-                <tr>
-                    <td>{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td><code>{{ e.method }} {{ e.path }}</code></td>
-                    <td><strong>{{ e.exception_type }}</strong>: {{ e.message }}</td>
-                    {# Null when the caller was not identified, or the account was deleted. #}
-                    <td>{{ e.user.email if e.user else '-' }}</td>
-                </tr>
+                {% include "admin/_error_row.html" %}
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <p class="empty-state">No errors recorded.</p>
         {% endif %}
