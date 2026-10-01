@@ -1,25 +1,20 @@
 """Published specs, drafts and their membership."""
 
-from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import (
-    DateTime,
     Enum,
     ForeignKey,
     Index,
     String,
     Text,
     UniqueConstraint,
-    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from metaseed_hub.sharing import Role
 
 from .base import Base, _enum_values
 
@@ -30,7 +25,7 @@ if TYPE_CHECKING:
     from .comments import SpecComment
     from .identity import Tenant, User
 
-from .mixins import SoftDeleteMixin, TimestampMixin
+from .mixins import MemberMixin, SoftDeleteMixin, TimestampMixin
 
 
 class SpecStatus(StrEnum):
@@ -109,7 +104,7 @@ class Spec(TimestampMixin, SoftDeleteMixin, Base):
     members: Mapped[list["SpecMember"]] = relationship("SpecMember", back_populates="spec")
 
 
-class SpecMember(Base):
+class SpecMember(MemberMixin, Base):
     """User membership in a spec with role-based access."""
 
     __tablename__ = "spec_members"
@@ -123,22 +118,6 @@ class SpecMember(Base):
         ForeignKey("specs.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role: Mapped[Role] = mapped_column(
-        Enum(Role, name="memberrole", values_callable=_enum_values),
-        nullable=False,
-        default=Role.VIEWER,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
     # Relationships
     spec: Mapped["Spec"] = relationship("Spec", back_populates="members")
     user: Mapped["User"] = relationship("User", back_populates="spec_memberships")
@@ -212,7 +191,7 @@ class SpecDraft(TimestampMixin, Base):
     )
 
 
-class SpecDraftMember(Base):
+class SpecDraftMember(MemberMixin, Base):
     """User membership in a spec draft with role-based access."""
 
     __tablename__ = "spec_draft_members"
@@ -226,22 +205,6 @@ class SpecDraftMember(Base):
         ForeignKey("spec_drafts.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    role: Mapped[Role] = mapped_column(
-        Enum(Role, name="memberrole", values_callable=_enum_values),
-        nullable=False,
-        default=Role.VIEWER,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
     # Relationships
     spec_draft: Mapped["SpecDraft"] = relationship("SpecDraft", back_populates="members")
     user: Mapped["User"] = relationship("User")

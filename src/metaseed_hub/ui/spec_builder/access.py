@@ -581,23 +581,47 @@ async def unpublish_spec(
     # duplicate draft beside it, nor withdraw it with the work gone.
     spec.soft_delete()
 
-    # A user may already hold a draft at the spec's name and version, so reuse
-    # the collision-avoiding name here or the withdrawal fails on the unique
-    # index.
-    name = await free_draft_name(
+    return await create_draft_at_a_free_name(
         session,
         user_id=user_id,
         tenant_id=spec.tenant_id,
+        spec=builder.spec,
+        source_spec_id=spec.id,
+    )
+
+
+async def create_draft_at_a_free_name(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    tenant_id: str,
+    spec: ProfileSpec,
+    template_source: tuple[str, str] | None = None,
+    source_spec_id: str | None = None,
+) -> SpecDraft:
+    """Create a draft named after ``spec``, suffixed if the user already holds one.
+
+    Forking, cloning, importing and restoring a specification all name the
+    draft after the specification, and the user may already hold a draft at
+    that name and version: the second fork raised IntegrityError on the unique
+    index. One place picks the free name (see ``free_draft_name``) and creates
+    the draft, so none of the four can forget to.
+    """
+    name = await free_draft_name(
+        session,
+        user_id=user_id,
+        tenant_id=tenant_id,
         wanted=spec.name,
-        version=builder.spec.version,
+        version=spec.version,
     )
     return await create_new_draft(
         session,
         user_id=user_id,
-        tenant_id=spec.tenant_id,
+        tenant_id=tenant_id,
         name=name,
-        spec=builder.spec,
-        source_spec_id=spec.id,
+        spec=spec,
+        template_source=template_source,
+        source_spec_id=source_spec_id,
     )
 
 

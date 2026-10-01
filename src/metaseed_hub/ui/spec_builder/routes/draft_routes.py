@@ -25,9 +25,8 @@ from metaseed_hub.ui.spec_builder.access import (
     SpecInUseError,
     can_edit_draft,
     can_edit_spec,
-    create_new_draft,
+    create_draft_at_a_free_name,
     datasets_using_spec,
-    free_draft_name,
     load_state_for_draft,
     require_owner_role,
     save_state_to_draft,
@@ -412,20 +411,11 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
 
         # The forker's own account, not the source spec's: a fork is the
         # forker's copy. Taking the source's tenant would put their work in
-        # someone else's account, where they could not find it. The name is
-        # the specification's, suffixed when the forker already holds a draft
-        # at that name and version: a second fork raised IntegrityError.
-        draft = await create_new_draft(
+        # someone else's account, where they could not find it.
+        draft = await create_draft_at_a_free_name(
             session,
             user_id=user_id,
             tenant_id=tenant_id,
-            name=await free_draft_name(
-                session,
-                user_id=user_id,
-                tenant_id=tenant_id,
-                wanted=spec.name,
-                version=builder.spec.version,
-            ),
             spec=builder.spec,
             source_spec_id=spec.id,
         )
