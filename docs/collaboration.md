@@ -40,7 +40,7 @@ Each person has their own account, and sharing reaches across accounts: the pers
 
 ## Collaborations
 
-The hosted hub authenticates through SURF Research Access Management (SRAM), where people are organised into *collaborations*, each with one or more *groups*. SRAM reports a person's groups at sign-in as `eduperson_entitlement` URNs of the form `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>:<group>`. The hub uses them for two things: finding the people you work with, and sharing an item with a whole collaboration at once. A local instance authenticates through Keycloak, whose development realm emits the same URNs, so everything here works locally.
+The hosted hub authenticates through SURF Research Access Management (SRAM), where people are organised into *collaborations*, each with one or more *groups*. SRAM reports a person's membership at sign-in as `eduperson_entitlement` URNs: `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>` for the collaboration itself, and `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>:<group>` for each of its groups the person is in. A member of a collaboration who is in none of its groups is reported by the first form alone, and is a member like any other: listed under **People**, shown on their own profile, and reached by a grant to the collaboration. The hub uses them for two things: finding the people you work with, and sharing an item with a whole collaboration at once. A local instance authenticates through Keycloak, whose development realm emits the same URNs, so everything here works locally.
 
 ### Your collaborations
 
