@@ -85,6 +85,38 @@ def test_the_graph_opens_beside_the_editor_on_the_dataset_page(driver) -> None: 
     _no_severe_console_errors(driver)
 
 
+def test_the_simulation_can_be_stopped(driver) -> None:  # noqa: F811
+    """Reported: some graphs never settle and keep rotating, and the hub had no
+    way to stop them. The toggle is the library's; the hub only has to offer
+    the button the script looks for."""
+    dataset_id = _dataset_with_example_data(driver)
+    driver.get(f"{BASE}/hub/datasets/{dataset_id}/graph")
+    WebDriverWait(driver, 45).until(
+        lambda d: d.find_elements(By.CSS_SELECTOR, "#graph-view canvas")
+    )
+    # The legend arriving reflows the toolbar; a click sent before that lands
+    # where the button no longer is.
+    WebDriverWait(driver, 20).until(
+        lambda d: d.find_element(By.ID, "graph-legend").text.strip() != ""
+    )
+    button = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.ID, "graph-physics-btn"))
+    )
+    assert button.text == "Stop Physics"
+    driver.get_log("browser")  # what the pages before this one logged is not this test's
+
+    button.click()
+
+    WebDriverWait(driver, 10).until(lambda d: button.text == "Start Physics")
+    assert driver.execute_script("return graphPhysicsRunning") is False
+    _no_severe_console_errors(driver)
+
+    button.click()
+
+    WebDriverWait(driver, 10).until(lambda d: button.text == "Stop Physics")
+    assert driver.execute_script("return graphPhysicsRunning") is True
+
+
 def test_the_graph_page_draws_the_dataset(driver) -> None:  # noqa: F811
     dataset_id = _dataset_with_example_data(driver)
 
