@@ -58,6 +58,7 @@ nav:
     - Editing entities: datasets/entities.md
     - Versions and history: datasets/versions.md
     - Importing and exporting: datasets/import-export.md
+    - Pushing to SEEK: datasets/seek.md
     - Graph view: datasets/graph.md
   - Collaboration: collaboration.md
   - Spec Builder:

@@ -21,7 +21,7 @@ import json
 import logging
 import socket
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -38,9 +38,13 @@ from metaseed_hub.ui.dependencies import (
     require_user,
 )
 from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
+from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import validate_csrf_or_error
 from metaseed_hub.ui.services.seek_connection import connection_for_user, tenant_for_user
+
+if TYPE_CHECKING:
+    from metaseed.specs.schema import ProfileSpec
 
 logger = logging.getLogger(__name__)
 
@@ -276,27 +280,30 @@ async def seek_settings_check(
 REQUIRED_ROLE = "Investigation"
 
 
-def profile_supports_seek(profile: str, version: str) -> bool:
-    """Whether a dataset on this profile can be pushed to SEEK at all.
+def spec_supports_seek(spec: ProfileSpec | None) -> bool:
+    """Whether a dataset on this specification can be pushed to SEEK at all.
 
-    Read from the profile's own SEEK role annotations rather than a list of
-    names here, so a specification that declares the roles works without the
+    Read from the specification's own SEEK role annotations rather than a list
+    of names here, so a specification that declares the roles works without the
     hub being taught about it.
-    """
-    from metaseed.specs.loader import SpecLoader
 
-    try:
-        spec = SpecLoader().load_profile(version, profile)
-    except Exception:
+    Args:
+        spec: The dataset's specification, as ``dataset_profile_spec`` resolves
+            it, or None when it could not be resolved.
+
+    Returns:
+        True if an entity carries the Investigation role.
+    """
+    if spec is None:
         return False
     return any(
         entity.seek and entity.seek.role == REQUIRED_ROLE for entity in spec.entities.values()
     )
 
 
-@router.get("/templates/{profile}/{version}")
-async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Response:
-    """Download a profile's ISA Templates, for a SEEK administrator to install.
+@router.get("/datasets/{dataset_id}/templates")
+async def seek_isa_templates(dataset_id: str, session: DbSession, user: SeekUser) -> Response:
+    """Download the ISA Templates of a dataset's specification.
 
     Sample Types and controlled vocabularies are provisioned by the push
     itself. Templates are not: only an administrator can install them, under
@@ -304,20 +311,25 @@ async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Resp
     assay data file from an assay material. Without them a pushed dataset is in
     SEEK but cannot be exported as ISA-JSON, which is the whole point of
     putting it there.
+
+    Addressed by dataset, not by profile name: a draft or a published
+    specification lives in the database, where a name finds nothing.
     """
     from metaseed.seek.templates import to_isa_template_json
-    from metaseed.specs.loader import SpecLoader
 
-    try:
-        spec = SpecLoader().load_profile(version, profile)
-    except Exception:
-        # Never echo the requested profile back into the response.
-        raise HTTPException(status_code=404, detail="Unknown profile") from None
-
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    spec = await dataset_profile_spec(session, dataset)
+    if spec is None or not spec_supports_seek(spec):
+        # The same refusal the check and the push give: templates for a
+        # specification that cannot be pushed would install and serve nothing.
+        raise HTTPException(
+            status_code=422,
+            detail=f"The {dataset.profile} profile does not map onto SEEK.",
+        )
     try:
         document = to_isa_template_json(spec)
     except Exception as exc:
-        logger.info("ISA templates could not be built for %s: %s", profile, exc)
+        logger.info("ISA templates could not be built for %s: %s", dataset.profile, exc)
         raise HTTPException(
             status_code=422,
             detail=(
@@ -326,7 +338,7 @@ async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Resp
             ),
         ) from None
 
-    stem = "".join(c for c in f"{profile}-{version}" if c.isalnum() or c in "-_.")
+    stem = "".join(c for c in f"{dataset.profile}-{dataset.version}" if c.isalnum() or c in "-_.")
     return Response(
         json.dumps(document, indent=2),
         media_type="application/json",
@@ -377,7 +389,8 @@ async def seek_readiness(
     """
     validate_csrf_or_error(request, csrf_token)
     dataset = await get_dataset_for_user(dataset_id, session, user)
-    if not profile_supports_seek(dataset.profile, dataset.version):
+    profile = await dataset_profile_spec(session, dataset)
+    if profile is None or not spec_supports_seek(profile):
         return _panel(
             request,
             error=f"The {dataset.profile} profile does not map onto SEEK.",
@@ -389,11 +402,9 @@ async def seek_readiness(
 
     def work() -> tuple[list[str], list[str]]:
         from metaseed.seek.templates import template_title
-        from metaseed.specs.loader import SpecLoader
 
         client = _client_for(connection)
         installed = set(client.template_ids_by_title())
-        profile = SpecLoader().load_profile(dataset.version, dataset.profile)
         wanted = [
             template_title(profile, level) for level in ("study source", "study sample", "assay")
         ]
@@ -441,7 +452,8 @@ async def seek_push(
     # Before the connection: no SEEK account makes an unmappable profile work,
     # and "configure your connection first" would send someone to fix the wrong
     # thing.
-    if not profile_supports_seek(dataset.profile, dataset.version):
+    profile = await dataset_profile_spec(session, dataset)
+    if profile is None or not spec_supports_seek(profile):
         return _panel(
             request,
             error=(
@@ -466,12 +478,10 @@ async def seek_push(
             sync_dataset_to_seek,
         )
         from metaseed.seek.provision import resolve_cv_ids
-        from metaseed.specs.loader import SpecLoader
 
         client = _client_for(connection)
         # The person's choice; only fall back when they have never chosen.
         project_id = connection.project_id or client.default_project_id()
-        profile = SpecLoader().load_profile(dataset.version, dataset.profile)
         execute_provisioning_plan(client, build_provisioning_plan(profile), project_id=project_id)
         return sync_dataset_to_seek(
             client,
