@@ -399,9 +399,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
         context={
             "user": user,
             "nav_active": "profile",
-            "seek_error": request.query_params.get("seek_error"),
-            # The SEEK connection lives here, with the other per-user
-            # credentials, rather than on a page of its own that nothing links to.
+            # Its standing only; the connection is edited on the SEEK page.
             "connection": (await connection_for_user(session, user)),
             "csrf_token": get_or_create_csrf_token(request),
             "datasets_needing_new_owner": blocking_datasets,

@@ -1,0 +1,38 @@
+{# The three SEEK actions for one dataset, wherever a dataset is shown: its own
+   sidebar and its row on the SEEK page. Expects `dataset` and `connection`. #}
+{% set seek_ready = connection and connection.verified_at and not connection.last_error %}
+{% set seek_wait = "Connect your SEEK account first" if not connection else "Your SEEK connection is not working" %}
+{# A push provisions the profile and creates every record over the network,
+   which takes a while; without a sign that it started, the page looks dead and
+   people press the button again. #}
+<form hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
+      hx-target="#seek-result-{{ dataset.id }}" hx-disabled-elt="find button"
+      data-working-target="seek-result-{{ dataset.id }}"
+      data-working-message="Pushing to SEEK. Provisioning the profile and creating records takes a minute or two; this panel reports what happened.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="sidebar-actions-row" data-testid="seek-panel">
+        <button class="btn btn-sm btn-primary" type="submit" {% if not seek_ready %}disabled{% endif %}
+                title="{{ 'Provision the profile on your SEEK and push this dataset' if seek_ready else seek_wait }}"
+                data-testid="btn-seek-push">Push to SEEK</button>
+        <button class="btn btn-sm" type="button" {% if not seek_ready %}disabled{% endif %}
+                hx-post="/hub/seek/datasets/{{ dataset.id }}/check"
+                hx-target="#seek-result-{{ dataset.id }}" hx-disabled-elt="this"
+                data-working-target="seek-result-{{ dataset.id }}"
+                data-working-message="Asking SEEK what it has..."
+                title="{{ 'What this SEEK still needs before a push works' if seek_ready else seek_wait }}"
+                data-testid="btn-seek-check">Check SEEK</button>
+        <a href="/hub/seek/datasets/{{ dataset.id }}/templates"
+           class="btn btn-sm" download
+           title="ISA Templates for this profile — a SEEK administrator installs them under Templates, populate; SEEK's ISA-JSON export needs them"
+           data-testid="btn-seek-templates">ISA templates</a>
+    </div>
+    <label class="form-hint seek-downloadable"
+           title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">
+        <input type="checkbox" name="downloadable" value="true" data-testid="seek-downloadable">
+        downloadable in SEEK
+    </label>
+    {% if not seek_ready %}
+    <p class="form-hint" data-testid="seek-not-ready">{{ seek_wait }}{% if not on_seek_page %}, on the <a href="/hub/seek">SEEK page</a>{% endif %}; check and push need it.</p>
+    {% endif %}
+</form>
+<div id="seek-result-{{ dataset.id }}"></div>

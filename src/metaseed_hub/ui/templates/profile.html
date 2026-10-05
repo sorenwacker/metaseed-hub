@@ -124,9 +124,13 @@
             </form>
         </div>
 
-        {% if true %}
-        {% include "partials/seek_settings_section.html" %}
-        {% endif %}
+        <div class="profile-section" id="seek">
+            <h2>SEEK connection</h2>
+            <div class="seek-status-block">
+                {% include "partials/seek_status.html" %}
+                <a href="/hub/seek" class="btn btn-sm" data-testid="profile-seek-link">Open the SEEK page</a>
+            </div>
+        </div>
 
         <div class="profile-section">
             <h2>Delete account</h2>

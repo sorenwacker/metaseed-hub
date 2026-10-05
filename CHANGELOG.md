@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - **The graph has a Stop Physics button.** The graph script could freeze the force simulation, but neither the graph panel nor the graph window offered the button it looks for, so a graph that never settled kept moving. Both toolbars now carry **Stop Physics**, which becomes **Start Physics** to resume.
 
 ### Added
+- **A SEEK page, reachable from the header.** It holds the steps of a push in order: the connection, the project, and every dataset you can open that can be pushed, each with **Push to SEEK**, **Check SEEK** and **ISA templates**. The connection form moved there from the profile page, which keeps the connection's standing and a link. Check and push are disabled, with the reason, until the connection works. The page counts the datasets whose specification cannot be pushed.
 - **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
 
 ## [0.61.0] - 261001
