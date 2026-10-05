@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **The SEEK controls appear on datasets bound to a draft or a published specification.** The panel, **Check SEEK**, **Push to SEEK** and the **ISA templates** download looked the profile up among the installed ones by name, found nothing for a specification stored in the hub, and treated that as "does not map onto SEEK". They now read the specification the dataset is bound to. The template download is addressed by dataset (`/hub/seek/datasets/<id>/templates`); the by-name address is gone, and the download is refused for a specification without an Investigation role.
+- **The graph has a Stop Physics button.** The graph script could freeze the force simulation, but neither the graph panel nor the graph window offered the button it looks for, so a graph that never settled kept moving. Both toolbars now carry **Stop Physics**, which becomes **Start Physics** to resume.
 
 ### Added
 - **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
