@@ -16,9 +16,14 @@
             <h2 class="section-title">My Datasets</h2>
             <a href="/hub/datasets/new" class="btn btn-primary btn-sm">+ New Dataset</a>
         </div>
+        {# Listened for on the form itself: `input` and `change` bubble from
+           whichever control the view renders. Naming the controls
+           (`from:find select`) threw in the cards view, which has none, and
+           reached only the first of each in the table. A choice raises both
+           events; the shared delay folds them into one request. #}
         <form class="dataset-list-controls" method="get" action="/hub/"
               hx-get="/hub/" hx-target="#dataset-list" hx-swap="innerHTML" hx-push-url="true"
-              hx-trigger="input changed delay:300ms from:find input, change from:find select"
+              hx-trigger="input delay:300ms, change delay:300ms"
               data-testid="dataset-list-controls">
             <input type="hidden" name="view" value="{{ filters.view }}">
             <input type="hidden" name="sort" value="{{ filters.sort }}">
