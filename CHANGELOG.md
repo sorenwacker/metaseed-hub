@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **A SEEK page, reachable from the header.** It holds the steps of a push in order: the connection, the project, and every dataset you can open that can be pushed, each with **Push to SEEK**, **Check SEEK** and **ISA templates**. The connection form moved there from the profile page, which keeps the connection's standing and a link. Check and push are disabled, with the reason, until the connection works. The page counts the datasets whose specification cannot be pushed.
 - **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
+- **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
 
 ## [0.61.0] - 261001
 

@@ -13,6 +13,8 @@ from sqlalchemy.orm import selectinload
 from starlette.responses import Response
 
 from metaseed_hub.models import ReactionType, SpecComment, SpecCommentReaction
+from metaseed_hub.notifications import comment_posted
+from metaseed_hub.sharing import resource_for
 from metaseed_hub.ui.spec_builder.access import require_draft_access
 
 from ._common import SessionDep, UserContextDep
@@ -119,6 +121,7 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
         # client-supplied parent cannot link a reply across drafts. Matches the
         # spec_draft_id scoping the sibling delete/react routes enforce.
         resolved_parent_id: str | None = None
+        parent_author_id: str | None = None
         if parent_id:
             if not _is_comment_id(parent_id):
                 return HTMLResponse(
@@ -140,6 +143,7 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
                     "<div class='error'>Parent comment not found</div>", status_code=404
                 )
             resolved_parent_id = parent.id
+            parent_author_id = parent.user_id
 
         comment = SpecComment(
             spec_draft_id=draft_id,
@@ -148,6 +152,13 @@ def register_comment_routes(router: APIRouter, templates: Jinja2Templates) -> No
             content=content.strip(),
         )
         session.add(comment)
+        await comment_posted(
+            session,
+            resource_for("draft"),
+            draft_id,
+            actor_id=user_id,
+            parent_author_id=parent_author_id,
+        )
         await session.commit()
 
         return await _get_spec_comments_html(request, draft_id, session, user_id)

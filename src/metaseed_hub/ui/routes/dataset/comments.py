@@ -15,6 +15,8 @@ from metaseed_hub.models import (
     ReactionType,
     User,
 )
+from metaseed_hub.notifications import comment_posted
+from metaseed_hub.sharing import resource_for
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
     DbSession,
@@ -134,6 +136,7 @@ async def add_dataset_comment(
     # dataset's thread; without the existence check the foreign key raises an
     # unhandled IntegrityError on commit. The id is parsed first because the
     # column is UUID-typed and a malformed value would fail at the query.
+    parent: Comment | None = None
     if parent_id:
         try:
             uuid.UUID(parent_id)
@@ -144,7 +147,8 @@ async def add_dataset_comment(
         parent_result = await session.execute(
             select(Comment).where(Comment.id == parent_id, Comment.dataset_id == dataset_id)
         )
-        if parent_result.scalar_one_or_none() is None:
+        parent = parent_result.scalar_one_or_none()
+        if parent is None:
             return HTMLResponse(
                 "<div class='error'>Parent comment not found</div>", status_code=404
             )
@@ -156,6 +160,13 @@ async def add_dataset_comment(
         content=content.strip(),
     )
     session.add(comment)
+    await comment_posted(
+        session,
+        resource_for("dataset"),
+        dataset_id,
+        actor_id=db_user.id,
+        parent_author_id=parent.user_id if parent else None,
+    )
     await session.commit()
 
     return await _get_comments_html(request, dataset_id, session, user.sub)

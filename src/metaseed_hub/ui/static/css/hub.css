@@ -296,6 +296,58 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* The bell, and the unread count riding on its corner. */
+.notification-bell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.notification-bell:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.notification-count {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #c0392b;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+}
+
+.notification-count:empty {
+    display: none;
+}
+
+.notifications-page { max-width: 48rem; }
+.notification-list { list-style: none; margin: 0; padding: 0; }
+.notification-entry {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid var(--color-border, #ddd);
+}
+.notification-entry-unread {
+    border-left: 3px solid var(--color-success, #2f6f4f);
+    font-weight: 500;
+}
+.notification-text { min-width: 0; }
+.notification-time { flex: 0 0 auto; color: var(--color-text-muted, #777); font-size: 0.8125rem; }
+
 /* Header buttons (for dark header) */
 .btn-header {
     background: rgba(255, 255, 255, 0.1);
