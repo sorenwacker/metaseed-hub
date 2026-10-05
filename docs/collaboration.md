@@ -89,6 +89,19 @@ The **Comments** tab provides threaded discussion on a dataset.
 
 Specification drafts have their own **Comments** tab that works the same way.
 
+## Notifications
+
+The hub tells you about things that happened to your items while you were not looking. The bell in the header shows how many notifications are unread and opens the list. Each entry names what happened, who did it and when, and links to the item where you can still open it. Opening the list marks every entry as read. Entries are kept for 90 days.
+
+You are notified when
+
+- someone shares a dataset, a specification draft or a published specification with you, changes your role on it, or removes your access;
+- someone comments on a dataset or a draft you own, or replies to a comment of yours.
+
+You are not notified of your own actions, and one action produces at most one entry per person: the owner of a dataset who is also the author of the comment replied to gets the reply, not a second entry for the comment. Access gained or lost through a [collaboration grant](#sharing-with-a-collaboration) produces no notification.
+
+The count on the bell is refreshed once a minute while a page is open. The list is part of the web interface; a client using an access token (metaseed, MCP clients) cannot read it.
+
 ## Presence
 
 Who is in a dataset room is kept in Redis, not per process: each instance

@@ -25,6 +25,7 @@ from .comments import (
 from .datasets import Dataset, DatasetMember, DatasetVersion
 from .identity import Tenant, User
 from .mixins import SoftDeleteMixin, TimestampMixin
+from .notifications import Notification
 from .operations import ApiToken, ErrorEvent, SeekConnection
 from .specs import (
     Spec,
@@ -46,6 +47,7 @@ __all__ = [
     "DatasetVersion",
     "ErrorEvent",
     "GroupMembership",
+    "Notification",
     "ReactionType",
     "SeekConnection",
     "SoftDeleteMixin",

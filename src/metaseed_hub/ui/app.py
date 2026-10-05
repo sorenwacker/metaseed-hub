@@ -56,6 +56,7 @@ from metaseed_hub.ui.routes import (
     init_dataset_templates,
     init_entity_templates,
     is_admin,
+    notifications_router,
     ontology_router,
     people_router,
     seek_router,
@@ -306,6 +307,7 @@ def create_hub_app() -> FastAPI:
     app.include_router(seek_router)
     app.include_router(sharing_router)
     app.include_router(people_router)
+    app.include_router(notifications_router)
 
     # Add spec builder routes
     spec_builder_router = create_spec_builder_router(templates)
