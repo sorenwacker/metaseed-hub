@@ -28,7 +28,7 @@ from metaseed_hub.crypto import decrypt_secret, encrypt_secret
 from metaseed_hub.main import create_app
 from metaseed_hub.models import SeekConnection
 from tests.conftest import _test_database_url
-from tests.factories import make_dataset, make_tenant, make_user
+from tests.factories import make_dataset, make_spec, make_spec_draft, make_tenant, make_user
 
 PROFILE = "/hub/auth/profile"
 
@@ -61,6 +61,60 @@ async def dataset(session: AsyncSession):
     return ds
 
 
+HUB_SPEC = "hub-stored-isa"
+"""A specification name no installed profile has: it exists only in the database."""
+
+
+def _hub_spec_data() -> dict:
+    """The SEEK-ready template under another name, as the spec builder stores it."""
+    from metaseed.specs.loader import SpecLoader
+
+    from metaseed_hub.ui.spec_builder.state import spec_to_dict
+
+    spec = SpecLoader().load_profile("3.0", "seek-ready-template")
+    return {"spec": {**spec_to_dict(spec), "name": HUB_SPEC}}
+
+
+async def _hub_spec_dataset(session: AsyncSession, *, published: bool):
+    """A dataset bound to a specification stored in the hub, not on disk."""
+    from metaseed_hub.ui.dependencies import tenant_slug_for
+
+    tenant = make_tenant(slug=tenant_slug_for("kc-1"))
+    session.add(tenant)
+    await session.flush()
+    user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
+    session.add(user)
+    await session.flush()
+    ds = make_dataset(tenant=tenant, profile=HUB_SPEC, version="3.0")
+    if published:
+        spec = make_spec(
+            tenant=tenant, created_by=user, name=HUB_SPEC, version="3.0", spec_data=_hub_spec_data()
+        )
+        session.add(spec)
+        await session.flush()
+        ds.spec_id = spec.id
+    else:
+        draft = make_spec_draft(
+            tenant=tenant, user=user, name=HUB_SPEC, version="3.0", spec_data=_hub_spec_data()
+        )
+        session.add(draft)
+        await session.flush()
+        ds.spec_draft_id = draft.id
+    session.add(ds)
+    await session.commit()
+    return ds
+
+
+@pytest.fixture
+async def draft_dataset(session: AsyncSession):
+    return await _hub_spec_dataset(session, published=False)
+
+
+@pytest.fixture
+async def published_dataset(session: AsyncSession):
+    return await _hub_spec_dataset(session, published=True)
+
+
 def _signed_in():
     """Patch authentication for one request."""
     return patch(
@@ -76,6 +130,26 @@ async def _get(path: str) -> httpx.Response:
             transport=httpx.ASGITransport(app=app), base_url="https://test"
         ) as client:
             return await client.get(path)
+
+
+async def _post(path: str, factory_setup=None, **patches) -> httpx.Response:
+    """POST a SEEK dataset action with a CSRF token and a faked SEEK client."""
+    from contextlib import ExitStack
+
+    app = create_app()
+    with ExitStack() as stack:
+        stack.enter_context(_signed_in())
+        factory = stack.enter_context(patch("metaseed.seek.client_from_settings"))
+        if factory_setup:
+            factory_setup(factory)
+        for target, replacement in patches.items():
+            stack.enter_context(patch(target.replace("__", "."), replacement))
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://test"
+        ) as client:
+            page = await client.get(PROFILE)
+            csrf = page.text.split('name="csrf_token" value="')[1].split('"')[0]
+            return await client.post(path, data={"csrf_token": csrf}, cookies=page.cookies)
 
 
 async def _save_settings(url: str, seek_behaviour):
@@ -403,20 +477,32 @@ class TestTheIsaTemplates:
     not — only a SEEK administrator can install them, and SEEK's ISA-JSON
     export reads them. The file could not be obtained from the hub at all."""
 
-    async def test_a_profile_yields_its_templates(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/templates/seek-ready-template/3.0")
+    async def test_a_dataset_yields_its_templates(self, dataset, app_db) -> None:
+        response = await _get(f"/hub/seek/datasets/{dataset.id}/templates")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("application/json")
         assert "isa-templates.json" in response.headers["content-disposition"]
         assert response.json()["data"]
 
-    async def test_an_unknown_profile_is_404(self, dataset, app_db) -> None:
-        response = await _get("/hub/seek/templates/no-such-profile/1.0")
-        assert response.status_code == 404
+    async def test_an_unmappable_dataset_is_refused(self, session, app_db) -> None:
+        from metaseed_hub.ui.dependencies import tenant_slug_for
+
+        tenant = make_tenant(slug=tenant_slug_for("kc-1"))
+        session.add(tenant)
+        await session.flush()
+        session.add(make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org"))
+        ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
+        session.add(ena)
+        await session.commit()
+
+        response = await _get(f"/hub/seek/datasets/{ena.id}/templates")
+        assert response.status_code == 422
+        assert "does not map onto SEEK" in response.text
 
     async def test_the_panel_offers_the_download(self, dataset, app_db) -> None:
         html = (await _get(f"/hub/datasets/{dataset.id}")).text
         assert 'data-testid="btn-seek-templates"' in html
+        assert f'href="/hub/seek/datasets/{dataset.id}/templates"' in html
 
 
 class TestThePanelOnlyAppearsWhereItWorks:
@@ -425,23 +511,27 @@ class TestThePanelOnlyAppearsWhereItWorks:
     and only a profile declaring that role has an ISA shape to map."""
 
     def test_the_seek_ready_template_qualifies(self) -> None:
-        from metaseed_hub.ui.routes.seek import profile_supports_seek
+        from metaseed.specs.loader import SpecLoader
 
-        assert profile_supports_seek("seek-ready-template", "3.0")
+        from metaseed_hub.ui.routes.seek import spec_supports_seek
+
+        assert spec_supports_seek(SpecLoader().load_profile("3.0", "seek-ready-template"))
 
     @pytest.mark.parametrize(
         "profile,version",
         [("ena", "1.0"), ("pride", "1.0"), ("miappe", "1.2"), ("darwin-core", "1.0")],
     )
     def test_a_profile_without_isa_roles_does_not(self, profile: str, version: str) -> None:
-        from metaseed_hub.ui.routes.seek import profile_supports_seek
+        from metaseed.specs.loader import SpecLoader
 
-        assert not profile_supports_seek(profile, version)
+        from metaseed_hub.ui.routes.seek import spec_supports_seek
 
-    def test_an_unknown_profile_does_not_raise(self) -> None:
-        from metaseed_hub.ui.routes.seek import profile_supports_seek
+        assert not spec_supports_seek(SpecLoader().load_profile(version, profile))
 
-        assert not profile_supports_seek("no-such-profile", "9.9")
+    def test_an_unresolved_specification_does_not(self) -> None:
+        from metaseed_hub.ui.routes.seek import spec_supports_seek
+
+        assert not spec_supports_seek(None)
 
     async def test_an_ena_dataset_shows_no_seek_panel(self, session, app_db) -> None:
         from metaseed_hub.ui.dependencies import tenant_slug_for
@@ -657,3 +747,65 @@ class TestThePushSaysItIsWorking:
         )
         assert 'data-testid="seek-result-nothing"' in html
         assert 'data-testid="seek-result-ok"' not in html
+
+
+class TestADatasetOnAHubStoredSpecification:
+    """The SEEK routes looked the profile up among the installed ones, by name.
+    A dataset bound to a draft or a published specification has its profile in
+    the database, so the lookup failed, read as "does not map onto SEEK", and
+    hid the whole panel from exactly the specifications written for SEEK."""
+
+    async def test_the_panel_appears_for_a_draft(self, draft_dataset, app_db) -> None:
+        html = (await _get(f"/hub/datasets/{draft_dataset.id}")).text
+        assert 'data-testid="seek-panel"' in html
+
+    async def test_the_panel_appears_for_a_published_specification(
+        self, published_dataset, app_db
+    ) -> None:
+        html = (await _get(f"/hub/datasets/{published_dataset.id}")).text
+        assert 'data-testid="seek-panel"' in html
+
+    async def test_a_draft_yields_its_templates(self, draft_dataset, app_db) -> None:
+        response = await _get(f"/hub/seek/datasets/{draft_dataset.id}/templates")
+        assert response.status_code == 200
+        names = [t["metadata"]["name"] for t in response.json()["data"]]
+        assert names and all(HUB_SPEC in name for name in names)
+
+    async def test_a_published_specification_yields_its_templates(
+        self, published_dataset, app_db
+    ) -> None:
+        response = await _get(f"/hub/seek/datasets/{published_dataset.id}/templates")
+        assert response.status_code == 200
+        assert response.json()["data"]
+
+    async def test_the_check_reads_its_templates(self, draft_dataset, app_db) -> None:
+        await _save_settings("https://seek.example.org", _working)
+
+        def nothing_installed(factory) -> None:
+            factory.return_value.template_ids_by_title.return_value = {}
+
+        response = await _post(f"/hub/seek/datasets/{draft_dataset.id}/check", nothing_installed)
+        assert "does not map onto SEEK" not in response.text
+        assert "not installed" in response.text
+        assert HUB_SPEC in response.text
+
+    async def test_the_push_provisions_its_specification(self, draft_dataset, app_db) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        await _save_settings("https://seek.example.org", _working)
+        plan = MagicMock()
+        pushed = SimpleNamespace(
+            investigations=["1"], studies=[], assays=[], samples=[], errors=[], unlinked=[]
+        )
+
+        response = await _post(
+            f"/hub/seek/datasets/{draft_dataset.id}/push",
+            metaseed__seek__build_provisioning_plan=plan,
+            metaseed__seek__execute_provisioning_plan=MagicMock(),
+            metaseed__seek__provision__resolve_cv_ids=MagicMock(return_value={}),
+            metaseed__seek__sync_dataset_to_seek=MagicMock(return_value=pushed),
+        )
+
+        assert 'data-testid="seek-result-ok"' in response.text, response.text
+        assert plan.call_args.args[0].name == HUB_SPEC
