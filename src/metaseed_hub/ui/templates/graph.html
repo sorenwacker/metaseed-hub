@@ -31,6 +31,7 @@
                 <input type="range" id="graph-repulsion" min="-1000" max="-100" value="-500" oninput="updateGraphPhysics()">
             </label>
             <button id="graph-layout-btn" class="btn btn-sm" onclick="toggleGraphLayout()">Hierarchical</button>
+            <button id="graph-physics-btn" class="btn btn-sm" onclick="toggleGraphPhysics()" data-testid="btn-graph-physics" title="Freeze or resume the force simulation">Stop Physics</button>
             <button class="btn btn-sm" onclick="fitGraph()">Fit</button>
             <a href="/hub/datasets/{{ dataset.id }}" class="btn">Back to Dataset</a>
         </div>

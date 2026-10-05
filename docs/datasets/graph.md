@@ -12,6 +12,7 @@ Entities appear as nodes and relationships as edges, laid out as a force-directe
 
 - **Zoom and pan** to move around the graph.
 - Toggle a **hierarchical layout** to arrange the graph by parent–child depth.
+- **Stop Physics** freezes the force simulation, so the nodes stay where they are; the button then reads **Start Physics** and resumes it. Use it when a graph keeps drifting or rotating instead of settling.
 - Node labels show the entity and its fields; zoom in to read field-level detail.
 
 The graph is a read-only view. To change data, edit entities in the dataset editor — see [Editing entities](entities.md).
