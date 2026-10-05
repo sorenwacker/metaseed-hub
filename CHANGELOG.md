@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **The SEEK controls appear on datasets bound to a draft or a published specification.** The panel, **Check SEEK**, **Push to SEEK** and the **ISA templates** download looked the profile up among the installed ones by name, found nothing for a specification stored in the hub, and treated that as "does not map onto SEEK". They now read the specification the dataset is bound to. The template download is addressed by dataset (`/hub/seek/datasets/<id>/templates`); the by-name address is gone, and the download is refused for a specification without an Investigation role.
+
+### Added
+- **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
+
 ## [0.61.0] - 261001
 
 ### Added

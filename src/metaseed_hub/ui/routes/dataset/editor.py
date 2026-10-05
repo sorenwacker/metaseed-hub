@@ -28,11 +28,11 @@ from metaseed_hub.ui.helpers import (
     save_dataset_state,
 )
 from metaseed_hub.ui.helpers.load_report import skipped_node_message
-from metaseed_hub.ui.helpers.spec_hash import spec_drift_message
+from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec, spec_drift_message
 from metaseed_hub.ui.helpers.text import safe_filename
 from metaseed_hub.ui.helpers.validation_report import validation_issues
 from metaseed_hub.ui.render import render_template
-from metaseed_hub.ui.routes.seek import profile_supports_seek
+from metaseed_hub.ui.routes.seek import spec_supports_seek
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 from metaseed_hub.ui.services.seek_connection import connection_for_user
 
@@ -185,7 +185,7 @@ async def dataset_editor(
             "tree_data": ctx["tree_data"],
             "overview": entity_overview(ctx["tree_data"]),
             "entity_descriptions": ctx["entity_descriptions"],
-            "seek_supported": profile_supports_seek(dataset.profile, dataset.version),
+            "seek_supported": spec_supports_seek(await dataset_profile_spec(session, dataset)),
             "connection": await connection_for_user(session, user),
             "export_options": _adapter_export_options(dataset.profile),
             # Offered only while the dataset is empty: the importer replaces the
