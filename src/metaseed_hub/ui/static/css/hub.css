@@ -7677,6 +7677,17 @@ html, body {
 .seek-status-ok { color: var(--color-success, #2f6f4f); }
 .seek-status-bad { color: var(--color-danger, #a33); }
 .seek-status-none { color: var(--color-text-muted, #777); }
+.seek-inline-form { display: inline; }
+.seek-page { max-width: 48rem; }
+.seek-step { margin-bottom: var(--space-xl, 2rem); }
+.seek-step form { display: block; }
+.seek-step .form-group { display: block; max-width: 30rem; }
+.seek-step .form-input { display: block; width: 100%; }
+.seek-step .sidebar-actions-row .btn { flex: 0 0 auto; font-size: 0.8125rem; }
+.seek-downloadable { display: block; margin: 0.25rem 0 0.5rem; }
+.seek-dataset-list { list-style: none; margin: 0; padding: 0; }
+.seek-dataset { padding: 0.75rem 0; border-top: 1px solid var(--color-border, #ddd); }
+.seek-dataset-title { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
 
 /* Collaborations: the grant rows on the sharing panel, and the People page. */
 .members-subheading {

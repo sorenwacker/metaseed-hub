@@ -11,6 +11,9 @@ The routes are open to every signed-in user; the connection they configure
 lifting is metaseed's (:mod:`metaseed.seek`); these routes wrap it around the
 hub's per-user connection and dataset model.
 
+``/hub/seek`` is the page that holds the steps in order: the connection, the
+project, and the datasets that can be pushed, each with its actions.
+
 The connection is per user because SEEK creates every record as the API key's
 person. The key is encrypted at rest and never rendered back into a page.
 """
@@ -31,9 +34,10 @@ from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.crypto import decrypt_secret, encrypt_secret
-from metaseed_hub.models import SeekConnection
+from metaseed_hub.models import Dataset, SeekConnection
 from metaseed_hub.ui.dependencies import (
     DbSession,
+    ensure_tenant_and_user,
     get_dataset_for_user,
     require_user,
 )
@@ -41,10 +45,12 @@ from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
 from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import validate_csrf_or_error
+from metaseed_hub.ui.services.dataset_listing import datasets_visible_to
 from metaseed_hub.ui.services.seek_connection import connection_for_user, tenant_for_user
 
 if TYPE_CHECKING:
     from metaseed.specs.schema import ProfileSpec
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -115,16 +121,14 @@ def _verification_failure(exc: Exception, url: str) -> str:
     return f"Could not reach SEEK at {host}: {exc}"
 
 
-#: Where the connection is edited and its standing shown.
-SETTINGS_URL = "/hub/auth/profile#seek"
+#: The SEEK page, where the connection is edited and its standing shown.
+SETTINGS_URL = "/hub/seek"
 
 
 def _back(error: str | None = None) -> RedirectResponse:
-    """Back to the settings section, carrying a message the page can show."""
+    """Back to the SEEK page, carrying a message the page can show."""
     if error:
-        return RedirectResponse(
-            url=f"/hub/auth/profile?seek_error={quote(error)}#seek", status_code=303
-        )
+        return RedirectResponse(url=f"{SETTINGS_URL}?seek_error={quote(error)}", status_code=303)
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
@@ -177,10 +181,47 @@ def _record_outcome(
         )
 
 
-@router.get("")
+async def _by_pushability(
+    session: AsyncSession, datasets: list[Dataset]
+) -> tuple[list[Dataset], int]:
+    """Split datasets into those SEEK can take and a count of the rest.
+
+    Many datasets share one specification, so each is resolved once.
+    """
+    supported: dict[tuple[str | None, str | None, str, str], bool] = {}
+    pushable: list[Dataset] = []
+    for dataset in datasets:
+        key = (dataset.spec_draft_id, dataset.spec_id, dataset.profile, dataset.version)
+        if key not in supported:
+            supported[key] = spec_supports_seek(await dataset_profile_spec(session, dataset))
+        if supported[key]:
+            pushable.append(dataset)
+    return pushable, len(datasets) - len(pushable)
+
+
+@router.get("", response_class=HTMLResponse)
+async def seek_page(request: Request, session: DbSession, user: SeekUser) -> Response:
+    """The steps of a push in order: connection, project, datasets."""
+    tenant, db_user = await ensure_tenant_and_user(session, user)
+    datasets, _owned = await datasets_visible_to(session, tenant.id, db_user.id)
+    pushable, unpushable = await _by_pushability(session, datasets)
+    return render_template(
+        request,
+        "seek.html",
+        {
+            "user": user,
+            "nav_active": "seek",
+            "connection": await connection_for_user(session, user),
+            "seek_error": request.query_params.get("seek_error"),
+            "pushable": pushable,
+            "unpushable": unpushable,
+        },
+    )
+
+
 @router.get("/settings")
 async def seek_settings(user: SeekUser) -> Response:
-    """Send the old settings URLs to the profile section that replaced them."""
+    """Send the old settings URL to the page that replaced it."""
     return RedirectResponse(url=SETTINGS_URL, status_code=302)
 
 
