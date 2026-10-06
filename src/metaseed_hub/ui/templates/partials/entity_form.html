@@ -142,7 +142,13 @@
                         {% if field.ontologies %}
                         <span class="ontology-badge">{{ field.ontologies | join(', ') | upper }}</span>
                         {% endif %}
+                        {# The search window also opens on Tab, which nothing
+                           on the form said. #}
+                        <button type="button" class="btn btn-sm" data-ontology-search="{{ field.name }}"
+                                title="Search {% if field.ontologies %}{{ field.ontologies | join(', ') | upper }}{% else %}all ontologies{% endif %} for a term">Search</button>
                     </div>
+                    <p class="form-help">Click Search, or press Tab in the field, to look a term up.</p>
+                    <div class="ontology-term-info" data-term-info-for="{{ field.name }}" aria-live="polite"></div>
 
                     {% else %}
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"
@@ -239,7 +245,13 @@
                         {% if field.ontologies %}
                         <span class="ontology-badge">{{ field.ontologies | join(', ') | upper }}</span>
                         {% endif %}
+                        {# The search window also opens on Tab, which nothing
+                           on the form said. #}
+                        <button type="button" class="btn btn-sm" data-ontology-search="{{ field.name }}"
+                                title="Search {% if field.ontologies %}{{ field.ontologies | join(', ') | upper }}{% else %}all ontologies{% endif %} for a term">Search</button>
                     </div>
+                    <p class="form-help">Click Search, or press Tab in the field, to look a term up.</p>
+                    <div class="ontology-term-info" data-term-info-for="{{ field.name }}" aria-live="polite"></div>
 
                     {% else %}
                     <input class="form-input" type="text" id="{{ field.name }}" name="{{ field.name }}"

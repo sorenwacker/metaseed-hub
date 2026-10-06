@@ -4,11 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **An ontology field has a Search button and says what its value means.** The search window opened on the Tab key and on nothing else, with no hint on the form. The field now has a **Search** button and names the key, and the hub shows the stored term's name, synonyms and definition under the field, or says that no such term was found.
+
 ### Changed
 - **A push to SEEK checks the templates first.** If an ISA Template is missing, nothing is sent and the panel names each missing template once; a push used to create the Investigation and Studies and then fail on every sample table.
 - **The SEEK project is saved when it is picked.** The select needed a second button, and a push went to the project shown before.
 
 ### Fixed
+- **The term lookup passes on a term's definition.** The endpoint read `definition` and `id` off a term that carries `description` and `term_id`, so no definition was ever returned.
 - **Check SEEK looks for the templates the downloaded file holds.** It built three titles from the profile's name, which matched neither the generated assay template ("... assay - data file") nor any template of a template-bound profile, so installed templates were reported missing, all of them for the CropXR profiles.
 
 ## [0.62.0] - 261006
