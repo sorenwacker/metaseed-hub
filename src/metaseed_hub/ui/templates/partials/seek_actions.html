@@ -7,6 +7,7 @@
    people press the button again. #}
 <form hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
       hx-target="#seek-result-{{ dataset.id }}" hx-disabled-elt="find button"
+      {% if seek_ready %}hx-confirm="Are you sure you want to push the dataset {{ dataset.name }} to project {{ connection.project_hint or 'your first project' }} on {{ connection.url }}?&#10;&#10;Records are created in SEEK as your account. The hub cannot remove them again."{% endif %}
       data-working-target="seek-result-{{ dataset.id }}"
       data-working-message="Pushing to SEEK. Provisioning the profile and creating records takes a minute or two; this panel reports what happened.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
