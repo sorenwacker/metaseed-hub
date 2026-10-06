@@ -7854,13 +7854,31 @@ html, body {
 /* Sized to its content, not to the toolbar: .form-input is width 100%, which
    in a flex row made the control demand the whole bar and wrap the buttons
    onto a line of their own. */
+/* One height for everything on the toolbar's right. A select takes its height
+   from the browser's own control, not from the padding and font the buttons
+   use, so it stood taller than the Save and Publish buttons beside it. */
+.toolbar-right .btn,
 .publish-audience {
+    box-sizing: border-box;
+    height: 2rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.publish-audience {
+    appearance: none;
+    -webkit-appearance: none;
     max-width: 16rem;
-    padding: var(--space-xs) var(--space-sm);
+    padding: 0 1.75rem 0 var(--space-sm);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-color: white;
     font-size: 0.8125rem;
     border: 1px solid var(--clr-parchment);
     border-radius: var(--radius-md);
     font-family: var(--font-body);
     color: var(--clr-ink);
-    background: white;
 }
