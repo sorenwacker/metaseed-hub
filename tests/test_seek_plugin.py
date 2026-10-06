@@ -881,3 +881,69 @@ class TestADatasetOnAHubStoredSpecification:
 
         assert 'data-testid="seek-result-ok"' in response.text, response.text
         assert plan.call_args.args[0].name == HUB_SPEC
+
+
+class TestAPushThatTakesLong:
+    """A push to a small SEEK reported "timed out" with one Investigation
+    created and nothing else. SEEK had answered ``POST /isa_assays`` after 35
+    seconds; the client had given up at 30. The request succeeded and the hub
+    called it an error, with no word that pushing again would continue."""
+
+    async def test_the_push_waits_longer_than_seek_takes_to_build_an_assay(
+        self, dataset, app_db
+    ) -> None:
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        await _save_settings("https://seek.example.org", _working)
+        pushed = SimpleNamespace(
+            investigations=["1"], studies=[], assays=[], samples=[], errors=[], unlinked=[]
+        )
+        seen: dict = {}
+
+        def remember(factory) -> None:
+            seen["factory"] = factory
+
+        await _post(
+            f"/hub/seek/datasets/{dataset.id}/push",
+            remember,
+            metaseed__seek__build_provisioning_plan=MagicMock(),
+            metaseed__seek__execute_provisioning_plan=MagicMock(),
+            metaseed__seek__provision__resolve_cv_ids=MagicMock(return_value={}),
+            metaseed__seek__sync_dataset_to_seek=MagicMock(return_value=pushed),
+        )
+
+        assert seen["factory"].call_args.kwargs["timeout"] >= 180
+
+    def test_an_error_says_pushing_again_continues(self) -> None:
+        from types import SimpleNamespace
+
+        from metaseed_hub.ui.render import get_templates
+
+        stopped = SimpleNamespace(
+            investigations=["1"],
+            studies=[],
+            assays=[],
+            samples=[],
+            errors=[("node", "timed out")],
+            unlinked=[],
+        )
+        html = (
+            get_templates()
+            .get_template("partials/seek_panel_result.html")
+            .render(result=stopped, message=None, error=None)
+        )
+        assert 'data-testid="seek-result-resume"' in html
+        assert "Push again" in html
+
+    async def test_the_push_asks_to_confirm_the_project(self, dataset, app_db) -> None:
+        await _save_settings("https://seek.example.org", _working)
+        html = (await _get(SEEK_PAGE)).text
+        row = html.split(f'data-testid="seek-dataset-{dataset.id}"')[1].split("</li>")[0]
+        confirm = row.split('hx-confirm="')[1].split('"')[0]
+        assert "Tulip" in confirm and "seek.example.org" in confirm
+        assert dataset.name in confirm
+
+    async def test_nothing_is_confirmed_without_a_connection(self, dataset, app_db) -> None:
+        html = (await _get(SEEK_PAGE)).text
+        assert "hx-confirm" not in html.split(f'data-testid="seek-dataset-{dataset.id}"')[1]
