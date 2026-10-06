@@ -313,6 +313,9 @@ class TestMalformedInputIsAFormErrorNotA500:
             new_name="Sample",  # already exists -> rejected
             description="leaked",
             ontology_term="",
+            seek_role="",
+            seek_template="",
+            seek_extended_metadata="",
         )
         assert response.status_code == 200
         assert ctx.spec.entities["Study"].description == "study", "description must not change"
@@ -374,6 +377,9 @@ class TestEntityRenameRewritesEverything:
             new_name="Trial",
             description="study",
             ontology_term="",
+            seek_role="",
+            seek_template="",
+            seek_extended_metadata="",
         )
         assert response.status_code == 200
         return ctx
@@ -397,6 +403,9 @@ class TestEntityRenameRewritesEverything:
             new_name="Specimen",
             description="sample",
             ontology_term="",
+            seek_role="",
+            seek_template="",
+            seek_extended_metadata="",
         )
         rules = {r.name: r for r in ctx.spec.validation_rules}
         assert rules["sample_exists"].reference == "Specimen.id"
