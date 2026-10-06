@@ -421,3 +421,78 @@ document.addEventListener('click', function(e) {
     const panel = scope.querySelector('#panel-' + tab.dataset.tab);
     if (panel) panel.classList.add('active');
 });
+
+
+// Ontology fields: a Search button for the window that otherwise opens only on
+// Tab, and a note under the field saying what the stored identifier means.
+// The window is metaseed's (lookup.js); the hub only calls it.
+document.addEventListener('click', function (e) {
+    const button = e.target.closest('[data-ontology-search]');
+    if (!button) return;
+    const input = document.getElementById(button.dataset.ontologySearch);
+    if (!input || typeof openOntologyModal !== 'function') return;
+    let inputId = input.getAttribute('data-testid');
+    if (!inputId) {
+        inputId = 'lookup-input-' + Date.now();
+        input.setAttribute('data-testid', inputId);
+    }
+    openOntologyModal(inputId, input.dataset.ontologies || null, input.dataset.within || null);
+});
+
+const TERM_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_.]*:[A-Za-z0-9_.-]+$/;
+
+function describeOntologyTerms(input) {
+    const note = document.querySelector('[data-term-info-for="' + CSS.escape(input.id) + '"]');
+    if (!note) return;
+    const ids = input.value.split(',').map(v => v.trim()).filter(v => TERM_IDENTIFIER.test(v));
+    // Asked again on every change; an answer for a value since replaced is dropped.
+    const asked = input.value;
+    note.replaceChildren();
+    ids.forEach(function (id) {
+        const line = document.createElement('p');
+        line.className = 'ontology-term-line';
+        line.textContent = id + ': looking up...';
+        note.appendChild(line);
+        fetch('/hub/api/ontology/term/' + encodeURIComponent(id))
+            .then(function (response) {
+                if (response.status === 404) return { missing: true };
+                if (!response.ok) return { unavailable: true };
+                return response.json();
+            })
+            .catch(function () { return { unavailable: true }; })
+            .then(function (term) {
+                if (input.value !== asked) return;
+                line.replaceChildren();
+                if (term.unavailable) {
+                    line.textContent = id + ': the lookup service did not answer, so this term was not checked.';
+                    return;
+                }
+                if (term.missing) {
+                    line.classList.add('ontology-term-missing');
+                    line.textContent = id + ': no such term was found.';
+                    return;
+                }
+                const name = document.createElement('strong');
+                name.textContent = term.label || id;
+                line.appendChild(name);
+                const parts = [];
+                // An ontology may list one synonym twice, once per scope.
+                const synonyms = Array.from(new Set(term.synonyms || [])).slice(0, 4);
+                if (synonyms.length) parts.push(synonyms.join(', '));
+                if (term.definition) parts.push(term.definition);
+                if (parts.length) line.appendChild(document.createTextNode(' \u2014 ' + parts.join('. ')));
+            });
+    });
+}
+
+function describeOntologyFieldsIn(root) {
+    root.querySelectorAll('input.lookup-input[data-lookup-type="ontology"]').forEach(describeOntologyTerms);
+}
+
+document.addEventListener('DOMContentLoaded', function () { describeOntologyFieldsIn(document); });
+document.addEventListener('htmx:afterSwap', function (e) { describeOntologyFieldsIn(e.target); });
+document.addEventListener('change', function (e) {
+    if (e.target.matches && e.target.matches('input.lookup-input[data-lookup-type="ontology"]')) {
+        describeOntologyTerms(e.target);
+    }
+});

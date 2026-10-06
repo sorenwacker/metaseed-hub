@@ -6732,6 +6732,11 @@ a.start-option-card:hover {
 }
 
 /* Ontology Autocomplete */
+.ontology-term-info { margin-top: var(--space-xs); }
+.ontology-term-line { margin: 0; font-size: 0.8125rem; color: var(--clr-ink-light); line-height: 1.4; }
+.ontology-term-line strong { color: var(--clr-ink); }
+.ontology-term-missing { color: var(--color-danger, #a33); }
+
 /* The suggestion list hangs below its input, outside the group that holds it.
    The builder's form groups and forms clip their overflow, which hid every
    suggestion; a container holding a lookup must let it out. */
