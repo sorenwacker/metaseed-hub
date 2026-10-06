@@ -75,6 +75,10 @@ Click **Validate** to check the dataset against its profile. The result lists is
 
 What is checked is what metaseed's validator checks: field constraints (type, pattern, length, range, allowed values), required fields, the profile's validation rules, references between entities (a study id that names no study in the dataset), and identifiers the profile declares unique. An agent asking through the MCP `validate_dataset` tool gets the same report. Validation runs in the background on the server; on a dataset with thousands of entities it takes seconds, and other pages stay responsive meanwhile.
 
+Ontology terms are checked as well, against the ontologies the field names: a term that does not exist, or that comes from another ontology or branch than the field takes, is an issue. A value that could not be checked is reported as *not checked*, not as valid and not as an error: a value that is not a term identifier (a label such as `leaf` instead of `PO:0025034`), or a lookup service that did not answer.
+
+**Validate** in an entity's form checks that one entity the same way before you save it, ontology terms included.
+
 The result also names any stored entity that could not be loaded — for example one whose entity type the current specification no longer defines. Such an entity is not shown in the tree and is not part of the dataset you are editing, so saving removes it; the validation panel is where you find out before that happens.
 
 ## Deleting an entity
