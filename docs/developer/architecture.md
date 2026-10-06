@@ -65,6 +65,16 @@ The header is set on responses from the hub app, which is where authenticated HT
 
 `make dev` starts the Postgres and Keycloak containers, migrates the database to head, and serves the hub with reload on port 7001. After migrating it runs `alembic check`, which compares the live schema with the models and stops the start if they differ. A database that reports the head revision but lacks a column the models declare, which is what a dump restored over a newer stamp produces, then fails at startup with the missing column named, rather than as an internal server error on whichever page first touches it. Repair such a database by hand with the statement the migration would have run, then start again.
 
+## Browser tests
+
+The tests marked `selenium` drive a real browser against the running hub at `http://localhost:7001`, signed in as the realm's demo account, so every record they create lands in the development database that the developer also uses.
+
+Every browser test deletes what it created. A test names its records with `record_name()` from `tests/selenium_records.py`, which puts a prefix unique to the test run in front of the name, and the `driver` fixture calls `delete_records()` when the test ends, whether it passed or failed. `delete_records()` deletes each dataset and specification draft carrying the run's prefix through the same delete requests the pages send, then fails the test if any is still listed. The prefix is per run so that two runs against the same account do not delete, or fail on, each other's records.
+
+A dataset is deleted the way the Delete button deletes it, which marks the row deleted and hides it from every list; the row itself stays in the database.
+
+`tests/test_browser_tests_clean_up.py` is in the default suite and holds the rule in place: it fails when a browser test writes a `selenium-` name by hand instead of calling `record_name()`, and when a `driver` fixture does not call `delete_records()`.
+
 ## Dataset persistence
 
 `dataset.data` (JSONB) stores a `{profile, version, spec_hash, tree: [...]}` envelope. The `{profile, version, tree}` part is produced by metaseed's `MetaseedClient.serialize(format="tree")`; each tree node carries `id`, `entity_type`, `label`, `data`, and `children`.

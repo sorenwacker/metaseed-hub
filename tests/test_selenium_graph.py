@@ -12,8 +12,6 @@ legend that only the library produces.
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 pytest.importorskip("selenium")
@@ -21,7 +19,8 @@ from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
-from tests.test_selenium_export import BASE, _login, driver  # noqa: F401
+from tests.selenium_records import record_name  # noqa: E402
+from tests.test_selenium_export import BASE, _login, driver  # noqa: E402, F401
 
 pytestmark = pytest.mark.selenium
 
@@ -33,7 +32,7 @@ def _dataset_with_example_data(browser) -> str:
 
     browser.get(f"{BASE}/hub/datasets/new")
     WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.ID, "dataset-name")))
-    browser.find_element(By.ID, "dataset-name").send_keys(f"selenium-graph-{uuid.uuid4().hex[:8]}")
+    browser.find_element(By.ID, "dataset-name").send_keys(record_name("graph"))
     card = WebDriverWait(browser, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.standard-card[data-profile="pride"]'))
     )

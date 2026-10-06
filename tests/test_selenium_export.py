@@ -14,7 +14,6 @@ import io
 import json
 import os
 import urllib.request
-import uuid
 import zipfile
 from pathlib import Path
 
@@ -26,6 +25,8 @@ from selenium.webdriver.chrome.options import Options  # noqa: E402
 from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
+
+from tests.selenium_records import delete_records, record_name  # noqa: E402
 
 pytestmark = pytest.mark.selenium
 
@@ -66,6 +67,7 @@ def driver():
     d.set_page_load_timeout(60)
     try:
         yield d
+        delete_records(d)
     finally:
         d.quit()
 
@@ -87,8 +89,8 @@ def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
     # by driving the profile-picker UI the way a user does.
     driver.get(f"{BASE}/hub/datasets/new")
     WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "dataset-name")))
-    # Unique per run: the tenant enforces unique dataset names.
-    driver.find_element(By.ID, "dataset-name").send_keys(f"selenium-export-{uuid.uuid4().hex[:8]}")
+    # Unique: the tenant enforces unique dataset names.
+    driver.find_element(By.ID, "dataset-name").send_keys(record_name("export"))
     card = WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.standard-card[data-profile="pride"]'))
     )

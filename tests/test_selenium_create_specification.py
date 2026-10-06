@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 pytest.importorskip("selenium")
@@ -11,6 +9,7 @@ from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import Select, WebDriverWait  # noqa: E402
 
+from tests.selenium_records import record_name  # noqa: E402
 from tests.test_selenium_export import BASE, _login, driver  # noqa: E402, F401
 
 pytestmark = pytest.mark.selenium
@@ -38,7 +37,7 @@ def test_a_template_is_chosen_then_named(driver) -> None:  # noqa: F811
     driver.execute_script("arguments[0].click();", use)
 
     name = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, "spec-name")))
-    chosen = f"selenium-named-{uuid.uuid4().hex[:8]}"
+    chosen = record_name("named")
     name.send_keys(chosen)
     driver.find_element(By.CSS_SELECTOR, '[data-testid="name-dialog-create"]').click()
 
