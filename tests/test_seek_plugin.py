@@ -16,6 +16,7 @@ routes validated the token, which they now do.
 
 from __future__ import annotations
 
+import re
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -941,7 +942,10 @@ class TestAPushThatTakesLong:
         html = (await _get(SEEK_PAGE)).text
         row = html.split(f'data-testid="seek-dataset-{dataset.id}"')[1].split("</li>")[0]
         confirm = row.split('hx-confirm="')[1].split('"')[0]
-        assert "Tulip" in confirm and "seek.example.org" in confirm
+        # The instance is read out of the sentence and compared whole: a
+        # substring test on a host name would also pass for a look-alike.
+        project, instance = re.search(r"to project (.+) on (\S+)\?", confirm).groups()
+        assert (project, instance) == ("Tulip", "https://seek.example.org")
         assert dataset.name in confirm
 
     async def test_nothing_is_confirmed_without_a_connection(self, dataset, app_db) -> None:
