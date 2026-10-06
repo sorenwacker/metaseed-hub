@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **Creating a specification asks for the name after the choice.** Choose From Scratch, a template or a YAML file, then name the draft in a dialog; the name field above the choices is gone. A template's newest version is listed first and selected, where the oldest was.
 - **The entity overview table has cell padding.** Its text sat against the cell border.
 - **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
+- **Validate in an entity's form checks ontology terms.** It reported "Validation passed" for any value in an ontology-term field, because it only built the entity and terms are not checked at construction. A term that does not exist or comes from the wrong ontology is now an issue; a value that could not be checked, such as a label where an identifier belongs or a lookup that did not answer, is listed as not checked.
 
 ## [0.61.0] - 261001
 
