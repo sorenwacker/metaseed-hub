@@ -7730,6 +7730,14 @@ html, body {
 .seek-status-bad { color: var(--color-danger, #a33); }
 .seek-status-none { color: var(--color-text-muted, #777); }
 .seek-inline-form { display: inline; }
+/* The SEEK block in a dataset's sidebar. Three buttons to a row wrapped their
+   labels; two to a row matches Validate/Graph and Export/Import above. The
+   status is one quiet line here, not the bordered box metaseed's stylesheet
+   gives it. */
+.seek-sidebar { display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--clr-border, #ddd); }
+.seek-sidebar .sidebar-actions-row { display: grid; grid-template-columns: 1fr 1fr; }
+.seek-sidebar .seek-downloadable { margin: var(--space-xs) 0 0; }
+.seek-sidebar .seek-status { display: block; padding: 0; margin: 0; border: none; background: none; font-size: 0.75rem; }
 .seek-page { max-width: 52rem; }
 .seek-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
 .seek-page-header .form-help { margin: 0; font-size: 0.875rem; }
