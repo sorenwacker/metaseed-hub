@@ -28,7 +28,7 @@ The connection is set in the **Connection** step of the SEEK page. Your profile 
 
 1. Enter the base URL of the instance and an API key. A key is created in SEEK under your profile, **API tokens**.
 2. Click **Save and check**. The hub asks the instance for your projects and records the result.
-3. Choose the **Project** that pushes go to.
+3. Choose the **Project** that pushes go to. The choice is saved when you make it.
 
 The instance must be reachable from the hub server. The key is stored encrypted and is never shown again; leaving the key field blank keeps the stored one. Records are created as the person the key belongs to, which is why each user has their own connection.
 
@@ -45,11 +45,11 @@ The download is refused for a specification that cannot be pushed, and for one w
 
 ## Checking the instance
 
-**Check SEEK** reports which of the specification's three templates (study source, study sample, assay) are installed, and names the missing ones. A connection that does not answer is reported as such, with the cause.
+**Check SEEK** reports which of the specification's ISA Templates are installed, and names the missing ones. The templates it looks for are the ones in the file the **ISA templates** button downloads, by the same titles. A connection that does not answer is reported as such, with the cause.
 
 ## Pushing
 
-**Push to SEEK** provisions the specification on the instance and creates the dataset's records in the chosen project. Before anything is sent, the hub asks you to confirm the dataset, the project and the instance, since a push cannot be undone from the hub. The panel reports what was created, or why the push failed.
+**Push to SEEK** first runs the same check. If a template is missing, nothing is sent: the panel names the missing templates and what to do, where a push used to create the Investigation and Studies and then fail on every sample table. With the templates in place, it provisions the specification on the instance and creates the dataset's records in the chosen project. Before anything is sent, the hub asks you to confirm the dataset, the project and the instance, since a push cannot be undone from the hub. The panel reports what was created, or why the push failed.
 
 SEEK builds a Study or an Assay together with its Sample Types, which can take half a minute or more on a small instance; the hub waits up to three minutes for each request. A record SEEK already holds is found by its title and left as it is, so a push that stopped on an error is continued by pushing again: what was created stays, and the rest is added. The panel says so whenever it reports an error.
 

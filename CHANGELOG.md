@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **A push to SEEK checks the templates first.** If an ISA Template is missing, nothing is sent and the panel names each missing template once; a push used to create the Investigation and Studies and then fail on every sample table.
+- **The SEEK project is saved when it is picked.** The select needed a second button, and a push went to the project shown before.
+
+### Fixed
+- **Check SEEK looks for the templates the downloaded file holds.** It built three titles from the profile's name, which matched neither the generated assay template ("... assay - data file") nor any template of a template-bound profile, so installed templates were reported missing, all of them for the CropXR profiles.
+
 ## [0.62.0] - 261006
 
 ### Added

@@ -425,6 +425,36 @@ async def seek_choose_project(
     return _back()
 
 
+def _templates_present_and_missing(
+    client: Any, profile: ProfileSpec
+) -> tuple[list[str], list[str]]:
+    """The profile's ISA Templates that this SEEK has, and those it lacks.
+
+    The titles are read from the document the ISA templates button downloads,
+    which is what an administrator installs and what the push looks up. Titles
+    built here from the profile's name agreed with neither: the generated assay
+    template is "... assay - data file", and a template-bound profile's
+    templates carry the titles its entities name.
+    """
+    from metaseed.seek.templates import to_isa_template_json
+
+    installed = set(client.template_ids_by_title())
+    wanted = [template["metadata"]["name"] for template in to_isa_template_json(profile)["data"]]
+    return [t for t in wanted if t in installed], [t for t in wanted if t not in installed]
+
+
+def _missing_templates_message(missing: list[str], url: str) -> str:
+    return (
+        f"{len(missing)} ISA Template(s) are not installed on this SEEK: "
+        + ", ".join(missing)
+        + ". Download them with the ISA templates button and have a "
+        "SEEK administrator install them at "
+        f"{url}/templates/default_templates. That page "
+        "exists only once 'Compliance with ISA-JSON schemas' is "
+        "enabled, which itself needs Single page, ISA and Samples."
+    )
+
+
 @router.post("/datasets/{dataset_id}/check", response_class=HTMLResponse)
 async def seek_readiness(
     request: Request,
@@ -453,35 +483,16 @@ async def seek_readiness(
     if connection is None:
         return _panel(request, error="Configure your SEEK connection first.")
 
-    def work() -> tuple[list[str], list[str]]:
-        from metaseed.seek.templates import template_title
-
-        client = _client_for(connection)
-        installed = set(client.template_ids_by_title())
-        wanted = [
-            template_title(profile, level) for level in ("study source", "study sample", "assay")
-        ]
-        return [t for t in wanted if t in installed], [t for t in wanted if t not in installed]
-
     try:
-        present, missing = await run_in_threadpool(work)
+        present, missing = await run_in_threadpool(
+            _templates_present_and_missing, _client_for(connection), profile
+        )
     except Exception as exc:
         logger.info("SEEK readiness check failed: %s", exc)
         return _panel(request, error=_push_failure(exc, connection.url))
 
     if missing:
-        return _panel(
-            request,
-            error=(
-                f"{len(missing)} ISA Template(s) are not installed on this SEEK: "
-                + ", ".join(missing)
-                + ". Download them with the ISA templates button and have a "
-                "SEEK administrator install them at "
-                f"{connection.url}/templates/default_templates. That page "
-                "exists only once 'Compliance with ISA-JSON schemas' is "
-                "enabled, which itself needs Single page, ISA and Samples."
-            ),
-        )
+        return _panel(request, error=_missing_templates_message(missing, connection.url))
     return _panel(request, message=f"Ready: {len(present)} template(s) installed.")
 
 
@@ -519,6 +530,22 @@ async def seek_push(
     connection = await connection_for_user(session, user)
     if connection is None:
         return _panel(request, error="Configure your SEEK connection first.")
+
+    # The check, before anything is created: without the templates SEEK takes
+    # the Investigation and the Studies and then refuses every sample table,
+    # once per Study, leaving half a dataset behind.
+    try:
+        _present, missing = await run_in_threadpool(
+            _templates_present_and_missing, _client_for(connection), profile
+        )
+    except Exception as exc:
+        logger.info("SEEK push stopped at the readiness check: %s", exc)
+        return _panel(request, error=f"Push failed. {_push_failure(exc, connection.url)}")
+    if missing:
+        return _panel(
+            request,
+            error="Nothing was sent. " + _missing_templates_message(missing, connection.url),
+        )
 
     state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()

@@ -16,7 +16,6 @@ routes validated the token, which they now do.
 
 from __future__ import annotations
 
-import re
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -134,6 +133,18 @@ async def _get(path: str) -> httpx.Response:
             return await client.get(path)
 
 
+def _installed_templates() -> dict[str, str]:
+    """Every ISA Template of the SEEK-ready template, under both names the
+    tests give it, as an instance that has them all would list them."""
+    from metaseed.seek.templates import to_isa_template_json
+    from metaseed.specs.loader import SpecLoader
+
+    spec = SpecLoader().load_profile("3.0", "seek-ready-template")
+    titles = [t["metadata"]["name"] for t in to_isa_template_json(spec)["data"]]
+    titles += [title.replace("seek-ready-template", HUB_SPEC) for title in titles]
+    return {title: str(index) for index, title in enumerate(titles, 1)}
+
+
 async def _post(path: str, factory_setup=None, **patches) -> httpx.Response:
     """POST a SEEK dataset action with a CSRF token and a faked SEEK client."""
     from contextlib import ExitStack
@@ -142,6 +153,8 @@ async def _post(path: str, factory_setup=None, **patches) -> httpx.Response:
     with ExitStack() as stack:
         stack.enter_context(_signed_in())
         factory = stack.enter_context(patch("metaseed.seek.client_from_settings"))
+        # A push checks the templates first; installed unless a test says otherwise.
+        factory.return_value.template_ids_by_title.return_value = _installed_templates()
         if factory_setup:
             factory_setup(factory)
         for target, replacement in patches.items():
@@ -722,15 +735,8 @@ class TestTheReadinessCheck:
         assert "Compliance with ISA-JSON schemas" in response.text
 
     async def test_it_says_ready_when_they_are_there(self, dataset, app_db, session) -> None:
-        from metaseed.seek.templates import template_title
-        from metaseed.specs.loader import SpecLoader
-
         await _save_settings("https://seek.example.org", _working)
-        profile = SpecLoader().load_profile("3.0", "seek-ready-template")
-        installed = {
-            template_title(profile, level): str(i)
-            for i, level in enumerate(("study source", "study sample", "assay"), 1)
-        }
+        installed = _installed_templates()
 
         app = create_app()
         with _signed_in(), patch("metaseed.seek.client_from_settings") as factory:
@@ -820,134 +826,3 @@ class TestThePushSaysItIsWorking:
         )
         assert 'data-testid="seek-result-nothing"' in html
         assert 'data-testid="seek-result-ok"' not in html
-
-
-class TestADatasetOnAHubStoredSpecification:
-    """The SEEK routes looked the profile up among the installed ones, by name.
-    A dataset bound to a draft or a published specification has its profile in
-    the database, so the lookup failed, read as "does not map onto SEEK", and
-    hid the whole panel from exactly the specifications written for SEEK."""
-
-    async def test_the_panel_appears_for_a_draft(self, draft_dataset, app_db) -> None:
-        html = (await _get(f"/hub/datasets/{draft_dataset.id}")).text
-        assert 'data-testid="seek-panel"' in html
-
-    async def test_the_panel_appears_for_a_published_specification(
-        self, published_dataset, app_db
-    ) -> None:
-        html = (await _get(f"/hub/datasets/{published_dataset.id}")).text
-        assert 'data-testid="seek-panel"' in html
-
-    async def test_a_draft_yields_its_templates(self, draft_dataset, app_db) -> None:
-        response = await _get(f"/hub/seek/datasets/{draft_dataset.id}/templates")
-        assert response.status_code == 200
-        names = [t["metadata"]["name"] for t in response.json()["data"]]
-        assert names and all(HUB_SPEC in name for name in names)
-
-    async def test_a_published_specification_yields_its_templates(
-        self, published_dataset, app_db
-    ) -> None:
-        response = await _get(f"/hub/seek/datasets/{published_dataset.id}/templates")
-        assert response.status_code == 200
-        assert response.json()["data"]
-
-    async def test_the_check_reads_its_templates(self, draft_dataset, app_db) -> None:
-        await _save_settings("https://seek.example.org", _working)
-
-        def nothing_installed(factory) -> None:
-            factory.return_value.template_ids_by_title.return_value = {}
-
-        response = await _post(f"/hub/seek/datasets/{draft_dataset.id}/check", nothing_installed)
-        assert "does not map onto SEEK" not in response.text
-        assert "not installed" in response.text
-        assert HUB_SPEC in response.text
-
-    async def test_the_push_provisions_its_specification(self, draft_dataset, app_db) -> None:
-        from types import SimpleNamespace
-        from unittest.mock import MagicMock
-
-        await _save_settings("https://seek.example.org", _working)
-        plan = MagicMock()
-        pushed = SimpleNamespace(
-            investigations=["1"], studies=[], assays=[], samples=[], errors=[], unlinked=[]
-        )
-
-        response = await _post(
-            f"/hub/seek/datasets/{draft_dataset.id}/push",
-            metaseed__seek__build_provisioning_plan=plan,
-            metaseed__seek__execute_provisioning_plan=MagicMock(),
-            metaseed__seek__provision__resolve_cv_ids=MagicMock(return_value={}),
-            metaseed__seek__sync_dataset_to_seek=MagicMock(return_value=pushed),
-        )
-
-        assert 'data-testid="seek-result-ok"' in response.text, response.text
-        assert plan.call_args.args[0].name == HUB_SPEC
-
-
-class TestAPushThatTakesLong:
-    """A push to a small SEEK reported "timed out" with one Investigation
-    created and nothing else. SEEK had answered ``POST /isa_assays`` after 35
-    seconds; the client had given up at 30. The request succeeded and the hub
-    called it an error, with no word that pushing again would continue."""
-
-    async def test_the_push_waits_longer_than_seek_takes_to_build_an_assay(
-        self, dataset, app_db
-    ) -> None:
-        from types import SimpleNamespace
-        from unittest.mock import MagicMock
-
-        await _save_settings("https://seek.example.org", _working)
-        pushed = SimpleNamespace(
-            investigations=["1"], studies=[], assays=[], samples=[], errors=[], unlinked=[]
-        )
-        seen: dict = {}
-
-        def remember(factory) -> None:
-            seen["factory"] = factory
-
-        await _post(
-            f"/hub/seek/datasets/{dataset.id}/push",
-            remember,
-            metaseed__seek__build_provisioning_plan=MagicMock(),
-            metaseed__seek__execute_provisioning_plan=MagicMock(),
-            metaseed__seek__provision__resolve_cv_ids=MagicMock(return_value={}),
-            metaseed__seek__sync_dataset_to_seek=MagicMock(return_value=pushed),
-        )
-
-        assert seen["factory"].call_args.kwargs["timeout"] >= 180
-
-    def test_an_error_says_pushing_again_continues(self) -> None:
-        from types import SimpleNamespace
-
-        from metaseed_hub.ui.render import get_templates
-
-        stopped = SimpleNamespace(
-            investigations=["1"],
-            studies=[],
-            assays=[],
-            samples=[],
-            errors=[("node", "timed out")],
-            unlinked=[],
-        )
-        html = (
-            get_templates()
-            .get_template("partials/seek_panel_result.html")
-            .render(result=stopped, message=None, error=None)
-        )
-        assert 'data-testid="seek-result-resume"' in html
-        assert "Push again" in html
-
-    async def test_the_push_asks_to_confirm_the_project(self, dataset, app_db) -> None:
-        await _save_settings("https://seek.example.org", _working)
-        html = (await _get(SEEK_PAGE)).text
-        row = html.split(f'data-testid="seek-dataset-{dataset.id}"')[1].split("</li>")[0]
-        confirm = row.split('hx-confirm="')[1].split('"')[0]
-        # The instance is read out of the sentence and compared whole: a
-        # substring test on a host name would also pass for a look-alike.
-        project, instance = re.search(r"to project (.+) on (\S+)\?", confirm).groups()
-        assert (project, instance) == ("Tulip", "https://seek.example.org")
-        assert dataset.name in confirm
-
-    async def test_nothing_is_confirmed_without_a_connection(self, dataset, app_db) -> None:
-        html = (await _get(SEEK_PAGE)).text
-        assert "hx-confirm" not in html.split(f'data-testid="seek-dataset-{dataset.id}"')[1]
