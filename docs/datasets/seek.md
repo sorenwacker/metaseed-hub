@@ -49,7 +49,9 @@ The download is refused for a specification that cannot be pushed, and for one w
 
 ## Pushing
 
-**Push to SEEK** provisions the specification on the instance and creates the dataset's records in the chosen project. The panel reports what was created, or why the push failed.
+**Push to SEEK** provisions the specification on the instance and creates the dataset's records in the chosen project. Before anything is sent, the hub asks you to confirm the dataset, the project and the instance, since a push cannot be undone from the hub. The panel reports what was created, or why the push failed.
+
+SEEK builds a Study or an Assay together with its Sample Types, which can take half a minute or more on a small instance; the hub waits up to three minutes for each request. A record SEEK already holds is found by its title and left as it is, so a push that stopped on an error is continued by pushing again: what was created stays, and the rest is added. The panel says so whenever it reports an error.
 
 Tick **downloadable in SEEK** to give the records SEEK's *download* sharing level, which the ISA-JSON export requires. Unticked, the records stay private to your SEEK account.
 
