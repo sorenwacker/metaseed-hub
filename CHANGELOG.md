@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.62.1] - 261006
 
 ### Added
 - **An ontology field has a Search button and says what its value means.** The search window opened on the Tab key and on nothing else, with no hint on the form. The field now has a **Search** button and names the key, and the hub shows the stored term's name, synonyms and definition under the field, or says that no such term was found.
