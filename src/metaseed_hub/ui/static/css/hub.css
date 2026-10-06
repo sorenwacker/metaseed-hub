@@ -6732,6 +6732,16 @@ a.start-option-card:hover {
 }
 
 /* Ontology Autocomplete */
+/* The suggestion list hangs below its input, outside the group that holds it.
+   The builder's form groups and forms clip their overflow, which hid every
+   suggestion; a container holding a lookup must let it out. */
+.form-group:has(.ontology-autocomplete-wrapper),
+.metadata-form:has(.ontology-autocomplete-wrapper),
+.field-edit-form:has(.ontology-autocomplete-wrapper),
+.entity-editor:has(.ontology-autocomplete-wrapper) {
+    overflow: visible;
+}
+
 .ontology-autocomplete-wrapper {
     position: relative;
     width: 100%;
