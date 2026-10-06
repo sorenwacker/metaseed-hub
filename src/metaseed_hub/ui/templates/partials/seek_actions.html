@@ -26,13 +26,13 @@
            title="ISA Templates for this profile — a SEEK administrator installs them under Templates, populate; SEEK's ISA-JSON export needs them"
            data-testid="btn-seek-templates">ISA templates</a>
     </div>
-    <label class="form-hint seek-downloadable"
+    <label class="form-help seek-downloadable"
            title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">
         <input type="checkbox" name="downloadable" value="true" data-testid="seek-downloadable">
         downloadable in SEEK
     </label>
     {% if not seek_ready %}
-    <p class="form-hint" data-testid="seek-not-ready">{{ seek_wait }}{% if not on_seek_page %}, on the <a href="/hub/seek">SEEK page</a>{% endif %}; check and push need it.</p>
+    <p class="form-help" data-testid="seek-not-ready">{{ seek_wait }}{% if not on_seek_page %}, on the <a href="/hub/seek">SEEK page</a>{% endif %}; check and push need it.</p>
     {% endif %}
 </form>
 <div id="seek-result-{{ dataset.id }}"></div>
