@@ -16,9 +16,10 @@ A draft is identified by its name and version within your account, so you can ho
 1. On the Specs page, click **+ New Specification**.
 2. Choose how to start:
    - **From Scratch** — an empty specification.
-   - **From Template** — start from a provided template. A template that cannot be loaded is reported on the form; no draft is created in its place.
+   - **From Template** — start from a provided template. Each template offers its versions with the newest selected. A template that cannot be loaded is reported on the form; no draft is created in its place.
    - **Import YAML** — upload an existing specification file (see [Publishing and sharing](publishing.md#importing-and-exporting-yaml)).
-3. The draft editor opens.
+3. The hub asks for a name. Leave it empty and the hub names the draft: after the template, after the imported file, or with a numbered default.
+4. The draft editor opens.
 
 ## The draft editor
 
