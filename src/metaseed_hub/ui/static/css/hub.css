@@ -7730,16 +7730,50 @@ html, body {
 .seek-status-bad { color: var(--color-danger, #a33); }
 .seek-status-none { color: var(--color-text-muted, #777); }
 .seek-inline-form { display: inline; }
-.seek-page { max-width: 48rem; }
-.seek-step { margin-bottom: var(--space-xl, 2rem); }
+.seek-page { max-width: 52rem; }
+.seek-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+.seek-page-header .form-help { margin: 0; font-size: 0.875rem; }
+.seek-step {
+    background: white;
+    border: 1px solid var(--clr-border, #ddd);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+.seek-step h2 { display: flex; align-items: center; gap: var(--space-sm); font-size: 1.125rem; margin: 0 0 var(--space-xs); }
+.seek-step-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    background: var(--clr-forest, #2f6f4f); color: white; font-size: 0.8125rem; font-weight: 600;
+}
+.seek-step-intro { margin: 0 0 var(--space-md); font-size: 0.875rem; }
 .seek-step form { display: block; }
 .seek-step .form-group { display: block; max-width: 30rem; }
 .seek-step .form-input { display: block; width: 100%; }
+.seek-step .sidebar-actions-row { gap: var(--space-sm); }
 .seek-step .sidebar-actions-row .btn { flex: 0 0 auto; font-size: 0.8125rem; }
-.seek-downloadable { display: block; margin: 0.25rem 0 0.5rem; }
+.seek-downloadable { display: block; margin: var(--space-xs) 0 0; }
 .seek-dataset-list { list-style: none; margin: 0; padding: 0; }
-.seek-dataset { padding: 0.75rem 0; border-top: 1px solid var(--color-border, #ddd); }
-.seek-dataset-title { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.seek-dataset {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) auto;
+    gap: var(--space-md);
+    align-items: start;
+    padding: var(--space-md) 0;
+    border-top: 1px solid var(--clr-border, #ddd);
+}
+.seek-dataset:first-child { border-top: none; }
+.seek-dataset-title { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.seek-dataset-name { font-weight: 500; overflow-wrap: anywhere; }
+.seek-dataset-title .profile-badge { align-self: flex-start; }
+.seek-step > .form-help { font-size: 0.8125rem; margin: var(--space-md) 0 0; }
+.seek-dataset-actions { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-xs); }
+.seek-dataset-actions .form-help { margin: 0; text-align: right; }
+@media (max-width: 40rem) {
+    .seek-dataset { grid-template-columns: 1fr; }
+    .seek-dataset-actions { align-items: flex-start; }
+    .seek-dataset-actions .form-help { text-align: left; }
+}
 
 /* Collaborations: the grant rows on the sharing panel, and the People page. */
 .members-subheading {
