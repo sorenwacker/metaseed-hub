@@ -6381,6 +6381,12 @@ a.start-option-card:hover {
     color: var(--clr-ink-light);
 }
 
+/* .data-table cells are padding-free for the inline-editing grid, where an
+   input fills the cell. These cells hold text. */
+.entity-overview-table td {
+    padding: var(--space-sm) var(--space-md);
+}
+
 .entity-overview-table .entity-name {
     color: var(--clr-ink);
     text-decoration: none;
