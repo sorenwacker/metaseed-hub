@@ -26,6 +26,13 @@
     <ul>{% for node, msg in result.errors[:5] %}<li>{{ msg }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
+{% if result.errors %}
+{# SEEK finds a record it already holds by title and leaves it, so what a
+   stopped push created is not created twice. #}
+<div class="alert alert-warning" data-testid="seek-result-resume">
+    What was created stays in SEEK. Push again to continue: records SEEK already holds are skipped and the rest is added.
+</div>
+{% endif %}
 {% if result.unlinked %}
 <div class="alert alert-warning" data-testid="seek-result-unlinked">
     {{ result.unlinked|length }} entity(ies) could not be linked into the ISA tree.

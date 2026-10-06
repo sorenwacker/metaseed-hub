@@ -61,8 +61,20 @@ router = APIRouter(prefix="/seek", tags=["seek"])
 SeekUser = Annotated[TokenUser, Depends(require_user)]
 
 
-def _client_for(connection: SeekConnection) -> Any:
+#: How long a push waits for one answer from SEEK. SEEK builds a Study or an
+#: Assay together with its Sample Types in one request, which took 35 seconds on
+#: a small instance; at the client's default of 30 the request succeeded in SEEK
+#: and was reported here as "timed out".
+PUSH_TIMEOUT_SECONDS = 180.0
+
+
+def _client_for(connection: SeekConnection, *, timeout: float = 30.0) -> Any:
     """A metaseed SEEK client for a stored connection.
+
+    Args:
+        connection: The stored connection.
+        timeout: Seconds to wait for each answer; a push passes
+            :data:`PUSH_TIMEOUT_SECONDS`.
 
     Raises ``ValueError`` when the key cannot be decrypted — which in practice
     means ``SECRET_KEY`` changed since it was stored, and the remedy is
@@ -76,7 +88,7 @@ def _client_for(connection: SeekConnection) -> Any:
             "The stored SEEK API key cannot be read any more (the server "
             "secret changed). Enter it again on the SEEK settings page."
         )
-    return client_from_settings({"url": connection.url, "api_key": api_key})
+    return client_from_settings({"url": connection.url, "api_key": api_key}, timeout=timeout)
 
 
 def _verification_failure(exc: Exception, url: str) -> str:
@@ -520,7 +532,7 @@ async def seek_push(
         )
         from metaseed.seek.provision import resolve_cv_ids
 
-        client = _client_for(connection)
+        client = _client_for(connection, timeout=PUSH_TIMEOUT_SECONDS)
         # The person's choice; only fall back when they have never chosen.
         project_id = connection.project_id or client.default_project_id()
         execute_provisioning_plan(client, build_provisioning_plan(profile), project_id=project_id)

@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
 - **Creating a specification asks for the name after the choice.** Choose From Scratch, a template or a YAML file, then name the draft in a dialog; the name field above the choices is gone. A template's newest version is listed first and selected, where the oldest was.
 - **The entity overview table has cell padding.** Its text sat against the cell border.
+- **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
 
 ## [0.61.0] - 261001
 
