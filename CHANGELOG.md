@@ -2,24 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.62.0] - 261006
+
+### Added
+- **A SEEK page, reachable from the header.** It holds the steps of a push in order: the connection, the project, and every dataset you can open that can be pushed, each with **Push to SEEK**, **Check SEEK** and **ISA templates**. The connection form moved there from the profile page, which keeps the connection's standing and a link. Check and push are disabled, with the reason, until the connection works. The page counts the datasets whose specification cannot be pushed.
+- **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
+- **The entity editor has a SEEK section.** SEEK role, ISA template and extended metadata type were read by the push and set only through a YAML import; the builder neither showed nor edited them, so a specification's SEEK mapping was invisible. The section offers the six roles metaseed accepts and preserves the extended metadata groups it does not show.
+- **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
+- **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
+
+### Changed
+- **Creating a specification asks for the name after the choice.** Choose From Scratch, a template or a YAML file, then name the draft in a dialog; the name field above the choices is gone. A template's newest version is listed first and selected, where the oldest was.
+- **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
 
 ### Fixed
 - **The SEEK controls appear on datasets bound to a draft or a published specification.** The panel, **Check SEEK**, **Push to SEEK** and the **ISA templates** download looked the profile up among the installed ones by name, found nothing for a specification stored in the hub, and treated that as "does not map onto SEEK". They now read the specification the dataset is bound to. The template download is addressed by dataset (`/hub/seek/datasets/<id>/templates`); the by-name address is gone, and the download is refused for a specification without an Investigation role.
 - **The graph has a Stop Physics button.** The graph script could freeze the force simulation, but neither the graph panel nor the graph window offered the button it looks for, so a graph that never settled kept moving. Both toolbars now carry **Stop Physics**, which becomes **Start Physics** to resume.
 - **Searching and filtering the dataset table works, and the cards view loads without a script error.** The filter form's trigger named controls the cards view does not render, so htmx threw on every load of the home page; in the table view it reached only the first input, a hidden field, and the first select, so typing in the search and choosing an access narrowed nothing. The form now listens for the events itself.
 - **Ontology suggestions appear in the spec builder.** The lookup answered and the list was built, but the builder's form groups clip their overflow and the list hangs below its input, so no suggestion was ever visible. Containers holding a lookup now let the list out.
-
-### Added
-- **A SEEK page, reachable from the header.** It holds the steps of a push in order: the connection, the project, and every dataset you can open that can be pushed, each with **Push to SEEK**, **Check SEEK** and **ISA templates**. The connection form moved there from the profile page, which keeps the connection's standing and a link. Check and push are disabled, with the reason, until the connection works. The page counts the datasets whose specification cannot be pushed.
-- **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
-- **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
-- **The entity editor has a SEEK section.** SEEK role, ISA template and extended metadata type were read by the push and set only through a YAML import; the builder neither showed nor edited them, so a specification's SEEK mapping was invisible. The section offers the six roles metaseed accepts and preserves the extended metadata groups it does not show.
 - **The Save, audience and Publish controls in the builder toolbar line up.** The select hung below the buttons.
-- **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
-- **Creating a specification asks for the name after the choice.** Choose From Scratch, a template or a YAML file, then name the draft in a dialog; the name field above the choices is gone. A template's newest version is listed first and selected, where the oldest was.
 - **The entity overview table has cell padding.** Its text sat against the cell border.
-- **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
 - **Validate in an entity's form checks ontology terms.** It reported "Validation passed" for any value in an ontology-term field, because it only built the entity and terms are not checked at construction. A term that does not exist or comes from the wrong ontology is now an issue; a value that could not be checked, such as a label where an identifier belongs or a lookup that did not answer, is listed as not checked.
 
 ## [0.61.0] - 261001

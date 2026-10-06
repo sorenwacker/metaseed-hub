@@ -8,8 +8,6 @@ endpoint and the markup were both correct.
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 pytest.importorskip("selenium")
@@ -17,6 +15,7 @@ from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
+from tests.selenium_records import record_name  # noqa: E402
 from tests.test_selenium_export import BASE, _login, driver  # noqa: E402, F401
 
 pytestmark = pytest.mark.selenium
@@ -25,7 +24,7 @@ pytestmark = pytest.mark.selenium
 def _draft_from_the_seek_ready_template(browser) -> None:
     browser.get(f"{BASE}/hub/spec-builder/new")
     form = {
-        "name": f"selenium-ontology-{uuid.uuid4().hex[:8]}",
+        "name": record_name("ontology"),
         "template": "seek-ready-template:3.0",
     }
     browser.execute_script(
