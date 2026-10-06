@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
 - **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
 - **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
+- **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
 
 ## [0.61.0] - 261001
 
