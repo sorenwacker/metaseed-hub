@@ -68,14 +68,15 @@
         <form method="post" action="/hub/seek/project" class="form-group" data-testid="seek-project-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="sidebar-actions-row">
-                <select class="form-input" id="seek-project" name="project_id" aria-label="Project" data-testid="seek-project">
+                <select class="form-input" id="seek-project" name="project_id" aria-label="Project" data-submit-on-change data-testid="seek-project">
                     {% for pid, title in connection.projects %}
                     <option value="{{ pid }}" {% if pid == connection.project_id %}selected{% endif %}>{{ title }}</option>
                     {% endfor %}
                 </select>
-                <button class="btn btn-sm" type="submit" data-testid="seek-project-save">Use this project</button>
+                {# Saved when picked; the button is for a browser without scripts. #}
+                <noscript><button class="btn btn-sm" type="submit" data-testid="seek-project-save">Use this project</button></noscript>
             </div>
-            <p class="form-help">SEEK attaches every record to a project; pushes go to this one.</p>
+            <p class="form-help">SEEK attaches every record to a project; pushes go to this one. Your choice is saved when you make it.</p>
         </form>
         {% elif connection %}
         <p class="form-help">No project is known for this connection. The status above says why; fix it, then check again.</p>
