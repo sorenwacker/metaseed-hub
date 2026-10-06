@@ -98,11 +98,11 @@
             </div>
             {% endif %}
             {% if seek_supported %}
-            {% include "partials/seek_actions.html" %}
-            <div class="seek-status-block">
+            {# One compact block: the actions two to a row like the rows
+               above, then the connection's standing as a single line. #}
+            <div class="seek-sidebar">
+                {% include "partials/seek_actions.html" %}
                 {% include "partials/seek_status.html" %}
-                <a href="/hub/seek" class="btn btn-sm" data-testid="btn-seek-page"
-                   title="Your SEEK connection, project and every dataset you can push">SEEK</a>
             </div>
             {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">

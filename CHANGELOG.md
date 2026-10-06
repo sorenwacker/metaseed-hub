@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
 - **The entity editor has a SEEK section.** SEEK role, ISA template and extended metadata type were read by the push and set only through a YAML import; the builder neither showed nor edited them, so a specification's SEEK mapping was invisible. The section offers the six roles metaseed accepts and preserves the extended metadata groups it does not show.
 - **The Save, audience and Publish controls in the builder toolbar line up.** The select hung below the buttons.
+- **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
 
 ## [0.61.0] - 261001
 
