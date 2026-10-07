@@ -44,7 +44,11 @@ from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
-from metaseed_hub.ui.services.repository_import import run_source_import
+from metaseed_hub.ui.services.repository_import import (
+    MAX_IDENTIFIERS,
+    repositories,
+    run_source_import,
+)
 
 from ._router import router
 from .profile_choice import ProfileChoiceNotFoundError, resolve_profile_choice
@@ -245,6 +249,8 @@ async def dataset_new(
             "user_specs": user_specs,
             "nav_active": "home",
             "error_message": NEW_DATASET_ERRORS.get(request.query_params.get("error", "")),
+            "repositories": repositories(),
+            "max_identifiers": MAX_IDENTIFIERS,
         },
     )
 

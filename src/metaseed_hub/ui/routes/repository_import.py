@@ -1,12 +1,12 @@
-"""The Import page: datasets from public repository records, without naming them.
+"""Datasets from public repository records, without naming them first.
 
-One page under the header's **Import**, three requests. The page itself; the
-list of identifiers, answered with one pending row each; and one request per
-row, which fetches the record and creates its dataset. The rows ask in turn, so
-a slow repository delays the rows after it and nothing else, and each row shows
-its outcome as it finishes.
+The form is the **From a repository** tab of the New Dataset screen. Two
+requests serve it: the list of identifiers, answered with one pending row
+each; and one request per row, which fetches the record and creates its
+dataset. The rows ask in turn, so a slow repository delays the rows after it
+and nothing else, and each row shows its outcome as it finishes.
 
-See docs/datasets/import-export.md, *The Import page*.
+See docs/datasets/import-export.md, *From a public repository*.
 """
 
 from __future__ import annotations
@@ -28,21 +28,6 @@ from metaseed_hub.ui.services.repository_import import (
 )
 
 router = APIRouter(prefix="/import", tags=["import"])
-
-
-@router.get("", response_class=HTMLResponse)
-async def import_page(request: Request, user: CurrentUser) -> Response:
-    """The form: a repository and the identifiers to fetch from it."""
-    return render_template(
-        request,
-        "import.html",
-        {
-            "user": user,
-            "nav_active": "import",
-            "repositories": repositories(),
-            "max_identifiers": MAX_IDENTIFIERS,
-        },
-    )
 
 
 @router.post("/rows", response_class=HTMLResponse)

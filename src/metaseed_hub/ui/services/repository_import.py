@@ -6,7 +6,7 @@ that supplies all three is known. Here the identifier comes first: the importer
 metaseed registers for the repository fetches the record, the record's title
 names the dataset, and one identifier makes one dataset.
 
-See docs/datasets/import-export.md, *The Import page*.
+See docs/datasets/import-export.md, *From a public repository*.
 """
 
 from __future__ import annotations
@@ -48,10 +48,11 @@ Status = Literal["imported", "empty", "duplicate", "failed", "not_checked"]
 
 @dataclass(frozen=True)
 class Repository:
-    """A repository metaseed can import from, as the Import page offers it."""
+    """A repository metaseed can import from, as the New Dataset screen offers it."""
 
     profile: str
-    label: str
+    button: str
+    input_label: str
     placeholder: str
 
 
@@ -71,7 +72,9 @@ def repositories() -> list[Repository]:
     for profile in adapters.importable_profiles():
         action = source_import_action(profile)
         if action is not None:
-            found.append(Repository(profile, action.input_label, action.input_placeholder))
+            found.append(
+                Repository(profile, action.label, action.input_label, action.input_placeholder)
+            )
     return found
 
 

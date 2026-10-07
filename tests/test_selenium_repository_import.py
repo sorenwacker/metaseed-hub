@@ -1,10 +1,10 @@
-"""The Import page is reachable from the header and its form answers in place.
+"""The repository tab of the New Dataset screen answers in place.
 
-The requests behind the page are tested without a browser. What only a browser
-shows is whether the header link is there to be clicked and whether htmx sends
-the form with what the hub requires of it, so the answer appears on the page.
-The list sent here is one the hub refuses before fetching anything: no
-repository is contacted and no dataset is created.
+The requests behind the tab are tested without a browser. What only a browser
+shows is whether the tab opens and whether htmx sends the form, with the
+button that was pressed, so the answer appears on the page. The list sent here
+is one the hub refuses before fetching anything: no repository is contacted
+and no dataset is created.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions  # noqa: E402
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
 from metaseed_hub.ui.services.repository_import import MAX_IDENTIFIERS  # noqa: E402
-from tests.test_selenium_export import _login, driver  # noqa: F401, E402
+from tests.test_selenium_export import BASE, _login, driver  # noqa: F401, E402
 
 pytestmark = pytest.mark.selenium
 
@@ -30,14 +30,13 @@ def _visible(browser, test_id: str):
     )
 
 
-def test_the_header_opens_the_import_page_and_the_form_answers(driver) -> None:  # noqa: F811
+def test_the_tab_opens_and_a_repository_button_sends_the_list(driver) -> None:  # noqa: F811
     _login(driver)
+    driver.get(f"{BASE}/hub/datasets/new")
 
-    _visible(driver, "nav-import").click()
+    _visible(driver, "tab-repository").click()
     identifiers = _visible(driver, "import-identifiers")
-    assert _visible(driver, "import-repository").find_elements(By.TAG_NAME, "option")
-
     identifiers.send_keys("\n".join(f"PRJEB{n}" for n in range(MAX_IDENTIFIERS + 1)))
-    _visible(driver, "btn-import").click()
+    _visible(driver, "btn-import-ena").click()
 
     assert str(MAX_IDENTIFIERS) in _visible(driver, "import-problem").text
