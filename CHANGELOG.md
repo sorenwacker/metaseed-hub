@@ -7,6 +7,68 @@ All notable changes to this project will be documented in this file.
 ### Added
 - The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
 
+## [0.62.1] - 261006
+
+### Added
+- **An ontology field has a Search button and says what its value means.** The search window opened on the Tab key and on nothing else, with no hint on the form. The field now has a **Search** button and names the key, and the hub shows the stored term's name, synonyms and definition under the field, or says that no such term was found.
+
+### Changed
+- **A push to SEEK checks the templates first.** If an ISA Template is missing, nothing is sent and the panel names each missing template once; a push used to create the Investigation and Studies and then fail on every sample table.
+- **The SEEK project is saved when it is picked.** The select needed a second button, and a push went to the project shown before.
+
+### Fixed
+- **The term lookup passes on a term's definition.** The endpoint read `definition` and `id` off a term that carries `description` and `term_id`, so no definition was ever returned.
+- **Check SEEK looks for the templates the downloaded file holds.** It built three titles from the profile's name, which matched neither the generated assay template ("... assay - data file") nor any template of a template-bound profile, so installed templates were reported missing, all of them for the CropXR profiles.
+
+## [0.62.0] - 261006
+
+### Added
+- **A SEEK page, reachable from the header.** It holds the steps of a push in order: the connection, the project, and every dataset you can open that can be pushed, each with **Push to SEEK**, **Check SEEK** and **ISA templates**. The connection form moved there from the profile page, which keeps the connection's standing and a link. Check and push are disabled, with the reason, until the connection works. The page counts the datasets whose specification cannot be pushed.
+- **Notifications.** A bell in the header shows how many are unread and opens the list. You are told when someone shares a dataset, a draft or a published specification with you, changes your role or removes your access, and when someone comments on a dataset or draft you own or replies to a comment of yours. Opening the list marks it read; entries are kept 90 days. Adds the `notifications` table (migration `261005_notifications`).
+- **The entity editor has a SEEK section.** SEEK role, ISA template and extended metadata type were read by the push and set only through a YAML import; the builder neither showed nor edited them, so a specification's SEEK mapping was invisible. The section offers the six roles metaseed accepts and preserves the extended metadata groups it does not show.
+- **A push waits for SEEK and asks before it starts.** SEEK builds a Study or an Assay with its Sample Types in one request, which took 35 seconds on a small instance; the hub gave up at 30 and reported "timed out" for a request that had succeeded. A push now waits three minutes per request, asks to confirm the dataset, project and instance first, and says after an error that pushing again continues where it stopped.
+- **A documentation page for pushing to FAIRDOM-SEEK**, covering the connection, the administrator's template step, the readiness check and the push.
+
+### Changed
+- **Creating a specification asks for the name after the choice.** Choose From Scratch, a template or a YAML file, then name the draft in a dialog; the name field above the choices is gone. A template's newest version is listed first and selected, where the oldest was.
+- **The SEEK page is laid out.** The three steps are numbered cards, each dataset is a row with its name and specification on the left and its actions on the right, and the help text is set in the small type the rest of the hub uses.
+
+### Fixed
+- **The SEEK controls appear on datasets bound to a draft or a published specification.** The panel, **Check SEEK**, **Push to SEEK** and the **ISA templates** download looked the profile up among the installed ones by name, found nothing for a specification stored in the hub, and treated that as "does not map onto SEEK". They now read the specification the dataset is bound to. The template download is addressed by dataset (`/hub/seek/datasets/<id>/templates`); the by-name address is gone, and the download is refused for a specification without an Investigation role.
+- **The graph has a Stop Physics button.** The graph script could freeze the force simulation, but neither the graph panel nor the graph window offered the button it looks for, so a graph that never settled kept moving. Both toolbars now carry **Stop Physics**, which becomes **Start Physics** to resume.
+- **Searching and filtering the dataset table works, and the cards view loads without a script error.** The filter form's trigger named controls the cards view does not render, so htmx threw on every load of the home page; in the table view it reached only the first input, a hidden field, and the first select, so typing in the search and choosing an access narrowed nothing. The form now listens for the events itself.
+- **Ontology suggestions appear in the spec builder.** The lookup answered and the list was built, but the builder's form groups clip their overflow and the list hangs below its input, so no suggestion was ever visible. Containers holding a lookup now let the list out.
+- **The Save, audience and Publish controls in the builder toolbar line up.** The select hung below the buttons.
+- **The entity overview table has cell padding.** Its text sat against the cell border.
+- **Validate in an entity's form checks ontology terms.** It reported "Validation passed" for any value in an ontology-term field, because it only built the entity and terms are not checked at construction. A term that does not exist or comes from the wrong ontology is now an issue; a value that could not be checked, such as a label where an identifier belongs or a lookup that did not answer, is listed as not checked.
+
+## [0.61.0] - 261001
+
+### Added
+- **A table view of the dataset list**, beside the cards, with search across name, description and profile as you type, a profile filter, an access filter (mine, shared with me, through a collaboration) and sortable columns. The filters live in the page address, so a narrowed table can be bookmarked; the chosen view is remembered.
+
+## [0.60.1] - 261001
+
+### Fixed
+- **The admin error list fits the page.** The time no longer wraps, a request path and a message wrap inside their columns, and a message longer than 200 characters is folded with the rest a click away; the table scrolls rather than pushing past its container. The stylesheet had the rules; no template used them.
+- **A member of a collaboration who is in none of its groups is a member.** SRAM reports membership of the collaboration itself as the collaboration's own URN and adds one URN per group; the hub parsed only the group form, so such a person was missing from **People**, saw no collaboration on their own profile, was not reached by a grant to the collaboration, and could not be published to. Seen on the hosted hub with a member who signed in through eduID.
+
+## [0.60.0] - 261001
+
+### Added
+- **SRAM application tokens.** A member creates a token for the Metaseed Hub application in SRAM and presents it to the REST API or the MCP endpoint; the hub checks it against SRAM's introspection endpoint with its own credential (`SRAM_INTROSPECTION_TOKEN`), so the token is exactly as alive as the person's place in SRAM and stops when SRAM suspends them, their institution withdraws their login, or SRAM's lifetime for it ends. The answer carries the person's current collaborations, so a request made with it refreshes the collaboration reading like a sign-in. Answers are cached for `SRAM_INTROSPECTION_CACHE_SECONDS` (300). A SRAM that cannot be reached is answered 503, *not checked*, never as a refusal; a hub credential SRAM rejects is logged for the administrator and answered 503. A hub personal access token outlives the account it was issued to, which is why the SRAM token is the credential on the hosted hub; hub tokens remain for local instances.
+
+### Changed
+- The REST dependency and the MCP caller decide what a bearer is in one place, `bearers.resolve_bearer`; a gate test keeps it that way.
+- metaseed 0.56.0: adapters from outside metaseed through entry points, examples for every shipped profile, the ENA import's study record and analyses, and the shared profile cache.
+
+## [0.59.1] - 261001
+
+### Fixed
+- The Explorer's **Compare** works again. Release 0.59.0 filled the template variable `base_url` with the instance's absolute URL, where every template uses it as the `/hub` mount prefix, so the Explorer posted its comparison to `https://<host>/explore/compare`, a path outside the mount, and every click answered 404. The prefix and the origin are now two variables, `base_url` and `app_url`, filled by the one context builder, with a test that the Explorer's own fetch URL is a route the application serves.
+- A push runs the structural gate tests in about fifteen seconds instead of the full suite, through the hook the repository now ships; the duplicate-code check that hook declares runs for the first time, and the two duplications it found are gone (one membership mixin, one draft-at-a-free-name helper).
+- A loaded profile is copied before a draft is named after it, so naming cannot edit the shared, cached specification in place.
+
 ## [0.59.0] - 261001
 
 Fifteen changes from the 260930 codebase review (docs/REVIEW.md), each with a gate test so the rule it restores cannot erode again.

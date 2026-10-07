@@ -40,13 +40,13 @@ Each person has their own account, and sharing reaches across accounts: the pers
 
 ## Collaborations
 
-The hosted hub authenticates through SURF Research Access Management (SRAM), where people are organised into *collaborations*, each with one or more *groups*. SRAM reports a person's groups at sign-in as `eduperson_entitlement` URNs of the form `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>:<group>`. The hub uses them for two things: finding the people you work with, and sharing an item with a whole collaboration at once. A local instance authenticates through Keycloak, whose development realm emits the same URNs, so everything here works locally.
+The hosted hub authenticates through SURF Research Access Management (SRAM), where people are organised into *collaborations*, each with one or more *groups*. SRAM reports a person's membership at sign-in as `eduperson_entitlement` URNs: `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>` for the collaboration itself, and `urn:mace:surf.nl:sram:group:<organisation>:<collaboration>:<group>` for each of its groups the person is in. A member of a collaboration who is in none of its groups is reported by the first form alone, and is a member like any other: listed under **People**, shown on their own profile, and reached by a grant to the collaboration. The hub uses them for two things: finding the people you work with, and sharing an item with a whole collaboration at once. A local instance authenticates through Keycloak, whose development realm emits the same URNs, so everything here works locally.
 
 ### Your collaborations
 
 The hub does not keep its own list of who is in which collaboration. It takes a reading: the group URNs your identity provider reported, and when it read them. A sign-in takes one and replaces whatever was there, so leaving every collaboration takes effect at your next sign-in. Opening any page also takes one when there is none or it has gone stale, which is what saves a session older than this feature from never having one. Your [profile](getting-started.md#your-profile) lists the result under **Your collaborations** with the time it was read.
 
-The snapshot exists because two things cannot be answered from the sign-in token alone. Listing the people in a collaboration needs everyone's membership, not just yours. And a request made with an access token, which is how metaseed and MCP clients call the hub, carries no entitlements at all, so without the snapshot a dataset shared with your collaboration would be invisible to those clients.
+The snapshot exists because two things cannot be answered from the sign-in token alone. Listing the people in a collaboration needs everyone's membership, not just yours. And a request made with a hub personal access token, which is one way metaseed and MCP clients call the hub, carries no entitlements at all, so without the snapshot a dataset shared with your collaboration would be invisible to those clients.
 
 A reading older than the configured limit (`MEMBERSHIP_MAX_AGE_DAYS`, 30 by default) is not trusted: it no longer grants access and no longer lists you among a collaboration's people. This bounds how long someone who has left a collaboration keeps reaching its items through an access token.
 
@@ -58,7 +58,7 @@ Seeing no collaboration means one of three things, and the page says which:
 | The reading is too old to trust | It grants nothing until it is taken again. |
 | Your identity provider reported none | A reading was taken and named no group. |
 
-An access token carries no group membership at all, which is why the reading exists; a request made with one therefore never takes a reading, and never clears the one you have.
+A hub personal access token carries no group membership at all, which is why the reading exists; a request made with one therefore never takes a reading, and never clears the one you have. A [SRAM application token](mcp.md#sram-application-tokens) is different: SRAM answers every check with your current groups, so a request made with one takes a reading like a sign-in does.
 
 ### People in your collaborations
 
@@ -88,6 +88,19 @@ The **Comments** tab provides threaded discussion on a dataset.
 - Delete a comment you authored.
 
 Specification drafts have their own **Comments** tab that works the same way.
+
+## Notifications
+
+The hub tells you about things that happened to your items while you were not looking. The bell in the header shows how many notifications are unread and opens the list. Each entry names what happened, who did it and when, and links to the item where you can still open it. Opening the list marks every entry as read. Entries are kept for 90 days.
+
+You are notified when
+
+- someone shares a dataset, a specification draft or a published specification with you, changes your role on it, or removes your access;
+- someone comments on a dataset or a draft you own, or replies to a comment of yours.
+
+You are not notified of your own actions, and one action produces at most one entry per person: the owner of a dataset who is also the author of the comment replied to gets the reply, not a second entry for the comment. Access gained or lost through a [collaboration grant](#sharing-with-a-collaboration) produces no notification.
+
+The count on the bell is refreshed once a minute while a page is open. The list is part of the web interface; a client using an access token (metaseed, MCP clients) cannot read it.
 
 ## Presence
 

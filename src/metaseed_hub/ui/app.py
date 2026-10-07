@@ -20,8 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.audience import audience_label
 from metaseed_hub.database import get_session
-from metaseed_hub.models import Dataset, SpecDraft
+from metaseed_hub.models import SpecDraft
 from metaseed_hub.sharing import accessible_ids, granting_urns, resource_for
+from metaseed_hub.ui.dataset_list import (
+    VIEW_COOKIE,
+    VIEWS,
+    DatasetRow,
+    ListFilters,
+    apply_filters,
+    profiles_of,
+)
 from metaseed_hub.ui.dependencies import (
     AuthRequiredError,
     DuplicateAccountEmailError,
@@ -48,6 +56,7 @@ from metaseed_hub.ui.routes import (
     init_dataset_templates,
     init_entity_templates,
     is_admin,
+    notifications_router,
     ontology_router,
     people_router,
     seek_router,
@@ -60,6 +69,7 @@ from metaseed_hub.ui.routes.auth import (
     REFRESH_TOKEN_MAX_AGE,
     refresh_access_token,
 )
+from metaseed_hub.ui.services.dataset_listing import datasets_visible_to
 from metaseed_hub.ui.spec_builder import create_spec_builder_router
 from metaseed_hub.ui.spec_builder_helpers import spec_label
 
@@ -297,6 +307,7 @@ def create_hub_app() -> FastAPI:
     app.include_router(seek_router)
     app.include_router(sharing_router)
     app.include_router(people_router)
+    app.include_router(notifications_router)
 
     # Add spec builder routes
     spec_builder_router = create_spec_builder_router(templates)
@@ -324,32 +335,7 @@ def create_hub_app() -> FastAPI:
         # via the canonical helper, so onboarding stays consistent across routes.
         tenant, db_user = await ensure_tenant_and_user(session, user)
 
-        # Get owned datasets from tenant
-        ds_result = await session.execute(
-            select(Dataset)
-            .where(Dataset.tenant_id == tenant.id, Dataset.deleted_at.is_(None))
-            .order_by(Dataset.updated_at.desc())
-        )
-        owned_datasets = list(ds_result.scalars().all())
-
-        # Datasets shared with this user: by membership or a collaboration grant
-        shared_ds_result = await session.execute(
-            select(Dataset)
-            .where(
-                Dataset.id.in_(await accessible_ids(session, resource_for("dataset"), db_user.id)),
-                Dataset.deleted_at.is_(None),
-            )
-            .order_by(Dataset.updated_at.desc())
-        )
-        shared_datasets = list(shared_ds_result.scalars().all())
-
-        # Combine and deduplicate datasets
-        seen_ds_ids: set[str] = set()
-        datasets: list[Dataset] = []
-        for ds in owned_datasets + shared_datasets:
-            if ds.id not in seen_ds_ids:
-                seen_ds_ids.add(ds.id)
-                datasets.append(ds)
+        datasets, owned_ids = await datasets_visible_to(session, tenant.id, db_user.id)
 
         # Get owned spec drafts from tenant
         spec_result = await session.execute(
@@ -377,25 +363,49 @@ def create_hub_app() -> FastAPI:
                 seen_ids.add(spec.id)
                 specs.append(spec)
 
-        return render_template(
-            request=request,
-            name="home.html",
-            context={
-                "user": user,
-                "tenant": tenant,
-                "datasets": datasets,
-                # What each card says about size: the tree is already loaded
-                # with the row, so counting it costs no further query.
-                "entity_counts": {
-                    ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets
-                },
-                "specs": specs,
-                # Which collaboration reaches each item the person does not own,
-                # so a card can say why it is in their list at all.
-                "granted_by": await _granted_labels(session, db_user.id),
-                "nav_active": "home",
-            },
+        # Which collaboration reaches each item the person does not own,
+        # so a card can say why it is in their list at all.
+        granted_by = await _granted_labels(session, db_user.id)
+        # What each card says about size: the tree is already loaded with the
+        # row, so counting it costs no further query.
+        entity_counts = {ds.id: count_entities_by_type(ds.data.get("tree", [])) for ds in datasets}
+        rows = [
+            DatasetRow(
+                dataset=ds,
+                entities=sum(entity_counts[ds.id].values()),
+                access="mine"
+                if ds.id in owned_ids
+                else ("collaboration" if granted_by.get(ds.id) else "shared"),
+                collaboration=granted_by.get(ds.id),
+            )
+            for ds in datasets
+        ]
+        filters = ListFilters.from_query(
+            request.query_params, remembered=request.cookies.get(VIEW_COOKIE)
         )
+        context = {
+            "user": user,
+            "tenant": tenant,
+            "datasets": datasets,
+            "entity_counts": entity_counts,
+            "rows": apply_filters(rows, filters),
+            "profiles": profiles_of(rows),
+            "filters": filters,
+            "specs": specs,
+            "granted_by": granted_by,
+            "nav_active": "home",
+        }
+        # A search or a filter arrives from the page itself and wants only the
+        # list back; a plain visit wants the page.
+        is_fragment = request.headers.get("HX-Request") == "true"
+        response = render_template(
+            request=request,
+            name="partials/dataset_list.html" if is_fragment else "home.html",
+            context=context,
+        )
+        if request.query_params.get("view") in VIEWS:
+            response.set_cookie(VIEW_COOKIE, filters.view, max_age=365 * 24 * 3600, samesite="lax")
+        return response
 
     @app.get("/home", response_class=Response)
     async def overview_home(request: Request, user: OptionalUser) -> Response:

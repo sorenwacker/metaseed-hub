@@ -11,6 +11,9 @@ The routes are open to every signed-in user; the connection they configure
 lifting is metaseed's (:mod:`metaseed.seek`); these routes wrap it around the
 hub's per-user connection and dataset model.
 
+``/hub/seek`` is the page that holds the steps in order: the connection, the
+project, and the datasets that can be pushed, each with its actions.
+
 The connection is per user because SEEK creates every record as the API key's
 person. The key is encrypted at rest and never rendered back into a page.
 """
@@ -21,7 +24,7 @@ import json
 import logging
 import socket
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -31,16 +34,23 @@ from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.crypto import decrypt_secret, encrypt_secret
-from metaseed_hub.models import SeekConnection
+from metaseed_hub.models import Dataset, SeekConnection
 from metaseed_hub.ui.dependencies import (
     DbSession,
+    ensure_tenant_and_user,
     get_dataset_for_user,
     require_user,
 )
 from metaseed_hub.ui.helpers.dataset_state import ensure_dataset_facade
+from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import validate_csrf_or_error
+from metaseed_hub.ui.services.dataset_listing import datasets_visible_to
 from metaseed_hub.ui.services.seek_connection import connection_for_user, tenant_for_user
+
+if TYPE_CHECKING:
+    from metaseed.specs.schema import ProfileSpec
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +61,20 @@ router = APIRouter(prefix="/seek", tags=["seek"])
 SeekUser = Annotated[TokenUser, Depends(require_user)]
 
 
-def _client_for(connection: SeekConnection) -> Any:
+#: How long a push waits for one answer from SEEK. SEEK builds a Study or an
+#: Assay together with its Sample Types in one request, which took 35 seconds on
+#: a small instance; at the client's default of 30 the request succeeded in SEEK
+#: and was reported here as "timed out".
+PUSH_TIMEOUT_SECONDS = 180.0
+
+
+def _client_for(connection: SeekConnection, *, timeout: float = 30.0) -> Any:
     """A metaseed SEEK client for a stored connection.
+
+    Args:
+        connection: The stored connection.
+        timeout: Seconds to wait for each answer; a push passes
+            :data:`PUSH_TIMEOUT_SECONDS`.
 
     Raises ``ValueError`` when the key cannot be decrypted — which in practice
     means ``SECRET_KEY`` changed since it was stored, and the remedy is
@@ -66,7 +88,7 @@ def _client_for(connection: SeekConnection) -> Any:
             "The stored SEEK API key cannot be read any more (the server "
             "secret changed). Enter it again on the SEEK settings page."
         )
-    return client_from_settings({"url": connection.url, "api_key": api_key})
+    return client_from_settings({"url": connection.url, "api_key": api_key}, timeout=timeout)
 
 
 def _verification_failure(exc: Exception, url: str) -> str:
@@ -111,16 +133,14 @@ def _verification_failure(exc: Exception, url: str) -> str:
     return f"Could not reach SEEK at {host}: {exc}"
 
 
-#: Where the connection is edited and its standing shown.
-SETTINGS_URL = "/hub/auth/profile#seek"
+#: The SEEK page, where the connection is edited and its standing shown.
+SETTINGS_URL = "/hub/seek"
 
 
 def _back(error: str | None = None) -> RedirectResponse:
-    """Back to the settings section, carrying a message the page can show."""
+    """Back to the SEEK page, carrying a message the page can show."""
     if error:
-        return RedirectResponse(
-            url=f"/hub/auth/profile?seek_error={quote(error)}#seek", status_code=303
-        )
+        return RedirectResponse(url=f"{SETTINGS_URL}?seek_error={quote(error)}", status_code=303)
     return RedirectResponse(url=SETTINGS_URL, status_code=303)
 
 
@@ -173,10 +193,47 @@ def _record_outcome(
         )
 
 
-@router.get("")
+async def _by_pushability(
+    session: AsyncSession, datasets: list[Dataset]
+) -> tuple[list[Dataset], int]:
+    """Split datasets into those SEEK can take and a count of the rest.
+
+    Many datasets share one specification, so each is resolved once.
+    """
+    supported: dict[tuple[str | None, str | None, str, str], bool] = {}
+    pushable: list[Dataset] = []
+    for dataset in datasets:
+        key = (dataset.spec_draft_id, dataset.spec_id, dataset.profile, dataset.version)
+        if key not in supported:
+            supported[key] = spec_supports_seek(await dataset_profile_spec(session, dataset))
+        if supported[key]:
+            pushable.append(dataset)
+    return pushable, len(datasets) - len(pushable)
+
+
+@router.get("", response_class=HTMLResponse)
+async def seek_page(request: Request, session: DbSession, user: SeekUser) -> Response:
+    """The steps of a push in order: connection, project, datasets."""
+    tenant, db_user = await ensure_tenant_and_user(session, user)
+    datasets, _owned = await datasets_visible_to(session, tenant.id, db_user.id)
+    pushable, unpushable = await _by_pushability(session, datasets)
+    return render_template(
+        request,
+        "seek.html",
+        {
+            "user": user,
+            "nav_active": "seek",
+            "connection": await connection_for_user(session, user),
+            "seek_error": request.query_params.get("seek_error"),
+            "pushable": pushable,
+            "unpushable": unpushable,
+        },
+    )
+
+
 @router.get("/settings")
 async def seek_settings(user: SeekUser) -> Response:
-    """Send the old settings URLs to the profile section that replaced them."""
+    """Send the old settings URL to the page that replaced it."""
     return RedirectResponse(url=SETTINGS_URL, status_code=302)
 
 
@@ -276,27 +333,30 @@ async def seek_settings_check(
 REQUIRED_ROLE = "Investigation"
 
 
-def profile_supports_seek(profile: str, version: str) -> bool:
-    """Whether a dataset on this profile can be pushed to SEEK at all.
+def spec_supports_seek(spec: ProfileSpec | None) -> bool:
+    """Whether a dataset on this specification can be pushed to SEEK at all.
 
-    Read from the profile's own SEEK role annotations rather than a list of
-    names here, so a specification that declares the roles works without the
+    Read from the specification's own SEEK role annotations rather than a list
+    of names here, so a specification that declares the roles works without the
     hub being taught about it.
-    """
-    from metaseed.specs.loader import SpecLoader
 
-    try:
-        spec = SpecLoader().load_profile(version, profile)
-    except Exception:
+    Args:
+        spec: The dataset's specification, as ``dataset_profile_spec`` resolves
+            it, or None when it could not be resolved.
+
+    Returns:
+        True if an entity carries the Investigation role.
+    """
+    if spec is None:
         return False
     return any(
         entity.seek and entity.seek.role == REQUIRED_ROLE for entity in spec.entities.values()
     )
 
 
-@router.get("/templates/{profile}/{version}")
-async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Response:
-    """Download a profile's ISA Templates, for a SEEK administrator to install.
+@router.get("/datasets/{dataset_id}/templates")
+async def seek_isa_templates(dataset_id: str, session: DbSession, user: SeekUser) -> Response:
+    """Download the ISA Templates of a dataset's specification.
 
     Sample Types and controlled vocabularies are provisioned by the push
     itself. Templates are not: only an administrator can install them, under
@@ -304,20 +364,25 @@ async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Resp
     assay data file from an assay material. Without them a pushed dataset is in
     SEEK but cannot be exported as ISA-JSON, which is the whole point of
     putting it there.
+
+    Addressed by dataset, not by profile name: a draft or a published
+    specification lives in the database, where a name finds nothing.
     """
     from metaseed.seek.templates import to_isa_template_json
-    from metaseed.specs.loader import SpecLoader
 
-    try:
-        spec = SpecLoader().load_profile(version, profile)
-    except Exception:
-        # Never echo the requested profile back into the response.
-        raise HTTPException(status_code=404, detail="Unknown profile") from None
-
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    spec = await dataset_profile_spec(session, dataset)
+    if spec is None or not spec_supports_seek(spec):
+        # The same refusal the check and the push give: templates for a
+        # specification that cannot be pushed would install and serve nothing.
+        raise HTTPException(
+            status_code=422,
+            detail=f"The {dataset.profile} profile does not map onto SEEK.",
+        )
     try:
         document = to_isa_template_json(spec)
     except Exception as exc:
-        logger.info("ISA templates could not be built for %s: %s", profile, exc)
+        logger.info("ISA templates could not be built for %s: %s", dataset.profile, exc)
         raise HTTPException(
             status_code=422,
             detail=(
@@ -326,7 +391,7 @@ async def seek_isa_templates(profile: str, version: str, user: SeekUser) -> Resp
             ),
         ) from None
 
-    stem = "".join(c for c in f"{profile}-{version}" if c.isalnum() or c in "-_.")
+    stem = "".join(c for c in f"{dataset.profile}-{dataset.version}" if c.isalnum() or c in "-_.")
     return Response(
         json.dumps(document, indent=2),
         media_type="application/json",
@@ -360,6 +425,36 @@ async def seek_choose_project(
     return _back()
 
 
+def _templates_present_and_missing(
+    client: Any, profile: ProfileSpec
+) -> tuple[list[str], list[str]]:
+    """The profile's ISA Templates that this SEEK has, and those it lacks.
+
+    The titles are read from the document the ISA templates button downloads,
+    which is what an administrator installs and what the push looks up. Titles
+    built here from the profile's name agreed with neither: the generated assay
+    template is "... assay - data file", and a template-bound profile's
+    templates carry the titles its entities name.
+    """
+    from metaseed.seek.templates import to_isa_template_json
+
+    installed = set(client.template_ids_by_title())
+    wanted = [template["metadata"]["name"] for template in to_isa_template_json(profile)["data"]]
+    return [t for t in wanted if t in installed], [t for t in wanted if t not in installed]
+
+
+def _missing_templates_message(missing: list[str], url: str) -> str:
+    return (
+        f"{len(missing)} ISA Template(s) are not installed on this SEEK: "
+        + ", ".join(missing)
+        + ". Download them with the ISA templates button and have a "
+        "SEEK administrator install them at "
+        f"{url}/templates/default_templates. That page "
+        "exists only once 'Compliance with ISA-JSON schemas' is "
+        "enabled, which itself needs Single page, ISA and Samples."
+    )
+
+
 @router.post("/datasets/{dataset_id}/check", response_class=HTMLResponse)
 async def seek_readiness(
     request: Request,
@@ -377,7 +472,8 @@ async def seek_readiness(
     """
     validate_csrf_or_error(request, csrf_token)
     dataset = await get_dataset_for_user(dataset_id, session, user)
-    if not profile_supports_seek(dataset.profile, dataset.version):
+    profile = await dataset_profile_spec(session, dataset)
+    if profile is None or not spec_supports_seek(profile):
         return _panel(
             request,
             error=f"The {dataset.profile} profile does not map onto SEEK.",
@@ -387,37 +483,16 @@ async def seek_readiness(
     if connection is None:
         return _panel(request, error="Configure your SEEK connection first.")
 
-    def work() -> tuple[list[str], list[str]]:
-        from metaseed.seek.templates import template_title
-        from metaseed.specs.loader import SpecLoader
-
-        client = _client_for(connection)
-        installed = set(client.template_ids_by_title())
-        profile = SpecLoader().load_profile(dataset.version, dataset.profile)
-        wanted = [
-            template_title(profile, level) for level in ("study source", "study sample", "assay")
-        ]
-        return [t for t in wanted if t in installed], [t for t in wanted if t not in installed]
-
     try:
-        present, missing = await run_in_threadpool(work)
+        present, missing = await run_in_threadpool(
+            _templates_present_and_missing, _client_for(connection), profile
+        )
     except Exception as exc:
         logger.info("SEEK readiness check failed: %s", exc)
         return _panel(request, error=_push_failure(exc, connection.url))
 
     if missing:
-        return _panel(
-            request,
-            error=(
-                f"{len(missing)} ISA Template(s) are not installed on this SEEK: "
-                + ", ".join(missing)
-                + ". Download them with the ISA templates button and have a "
-                "SEEK administrator install them at "
-                f"{connection.url}/templates/default_templates. That page "
-                "exists only once 'Compliance with ISA-JSON schemas' is "
-                "enabled, which itself needs Single page, ISA and Samples."
-            ),
-        )
+        return _panel(request, error=_missing_templates_message(missing, connection.url))
     return _panel(request, message=f"Ready: {len(present)} template(s) installed.")
 
 
@@ -441,7 +516,8 @@ async def seek_push(
     # Before the connection: no SEEK account makes an unmappable profile work,
     # and "configure your connection first" would send someone to fix the wrong
     # thing.
-    if not profile_supports_seek(dataset.profile, dataset.version):
+    profile = await dataset_profile_spec(session, dataset)
+    if profile is None or not spec_supports_seek(profile):
         return _panel(
             request,
             error=(
@@ -455,6 +531,22 @@ async def seek_push(
     if connection is None:
         return _panel(request, error="Configure your SEEK connection first.")
 
+    # The check, before anything is created: without the templates SEEK takes
+    # the Investigation and the Studies and then refuses every sample table,
+    # once per Study, leaving half a dataset behind.
+    try:
+        _present, missing = await run_in_threadpool(
+            _templates_present_and_missing, _client_for(connection), profile
+        )
+    except Exception as exc:
+        logger.info("SEEK push stopped at the readiness check: %s", exc)
+        return _panel(request, error=f"Push failed. {_push_failure(exc, connection.url)}")
+    if missing:
+        return _panel(
+            request,
+            error="Nothing was sent. " + _missing_templates_message(missing, connection.url),
+        )
+
     state = await ensure_dataset_facade(dataset, session)
     facade = state.get_or_create_facade()
 
@@ -466,12 +558,10 @@ async def seek_push(
             sync_dataset_to_seek,
         )
         from metaseed.seek.provision import resolve_cv_ids
-        from metaseed.specs.loader import SpecLoader
 
-        client = _client_for(connection)
+        client = _client_for(connection, timeout=PUSH_TIMEOUT_SECONDS)
         # The person's choice; only fall back when they have never chosen.
         project_id = connection.project_id or client.default_project_id()
-        profile = SpecLoader().load_profile(dataset.version, dataset.profile)
         execute_provisioning_plan(client, build_provisioning_plan(profile), project_id=project_id)
         return sync_dataset_to_seek(
             client,

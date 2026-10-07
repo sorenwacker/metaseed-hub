@@ -16,9 +16,10 @@ A draft is identified by its name and version within your account, so you can ho
 1. On the Specs page, click **+ New Specification**.
 2. Choose how to start:
    - **From Scratch** — an empty specification.
-   - **From Template** — start from a provided template. A template that cannot be loaded is reported on the form; no draft is created in its place.
+   - **From Template** — start from a provided template. Each template offers its versions with the newest selected. A template that cannot be loaded is reported on the form; no draft is created in its place.
    - **Import YAML** — upload an existing specification file (see [Publishing and sharing](publishing.md#importing-and-exporting-yaml)).
-3. The draft editor opens.
+3. The hub asks for a name. Leave it empty and the hub names the draft: after the template, after the imported file, or with a numbered default.
+4. The draft editor opens.
 
 ## The draft editor
 
@@ -27,6 +28,20 @@ The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, w
 ### Entities
 
 Click **+ Entity** on the canvas to add an entity, then click an entity to edit it. From the entity editor you can rename the entity and mark one entity as the specification's **root**.
+
+#### SEEK mapping
+
+For a specification whose datasets are pushed to FAIRDOM-SEEK, the entity editor has a **SEEK** section with the table-level settings the push reads:
+
+| Setting | Purpose |
+|---------|---------|
+| Role | The ISA object this entity becomes in SEEK: Investigation, Study, ObservationUnit, Sample, Assay or DataFile. Empty for an entity SEEK does not receive. |
+| ISA template | For the sample-level roles (ObservationUnit, Sample, DataFile), the title of the ISA Template installed on the SEEK instance whose columns this entity's fields are. Empty for a specification that builds its own Sample Types by nesting. |
+| Extended metadata type | For the Investigation, Study and Assay roles, the title of the Extended Metadata Type on the instance that the entity's scalar fields are pushed into. |
+
+These settings are what makes a dataset pushable: the SEEK controls appear on a dataset only when its specification has an entity with the Investigation role. ISA tags, by contrast, are a property of fields and are set in the field editor; they say what column a field is in a Sample Type.
+
+The section shows the settings a specification already carries, including one imported from YAML, so a specification's SEEK mapping is visible wherever its entities are edited.
 
 ### Fields
 

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - Metaseed Hub{% endblock %}
+
+{% block content %}
+<div class="notifications-page">
+    <header class="page-header">
+        <h1>Notifications</h1>
+        <p>What happened to your items in the last 90 days. Opening this list marks it read.</p>
+    </header>
+
+    {% if entries %}
+    <ul class="notification-list">
+        {% for entry in entries %}
+        <li class="notification-entry{% if entry.was_unread %} notification-entry-unread{% endif %}"
+            {% if entry.was_unread %}data-testid="notification-unread"{% endif %}>
+            <span class="notification-text">
+                {{ entry.lead }}
+                {% if entry.url %}<a href="{{ entry.url }}">{{ entry.title }}</a>{% else %}<strong>{{ entry.title }}</strong>{% endif %}{{ entry.tail }}
+            </span>
+            <time class="notification-time" datetime="{{ entry.created_at.isoformat() }}">{{ entry.created_at.strftime('%y%m%d %H:%M') }} UTC</time>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="form-hint" data-testid="notifications-empty">Nothing yet. You are told here when someone shares an item with you, changes or removes your access, comments on something you own, or replies to you.</p>
+    {% endif %}
+</div>
+{% endblock %}

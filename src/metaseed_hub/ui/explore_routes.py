@@ -386,7 +386,6 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 request,
                 "explore/index.html",
                 {
-                    "base_url": "/hub",
                     "profiles": profiles,
                     "profile_versions": profile_versions,
                     "profile_display_names": profile_display_names,

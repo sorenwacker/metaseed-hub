@@ -12,8 +12,6 @@ legend that only the library produces.
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 pytest.importorskip("selenium")
@@ -21,7 +19,8 @@ from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
-from tests.test_selenium_export import BASE, _login, driver  # noqa: F401
+from tests.selenium_records import record_name  # noqa: E402
+from tests.test_selenium_export import BASE, _login, driver  # noqa: E402, F401
 
 pytestmark = pytest.mark.selenium
 
@@ -33,7 +32,7 @@ def _dataset_with_example_data(browser) -> str:
 
     browser.get(f"{BASE}/hub/datasets/new")
     WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.ID, "dataset-name")))
-    browser.find_element(By.ID, "dataset-name").send_keys(f"selenium-graph-{uuid.uuid4().hex[:8]}")
+    browser.find_element(By.ID, "dataset-name").send_keys(record_name("graph"))
     card = WebDriverWait(browser, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.standard-card[data-profile="pride"]'))
     )
@@ -83,6 +82,38 @@ def test_the_graph_opens_beside_the_editor_on_the_dataset_page(driver) -> None: 
         lambda d: d.find_elements(By.CSS_SELECTOR, "#graph-container #graph-view canvas")
     )
     _no_severe_console_errors(driver)
+
+
+def test_the_simulation_can_be_stopped(driver) -> None:  # noqa: F811
+    """Reported: some graphs never settle and keep rotating, and the hub had no
+    way to stop them. The toggle is the library's; the hub only has to offer
+    the button the script looks for."""
+    dataset_id = _dataset_with_example_data(driver)
+    driver.get(f"{BASE}/hub/datasets/{dataset_id}/graph")
+    WebDriverWait(driver, 45).until(
+        lambda d: d.find_elements(By.CSS_SELECTOR, "#graph-view canvas")
+    )
+    # The legend arriving reflows the toolbar; a click sent before that lands
+    # where the button no longer is.
+    WebDriverWait(driver, 20).until(
+        lambda d: d.find_element(By.ID, "graph-legend").text.strip() != ""
+    )
+    button = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.ID, "graph-physics-btn"))
+    )
+    assert button.text == "Stop Physics"
+    driver.get_log("browser")  # what the pages before this one logged is not this test's
+
+    button.click()
+
+    WebDriverWait(driver, 10).until(lambda d: button.text == "Start Physics")
+    assert driver.execute_script("return graphPhysicsRunning") is False
+    _no_severe_console_errors(driver)
+
+    button.click()
+
+    WebDriverWait(driver, 10).until(lambda d: button.text == "Stop Physics")
+    assert driver.execute_script("return graphPhysicsRunning") is True
 
 
 def test_the_graph_page_draws_the_dataset(driver) -> None:  # noqa: F811

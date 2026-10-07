@@ -13,6 +13,7 @@
  *   data-after-request-reset      form.reset() once the request succeeds
  *   data-after-request-call       call a global function with the event
  *   data-after-request-redirect   go to this URL once the request succeeds
+ *   data-submit-on-change         submit the control's form when its value changes
  *   data-working-target           element to hold a "working" notice on send
  *   data-working-message          the notice's text
  */
@@ -58,5 +59,13 @@ document.addEventListener('htmx:afterRequest', function (event) {
     var url = el.dataset.afterRequestRedirect;
     if (ok && url) {
         window.location.href = url;
+    }
+});
+
+// A choice that is the whole form: saved when made, not on a second button.
+document.addEventListener('change', function (event) {
+    var el = event.target;
+    if (el && el.dataset && 'submitOnChange' in el.dataset && el.form) {
+        el.form.requestSubmit ? el.form.requestSubmit() : el.form.submit();
     }
 });

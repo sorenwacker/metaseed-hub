@@ -396,8 +396,36 @@ async def add_member(
         **{resource.foreign_key: resource_id}, user_id=user.id, role=role
     )
     session.add(member)
+    await _notify(session, resource, resource_id, actor_id, user.id, "shared", role.value)
     await session.commit()
     return member
+
+
+async def _notify(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    actor_id: str,
+    user_id: str,
+    kind: str,
+    detail: str | None = None,
+) -> None:
+    """Record, with the change itself, that ``user_id``'s access changed.
+
+    Imported here because the notifications module reads the models, which
+    read this module for :class:`Role`.
+    """
+    from metaseed_hub import notifications
+
+    await notifications.record(
+        session,
+        user_id=user_id,
+        actor_id=actor_id,
+        kind=notifications.Kind(kind),
+        resource=resource,
+        resource_id=resource_id,
+        detail=detail,
+    )
 
 
 async def record_creator(
@@ -443,6 +471,8 @@ async def set_role(
     if demoting_an_owner and await _owner_count(session, resource, resource_id) == 1:
         raise LastOwnerError("change this role")
 
+    if Role(member.role) is not role:
+        await _notify(session, resource, resource_id, actor_id, user_id, "role_changed", role.value)
     member.role = role
     await session.commit()
     return member
@@ -472,6 +502,7 @@ async def remove_member(
         raise LastOwnerError("leave" if actor_id == user_id else "remove them")
 
     await session.delete(member)
+    await _notify(session, resource, resource_id, actor_id, user_id, "access_removed")
     await session.commit()
 
 

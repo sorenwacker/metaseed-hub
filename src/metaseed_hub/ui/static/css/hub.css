@@ -296,6 +296,58 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* The bell, and the unread count riding on its corner. */
+.notification-bell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.notification-bell:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.notification-count {
+    position: absolute;
+    top: -2px;
+    right: -4px;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #c0392b;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+}
+
+.notification-count:empty {
+    display: none;
+}
+
+.notifications-page { max-width: 48rem; }
+.notification-list { list-style: none; margin: 0; padding: 0; }
+.notification-entry {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid var(--color-border, #ddd);
+}
+.notification-entry-unread {
+    border-left: 3px solid var(--color-success, #2f6f4f);
+    font-weight: 500;
+}
+.notification-text { min-width: 0; }
+.notification-time { flex: 0 0 auto; color: var(--color-text-muted, #777); font-size: 0.8125rem; }
+
 /* Header buttons (for dark header) */
 .btn-header {
     background: rgba(255, 255, 255, 0.1);
@@ -494,6 +546,97 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-md);
+}
+
+/* The dataset list's controls: view toggle, then search and filters when the
+   table is shown. One row that wraps on a narrow screen. */
+.dataset-list-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+}
+
+.dataset-list-controls input[type="search"] {
+    flex: 1 1 16rem;
+    min-width: 12rem;
+}
+
+.view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.view-toggle a {
+    padding: var(--space-xs) var(--space-md);
+    color: var(--clr-ink-light);
+    text-decoration: none;
+}
+
+.view-toggle a.active {
+    background: var(--clr-ink);
+    color: var(--clr-paper);
+}
+
+.dataset-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--clr-paper);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+
+.dataset-table th,
+.dataset-table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+    border-bottom: 1px solid var(--clr-border-light);
+    vertical-align: top;
+}
+
+.dataset-table th a {
+    color: var(--clr-ink-light);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+}
+
+.dataset-table th a.sorted::after {
+    content: " \2191";
+}
+
+.dataset-table th a.sorted.desc::after {
+    content: " \2193";
+}
+
+.dataset-table tbody tr:hover {
+    background: var(--clr-parchment);
+}
+
+.dataset-table-name {
+    font-weight: 500;
+}
+
+.dataset-table-description {
+    display: block;
+    color: var(--clr-ink-light);
+    font-size: 0.85rem;
+}
+
+.dataset-table-number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.dataset-table-date {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .section-header .section-title {
@@ -6238,6 +6381,12 @@ a.start-option-card:hover {
     color: var(--clr-ink-light);
 }
 
+/* .data-table cells are padding-free for the inline-editing grid, where an
+   input fills the cell. These cells hold text. */
+.entity-overview-table td {
+    padding: var(--space-sm) var(--space-md);
+}
+
 .entity-overview-table .entity-name {
     color: var(--clr-ink);
     text-decoration: none;
@@ -6583,6 +6732,21 @@ a.start-option-card:hover {
 }
 
 /* Ontology Autocomplete */
+.ontology-term-info { margin-top: var(--space-xs); }
+.ontology-term-line { margin: 0; font-size: 0.8125rem; color: var(--clr-ink-light); line-height: 1.4; }
+.ontology-term-line strong { color: var(--clr-ink); }
+.ontology-term-missing { color: var(--color-danger, #a33); }
+
+/* The suggestion list hangs below its input, outside the group that holds it.
+   The builder's form groups and forms clip their overflow, which hid every
+   suggestion; a container holding a lookup must let it out. */
+.form-group:has(.ontology-autocomplete-wrapper),
+.metadata-form:has(.ontology-autocomplete-wrapper),
+.field-edit-form:has(.ontology-autocomplete-wrapper),
+.entity-editor:has(.ontology-autocomplete-wrapper) {
+    overflow: visible;
+}
+
 .ontology-autocomplete-wrapper {
     position: relative;
     width: 100%;
@@ -6820,6 +6984,14 @@ a.start-option-card:hover {
 .admin-error-text {
     overflow-wrap: anywhere;
     max-width: 40rem;
+}
+
+.admin-error-text summary {
+    cursor: pointer;
+}
+
+.admin-error-when {
+    white-space: nowrap;
 }
 
 .admin-error-request {
@@ -7578,6 +7750,59 @@ html, body {
 .seek-status-ok { color: var(--color-success, #2f6f4f); }
 .seek-status-bad { color: var(--color-danger, #a33); }
 .seek-status-none { color: var(--color-text-muted, #777); }
+.seek-inline-form { display: inline; }
+/* The SEEK block in a dataset's sidebar. Three buttons to a row wrapped their
+   labels; two to a row matches Validate/Graph and Export/Import above. The
+   status is one quiet line here, not the bordered box metaseed's stylesheet
+   gives it. */
+.seek-sidebar { display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-sm); border-top: 1px solid var(--clr-border, #ddd); }
+.seek-sidebar .sidebar-actions-row { display: grid; grid-template-columns: 1fr 1fr; }
+.seek-sidebar .seek-downloadable { margin: var(--space-xs) 0 0; }
+.seek-sidebar .seek-status { display: block; padding: 0; margin: 0; border: none; background: none; font-size: 0.75rem; }
+.seek-page { max-width: 52rem; }
+.seek-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+.seek-page-header .form-help { margin: 0; font-size: 0.875rem; }
+.seek-step {
+    background: white;
+    border: 1px solid var(--clr-border, #ddd);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+.seek-step h2 { display: flex; align-items: center; gap: var(--space-sm); font-size: 1.125rem; margin: 0 0 var(--space-xs); }
+.seek-step-number {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    background: var(--clr-forest, #2f6f4f); color: white; font-size: 0.8125rem; font-weight: 600;
+}
+.seek-step-intro { margin: 0 0 var(--space-md); font-size: 0.875rem; }
+.seek-step form { display: block; }
+.seek-step .form-group { display: block; max-width: 30rem; }
+.seek-step .form-input { display: block; width: 100%; }
+.seek-step .sidebar-actions-row { gap: var(--space-sm); }
+.seek-step .sidebar-actions-row .btn { flex: 0 0 auto; font-size: 0.8125rem; }
+.seek-downloadable { display: block; margin: var(--space-xs) 0 0; }
+.seek-dataset-list { list-style: none; margin: 0; padding: 0; }
+.seek-dataset {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) auto;
+    gap: var(--space-md);
+    align-items: start;
+    padding: var(--space-md) 0;
+    border-top: 1px solid var(--clr-border, #ddd);
+}
+.seek-dataset:first-child { border-top: none; }
+.seek-dataset-title { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.seek-dataset-name { font-weight: 500; overflow-wrap: anywhere; }
+.seek-dataset-title .profile-badge { align-self: flex-start; }
+.seek-step > .form-help { font-size: 0.8125rem; margin: var(--space-md) 0 0; }
+.seek-dataset-actions { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-xs); }
+.seek-dataset-actions .form-help { margin: 0; text-align: right; }
+@media (max-width: 40rem) {
+    .seek-dataset { grid-template-columns: 1fr; }
+    .seek-dataset-actions { align-items: flex-start; }
+    .seek-dataset-actions .form-help { text-align: left; }
+}
 
 /* Collaborations: the grant rows on the sharing panel, and the People page. */
 .members-subheading {
@@ -7692,13 +7917,31 @@ html, body {
 /* Sized to its content, not to the toolbar: .form-input is width 100%, which
    in a flex row made the control demand the whole bar and wrap the buttons
    onto a line of their own. */
+/* One height for everything on the toolbar's right. A select takes its height
+   from the browser's own control, not from the padding and font the buttons
+   use, so it stood taller than the Save and Publish buttons beside it. */
+.toolbar-right .btn,
 .publish-audience {
+    box-sizing: border-box;
+    height: 2rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.publish-audience {
+    appearance: none;
+    -webkit-appearance: none;
     max-width: 16rem;
-    padding: var(--space-xs) var(--space-sm);
+    padding: 0 1.75rem 0 var(--space-sm);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-color: white;
     font-size: 0.8125rem;
     border: 1px solid var(--clr-parchment);
     border-radius: var(--radius-md);
     font-family: var(--font-body);
     color: var(--clr-ink);
-    background: white;
 }

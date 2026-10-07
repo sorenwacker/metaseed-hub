@@ -187,6 +187,46 @@ def test_every_page_with_a_graph_loads_the_library_drawing(template: str) -> Non
     )
 
 
+#: Controls metaseed's graph script reads that the hub's toolbars leave out on
+#: purpose, with the reason. A control missing from here and from a toolbar
+#: fails the gate below.
+GRAPH_CONTROLS_NOT_OFFERED: dict[str, str] = {
+    "graph-gravity": "never offered by the hub; the script uses its default",
+    "graph-edge-width": "never offered by the hub; the script uses its default",
+}
+
+#: Elements the script looks up that are the canvas and its surroundings, not
+#: controls a toolbar offers.
+GRAPH_STRUCTURE = {"graph-view", "graph-legend", "graph-container"}
+
+
+@pytest.mark.parametrize("template", ["graph.html", "dataset.html"])
+def test_every_graph_toolbar_offers_the_librarys_controls(template: str) -> None:
+    """A control the library's graph supports must be in the hub's toolbars.
+
+    The script looks each control up by id and does nothing when it is absent,
+    so a toolbar that omits one fails silently. That is how the hub went
+    without the physics toggle: the script had it, neither toolbar did, and a
+    graph that never settled could not be stopped.
+    """
+    import re
+
+    from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR
+
+    script = (METASEED_STATIC_DIR / "js" / "graph.js").read_text()
+    looked_up = set(re.findall(r"getElementById\('(graph-[a-z-]+)'\)", script))
+    assert "graph-physics-btn" in looked_up, "the scan no longer finds the script's controls"
+
+    markup = (Path("src/metaseed_hub/ui/templates") / template).read_text()
+    wanted = looked_up - GRAPH_STRUCTURE - set(GRAPH_CONTROLS_NOT_OFFERED)
+    missing = sorted(control for control in wanted if f'id="{control}"' not in markup)
+
+    assert not missing, (
+        f"{template} has no element for these graph controls: {missing}. Add "
+        "them to the toolbar, or list them in GRAPH_CONTROLS_NOT_OFFERED with a reason."
+    )
+
+
 def test_the_explorer_panel_is_the_librarys() -> None:
     """The hub's explorer used to carry its own selectEntity -- a lesser copy of
     metaseed's panel that showed fields as name and type while metaseed's showed

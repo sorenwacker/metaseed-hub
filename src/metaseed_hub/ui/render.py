@@ -10,7 +10,7 @@ from fastapi import Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
-from metaseed_hub.config import get_settings
+from metaseed_hub.config import MOUNT_PREFIX, get_settings
 from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
 
 HUB_REPO = "sorenwacker/metaseed-hub"
@@ -148,9 +148,15 @@ def standard_context(request: Request, context: dict[str, Any]) -> str:
     """Fill the context every page needs and return the CSRF token to set.
 
     One place for the CSRF token, the request, the version, the analytics
-    settings and ``base_url``: the spec builder and the explorer each kept a
-    copy of this list that omitted ``base_url``, so their pages emitted the
-    template's hard-coded production URL on a local instance.
+    settings, ``base_url`` and ``app_url``: the spec builder and the explorer
+    each kept a copy of this list that omitted the URL, so their pages emitted
+    the template's hard-coded production URL on a local instance.
+
+    ``base_url`` is the mount prefix (``/hub``), which templates put in front
+    of a route; ``app_url`` is the instance's absolute origin, for the
+    canonical link and the share preview only. Release 0.59.0 filled
+    ``base_url`` with the origin, and the Explorer posted its comparison to
+    ``https://<host>/explore/compare``, outside the mount.
 
     Args:
         request: The request being answered.
@@ -166,7 +172,8 @@ def standard_context(request: Request, context: dict[str, Any]) -> str:
     settings = get_settings()
     context["matomo_url"] = settings.matomo_url
     context["matomo_site_id"] = settings.matomo_site_id
-    context["base_url"] = settings.app_url
+    context["base_url"] = MOUNT_PREFIX
+    context["app_url"] = settings.app_url
     return csrf_token
 
 

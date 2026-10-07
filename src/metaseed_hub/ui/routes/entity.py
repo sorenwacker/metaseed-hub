@@ -6,6 +6,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import escape
+from metaseed.services.term_check import check_entity_terms
+from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.ui.dependencies import (
     CurrentUser,
@@ -207,17 +209,37 @@ async def dataset_entity_validate(
     # Validate without saving
     errors = await service.validate_entity(entity_type, values)
 
-    if not errors:
+    # Ontology terms are not checked when an entity is built -- that would be a
+    # network request per entity -- so building it says nothing about them.
+    # Asked here, as dataset validation asks, off the event loop.
+    verdicts = await run_in_threadpool(check_entity_terms, helper.spec.fields, values)
+    not_checked: list[str] = []
+    for field_name, verdict in verdicts.items():
+        if not verdict.message:
+            continue
+        if verdict.is_problem:
+            errors.append(f"{field_name}: {verdict.message}")
+        else:
+            # A label where an identifier belongs, or a lookup service that did
+            # not answer: nothing is known, which is neither valid nor an error.
+            not_checked.append(f"{field_name}: {verdict.message}")
+
+    if not errors and not not_checked:
         return HTMLResponse(
             "<div class='success-message'>Validation passed. No errors found.</div>"
         )
 
-    # Format errors as list
-    error_html = "<div class='warning-message'><strong>Validation issues:</strong><ul>"
-    for error in errors:
-        error_html += f"<li>{escape(error)}</li>"
-    error_html += "</ul></div>"
-    return HTMLResponse(error_html)
+    html = ""
+    if errors:
+        html += "<div class='warning-message'><strong>Validation issues:</strong><ul>"
+        html += "".join(f"<li>{escape(error)}</li>" for error in errors)
+        html += "</ul></div>"
+    if not_checked:
+        heading = "Not checked:" if errors else "No errors found. Not checked:"
+        html += f"<div class='warning-message'><strong>{heading}</strong><ul>"
+        html += "".join(f"<li>{escape(note)}</li>" for note in not_checked)
+        html += "</ul></div>"
+    return HTMLResponse(html)
 
 
 @router.get("/entity/{node_id}", response_class=HTMLResponse)

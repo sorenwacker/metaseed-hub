@@ -4,21 +4,29 @@ The hub exposes a [Model Context Protocol](https://modelcontextprotocol.io) endp
 
 ## Getting a token
 
-The hub signs you in through your institution, which needs a browser; an agent is not a browser, so it presents a **personal access token** instead. Create one under **Access tokens** on your [profile](getting-started.md#your-profile).
+The hub signs you in through your institution, which needs a browser; an agent is not a browser, so it presents a token instead. On the hosted hub that token comes from SRAM; a local instance issues its own.
 
-The token is shown once and cannot be recovered — only its hash is stored, so a copy of the database is not a set of working credentials. Create a new one if you lose it, and revoke any you no longer use.
+### SRAM application tokens
 
-A token can be given an expiry, after which it stops working on its own. A token without one lasts until revoked, which is what a token pasted into a config file and forgotten then does indefinitely.
+On the hosted hub, create an **application token** for the Metaseed Hub application in SRAM itself, under the collaboration's **Application tokens** tab. SRAM shows it once. The hub validates every request carrying it by asking SRAM, so the token is exactly as alive as your place in SRAM: it stops the moment SRAM suspends you, your institution withdraws your login, or the token reaches the lifetime SRAM fixes for the application. The hub stores nothing about it and cannot revoke it; you do that in SRAM. The answer SRAM gives also carries your current collaborations, so a request made with this token refreshes the [reading](collaboration.md#your-collaborations) the hub keeps, as a sign-in does.
 
-A token acts as **you**. Every tool call is scoped to your own account: it can see and change your datasets and nothing else.
+You must have signed in to the hub once before, so an account exists for the token to act as; the hub refuses the token with that message otherwise. A request the hub cannot check because SRAM is unreachable is refused as *not checked*, with status 503, never as an invalid token: someone else's downtime must not read as a revoked credential. Answers are cached for a few minutes, so a client making many requests does not ask SRAM for each one.
 
-The endpoint also accepts an **OIDC bearer** — the access token your signed-in hub session already holds — for clients that can obtain one. A personal access token is the durable, non-interactive credential; the OIDC bearer expires with your session.
+### Hub personal access tokens
+
+A local instance has no SRAM, so it issues its own: create one under **Access tokens** on your [profile](getting-started.md#your-profile). The token is shown once and cannot be recovered — only its hash is stored, so a copy of the database is not a set of working credentials. Create a new one if you lose it, and revoke any you no longer use. A token can be given an expiry, after which it stops working on its own; a token without one lasts until revoked, which is what a token pasted into a config file and forgotten then does indefinitely. The hosted hub accepts these too, but a hub token outlives your place in SRAM, which is why the SRAM token is the credential there.
+
+### What a token is
+
+Either token acts as **you**. Every tool call is scoped to your own account: it can see and change your datasets and nothing else. Neither carries the administrator role an OIDC sign-in can.
+
+The endpoint also accepts an **OIDC bearer** — the access token your signed-in hub session already holds — for clients that can obtain one. It expires with your session.
 
 ## Configuring Claude Code
 
 ```bash
 claude mcp add --transport http metaseed-hub https://metaseed.ewi.tudelft.nl/hub/mcp \
-  --header "Authorization: Bearer msh_your_token_here"
+  --header "Authorization: Bearer your_token_here"
 ```
 
 ## What an agent can do

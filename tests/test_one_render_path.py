@@ -17,7 +17,6 @@ import pytest
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
-from metaseed_hub.config import get_settings
 from metaseed_hub.ui.spec_builder.routes._common import render_with_context
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "metaseed_hub"
@@ -43,7 +42,8 @@ async def test_a_spec_builder_page_carries_the_configured_base_url(
         Jinja2Templates(directory=str(tmp_path)), _request(), "probe.html", {"user": None}
     )
 
-    assert response.body.decode() == f"{get_settings().app_url}|True"
+    # The mount prefix, not the origin: templates put it in front of a route.
+    assert response.body.decode() == "/hub|True"
 
 
 def test_only_render_builds_the_standard_context() -> None:

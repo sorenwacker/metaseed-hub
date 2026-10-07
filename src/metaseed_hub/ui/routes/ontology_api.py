@@ -143,14 +143,20 @@ async def get_ontology_term(term_id: str) -> JSONResponse:
         # Fields vary by source: a local vocabulary has an id and a label, OLS
         # adds an IRI, synonyms and obsolescence. Report what the answering
         # source actually holds rather than inventing empty fields for the rest.
+        # A term names itself ``term_id`` and its definition ``description``;
+        # reading ``id`` and ``definition`` off it found neither, so the id was
+        # whatever had been asked for and no definition was ever passed on.
         result: dict[str, object] = {
-            "id": getattr(term, "id", term_id),
+            "id": getattr(term, "term_id", None) or term_id,
             "label": getattr(term, "label", ""),
         }
-        for name in ("ontology", "iri", "is_obsolete", "definition", "synonyms"):
+        for name in ("ontology", "iri", "is_obsolete", "synonyms"):
             value = getattr(term, name, None)
             if value not in (None, "", []):
                 result[name] = value
+        definition = getattr(term, "description", None)
+        if definition:
+            result["definition"] = definition
         source = getattr(term, "source", "")
         if source:
             result["source"] = source

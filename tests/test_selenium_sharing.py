@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import os
-import uuid
 from pathlib import Path
 
 import pytest
@@ -26,6 +25,8 @@ from selenium.webdriver.chrome.options import Options  # noqa: E402
 from selenium.webdriver.common.by import By  # noqa: E402
 from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
+
+from tests.selenium_records import delete_records, record_name  # noqa: E402
 
 pytestmark = pytest.mark.selenium
 
@@ -72,6 +73,7 @@ def driver():
     d = _driver()
     try:
         yield d
+        delete_records(d)
     finally:
         d.quit()
 
@@ -108,16 +110,20 @@ def test_a_spec_draft_can_be_shared_with_a_colleague(driver) -> None:
 
     # Create a draft to share. Draft names are unique per user.
     driver.get(f"{BASE}/hub/spec-builder/new")
+    # The way to start is chosen first; the name is asked in the dialog after.
+    create = WebDriverWait(driver, 20).until(
+        lambda d: next(
+            b
+            for b in d.find_elements(By.CSS_SELECTOR, "button.btn-primary")
+            if "createEmptySpec" in (b.get_attribute("onclick") or "")
+        )
+    )
+    driver.execute_script("arguments[0].click();", create)
     name_field = WebDriverWait(driver, 20).until(
         EC.visibility_of_element_located((By.ID, "spec-name"))
     )
-    name_field.send_keys(f"selenium-sharing-{uuid.uuid4().hex[:8]}")
-    create = next(
-        b
-        for b in driver.find_elements(By.CSS_SELECTOR, "button.btn-primary")
-        if "createEmptySpec" in (b.get_attribute("onclick") or "")
-    )
-    driver.execute_script("arguments[0].click();", create)
+    name_field.send_keys(record_name("sharing"))
+    driver.find_element(By.CSS_SELECTOR, '[data-testid="name-dialog-create"]').click()
     WebDriverWait(driver, 45).until(
         lambda d: "/hub/spec-builder/" in d.current_url and "/new" not in d.current_url
     )

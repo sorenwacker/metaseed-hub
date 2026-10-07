@@ -41,6 +41,35 @@
                        placeholder="Search ontology terms..."
                        data-ontology-autocomplete>
             </div>
+            {# The table-level SEEK mapping the push reads. ISA tags are per
+               field and live in the field editor; this is what says which
+               ISA object the table itself becomes. #}
+            <h4 class="editor-section-title">SEEK</h4>
+            <div class="form-group">
+                <label class="form-label" for="seek-role"
+                       title="The ISA object this entity becomes in SEEK; empty for an entity SEEK does not receive">SEEK role</label>
+                <select name="seek_role" id="seek-role" class="form-input" data-testid="seek-role">
+                    <option value=""{% if not entity.seek or not entity.seek.role %} selected{% endif %}>(not pushed to SEEK)</option>
+                    {% for role in seek_roles %}
+                    <option value="{{ role }}"{% if entity.seek and entity.seek.role == role %} selected{% endif %}>{{ role }}</option>
+                    {% endfor %}
+                </select>
+                <p class="form-help">A dataset can be pushed to SEEK only when one entity has the Investigation role.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="seek-template"
+                       title="For the sample-level roles: the title of the ISA Template installed on the SEEK instance whose columns this entity's fields are">ISA template</label>
+                <input type="text" name="seek_template" id="seek-template" class="form-input"
+                       value="{{ entity.seek.template or '' if entity.seek else '' }}"
+                       placeholder="e.g. CropXR source" data-testid="seek-template">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="seek-extended-metadata"
+                       title="For the Investigation, Study and Assay roles: the title of the Extended Metadata Type on the SEEK instance the entity's fields are pushed into">Extended metadata type</label>
+                <input type="text" name="seek_extended_metadata" id="seek-extended-metadata" class="form-input"
+                       value="{{ entity.seek.extended_metadata or '' if entity.seek else '' }}"
+                       placeholder="e.g. CropXR phenotyping study" data-testid="seek-extended-metadata">
+            </div>
             <button type="submit" class="btn btn-sm">Update</button>
         </form>
     </div>

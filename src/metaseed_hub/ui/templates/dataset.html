@@ -98,40 +98,12 @@
             </div>
             {% endif %}
             {% if seek_supported %}
-            {# The SEEK plugin, visible only to the seek group while it is
-               developed behind its feature flag. #}
-            {# A push provisions the profile and creates every record over the
-               network, which takes a while; without a sign that it started, the
-               page looks dead and people press the button again. #}
-            <form id="seek-push-form" hx-post="/hub/seek/datasets/{{ dataset.id }}/push"
-                  hx-target="#seek-result" hx-disabled-elt="find button"
-                  data-working-target="seek-result"
-                  data-working-message="Pushing to SEEK. Provisioning the profile and creating records takes a minute or two; this panel reports what happened.">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <div class="sidebar-actions-row" data-testid="seek-panel">
-                    <button class="btn btn-sm btn-primary" type="submit"
-                            data-testid="btn-seek-push"
-                            title="Provision the profile on your SEEK and push this dataset">Push to SEEK</button>
-                    <a href="/hub/auth/profile#seek" class="btn btn-sm" data-testid="btn-seek-settings"
-                       title="Your SEEK instance and API key">SEEK settings</a>
-                    <button class="btn btn-sm" type="button" data-testid="btn-seek-check"
-                            hx-post="/hub/seek/datasets/{{ dataset.id }}/check"
-                            hx-target="#seek-result" hx-disabled-elt="this"
-                            data-working-target="seek-result"
-                            data-working-message="Asking SEEK what it has..."
-                            title="What this SEEK still needs before a push works">Check SEEK</button>
-                    <a href="/hub/seek/templates/{{ dataset.profile }}/{{ dataset.version }}"
-                       class="btn btn-sm" data-testid="btn-seek-templates" download
-                       title="ISA Templates for this profile — a SEEK administrator installs them under Templates, populate; SEEK's ISA-JSON export needs them">ISA templates</a>
-                </div>
-                <label class="form-hint" style="display:block; margin:0.25rem 0 0.5rem"
-                       title="SEEK's ISA-JSON export needs the download sharing level; unchecked, records stay private to your SEEK account">
-                    <input type="checkbox" name="downloadable" value="true" data-testid="seek-downloadable">
-                    downloadable in SEEK
-                </label>
-            </form>
-            <div class="seek-status-block">{% include "partials/seek_status.html" %}</div>
-            <div id="seek-result"></div>
+            {# One compact block: the actions two to a row like the rows
+               above, then the connection's standing as a single line. #}
+            <div class="seek-sidebar">
+                {% include "partials/seek_actions.html" %}
+                {% include "partials/seek_status.html" %}
+            </div>
             {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
             <div class="sidebar-actions-row">
@@ -218,6 +190,7 @@
                 <input type="range" id="graph-repulsion" min="-1000" max="-100" value="-500" oninput="updateGraphPhysics()">
             </label>
             <button type="button" id="graph-layout-btn" class="btn btn-sm" onclick="toggleGraphLayout()">Hierarchical</button>
+            <button type="button" id="graph-physics-btn" class="btn btn-sm" onclick="toggleGraphPhysics()" data-testid="btn-graph-physics" title="Freeze or resume the force simulation">Stop Physics</button>
             <button type="button" class="btn btn-sm" onclick="fitGraph()">Fit</button>
         </div>
         <div class="graph-body">

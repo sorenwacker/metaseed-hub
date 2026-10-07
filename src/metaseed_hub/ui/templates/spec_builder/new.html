@@ -18,13 +18,6 @@
 
     <div class="new-dataset-form">
         <div class="form-section">
-            <label for="spec-name" class="form-label">Name</label>
-            <input type="text" id="spec-name" name="name"
-                   class="form-input form-input-lg"
-                   placeholder="Enter specification name" autofocus>
-        </div>
-
-        <div class="form-section">
             <label class="form-label">Source</label>
             <div class="source-tabs">
                 <button type="button" class="source-tab active" data-tab="scratch">From Scratch</button>
@@ -58,8 +51,9 @@
                         <div class="standard-header">
                             <h3>{{ template.display_name }}</h3>
                             <select class="version-select" id="version-{{ template.name }}">
-                                {% for version in template.versions %}
-                                <option value="{{ version }}">v{{ version }}</option>
+                                {# Newest first and selected: the default start is the current release. #}
+                                {% for version in template.versions|reverse %}
+                                <option value="{{ version }}"{% if loop.first %} selected{% endif %}>v{{ version }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -98,6 +92,31 @@
     </div>
 </div>
 
+{# Asked after the choice, not before it: what to call a draft is a question
+   about the thing just chosen. #}
+<div class="modal-overlay hidden" id="name-dialog" data-testid="name-dialog">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>Name the specification</h3>
+            <button type="button" class="btn-close" onclick="closeNameDialog()" aria-label="Cancel">&times;</button>
+        </div>
+        <form id="name-dialog-form">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" for="spec-name">Name</label>
+                    <input type="text" id="spec-name" name="name" class="form-input"
+                           placeholder="Specification name" autocomplete="off">
+                    <small class="form-help">Leave empty and the hub names the draft.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeNameDialog()">Cancel</button>
+                <button type="submit" class="btn btn-primary" data-testid="name-dialog-create">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // Tab switching
 document.querySelectorAll('.source-tab').forEach(tab => {
@@ -130,20 +149,38 @@ if (importZone) {
     });
 }
 
-async function createEmptySpec() {
-    // Blank stays blank: the server names and numbers an unnamed draft.
-    const name = document.getElementById('spec-name').value;
+// The name is asked once a way to start is chosen. `create` receives what was
+// typed, which may be empty: the server names an unnamed draft.
+let pendingCreate = null;
 
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('template', '');
+function askName(suggestion, create) {
+    pendingCreate = create;
+    const field = document.getElementById('spec-name');
+    field.value = suggestion;
+    document.getElementById('name-dialog').classList.remove('hidden');
+    field.focus();
+    field.select();
+}
 
+function closeNameDialog() {
+    pendingCreate = null;
+    document.getElementById('name-dialog').classList.add('hidden');
+    // A file chosen and then cancelled must be choosable again.
+    document.getElementById('import-file').value = '';
+}
+
+document.getElementById('name-dialog-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const create = pendingCreate;
+    const name = document.getElementById('spec-name').value.trim();
+    document.getElementById('name-dialog').classList.add('hidden');
+    pendingCreate = null;
+    if (create) create(name);
+});
+
+async function postDraft(url, formData, failure) {
     try {
-        const response = await fetch('/hub/spec-builder/new', {
-            method: 'POST',
-            body: formData
-        });
-
+        const response = await fetch(url, { method: 'POST', body: formData });
         if (response.redirected) {
             window.location.href = response.url;
         } else if (response.ok) {
@@ -152,72 +189,44 @@ async function createEmptySpec() {
             // The server explains refusals (a name already in use); show that
             // rather than a generic failure the user cannot act on.
             const reason = (await response.text()).trim();
-            alert(reason || 'Error creating specification');
+            alert(reason ? reason.substring(0, 200) : failure);
         }
     } catch (error) {
         alert('Network error: ' + error.message);
     }
 }
 
-async function createFromTemplate(templateName) {
-    // Send only a name the user actually typed. Passing the template name here
-    // made every draft from a template look like a deliberate choice, so using
-    // the same template twice was refused instead of numbered.
-    const name = document.getElementById('spec-name').value;
+function createEmptySpec() {
+    askName('', name => {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('template', '');
+        postDraft('/hub/spec-builder/new', formData, 'Error creating specification');
+    });
+}
+
+function createFromTemplate(templateName) {
     const version = document.getElementById('version-' + templateName).value;
-
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('template', templateName + ':' + version);
-
-    try {
-        const response = await fetch('/hub/spec-builder/new', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected) {
-            window.location.href = response.url;
-        } else if (response.ok) {
-            window.location.href = response.url || '/hub/spec-builder';
-        } else {
-            // The server explains refusals (a name already in use); show that
-            // rather than a generic failure the user cannot act on.
-            const reason = (await response.text()).trim();
-            alert(reason || 'Error creating specification');
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-    }
+    // No suggestion: a name the user did not type must stay empty, so that
+    // using the same template twice is numbered by the server, not refused.
+    askName('', name => {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('template', templateName + ':' + version);
+        postDraft('/hub/spec-builder/new', formData, 'Error creating specification');
+    });
 }
 
-async function handleImport(input) {
+function handleImport(input) {
     const file = input.files[0];
     if (!file) return;
-
-    const name = document.getElementById('spec-name').value || file.name.replace(/\.(yaml|yml)$/i, '');
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('name', name);
-
-    try {
-        const response = await fetch('/hub/spec-builder/import', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected) {
-            window.location.href = response.url;
-        } else if (response.ok) {
-            window.location.href = response.url || '/hub/spec-builder';
-        } else {
-            const text = await response.text();
-            alert('Import error: ' + text.substring(0, 200));
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-    }
+    const fromFile = file.name.replace(/\.(yaml|yml)$/i, '');
+    askName(fromFile, name => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', name || fromFile);
+        postDraft('/hub/spec-builder/import', formData, 'Import error');
+    });
 }
 </script>
 

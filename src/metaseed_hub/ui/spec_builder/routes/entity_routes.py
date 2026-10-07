@@ -5,8 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from metaseed.seek.roles import SEEK_ROLES
 from metaseed.specs.builder import SpecBuilder
-from metaseed.specs.schema import EntityDefSpec, FieldType, ValidationRuleSpec
+from metaseed.specs.schema import EntityDefSpec, FieldType, SeekEntityConfig, ValidationRuleSpec
 
 from metaseed_hub.ui.spec_builder_helpers import validate_entity_name
 
@@ -17,6 +18,10 @@ __all__ = ["register_entity_routes"]
 
 def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> None:
     """Register entity CRUD routes."""
+    # The entity editor lists the roles; the tuple is SEEK vocabulary that lives
+    # with metaseed's exporter, so the template reads it from here rather than
+    # from a copy.
+    templates.env.globals["seek_roles"] = SEEK_ROLES
 
     @router.post("/{draft_id}/entity", response_class=HTMLResponse)
     async def add_entity(
@@ -114,12 +119,32 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         new_name: str = Form(""),
         description: str = Form(""),
         ontology_term: str = Form(""),
+        seek_role: str = Form(""),
+        seek_template: str = Form(""),
+        seek_extended_metadata: str = Form(""),
     ) -> HTMLResponse:
-        """Update entity metadata including rename."""
+        """Update entity metadata including rename and the SEEK mapping."""
         if name not in ctx.spec.entities:
             raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
 
         entity = ctx.spec.entities[name]
+        # Checked before anything is written, like the rename below: the role
+        # arrives from a form, so it is whatever the browser sent.
+        role = seek_role.strip() or None
+        if role is not None and role not in SEEK_ROLES:
+            return templates.TemplateResponse(
+                request,
+                "spec_builder/partials/entity_editor.html",
+                {
+                    "draft_id": ctx.draft.id,
+                    "spec": ctx.spec,
+                    "entity_name": name,
+                    "entity": entity,
+                    "editing_field_idx": None,
+                    "field_types": [t.value for t in FieldType],
+                    "error": f"Unknown SEEK role '{role}'; one of {', '.join(SEEK_ROLES)}",
+                },
+            )
         # The rename is validated before any field is written: assigning the
         # description or ontology term first left a rejected rename with the
         # cached entity already mutated.
@@ -168,6 +193,21 @@ def register_entity_routes(router: APIRouter, templates: Jinja2Templates) -> Non
         # Applied only now that the rename (if any) succeeded.
         entity.description = description.strip()
         entity.ontology_term = ontology_term.strip() or None
+        # The editor shows three of the four SEEK settings; the groups it does
+        # not show are carried over, so saving the form cannot drop them.
+        groups = entity.seek.extended_metadata_groups if entity.seek else None
+        template = seek_template.strip() or None
+        extended_metadata = seek_extended_metadata.strip() or None
+        entity.seek = (
+            SeekEntityConfig(
+                role=role,
+                template=template,
+                extended_metadata=extended_metadata,
+                extended_metadata_groups=groups,
+            )
+            if any((role, template, extended_metadata, groups))
+            else None
+        )
         await ctx.save(session)
 
         return templates.TemplateResponse(
