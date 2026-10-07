@@ -1,0 +1,27 @@
+{% set labels = {
+    "imported": "Imported",
+    "empty": "Nothing to import",
+    "duplicate": "Already imported",
+    "failed": "Failed",
+    "not_checked": "Not checked",
+} %}
+<tr data-testid="import-row" data-status="{{ outcome.status }}">
+    <td>{{ outcome.identifier }}</td>
+    <td>
+        <span class="import-status import-status-{{ outcome.status }}">{{ labels[outcome.status] }}</span>
+        {% if outcome.status == "empty" %}
+        <span class="form-help">The repository holds no records of the kind the importer reads for this identifier.</span>
+        {% elif outcome.status == "duplicate" %}
+        <span class="form-help">You already have datasets named &ldquo;{{ outcome.detail }}&rdquo;, with and without the identifier.</span>
+        {% elif outcome.status == "not_checked" %}
+        <span class="form-help">The repository did not answer. Try again later.</span>
+        {% elif outcome.status == "failed" %}
+        <span class="form-help">{{ outcome.detail }}</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if outcome.dataset %}
+        <a href="/hub/datasets/{{ outcome.dataset.id }}" data-testid="import-dataset-link">{{ outcome.dataset.name }}</a>
+        {% endif %}
+    </td>
+</tr>

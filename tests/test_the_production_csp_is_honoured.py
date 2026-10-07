@@ -98,6 +98,7 @@ def test_the_spec_builder_raises_no_policy_violation(driver) -> None:  # noqa: F
 def test_the_api_reference_renders_under_the_policy(driver) -> None:  # noqa: F811
     """The page answered 200 and stayed blank: its script came from a CDN the
     policy refuses, which only a browser reports."""
+    _login(driver)
     driver.get(f"{BASE}/docs")
 
     WebDriverWait(driver, 15).until(

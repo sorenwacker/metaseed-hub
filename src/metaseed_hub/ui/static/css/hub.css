@@ -7945,3 +7945,16 @@ html, body {
     font-family: var(--font-body);
     color: var(--clr-ink);
 }
+
+/* The Import page: datasets from repository records. */
+.import-page { max-width: 52rem; }
+.import-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+.import-page-header .form-help { margin: 0; font-size: 0.875rem; }
+.import-form textarea { width: 100%; font-family: var(--font-mono, monospace); }
+.import-results { margin-top: var(--space-lg); }
+.import-results-table td { padding: var(--space-sm) var(--space-md); vertical-align: top; }
+.import-results-table .form-help { display: block; margin: 0; }
+.import-waiting { color: var(--clr-text-muted, #6b7a70); }
+.import-status { font-weight: 600; }
+.import-status-imported { color: var(--clr-success, #2e7d32); }
+.import-status-failed { color: var(--clr-error, #c62828); }

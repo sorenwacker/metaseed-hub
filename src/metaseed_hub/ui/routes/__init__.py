@@ -11,12 +11,14 @@ from metaseed_hub.ui.routes.entity import router as entity_router
 from metaseed_hub.ui.routes.notifications import router as notifications_router
 from metaseed_hub.ui.routes.ontology_api import router as ontology_router
 from metaseed_hub.ui.routes.people import router as people_router
+from metaseed_hub.ui.routes.repository_import import router as repository_import_router
 from metaseed_hub.ui.routes.seek import router as seek_router
 from metaseed_hub.ui.routes.sharing import router as sharing_router
 from metaseed_hub.ui.routes.table import router as table_router
 
 __all__ = [
     "admin_router",
+    "repository_import_router",
     "seek_router",
     "sharing_router",
     "auth_router",

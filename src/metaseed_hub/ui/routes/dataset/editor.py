@@ -651,7 +651,7 @@ def _source_import_option(profile: str) -> dict[str, str] | None:
     accession and a BrAPI server URL are not interchangeable and the hub should
     not hold a per-repository phrasebook.
     """
-    from metaseed_hub.ui.routes.dataset.crud import source_import_action
+    from metaseed_hub.ui.services.repository_import import source_import_action
 
     action = source_import_action(profile)
     if action is None:

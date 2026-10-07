@@ -59,6 +59,7 @@ from metaseed_hub.ui.routes import (
     notifications_router,
     ontology_router,
     people_router,
+    repository_import_router,
     seek_router,
     sharing_router,
     table_router,
@@ -312,6 +313,7 @@ def create_hub_app() -> FastAPI:
     app.include_router(ontology_router)
     app.include_router(admin_router)
     app.include_router(seek_router)
+    app.include_router(repository_import_router)
     app.include_router(sharing_router)
     app.include_router(people_router)
     app.include_router(notifications_router)

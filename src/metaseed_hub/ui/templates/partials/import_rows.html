@@ -1,0 +1,28 @@
+{% if problem %}
+<div class="alert alert-error" data-testid="import-problem">{{ problem }}</div>
+{% else %}
+<table class="data-table import-results-table" data-testid="import-results-table">
+    <thead><tr><th>Identifier</th><th>Outcome</th><th>Dataset</th></tr></thead>
+    {# Every row's request waits its turn on this element, so the repository is
+       asked for one record at a time. #}
+    <tbody id="import-queue">
+        {% for identifier in identifiers %}
+        <tr data-testid="import-row" data-status="waiting">
+            <td>{{ identifier }}</td>
+            <td>
+                <form hx-post="/hub/import/record"
+                      hx-trigger="load"
+                      hx-target="closest tr"
+                      hx-swap="outerHTML"
+                      hx-sync="#import-queue:queue all">
+                    <input type="hidden" name="profile" value="{{ profile }}">
+                    <input type="hidden" name="identifier" value="{{ identifier }}">
+                    <span class="import-waiting">Waiting&hellip;</span>
+                </form>
+            </td>
+            <td></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
