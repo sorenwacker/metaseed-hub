@@ -6387,6 +6387,31 @@ a.start-option-card:hover {
     padding: var(--space-sm) var(--space-md);
 }
 
+.entity-overview-controls {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.entity-overview-table tr.is-expanded .tree-expand {
+    transform: rotate(90deg);
+}
+
+.entity-overview-table .tree-expand-spacer {
+    display: inline-block;
+    width: 1rem;
+}
+
+.entity-overview-child-count {
+    margin-left: var(--space-sm);
+    font-size: 0.75rem;
+    color: var(--clr-ink-light);
+}
+
+.entity-overview-more .form-help {
+    margin-left: var(--space-sm);
+}
+
 .entity-overview-table .entity-name {
     color: var(--clr-ink);
     text-decoration: none;

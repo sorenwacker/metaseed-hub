@@ -8,7 +8,11 @@ The left sidebar shows the dataset's entities as a hierarchy. Click an entity to
 
 ## The entity overview
 
-Opening a dataset shows its entities in the center pane before any is selected: a count per entity type, then every entity as a link in tree order with its type. Clicking a link opens that entity's form, the same as clicking it in the sidebar. A dataset with no entities says so and points to the sidebar buttons and the import controls. The overview sits in an **Entities** tab beside **History** and **Comments**; it is the tab that is open on arrival.
+Opening a dataset shows its entities in the center pane before any is selected: a count per entity type, then the entities as links in tree order with their type. Clicking a link opens that entity's form, the same as clicking it in the sidebar.
+
+The overview opens folded, as the sidebar tree does: the root entities and their direct children are listed, and deeper levels are hidden. An entity that holds others carries a toggle beside its name and the number of entities directly below it; the toggle shows or hides that level. **Expand all** and **Collapse all** above the table act on every level at once.
+
+An entity with more than 50 direct children lists the first 50. A **Show more** row beneath them states how many remain and adds the next 50 each time it is used, so a study with several hundred runs does not push the rest of the dataset off the page. The count per entity type always covers the whole dataset, whatever is folded. A dataset with no entities says so and points to the sidebar buttons and the import controls. The overview sits in an **Entities** tab beside **History** and **Comments**; it is the tab that is open on arrival.
 
 ## Adding an entity
 
