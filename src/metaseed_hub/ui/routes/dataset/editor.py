@@ -677,6 +677,27 @@ async def dataset_export(
     )
 
 
+@router.get("/{dataset_id}/export/yaml")
+async def dataset_export_yaml(
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Download the dataset as a YAML file the New Dataset import reads back."""
+    from metaseed_hub.ui.services.export import export_to_yaml, generate_filename
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
+
+    filename = generate_filename(facade, "yaml")
+    return Response(
+        export_to_yaml(facade),
+        media_type="application/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _source_import_option(profile: str) -> dict[str, str] | None:
     """The import control a profile offers, from metaseed's registry, or None.
 

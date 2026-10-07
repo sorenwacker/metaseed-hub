@@ -1,4 +1,4 @@
-"""Exporting a dataset as an Excel workbook.
+"""Exporting a dataset as an Excel workbook or a YAML file.
 
 The workbook itself is metaseed's: one sheet per entity type, every cell text,
 the tree carried in a ``_parent`` column, and — since the RightField work — the
@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from typing import TYPE_CHECKING
 
+import yaml
 from metaseed import MetaseedClient, ProfileFacade
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 
 from metaseed_hub.ui.metaseed_ui import build_workbook_from_facade
 
-__all__ = ["build_workbook", "export_to_bytes", "generate_filename"]
+__all__ = ["build_workbook", "export_to_bytes", "export_to_yaml", "generate_filename"]
 
 
 def build_workbook(facade: ProfileFacade) -> Workbook:
@@ -52,8 +53,25 @@ def export_to_bytes(facade: ProfileFacade) -> BytesIO:
     return output
 
 
-def generate_filename(facade: ProfileFacade) -> str:
-    """Generate a ``YYMMDD-profile-version-rootid.xlsx`` export filename.
+def export_to_yaml(facade: ProfileFacade) -> str:
+    """The dataset as a YAML document: profile, version and a flat entity list.
+
+    The document is what ``MetaseedClient.serialize`` returns, which is the
+    form the New Dataset screen's file import rebuilds a dataset from, so an
+    exported file reads back in as the same entities and tree.
+
+    Args:
+        facade: Profile facade holding the dataset's entities.
+
+    Returns:
+        The YAML text, keys in the order the profile declares them.
+    """
+    document = MetaseedClient.from_facade(facade).serialize()
+    return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
+
+
+def generate_filename(facade: ProfileFacade, extension: str = "xlsx") -> str:
+    """Generate a ``YYMMDD-profile-version-rootid.<extension>`` export filename.
 
     The root-entity segment is the first root's ``unique_id`` (path-hostile
     characters replaced, truncated to 30), falling back to ``export`` when the
@@ -61,9 +79,10 @@ def generate_filename(facade: ProfileFacade) -> str:
 
     Args:
         facade: Profile facade holding the dataset's entities.
+        extension: File extension without the dot.
 
     Returns:
-        Filename for the Excel export.
+        Filename for the export.
     """
     date_str = datetime.now(UTC).strftime("%y%m%d")
     version_str = facade.version.replace(".", "-")
@@ -76,4 +95,4 @@ def generate_filename(facade: ProfileFacade) -> str:
         if unique_id:
             entity_id = str(unique_id).replace("/", "-").replace(":", "-")[:30]
 
-    return f"{date_str}-{facade.profile}-{version_str}-{entity_id}.xlsx"
+    return f"{date_str}-{facade.profile}-{version_str}-{entity_id}.{extension}"

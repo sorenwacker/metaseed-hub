@@ -77,16 +77,20 @@ Which repositories are on offer comes from metaseed's adapter registry, so the l
 
 ## Exporting
 
-Open a dataset and click **Export** in the sidebar to download it.
+Open a dataset and use the sidebar: **Export** downloads an Excel workbook and **YAML** downloads a YAML file. Both file names are built from the date, the profile, its version and the root entity's identifier.
+
+| Format | Extension | Reads back in through |
+|--------|-----------|-----------------------|
+| Excel | `.xlsx` | **Import File** on the **+ New Dataset** screen, or **Import** in a dataset |
+| YAML | `.yaml` | **Import File** on the **+ New Dataset** screen |
 
 ### Excel
 
-The Excel export produces one worksheet per entity type (for example *Investigation*, *Study*, *Assay*). Column headers match the entity field names, and nested entities are flattened into their own worksheets. The file name is derived from the dataset's root entity.
+The Excel export produces one worksheet per entity type (for example *Investigation*, *Study*, *Assay*). Column headers match the entity field names, and nested entities are flattened into their own worksheets.
 
-| Direction | Format | Extension |
-|-----------|--------|-----------|
-| Export | Excel | `.xlsx` |
-| Export | JSON | `.json` |
+### YAML
+
+The YAML export is the dataset as the hub holds it: the profile, its version, and every entity as a flat list. Each entity carries its type in `_type` and, where it has a parent, the parent's identifier, so the tree is rebuilt on import. The **Import File** tab reads the profile and version from the file when you leave them unset, and creates a dataset with the same entities, tree and values.
 
 ### Repository submission formats
 

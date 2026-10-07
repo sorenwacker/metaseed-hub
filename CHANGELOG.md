@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **A dataset exports as YAML.** A **YAML** button beside **Export** in the dataset sidebar downloads the profile, its version and every entity as one file, which the **Import File** tab of the New Dataset screen reads back as the same dataset.
 - **An Import page, reachable from the header.** Choose a repository (ENA, PRIDE, MetaboLights, BrAPI), paste up to 20 identifiers, and the hub creates one dataset per identifier, named by the title the record carries at the repository. The identifiers are fetched one after another and each row reports its outcome: imported with a link, nothing to import, already imported, failed, or not checked when the repository did not answer.
 - **An API reference page that renders.** `/docs` shows every `/api` operation in Swagger UI, and *Authorize* takes an access token so an operation can be called from the page. The profile page links it beside the access tokens. Swagger UI 5.33.1 is served from the hub's own static files.
 - The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.

@@ -58,7 +58,8 @@
                         title="Show or hide the graph beside the editor">Graph</button>
             </div>
             <div class="sidebar-actions-row">
-                <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export data">Export</a>
+                <a href="/hub/datasets/{{ dataset.id }}/export" class="btn btn-sm" download title="Export as an Excel workbook">Export</a>
+                <a href="/hub/datasets/{{ dataset.id }}/export/yaml" class="btn btn-sm" download data-testid="btn-export-yaml" title="Export as a YAML file">YAML</a>
                 <button class="btn btn-sm" onclick="document.getElementById('import-file').click()" title="Import data from file">Import</button>
             </div>
             {% if import_option %}
