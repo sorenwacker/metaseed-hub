@@ -1,5 +1,22 @@
 # API Reference
 
+## Interactive reference
+
+The hub serves an OpenAPI description of the REST API and a Swagger UI page that renders it.
+
+| Path | Content |
+|------|---------|
+| `/docs` | Swagger UI: every `/api` operation with its parameters, request body and response schema |
+| `/openapi.json` | The OpenAPI document the page is generated from, for client generators |
+
+To open the page from the web interface, select **API reference** in the *Access tokens* section of your profile page. The page is readable without signing in; it describes the operations and returns no data.
+
+To call an operation from the page, select **Authorize**, paste an access token, and then use **Try it out** on the operation. The token is kept in the page's memory and is discarded when the tab is closed or reloaded.
+
+The Swagger UI script and stylesheet are served by the hub from `/hub/hub-static/vendor/swagger-ui/`, because the hub's Content-Security-Policy allows scripts and styles from its own origin only. ReDoc is not served.
+
+The web interface mounted at `/hub` is not an API: its routes return HTML fragments for the browser, are authenticated by the session cookie, and change without notice. It publishes no OpenAPI document, so `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` answer 404.
+
 ## REST API (`/api`, bearer token)
 
 | Method | Path | Description |
@@ -20,55 +37,6 @@
 A publish without an `audience` reaches every user of the hub, which is what publishing has always meant. With one, the specification is released to that collaboration alone: its members see it and can build datasets on it, and for everyone else it is absent from every listing this API offers.
 
 The URNs you may name are the ones `GET /api/me` reports under `collaborations`, and only those: a group URN is refused with 403, because a release is addressed to a collaboration or to the whole hub. Any collaboration you are not in is refused the same way. An `audience` sent without `publish` is refused with 422, because a draft is private and is shared with people or a collaboration rather than published to one. Every entry `GET /api/specs` returns carries `audience`: the collaboration a published specification went to, or null for everyone.
-
-
-## Hub UI Routes
-
-### Accounts
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/hub/` | List accounts |
-| GET | `/hub/accounts/new` | New account form |
-| POST | `/hub/accounts` | Create account |
-| GET | `/hub/accounts/{id}` | Account detail |
-
-### Projects
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/hub/projects/new` | New project form |
-| POST | `/hub/projects` | Create project |
-| GET | `/hub/projects/{id}` | Project editor |
-| DELETE | `/hub/projects/{id}` | Delete project |
-
-### Entities
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/hub/projects/{id}/form/{type}` | Entity form |
-| POST | `/hub/projects/{id}/entities` | Create/update entity |
-| GET | `/hub/projects/{id}/entity/{node_id}` | Edit entity |
-| DELETE | `/hub/projects/{id}/entity/{node_id}` | Delete entity |
-
-### Export
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/hub/projects/{id}/export` | Download Excel |
-
-### Visualization
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/hub/projects/{id}/graph` | Graph view page |
-| GET | `/hub/projects/{id}/api/graph` | Graph data (JSON) |
-
-### Validation
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/hub/projects/{id}/validate` | Validate all entities |
 
 ## WebSocket
 

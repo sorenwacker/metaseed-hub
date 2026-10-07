@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **An API reference page that renders.** `/docs` shows every `/api` operation in Swagger UI, and *Authorize* takes an access token so an operation can be called from the page. The profile page links it beside the access tokens. Swagger UI 5.33.1 is served from the hub's own static files.
 - The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
+
+### Removed
+- **`/redoc`, and the OpenAPI pages of the web interface.** `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` listed every cookie-authenticated route of the web interface as though it were an API; they answer 404.
+
+### Fixed
+- **`/docs` was blank.** The page loaded its script and stylesheet from a CDN, which the Content-Security-Policy refuses, so it answered 200 and showed nothing.
 
 ## [0.62.1] - 261006
 

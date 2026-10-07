@@ -121,7 +121,14 @@ def create_hub_app() -> FastAPI:
     # mounted separately, so it is unaffected.
     from metaseed_hub.ui.security import require_same_origin
 
-    app = FastAPI(title="Metaseed Hub", dependencies=[Depends(require_same_origin)])
+    # No OpenAPI document, and so no /hub/docs: these routes return HTML to a
+    # browser holding a session cookie, and publishing them as an API invites
+    # clients to depend on them. The REST API's reference is /docs.
+    app = FastAPI(
+        title="Metaseed Hub",
+        dependencies=[Depends(require_same_origin)],
+        openapi_url=None,
+    )
 
     # Token refresh middleware - auto-refresh expired tokens
     class TokenRefreshMiddleware(BaseHTTPMiddleware):
