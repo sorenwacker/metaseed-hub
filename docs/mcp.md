@@ -41,7 +41,7 @@ claude mcp add --transport http metaseed-hub https://metaseed.ewi.tudelft.nl/hub
 | `validate_dataset` | Check a dataset against its profile and list what is missing |
 | `delete_dataset` | Remove a dataset (soft — it is not erased) |
 | `list_profiles` | Built-in standards, plus every published specification |
-| `get_profile_schema` | A profile's entity types and their fields |
+| `get_profile_schema` | A profile's entity types and their fields. A field carries the `example` value its specification gives, so an agent sees the expected form of a value before writing one; a field whose specification gives none carries no `example` |
 | `get_profile_relationships` | A profile's hierarchy: each entity's identifier, children, and cross-references |
 
 ### Editing entities

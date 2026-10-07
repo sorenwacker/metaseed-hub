@@ -253,35 +253,68 @@ async def dataset_root_buttons(
     )
 
 
+#: How many children of one entity the overview lists before a "Show more" row.
+OVERVIEW_BATCH = 50
+
+#: The overview opens with entities down to this depth listed (roots are 0).
+OVERVIEW_OPEN_DEPTH = 1
+
+
 def entity_overview(tree_data: list[dict[str, Any]]) -> dict[str, Any]:
     """Flatten the entity tree for the overview the center pane opens on.
+
+    The rows are every entity in tree order, each knowing its parent and its
+    place among its siblings, so the page can fold a level and batch a long
+    list without asking again. ``hidden`` and ``expanded`` are the state on
+    arrival: entities down to ``OVERVIEW_OPEN_DEPTH`` are listed, and at most
+    ``OVERVIEW_BATCH`` children of any one entity.
 
     Args:
         tree_data: Nested tree as ``get_tree_data_from_nodes`` builds it.
 
     Returns:
-        ``counts``: ``[(entity_type, n), ...]`` in order of first appearance;
-        ``rows``: every entity in tree order with its depth, for indentation.
+        ``counts``: ``[(entity_type, n), ...]`` in order of first appearance,
+        over the whole dataset; ``rows``: ``entity`` rows in tree order, with a
+        ``more`` row closing each list longer than one batch.
     """
     counts: dict[str, int] = {}
     rows: list[dict[str, Any]] = []
 
-    def walk(items: list[dict[str, Any]], depth: int) -> None:
-        for item in items:
+    def walk(items: list[dict[str, Any]], depth: int, parent: str, shown: bool) -> None:
+        for index, item in enumerate(items):
             entity_type = item.get("entity_type") or "Entity"
             counts[entity_type] = counts.get(entity_type, 0) + 1
+            children = item.get("children") or []
+            visible = shown and index < OVERVIEW_BATCH
+            expanded = bool(children) and depth < OVERVIEW_OPEN_DEPTH
             rows.append(
                 {
+                    "kind": "entity",
                     "id": item.get("id"),
                     "label": item.get("label") or "Unnamed",
                     "entity_type": entity_type,
                     "depth": depth,
+                    "parent": parent,
+                    "index": index,
+                    "child_count": len(children),
+                    "expanded": expanded,
+                    "hidden": not visible,
                 }
             )
-            walk(item.get("children") or [], depth + 1)
+            walk(children, depth + 1, str(item.get("id") or ""), visible and expanded)
+        if len(items) > OVERVIEW_BATCH:
+            rows.append(
+                {
+                    "kind": "more",
+                    "parent": parent,
+                    "depth": depth,
+                    "remaining": len(items) - OVERVIEW_BATCH,
+                    "hidden": not shown,
+                }
+            )
 
-    walk(tree_data, 0)
-    return {"counts": list(counts.items()), "rows": rows}
+    walk(tree_data, 0, "", True)
+    return {"counts": list(counts.items()), "rows": rows, "batch": OVERVIEW_BATCH}
 
 
 @router.get("/{dataset_id}/overview", response_class=HTMLResponse)
@@ -644,6 +677,27 @@ async def dataset_export(
     )
 
 
+@router.get("/{dataset_id}/export/yaml")
+async def dataset_export_yaml(
+    dataset_id: str,
+    session: DbSession,
+    user: CurrentUser,
+) -> Response:
+    """Download the dataset as a YAML file the New Dataset import reads back."""
+    from metaseed_hub.ui.services.export import export_to_yaml, generate_filename
+
+    dataset = await get_dataset_for_user(dataset_id, session, user)
+    state = await ensure_dataset_facade(dataset, session)
+    facade = state.get_or_create_facade()
+
+    filename = generate_filename(facade, "yaml")
+    return Response(
+        export_to_yaml(facade),
+        media_type="application/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 def _source_import_option(profile: str) -> dict[str, str] | None:
     """The import control a profile offers, from metaseed's registry, or None.
 
@@ -651,7 +705,7 @@ def _source_import_option(profile: str) -> dict[str, str] | None:
     accession and a BrAPI server URL are not interchangeable and the hub should
     not hold a per-repository phrasebook.
     """
-    from metaseed_hub.ui.routes.dataset.crud import source_import_action
+    from metaseed_hub.ui.services.repository_import import source_import_action
 
     action = source_import_action(profile)
     if action is None:

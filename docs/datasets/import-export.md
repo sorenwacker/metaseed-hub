@@ -25,7 +25,36 @@ A file that reads but whose entities cannot be loaded under the chosen profile a
 
 ### From a public repository
 
-A dataset whose profile has a matching public repository can be filled from that repository directly. While the dataset is still empty, the sidebar shows a field asking for the identifier the repository uses:
+There are two ways in: the **Import** page, which creates the datasets for you, and the import field of a dataset that is still empty.
+
+#### The Import page
+
+Select **Import** in the header. The page asks for two things: the repository, and the identifiers to fetch, one per line.
+
+| Repository | What to enter | Profile of the new dataset |
+|------------|---------------|----------------------------|
+| ENA | Accessions, e.g. `PRJEB1234` | `ena` |
+| PRIDE | ProteomeXchange accessions, e.g. `PXD000001` | `pride` |
+| MetaboLights | Study accessions, e.g. `MTBLS1` | `metabolights` |
+| BrAPI | BrAPI v2 server URLs | `miappe` |
+
+Select **Import** and the hub creates one dataset per identifier, in the latest version of the repository's profile. You name nothing: a dataset takes the title its root record carries at the repository, and the identifier where the record has no title. If you already have a dataset of that name, the identifier is appended in parentheses; if that name is taken as well, the record is reported as already imported and nothing is created.
+
+One submission takes up to 20 identifiers. They are fetched one after another, and the page lists each with its outcome as it finishes:
+
+| Outcome | Meaning |
+|---------|---------|
+| Imported | The dataset exists; the row links to it |
+| Nothing to import | The repository answered, and holds no records of the kind the importer reads for this identifier |
+| Already imported | You have a dataset for this record under both names described above |
+| Failed | The identifier was malformed, or the repository's answer could not be read |
+| Not checked | The repository did not answer in time; try again later |
+
+An identifier that fails does not stop the ones after it, and no dataset is created for anything but an **Imported** row. A repeated identifier in one submission is fetched once.
+
+#### Into an empty dataset
+
+A dataset whose profile has a matching public repository can also be filled from that repository directly. While the dataset is still empty, the sidebar shows a field asking for the identifier the repository uses:
 
 | Profile | Control | What to enter |
 |---------|---------|---------------|
@@ -48,16 +77,20 @@ Which repositories are on offer comes from metaseed's adapter registry, so the l
 
 ## Exporting
 
-Open a dataset and click **Export** in the sidebar to download it.
+Open a dataset and use the sidebar: **Export** downloads an Excel workbook and **YAML** downloads a YAML file. Both file names are built from the date, the profile, its version and the root entity's identifier.
+
+| Format | Extension | Reads back in through |
+|--------|-----------|-----------------------|
+| Excel | `.xlsx` | **Import File** on the **+ New Dataset** screen, or **Import** in a dataset |
+| YAML | `.yaml` | **Import File** on the **+ New Dataset** screen |
 
 ### Excel
 
-The Excel export produces one worksheet per entity type (for example *Investigation*, *Study*, *Assay*). Column headers match the entity field names, and nested entities are flattened into their own worksheets. The file name is derived from the dataset's root entity.
+The Excel export produces one worksheet per entity type (for example *Investigation*, *Study*, *Assay*). Column headers match the entity field names, and nested entities are flattened into their own worksheets.
 
-| Direction | Format | Extension |
-|-----------|--------|-----------|
-| Export | Excel | `.xlsx` |
-| Export | JSON | `.json` |
+### YAML
+
+The YAML export is the dataset as the hub holds it: the profile, its version, and every entity as a flat list. Each entity carries its type in `_type` and, where it has a parent, the parent's identifier, so the tree is rebuilt on import. The **Import File** tab reads the profile and version from the file when you leave them unset, and creates a dataset with the same entities, tree and values.
 
 ### Repository submission formats
 

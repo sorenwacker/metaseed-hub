@@ -30,6 +30,8 @@ import pytest
 
 pytest.importorskip("selenium")
 from selenium.webdriver.common.by import By  # noqa: E402
+from selenium.webdriver.support import expected_conditions  # noqa: E402
+from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
 from tests.test_selenium_export import BASE, _login, driver  # noqa: F401, E402
 
@@ -87,6 +89,21 @@ def test_the_spec_builder_raises_no_policy_violation(driver) -> None:  # noqa: F
     driver.get(f"{BASE}/hub/spec-builder")
     driver.find_element(By.TAG_NAME, "body")
 
+    violations = _violations(driver)
+    assert not violations, "the browser refused something the policy forbids:\n" + "\n".join(
+        v[:300] for v in violations[:5]
+    )
+
+
+def test_the_api_reference_renders_under_the_policy(driver) -> None:  # noqa: F811
+    """The page answered 200 and stayed blank: its script came from a CDN the
+    policy refuses, which only a browser reports."""
+    _login(driver)
+    driver.get(f"{BASE}/docs")
+
+    WebDriverWait(driver, 15).until(
+        expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".swagger-ui .opblock"))
+    )
     violations = _violations(driver)
     assert not violations, "the browser refused something the policy forbids:\n" + "\n".join(
         v[:300] for v in violations[:5]

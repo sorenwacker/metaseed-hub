@@ -23,18 +23,48 @@
             <li><span class="entity-type-badge">{{ entity_type }}</span> <strong data-testid="entity-count-{{ entity_type }}">{{ count }}</strong></li>
             {% endfor %}
         </ul>
-        <table class="data-table entity-overview-table">
+        {# Folded on arrival, like the sidebar tree. The rows carry their parent
+           and their place among its children; refreshEntityOverview in hub.js
+           works out from those which rows show. #}
+        <div class="entity-overview-controls">
+            <button type="button" class="btn btn-sm" data-testid="overview-expand-all"
+                    onclick="setEntityOverviewExpanded(this, true)">Expand all</button>
+            <button type="button" class="btn btn-sm" data-testid="overview-collapse-all"
+                    onclick="setEntityOverviewExpanded(this, false)">Collapse all</button>
+        </div>
+        <table class="data-table entity-overview-table" data-batch="{{ overview.batch }}">
             <thead><tr><th>Type</th><th>Entity</th></tr></thead>
             <tbody>
             {% for row in overview.rows %}
-            <tr>
+            {% if row.kind == "more" %}
+            <tr class="entity-overview-more" data-more-for="{{ row.parent }}" data-total="{{ row.remaining + overview.batch }}"{% if row.hidden %} hidden{% endif %}>
+                <td></td>
+                <td style="padding-left: calc(var(--space-md) + {{ row.depth }} * var(--space-lg))">
+                    <button type="button" class="btn btn-sm" data-testid="overview-more"
+                            onclick="showMoreOfEntityOverview(this)">Show {{ overview.batch }} more</button>
+                    <span class="form-help entity-overview-remaining">{{ row.remaining }} not listed</span>
+                </td>
+            </tr>
+            {% else %}
+            <tr data-node="{{ row.id }}" data-parent="{{ row.parent }}" data-index="{{ row.index }}"
+                data-children="{{ row.child_count }}"
+                class="{{ 'is-expanded' if row.expanded else '' }}"{% if row.hidden %} hidden{% endif %}>
                 <td><span class="entity-type-badge">{{ row.entity_type }}</span></td>
                 <td style="padding-left: calc(var(--space-md) + {{ row.depth }} * var(--space-lg))">
+                    {% if row.child_count %}
+                    <button type="button" class="tree-expand" data-testid="overview-toggle"
+                            onclick="toggleEntityOverviewRow(this)"
+                            title="Show or hide the {{ row.child_count }} entities directly below">&#9654;</button>
+                    {% else %}
+                    <span class="tree-expand-spacer"></span>
+                    {% endif %}
                     <a href="#" class="entity-name"
                        hx-get="/hub/datasets/{{ dataset.id }}/entity/{{ row.id }}"
                        hx-target="#editor">{{ row.label }}</a>
+                    {% if row.child_count %}<span class="entity-overview-child-count">{{ row.child_count }}</span>{% endif %}
                 </td>
             </tr>
+            {% endif %}
             {% endfor %}
             </tbody>
         </table>

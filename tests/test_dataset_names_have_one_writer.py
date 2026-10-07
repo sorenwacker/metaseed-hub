@@ -187,7 +187,7 @@ def _error_codes_redirected_to_the_form() -> set[str]:
 
 def test_the_scan_finds_the_error_codes() -> None:
     codes = _error_codes_redirected_to_the_form()
-    assert {"import_failed", "duplicate_name", "name_held_by_deleted"} <= codes
+    assert {"parse_error", "duplicate_name", "name_held_by_deleted"} <= codes
 
 
 def test_every_error_the_form_is_sent_has_a_message() -> None:

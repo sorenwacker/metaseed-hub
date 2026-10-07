@@ -22,25 +22,28 @@ pytestmark = pytest.mark.selenium
 FIELD = "input.lookup-input[data-lookup-type='ontology']"
 
 
+def _every_overview_link(browser) -> list:
+    """The overview's entity links, unfolded so each can be clicked."""
+    WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, '[data-testid="overview-expand-all"]'))
+    ).click()
+    return browser.find_elements(By.CSS_SELECTOR, ".entity-overview-table .entity-name")
+
+
 def _form_with_an_ontology_field(browser):
     """Open entities of the example dataset until one has an ontology field."""
     dataset_id = _dataset_with_example_data(browser)
     browser.set_window_size(1500, 1000)
     browser.get(f"{BASE}/hub/datasets/{dataset_id}")
-    links = WebDriverWait(browser, 20).until(
-        lambda d: d.find_elements(By.CSS_SELECTOR, ".entity-overview-table .entity-name")
-    )
+    links = _every_overview_link(browser)
     for index in range(len(links)):
-        browser.find_elements(By.CSS_SELECTOR, ".entity-overview-table .entity-name")[index].click()
+        _every_overview_link(browser)[index].click()
         try:
             return WebDriverWait(browser, 5).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, f"#editor {FIELD}"))
             )
         except Exception:
             browser.get(f"{BASE}/hub/datasets/{dataset_id}")
-            WebDriverWait(browser, 20).until(
-                lambda d: d.find_elements(By.CSS_SELECTOR, ".entity-overview-table .entity-name")
-            )
     pytest.fail("the example dataset has no entity with an ontology field")
 
 

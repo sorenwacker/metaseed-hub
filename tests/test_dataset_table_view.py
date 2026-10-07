@@ -58,7 +58,7 @@ ROWS = [
         days_ago=1,
         description="leaf metabolome",
     ),
-    _row("maize-imaging", "miappe-htp", "1.0", entities=0, access="collaboration", days_ago=2),
+    _row("maize-imaging", "rembi", "1.5", entities=0, access="collaboration", days_ago=2),
 ]
 
 
@@ -70,13 +70,11 @@ class TestFiltering:
     def test_search_matches_name_description_and_profile_whatever_the_case(self) -> None:
         assert _names(q="WHEAT") == ["wheat-drought"]
         assert _names(q="metabolome") == ["tomato-lcms"]
-        assert set(_names(q="miappe")) == {
-            "wheat-drought",
-            "maize-imaging",
-        }
+        assert _names(q="REM") == ["maize-imaging"]
 
     def test_profile_and_access_narrow_the_list(self) -> None:
         assert _names(profile="miappe") == ["wheat-drought"]
+        assert _names(profile="rem") == []
         assert _names(access="shared") == ["tomato-lcms"]
         assert [
             r.dataset.name for r in apply_filters(ROWS, ListFilters(access="collaboration"))

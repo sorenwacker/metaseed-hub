@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **A dataset exports as YAML.** A **YAML** button beside **Export** in the dataset sidebar downloads the profile, its version and every entity as one file, which the **Import File** tab of the New Dataset screen reads back as the same dataset.
+- **An Import page, reachable from the header.** Choose a repository (ENA, PRIDE, MetaboLights, BrAPI), paste up to 20 identifiers, and the hub creates one dataset per identifier, named by the title the record carries at the repository. The identifiers are fetched one after another and each row reports its outcome: imported with a link, nothing to import, already imported, failed, or not checked when the repository did not answer.
+- **An API reference page that renders.** `/docs` shows every `/api` operation in Swagger UI, and *Authorize* takes an access token so an operation can be called from the page. The profile page links it beside the access tokens. Swagger UI 5.33.1 is served from the hub's own static files.
+- The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
+
+### Changed
+- **The entity overview opens folded.** It listed every entity of a dataset in one table. It now lists the roots and their direct children; an entity that holds others has a toggle and the number directly below it, **Expand all** and **Collapse all** act on every level, and a list of more than 50 children shows 50 with a **Show more** row for the rest.
+
+### Removed
+- **The unreachable `POST /hub/datasets/import-accession` route.** It created a dataset from an accession under a name the caller supplied, and no page posted to it; the Import page replaces it.
+- **`/redoc`, and the OpenAPI pages of the web interface.** `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` listed every cookie-authenticated route of the web interface as though it were an API; they answer 404.
+
+### Fixed
+- **The Import File tab sends the version of the profile that is chosen.** Each profile's versions were embedded unescaped in an attribute, which cut them off at the first quote, so the version list never followed the profile and a file imported under any profile but the first was sent with the first profile's version and refused.
+- **`/docs` was blank.** The page loaded its script and stylesheet from a CDN, which the Content-Security-Policy refuses, so it answered 200 and showed nothing.
+
 ## [0.62.1] - 261006
 
 ### Added

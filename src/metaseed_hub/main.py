@@ -58,6 +58,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 MCP_PATH = "/hub/mcp"
 
+#: Swagger UI as shipped in swagger-ui-dist, at the version its VERSION file
+#: names; served by the hub because the policy allows no other origin.
+SWAGGER_UI = f"{MOUNT_PREFIX}/hub-static/vendor/swagger-ui"
+
 
 class _AcceptMcpWithoutTrailingSlash:
     """Let ``/hub/mcp`` reach the MCP app, not just ``/hub/mcp/``.
@@ -94,6 +98,11 @@ def create_app() -> FastAPI:
         description="Collaborative hub for metaseed projects",
         version=__version__,
         lifespan=lifespan,
+        # FastAPI's own pages load their script and stylesheet from a CDN the
+        # Content-Security-Policy refuses, so they answered 200 and stayed
+        # blank. /docs is served below from the hub's own static files.
+        docs_url=None,
+        redoc_url=None,
     )
 
     # CORS middleware
@@ -153,7 +162,8 @@ def create_app() -> FastAPI:
     app.mount(MOUNT_PREFIX, hub_app)
 
     # Redirect root to hub
-    from fastapi.responses import PlainTextResponse, RedirectResponse
+    from fastapi.openapi.docs import get_swagger_ui_html
+    from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
     @app.get("/robots.txt", include_in_schema=False)
     async def robots() -> PlainTextResponse:
@@ -162,6 +172,17 @@ def create_app() -> FastAPI:
         # served at /matomo/ (nginx proxies matomo.php and matomo.js there), not
         # under /hub/, so the disallow has to name the path that actually exists.
         return PlainTextResponse("User-agent: *\nDisallow: /api/\nDisallow: /matomo/\nAllow: /\n")
+
+    @app.get("/docs", include_in_schema=False)
+    async def api_reference() -> HTMLResponse:
+        """The REST API rendered by Swagger UI, from the vendored bundle."""
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="Metaseed Hub API reference",
+            swagger_js_url=f"{SWAGGER_UI}/swagger-ui-bundle.js",
+            swagger_css_url=f"{SWAGGER_UI}/swagger-ui.css",
+            swagger_favicon_url=f"{MOUNT_PREFIX}/hub-static/images/metaseed-icon.svg",
+        )
 
     @app.get("/")
     async def root() -> RedirectResponse:

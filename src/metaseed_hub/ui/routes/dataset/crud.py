@@ -6,20 +6,17 @@ import logging
 from html import escape
 from json import JSONDecodeError
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from metaseed.adapters import Action  # lightweight by design: no plugin imports
 from metaseed.specs.versioning import version_sort_key
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
-from metaseed_hub.access import live_user
 from metaseed_hub.audience import visible_specs
 from metaseed_hub.models import (
-    Dataset,
     Spec,
     SpecDraft,
     SpecDraftMember,
@@ -47,6 +44,7 @@ from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
+from metaseed_hub.ui.services.repository_import import run_source_import
 
 from ._router import router
 from .profile_choice import ProfileChoiceNotFoundError, resolve_profile_choice
@@ -61,9 +59,6 @@ NEW_DATASET_ERRORS: dict[str, str] = {
     "unsupported_format": "That file format is not supported. Use JSON, YAML or Excel.",
     "empty_file": "The file is empty.",
     "parse_error": "The file could not be read. Check that it is valid JSON, YAML or Excel.",
-    "no_importer": "No importer is installed for this profile.",
-    "import_empty": "Nothing was found for that accession.",
-    "import_failed": "The import failed. Check the accession and try again.",
     "import_entities_failed": (
         "The file was read, but its entities could not be loaded under that profile and "
         "version. Check that they match the file. Nothing was created."
@@ -76,26 +71,11 @@ NEW_DATASET_ERRORS: dict[str, str] = {
 }
 
 
-class EmptySourceImportError(Exception):
-    """The importer ran and the accession resolved to nothing.
-
-    Its own type, not ValueError: json.JSONDecodeError is a ValueError, and
-    so is what an importer raises for a malformed accession, and catching
-    ValueError reported those as an empty result -- sending the user to check
-    the accession when the archive had answered with non-JSON.
-    """
-
-
 def _duplicate_name_redirect(refused: DuplicateDatasetNameError) -> RedirectResponse:
     """Back to the form, saying which kind of clash it was."""
     code = "name_held_by_deleted" if refused.held_by_deleted else "duplicate_name"
     return RedirectResponse(f"/hub/datasets/new?error={code}", status_code=302)
 
-
-if TYPE_CHECKING:
-    from metaseed import MetaseedClient
-
-    from metaseed_hub.auth import TokenUser
 
 logger = logging.getLogger("metaseed_hub")
 
@@ -438,96 +418,6 @@ async def dataset_import(
     return RedirectResponse(f"/hub/datasets/{dataset_id}", status_code=303)
 
 
-def source_import_action(profile: str) -> Action | None:
-    """The registry's import-menu action for ``profile``, or None.
-
-    metaseed declares one per repository it can pull from (ENA, PRIDE,
-    MetaboLights, BrAPI). Resolving through the registry rather than naming the
-    importers here means a new one reaches the hub by being declared upstream.
-    """
-    from metaseed import adapters
-
-    return next(
-        iter(adapters.actions_for_profile(profile, kind="import", surface="import-menu")),
-        None,
-    )
-
-
-def run_source_import(profile: str, value: str) -> "MetaseedClient":
-    """Import ``value`` through the importer registered for ``profile``.
-
-    Every import action takes a single string, though its meaning varies by
-    repository: an accession for the archives, a server URL for BrAPI. The
-    action's ``input_label`` is what tells the user which to supply.
-
-    Raises:
-        LookupError: If no importer is registered for ``profile``.
-    """
-    action = source_import_action(profile)
-    if action is None:
-        raise LookupError(f"No source importer for profile '{profile}'")
-    client: MetaseedClient = action.resolve()(value)
-    return client
-
-
-async def create_dataset_from_accession(
-    session: DbSession,
-    tenant_id: str,
-    name: str,
-    profile: str,
-    accession: str,
-    user: "TokenUser | None" = None,
-) -> Dataset:
-    """Import a public dataset from a source database into a new dataset.
-
-    Reuses metaseed's adapter registry: the importer for ``profile`` (ENA, PRIDE,
-    MetaboLights) is resolved from ``actions_for_profile(kind="import")`` and
-    invoked with ``accession`` -- the same importer the CLI and MCP use, none
-    reimplemented here. The imported entities are loaded into the new dataset by
-    swapping in the importer's facade.
-
-    Args:
-        session: Database session.
-        tenant_id: Tenant that will own the dataset.
-        name: Name for the new dataset.
-        profile: Profile whose registered importer resolves the accession.
-        accession: Identifier to import.
-        user: The acting user, recorded as the created version's author.
-
-    Raises:
-        LookupError: If no accession importer is registered for ``profile``.
-        EmptySourceImportError: If the importer resolved ``accession`` to nothing.
-    """
-    # The importer is blocking HTTP against a public archive that can take
-    # many seconds to answer. On the event loop that stalled every other
-    # request the hub was serving for the whole fetch.
-    client = await run_in_threadpool(run_source_import, profile, accession)
-    if not client.serialize().get("entities"):
-        # Creating an empty dataset named after an accession that resolved to
-        # nothing leaves the user to discover the failure themselves. Distinct
-        # from LookupError above so the caller does not blame a missing importer.
-        raise EmptySourceImportError(f"Nothing was found for '{accession}'")
-
-    creator = await live_user(session, user) if user is not None else None
-    dataset = await create_dataset(
-        session,
-        tenant_id=tenant_id,
-        name=name,
-        profile=client.profile,
-        version=client.version,
-        creator_id=creator.id if creator else None,
-    )
-
-    state = await ensure_dataset_facade_for_write(dataset, session)
-    state.profile = client.profile
-    state.version = client.version
-    # Swap in the importer's facade and rebuild caches; do not reset() (it clears).
-    state.facade = client.facade
-    state.invalidate_cache()
-    await save_dataset_state(session, dataset, state, user)
-    return dataset
-
-
 def _import_failure_message(exc: Exception, value: str) -> str:
     """Explain an import failure in terms the user can act on.
 
@@ -633,44 +523,6 @@ async def dataset_import_source(
     response = HTMLResponse(status_code=200)
     response.headers["HX-Redirect"] = f"/hub/datasets/{dataset_id}"
     return response
-
-
-@router.post("/import-accession")
-async def dataset_import_accession(
-    request: Request,
-    session: DbSession,
-    user: CurrentUser,
-    profile: Annotated[str, Form()],
-    accession: Annotated[str, Form()],
-    name: Annotated[str, Form()],
-    csrf_token: Annotated[str | None, Form(alias="_csrf_token")] = None,
-) -> RedirectResponse:
-    """Import a public dataset from a source database (ENA/PRIDE/MetaboLights)."""
-    from metaseed_hub.ui.helpers import validate_csrf_token
-
-    if not validate_csrf_token(request, csrf_token):
-        return RedirectResponse("/hub/?error=csrf_validation_failed", status_code=302)
-
-    tenant, _ = await ensure_tenant_and_user(session, user)
-    try:
-        dataset = await create_dataset_from_accession(
-            session, tenant.id, name.strip(), profile, accession.strip(), user
-        )
-    except LookupError:
-        return RedirectResponse("/hub/datasets/new?error=no_importer", status_code=302)
-    except EmptySourceImportError:
-        # The importer ran but the accession resolved to nothing -- a typo, not
-        # a missing importer.
-        return RedirectResponse("/hub/datasets/new?error=import_empty", status_code=302)
-    except DuplicateDatasetNameError as refused:
-        return _duplicate_name_redirect(refused)
-    except Exception:
-        # A failed fetch (bad accession, database down) must not 500 the page.
-        logger.exception("Accession import failed for %s:%s", profile, accession)
-        return RedirectResponse("/hub/datasets/new?error=import_failed", status_code=302)
-
-    await session.commit()
-    return RedirectResponse(f"/hub/datasets/{dataset.id}", status_code=303)
 
 
 @router.post("")

@@ -379,6 +379,53 @@ function toggleTreeNode(btn) {
     }
 }
 
+// Entity overview: which rows show follows from which entities are expanded
+// and how many children of each have been asked for. A row shows when its
+// parent shows, is expanded, and has listed at least that many children.
+function refreshEntityOverview(table) {
+    var batch = parseInt(table.dataset.batch, 10);
+    var shown = {'': true};
+    var expanded = {'': true};
+    var limits = table.overviewLimits || {};
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+        var parent = row.dataset.node === undefined ? row.dataset.moreFor : row.dataset.parent;
+        var open = shown[parent] && expanded[parent];
+        var limit = limits[parent] || batch;
+        if (row.dataset.node === undefined) {
+            var remaining = parseInt(row.dataset.total, 10) - limit;
+            row.hidden = !(open && remaining > 0);
+            row.querySelector('.entity-overview-remaining').textContent = remaining + ' not listed';
+            return;
+        }
+        var visible = Boolean(open && parseInt(row.dataset.index, 10) < limit);
+        row.hidden = !visible;
+        shown[row.dataset.node] = visible;
+        expanded[row.dataset.node] = row.classList.contains('is-expanded');
+    });
+}
+
+function toggleEntityOverviewRow(button) {
+    button.closest('tr').classList.toggle('is-expanded');
+    refreshEntityOverview(button.closest('table'));
+}
+
+function showMoreOfEntityOverview(button) {
+    var table = button.closest('table');
+    var parent = button.closest('tr').dataset.moreFor;
+    var batch = parseInt(table.dataset.batch, 10);
+    table.overviewLimits = table.overviewLimits || {};
+    table.overviewLimits[parent] = (table.overviewLimits[parent] || batch) + batch;
+    refreshEntityOverview(table);
+}
+
+function setEntityOverviewExpanded(button, expanded) {
+    var table = button.closest('section').querySelector('.entity-overview-table');
+    table.querySelectorAll('tbody tr[data-children]').forEach(function(row) {
+        row.classList.toggle('is-expanded', expanded && row.dataset.children !== '0');
+    });
+    refreshEntityOverview(table);
+}
+
 // Toggle sidebar
 // Sidebar tabs: the same markup on the dataset page, the spec builder and
 // the published-spec view, so one switcher serves all three. `button` is the
