@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
 
 ### Changed
+- **Built on metaseed 0.58.0.** The `miappe-htp` profile is no longer offered, and a repository import in the standalone application is confined to an empty dataset, as it already was here.
 - **The entity overview opens folded.** It listed every entity of a dataset in one table. It now lists the roots and their direct children; an entity that holds others has a toggle and the number directly below it, **Expand all** and **Collapse all** act on every level, and a list of more than 50 children shows 50 with a **Show more** row for the rest.
 
 ### Removed
@@ -18,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - **`/redoc`, and the OpenAPI pages of the web interface.** `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` listed every cookie-authenticated route of the web interface as though it were an API; they answer 404.
 
 ### Fixed
+- **The Excel export of a dataset on a hub-stored specification has its heading notes and dropdowns again.** metaseed looked the specification up by name among installed profiles, found nothing for a draft or a published specification, and wrote a bare grid. Fixed in metaseed 0.58.0.
+- **The Explorer's dropdowns no longer list their own prompt.** "Profile" and "Version" appeared at the top of the lists as though they were choices; they are now prompts shown only in the closed control.
 - **The Import File tab sends the version of the profile that is chosen.** Each profile's versions were embedded unescaped in an attribute, which cut them off at the first quote, so the version list never followed the profile and a file imported under any profile but the first was sent with the first profile's version and refused.
 - **`/docs` was blank.** The page loaded its script and stylesheet from a CDN, which the Content-Security-Policy refuses, so it answered 200 and showed nothing.
 
