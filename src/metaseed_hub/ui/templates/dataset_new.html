@@ -89,7 +89,7 @@
                             <label for="import-profile" class="form-label">Profile</label>
                             <select id="import-profile" class="form-select" onchange="updateImportVersions()">
                                 {% for profile in profiles %}
-                                <option value="{{ profile.name }}" data-versions="{{ profile.versions | tojson }}">
+                                <option value="{{ profile.name }}" data-versions="{{ profile.versions | tojson | forceescape }}">
                                     {{ profile.display_name }}
                                 </option>
                                 {% endfor %}

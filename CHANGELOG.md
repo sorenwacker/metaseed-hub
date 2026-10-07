@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **`/redoc`, and the OpenAPI pages of the web interface.** `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` listed every cookie-authenticated route of the web interface as though it were an API; they answer 404.
 
 ### Fixed
+- **The Import File tab sends the version of the profile that is chosen.** Each profile's versions were embedded unescaped in an attribute, which cut them off at the first quote, so the version list never followed the profile and a file imported under any profile but the first was sent with the first profile's version and refused.
 - **`/docs` was blank.** The page loaded its script and stylesheet from a CDN, which the Content-Security-Policy refuses, so it answered 200 and showed nothing.
 
 ## [0.62.1] - 261006
