@@ -7988,3 +7988,7 @@ html, body {
 .import-status { font-weight: 600; }
 .import-status-imported { color: var(--clr-success, #2e7d32); }
 .import-status-failed { color: var(--clr-error, #c62828); }
+
+/* People: the viewer's choice per collaboration. */
+.collaboration-visibility { margin: var(--space-sm) 0; }
+.member-hidden { font-style: italic; }

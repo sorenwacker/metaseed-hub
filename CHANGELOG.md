@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Opt out of showing your name and email to a collaboration.** Each collaboration's card on **People** has a tick box that keeps your entry from that collaboration's list and from the Sharing tab's suggestions to its members; your own row says so. Per collaboration, kept across sign-ins.
 - **A repository import runs in the background.** A submission on the **From a repository** tab starts a job: its panel shows a progress bar and one row per identifier, filling in as they are fetched, and polls while the job runs. You can leave the screen; a notification under the bell says how the job went when it is over, the imports of the last 24 hours are listed on the tab, and each imported dataset and the end of the job are announced in a toast while you watch. A hub restart marks a running job interrupted, with the identifiers it had not reached as not checked.
 
 ## [0.63.0] - 261008

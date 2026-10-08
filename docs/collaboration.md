@@ -66,6 +66,8 @@ A hub personal access token carries no group membership at all, which is why the
 
 The email field on the **Sharing** tab suggests these people as you type, so sharing with a colleague no longer means asking them for the address on their profile.
 
+Each collaboration's card on **People** has **Hide my name and email from this collaboration**. Ticked, your entry leaves that collaboration's list for everyone but you, and the **Sharing** tab stops suggesting you to its members; your own row says *hidden from the others*. The choice is per collaboration and holds across sign-ins. It changes nothing else: you still see the list, anyone who knows the address on your profile can still share with you, and grants to the collaboration reach you as before, because membership itself is SRAM's.
+
 ### Publishing to a collaboration
 
 A specification can be published so that only a collaboration's members see it, which is the middle ground between a private draft and a release to the whole hub. See [Who can see it](spec-builder/publishing.md#who-can-see-it).
