@@ -40,9 +40,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
     await db.connect(settings.database_url, echo=settings.debug)
     # Nothing can be running at startup; a job still marked so was cut off.
-    async with db.session_factory() as session:
-        await mark_interrupted(session)
-        await session.commit()
+    # The database is reached lazily otherwise, so an unreachable one must not
+    # stop the application here either.
+    try:
+        async with db.session_factory() as session:
+            await mark_interrupted(session)
+            await session.commit()
+    except Exception:
+        logging.getLogger("metaseed_hub").warning(
+            "Could not close import jobs left running by the last stop", exc_info=True
+        )
     manager: WebSocketManager = app.state.manager
     await manager.connect_redis()
 
