@@ -29,7 +29,7 @@ from metaseed_hub.entitlements import (
     group_urns,
     parse_group,
 )
-from metaseed_hub.models import GroupMembership, User
+from metaseed_hub.models import CollaborationOptOut, GroupMembership, User
 
 
 class MembershipState(StrEnum):
@@ -252,9 +252,48 @@ async def people_in(session: AsyncSession, urn: str, *, viewer_id: str) -> list[
         )
         .order_by(User.display_name, User.email)
     )
+    # Those who chose to keep their name and address from this collaboration,
+    # still shown to themselves: their own row is where the choice is seen.
+    hidden = set(
+        (
+            await session.execute(
+                select(CollaborationOptOut.user_id).where(CollaborationOptOut.urn == urn)
+            )
+        ).scalars()
+    )
+    hidden.discard(str(viewer_id))
     people: dict[str, User] = {}
     for user, member_urn in result.all():
         group = parse_group(member_urn)
-        if group is not None and collaboration_urn(group) == urn:
+        if group is not None and collaboration_urn(group) == urn and str(user.id) not in hidden:
             people.setdefault(user.id, user)
     return list(people.values())
+
+
+async def opted_out_of(session: AsyncSession, user_id: str) -> set[str]:
+    """The collaboration URNs ``user_id`` keeps their name and address from."""
+    return set(
+        (
+            await session.execute(
+                select(CollaborationOptOut.urn).where(CollaborationOptOut.user_id == user_id)
+            )
+        ).scalars()
+    )
+
+
+async def set_opt_out(session: AsyncSession, user_id: str, urn: str, *, hidden: bool) -> None:
+    """Keep ``user_id``'s name and address from collaboration ``urn``, or stop.
+
+    The caller commits.
+
+    Raises:
+        NotInCollaborationError: If the person's snapshot does not put them in
+            it; a choice about a collaboration one is not in means nothing.
+    """
+    if urn not in await entitled_urns_of(session, user_id):
+        raise NotInCollaborationError(urn)
+    existing = await session.get(CollaborationOptOut, (user_id, urn))
+    if hidden and existing is None:
+        session.add(CollaborationOptOut(user_id=user_id, urn=urn))
+    elif not hidden and existing is not None:
+        await session.delete(existing)

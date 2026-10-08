@@ -7977,9 +7977,18 @@ html, body {
 .import-repository .form-hint { margin: 0; }
 .import-form textarea { width: 100%; font-family: var(--font-mono, monospace); }
 .import-results { margin-top: var(--space-lg); }
+.import-job { margin-bottom: var(--space-lg); }
+.import-job[data-status="interrupted"] .import-progress progress { accent-color: var(--clr-error, #c62828); }
+.import-progress { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-sm); }
+.import-progress progress { flex: 1; height: 0.5rem; accent-color: var(--clr-primary); }
+.import-progress .form-hint { margin: 0; white-space: nowrap; }
 .import-results-table td { padding: var(--space-sm) var(--space-md); vertical-align: top; }
 .import-results-table .form-help { display: block; margin: 0; }
 .import-waiting { color: var(--clr-text-muted, #6b7a70); }
 .import-status { font-weight: 600; }
 .import-status-imported { color: var(--clr-success, #2e7d32); }
 .import-status-failed { color: var(--clr-error, #c62828); }
+
+/* People: the viewer's choice per collaboration. */
+.collaboration-visibility { margin: var(--space-sm) 0; }
+.member-hidden { font-style: italic; }

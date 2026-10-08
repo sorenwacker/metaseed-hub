@@ -10,6 +10,7 @@ from metaseed_hub.sharing import Role
 
 from .base import Base, _enum_values
 from .collaborations import (
+    CollaborationOptOut,
     DatasetCollaborationGrant,
     GroupMembership,
     SpecCollaborationGrant,
@@ -24,6 +25,7 @@ from .comments import (
 )
 from .datasets import Dataset, DatasetMember, DatasetVersion
 from .identity import Tenant, User
+from .import_jobs import ImportJob
 from .mixins import SoftDeleteMixin, TimestampMixin
 from .notifications import Notification
 from .operations import ApiToken, ErrorEvent, SeekConnection
@@ -39,6 +41,7 @@ __all__ = [
     "Role",
     "ApiToken",
     "Base",
+    "CollaborationOptOut",
     "Comment",
     "CommentReaction",
     "Dataset",
@@ -47,6 +50,7 @@ __all__ = [
     "DatasetVersion",
     "ErrorEvent",
     "GroupMembership",
+    "ImportJob",
     "Notification",
     "ReactionType",
     "SeekConnection",

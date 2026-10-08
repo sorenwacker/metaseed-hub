@@ -40,6 +40,24 @@ class GroupMembership(Base):
     urn: Mapped[str] = mapped_column(String(URN_LENGTH), primary_key=True)
 
 
+class CollaborationOptOut(Base):
+    """A person's choice to keep their name and address from one collaboration.
+
+    A row is the choice; its absence is the default. Kept apart from the
+    membership snapshot, which every sign-in replaces.
+    """
+
+    __tablename__ = "collaboration_opt_outs"
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    urn: Mapped[str] = mapped_column(String(URN_LENGTH), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class CollaborationGrantMixin:
     """The columns every grant table shares; the subclass names the resource."""
 

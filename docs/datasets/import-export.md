@@ -36,11 +36,13 @@ On the **+ New Dataset** screen, open the **From a repository** tab. Enter the i
 | Import ENA accession | Accessions, e.g. `PRJEB1234` | `ena` |
 | Import PRIDE project | ProteomeXchange accessions, e.g. `PXD000001` | `pride` |
 | Import MetaboLights study | Study accessions, e.g. `MTBLS1` | `metabolights` |
-| Import BrAPI server | BrAPI v2 server URLs | `miappe` |
+| Import from BrAPI | A BrAPI v2 server's base URL, or a trial's or a study's address on it | `miappe` |
 
 The hub creates one dataset per identifier, in the latest version of the repository's profile. The **Name** field of the screen is not used: a dataset takes the title its root record carries at the repository, and the identifier where the record has no title. If you already have a dataset of that name, the identifier is appended in parentheses; if that name is taken as well, the record is reported as already imported and nothing is created.
 
-One submission takes up to 20 identifiers. They are fetched one after another, and the tab lists each with its outcome as it finishes:
+One submission takes up to 20 identifiers and runs as a background job: the tab shows a panel with a progress bar and one row per identifier, and the rows fill in as the identifiers are fetched, one after another. You can leave the screen; the job carries on, and when it is over a notification under the bell says how it went, for example *Finished importing 3 ena records: 2 imported, 1 failed*. Opening it returns to the tab, where the imports of the last 24 hours are listed below the form, each with its panel. While you are on the screen, each imported dataset and the end of the job are announced in a toast.
+
+A hub restart ends a job that is still running: its panel says *interrupted by a hub restart*, the identifiers it had not reached are marked **Not checked**, and the datasets it had already created stay. Submit those identifiers again.
 
 | Outcome | Meaning |
 |---------|---------|
@@ -61,7 +63,7 @@ A dataset whose profile has a matching public repository can also be filled from
 | `ena` | Import ENA accession | An ENA accession, e.g. `PRJEB1234` |
 | `pride` | Import PRIDE project | A ProteomeXchange accession, e.g. `PXD000001` |
 | `metabolights` | Import MetaboLights study | A study accession, e.g. `MTBLS1` |
-| `miappe` | Import BrAPI server | A BrAPI v2 server URL |
+| `miappe` | Import from BrAPI | A BrAPI v2 server's base URL (every study it holds), a trial's address (`<base>/trials/<trialDbId>`) or a study's |
 
 The hub fetches the public metadata and builds the dataset's entities from it. Metadata only: data files are referenced by name, never downloaded.
 

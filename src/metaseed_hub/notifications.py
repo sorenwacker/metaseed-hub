@@ -41,6 +41,7 @@ class Kind(StrEnum):
     ACCESS_REMOVED = "access_removed"
     COMMENT = "comment"
     REPLY = "reply"
+    IMPORT_FINISHED = "import_finished"
 
 
 #: Each kind as the words before the item's title and the words after it.
@@ -50,14 +51,24 @@ _PHRASES: dict[Kind, tuple[str, str]] = {
     Kind.ACCESS_REMOVED: ("removed your access to the {word}", "."),
     Kind.COMMENT: ("commented on the {word}", "."),
     Kind.REPLY: ("replied to your comment on the {word}", "."),
+    Kind.IMPORT_FINISHED: ("Finished importing", ": {detail}."),
 }
 
-_WORDS = {"dataset": "dataset", "draft": "specification draft", "spec": "specification"}
+#: Kinds that report the person's own background work, so no actor is named.
+_OWN_WORK = frozenset({Kind.IMPORT_FINISHED})
+
+_WORDS = {
+    "dataset": "dataset",
+    "draft": "specification draft",
+    "spec": "specification",
+    "import": "import",
+}
 
 _URLS = {
     "dataset": "/hub/datasets/{id}",
     "draft": "/hub/spec-builder/{id}",
     "spec": "/hub/spec-builder/spec/{id}",
+    "import": "/hub/datasets/new#repository",
 }
 
 
@@ -105,6 +116,40 @@ async def record(
             resource_id=resource_id,
             resource_title=_title(resource.kind, thing),
             detail=detail,
+        )
+    )
+
+
+async def import_finished(
+    session: AsyncSession,
+    *,
+    user_id: str,
+    job_id: str,
+    title: str,
+    summary: str,
+) -> None:
+    """Tell ``user_id`` that their background import is over.
+
+    Their own work, so it has no actor: :func:`record` refuses to tell a person
+    of their own action, and a finished job is the one case where that is
+    the point. Left for the caller to commit with the job's final state.
+
+    Args:
+        session: Database session.
+        user_id: Who started the import.
+        job_id: The job, which the entry opens the repository tab on.
+        title: What was imported, e.g. ``3 ena records``.
+        summary: How it went, e.g. ``2 imported, 1 failed``.
+    """
+    session.add(
+        Notification(
+            user_id=user_id,
+            actor_id=None,
+            kind=Kind.IMPORT_FINISHED.value,
+            resource_kind="import",
+            resource_id=job_id,
+            resource_title=title[:255],
+            detail=summary[:64],
         )
     )
 
@@ -186,8 +231,10 @@ class Entry:
 def _entry(notification: Notification, actor_name: str | None) -> Entry:
     kind = Kind(notification.kind)
     before, after = _PHRASES[kind]
-    actor = actor_name or "Someone"
-    lead = f"{actor} " + before.format(word=_WORDS[notification.resource_kind])
+    actor = "" if kind in _OWN_WORK else (actor_name or "Someone")
+    lead = before.format(word=_WORDS[notification.resource_kind])
+    if actor:
+        lead = f"{actor} {lead}"
     return Entry(
         actor=actor,
         lead=lead,

@@ -1,43 +1,69 @@
 """Datasets from public repository records, without naming them first.
 
-The form is the **From a repository** tab of the New Dataset screen. Two
-requests serve it: the list of identifiers, answered with one pending row
-each; and one request per row, which fetches the record and creates its
-dataset. The rows ask in turn, so a slow repository delays the rows after it
-and nothing else, and each row shows its outcome as it finishes.
+The form is the **From a repository** tab of the New Dataset screen. A
+submission starts a background job and answers with its panel; the panel polls
+the job while it runs and shows each outcome as it is reached.
 
 See docs/datasets/import-export.md, *From a public repository*.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+import json
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
+from metaseed_hub.models import ImportJob
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_and_user
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 from metaseed_hub.ui.services.repository_import import (
     MAX_IDENTIFIERS,
-    Outcome,
-    import_record,
+    job_of,
     parse_identifiers,
     repositories,
+    start_job,
+    summary,
 )
 
 router = APIRouter(prefix="/import", tags=["import"])
 
 
-@router.post("/rows", response_class=HTMLResponse)
-async def import_rows(
+def job_panel(request: Request, user: Any, job: ImportJob) -> Response:
+    """The job as the page shows it, telling the page what has been imported so far."""
+    response = render_template(request, "partials/import_job.html", {"user": user, "job": job})
+    imported = [
+        {"id": outcome["dataset_id"], "name": outcome["name"]}
+        for outcome in job.outcomes
+        if outcome["status"] == "imported"
+    ]
+    # After the swap, so the toasts follow what the page now shows.
+    response.headers["HX-Trigger-After-Swap"] = json.dumps(
+        {
+            "importJobProgress": {
+                "job": job.id,
+                "status": job.status,
+                "done": len(job.outcomes),
+                "total": len(job.identifiers),
+                "imported": imported,
+                "summary": summary(job.outcomes),
+            }
+        }
+    )
+    return response
+
+
+@router.post("/jobs", response_class=HTMLResponse)
+async def start_import_job(
     request: Request,
+    session: DbSession,
     user: CurrentUser,
     profile: Annotated[str, Form()],
     identifiers: Annotated[str, Form()] = "",
 ) -> Response:
-    """One pending row per identifier; each row then asks for its own import."""
+    """Start a job for the list, and answer with its panel."""
     try:
         validate_csrf_or_error(request)
     except Exception:
@@ -54,35 +80,29 @@ async def import_rows(
             f"{len(wanted)} identifiers were entered and one submission takes "
             f"{MAX_IDENTIFIERS}. Nothing was imported; split the list."
         )
-    return render_template(
-        request,
-        "partials/import_rows.html",
+    if problem:
         # Answered 200 with the reason in it: htmx leaves an error status
         # unswapped, and the form would then appear to do nothing.
-        {"user": user, "profile": profile, "identifiers": wanted, "problem": problem},
-    )
-
-
-@router.post("/record", response_class=HTMLResponse)
-async def import_one_record(
-    request: Request,
-    session: DbSession,
-    user: CurrentUser,
-    profile: Annotated[str, Form()],
-    identifier: Annotated[str, Form()],
-) -> Response:
-    """Fetch one record, create its dataset, and answer with the finished row."""
-    try:
-        validate_csrf_or_error(request)
-    except Exception:
-        return csrf_error_response()
-
-    tenant, _ = await ensure_tenant_and_user(session, user)
-    try:
-        outcome = await import_record(session, tenant.id, profile, identifier.strip(), user)
-    except LookupError:
-        outcome = Outcome(
-            identifier, "failed", detail="No importer is installed for that repository."
+        return render_template(
+            request, "partials/import_job.html", {"user": user, "problem": problem}
         )
+
+    tenant, db_user = await ensure_tenant_and_user(session, user)
+    job = await start_job(
+        session, tenant_id=tenant.id, user_id=db_user.id, profile=profile, identifiers=wanted
+    )
     await session.commit()
-    return render_template(request, "partials/import_row.html", {"user": user, "outcome": outcome})
+    request.app.state.import_jobs.start(job.id, user)
+    return job_panel(request, user, job)
+
+
+@router.get("/jobs/{job_id}", response_class=HTMLResponse)
+async def import_job(
+    request: Request, session: DbSession, user: CurrentUser, job_id: str
+) -> Response:
+    """The job's panel, as the page polls it."""
+    _tenant, db_user = await ensure_tenant_and_user(session, user)
+    job = await job_of(session, job_id, db_user.id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="No such import.")
+    return job_panel(request, user, job)

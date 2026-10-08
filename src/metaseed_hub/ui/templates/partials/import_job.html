@@ -1,0 +1,62 @@
+{% if problem %}
+<div class="alert alert-error" data-testid="import-problem">{{ problem }}</div>
+{% else %}
+{% set labels = {
+    "imported": "Imported",
+    "empty": "Nothing to import",
+    "duplicate": "Already imported",
+    "failed": "Failed",
+    "not_checked": "Not checked",
+} %}
+{% set done = job.outcomes | length %}
+{% set total = job.identifiers | length %}
+{# The job runs in the background; while it does, the panel asks for itself
+   again every two seconds, and stops once the job is over. #}
+<div class="import-job" id="import-job-{{ job.id }}" data-testid="import-job" data-status="{{ job.status }}"
+     {% if job.status == "running" %}hx-get="/hub/import/jobs/{{ job.id }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+    <div class="import-progress">
+        <progress data-testid="import-progress" max="{{ total }}" value="{{ done }}"></progress>
+        <span class="form-help" role="status" data-testid="import-progress-label">
+            {{ done }} of {{ total }} done
+            {%- if job.status == "done" %}, finished
+            {%- elif job.status == "interrupted" %}, interrupted by a hub restart
+            {%- endif %}
+            &middot; {{ job.profile }}, started {{ job.created_at.strftime('%y%m%d %H:%M') }} UTC
+        </span>
+    </div>
+    <table class="data-table import-results-table" data-testid="import-results-table">
+        <thead><tr><th>Identifier</th><th>Outcome</th><th>Dataset</th></tr></thead>
+        <tbody>
+        {% for outcome in job.outcomes %}
+        <tr data-testid="import-row" data-status="{{ outcome.status }}">
+            <td>{{ outcome.identifier }}</td>
+            <td>
+                <span class="import-status import-status-{{ outcome.status }}">{{ labels[outcome.status] }}</span>
+                {% if outcome.status == "empty" %}
+                <span class="form-help">The repository holds no records of the kind the importer reads for this identifier.</span>
+                {% elif outcome.status == "duplicate" %}
+                <span class="form-help">You already have datasets named &ldquo;{{ outcome.detail }}&rdquo;, with and without the identifier.</span>
+                {% elif outcome.status == "not_checked" %}
+                <span class="form-help">{{ outcome.detail or "The repository did not answer. Try again later." }}</span>
+                {% elif outcome.status == "failed" %}
+                <span class="form-help">{{ outcome.detail }}</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if outcome.dataset_id %}
+                <a href="/hub/datasets/{{ outcome.dataset_id }}" data-testid="import-dataset-link">{{ outcome.name }}</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% for identifier in job.identifiers[done:] %}
+        <tr data-testid="import-row" data-status="waiting">
+            <td>{{ identifier }}</td>
+            <td><span class="import-waiting">Waiting&hellip;</span></td>
+            <td></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

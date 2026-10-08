@@ -1,4 +1,4 @@
-"""Datasets from repository records: the service and the repository tab.
+"""Datasets from repository records: the service, the background job and the tab.
 
 A dataset could be filled from ENA, PRIDE, MetaboLights or a BrAPI server only
 after it had been created, given a profile and named by hand. A route that
@@ -10,6 +10,7 @@ See docs/datasets/import-export.md, *From a public repository*.
 
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -22,14 +23,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.main import create_app
-from metaseed_hub.models import Dataset, DatasetVersion
+from metaseed_hub.models import Dataset, DatasetVersion, ImportJob, Notification
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
 from metaseed_hub.ui.services.repository_import import (
     MAX_IDENTIFIERS,
     import_record,
+    mark_interrupted,
     parse_identifiers,
     record_title,
     repositories,
+    run_job,
+    start_job,
+    summary,
 )
 from tests.conftest import _test_database_url
 from tests.factories import make_dataset, make_tenant, make_user
@@ -221,10 +226,18 @@ def _signed_in():
     )
 
 
-async def _post(path: str, data: dict[str, str]) -> httpx.Response:
+async def _get(app, path: str) -> httpx.Response:
     with _signed_in():
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
+            transport=httpx.ASGITransport(app=app), base_url="https://test"
+        ) as client:
+            return await client.get(path)
+
+
+async def _post(app, path: str, data: dict[str, str]) -> httpx.Response:
+    with _signed_in():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://test"
         ) as client:
             page = await client.get("/hub/datasets/new")
             csrf = page.cookies[CSRF_TOKEN_COOKIE]
@@ -236,14 +249,118 @@ async def _post(path: str, data: dict[str, str]) -> httpx.Response:
             )
 
 
+async def _db_user_id(session: AsyncSession) -> str:
+    from metaseed_hub.models import User
+
+    return (
+        await session.execute(select(User.id).where(User.keycloak_id == "kc-import"))
+    ).scalar_one()
+
+
+@pytest.mark.asyncio
+class TestTheJob:
+    """The submission as a whole: what runs after the request has answered."""
+
+    async def test_it_works_through_the_list_and_tells_the_person_when_over(
+        self, session, tenant
+    ) -> None:
+        from metaseed_hub.database import db
+
+        await db.connect(_test_database_url())
+        try:
+            job = await start_job(
+                session,
+                tenant_id=tenant.id,
+                user_id=await _db_user_id(session),
+                profile="metabolights",
+                identifiers=["MTBLS1", "MTBLS2"],
+            )
+            await session.commit()
+            job_id = job.id
+
+            with patch(IMPORTER, _importer):
+                await run_job(job_id, _token(), lambda: db.session_factory())
+        finally:
+            await db.disconnect()
+
+        session.expire_all()
+        job = await session.get(ImportJob, job_id)
+        assert job.status == "done" and job.finished_at is not None
+        assert [o["status"] for o in job.outcomes] == ["imported", "imported"]
+        assert await _names(session) == [
+            "Tomato leaf metabolome",
+            "Tomato leaf metabolome (MTBLS2)",
+        ]
+        note = (await session.execute(select(Notification))).scalars().one()
+        assert (note.kind, note.actor_id, note.resource_id) == ("import_finished", None, job_id)
+        assert (note.resource_title, note.detail) == ("2 metabolights records", "2 imported")
+
+    async def test_a_failure_the_importer_did_not_foresee_is_an_outcome(
+        self, session, tenant
+    ) -> None:
+        """Never a job left running: the person would wait for ever."""
+        from metaseed_hub.database import db
+
+        await db.connect(_test_database_url())
+        try:
+            job = await start_job(
+                session,
+                tenant_id=tenant.id,
+                user_id=await _db_user_id(session),
+                profile="metabolights",
+                identifiers=["MTBLS1"],
+            )
+            await session.commit()
+            job_id = job.id
+            with patch(
+                "metaseed_hub.ui.services.repository_import.import_record",
+                side_effect=RuntimeError("the facade could not be built"),
+            ):
+                await run_job(job_id, _token(), lambda: db.session_factory())
+        finally:
+            await db.disconnect()
+
+        session.expire_all()
+        job = await session.get(ImportJob, job_id)
+        assert job.status == "done"
+        assert job.outcomes[0]["status"] == "failed"
+        assert "could not be built" in job.outcomes[0]["detail"]
+
+    async def test_a_job_cut_off_by_a_restart_is_closed_at_startup(self, session, tenant) -> None:
+        job = await start_job(
+            session,
+            tenant_id=tenant.id,
+            user_id=await _db_user_id(session),
+            profile="metabolights",
+            identifiers=["MTBLS1", "MTBLS2", "MTBLS3"],
+        )
+        job.outcomes = [
+            {
+                "identifier": "MTBLS1",
+                "status": "imported",
+                "dataset_id": None,
+                "name": "x",
+                "detail": "",
+            }
+        ]
+        await session.commit()
+
+        job_id = job.id
+
+        await mark_interrupted(session)
+        await session.commit()
+
+        session.expire_all()
+        job = await session.get(ImportJob, job_id)
+        assert job.status == "interrupted"
+        assert [o["status"] for o in job.outcomes] == ["imported", "not_checked", "not_checked"]
+        assert summary(job.outcomes) == "1 imported, 2 not checked"
+
+
 @pytest.mark.asyncio
 class TestThePage:
     async def test_every_importer_adds_its_button_to_the_tab(self, app_db, tenant) -> None:
-        with _signed_in():
-            async with httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
-            ) as client:
-                page = await client.get("/hub/datasets/new")
+        page = await _get(create_app(), "/hub/datasets/new")
 
         assert page.status_code == 200
         assert 'data-tab="repository"' in page.text
@@ -251,45 +368,119 @@ class TestThePage:
             assert f'name="profile" value="{repository.profile}"' in page.text, repository.profile
             assert f">{repository.button}</button>" in page.text
 
-    async def test_each_identifier_gets_a_row_that_imports_in_turn(self, app_db, tenant) -> None:
-        rows = await _post(
-            "/hub/import/rows", {"profile": "metabolights", "identifiers": "MTBLS1\nMTBLS2"}
+    async def test_a_submission_starts_a_job_and_answers_with_a_panel_that_polls(
+        self, app_db, tenant, session
+    ) -> None:
+        app = create_app()
+
+        with patch(IMPORTER, _importer):
+            response = await _post(
+                app,
+                "/hub/import/jobs",
+                {"profile": "metabolights", "identifiers": "MTBLS1\nMTBLS2"},
+            )
+            await app.state.import_jobs.wait()
+
+        assert response.status_code == 200
+        assert 'data-testid="import-progress" max="2" value="0"' in response.text
+        assert response.text.count('data-status="waiting"') == 2
+        job = (await session.execute(select(ImportJob))).scalars().one()
+        assert f'hx-get="/hub/import/jobs/{job.id}" hx-trigger="every 2s"' in response.text
+        assert json.loads(response.headers["HX-Trigger-After-Swap"])["importJobProgress"] == {
+            "job": job.id,
+            "status": "running",
+            "done": 0,
+            "total": 2,
+            "imported": [],
+            "summary": "",
+        }
+        # The request answered before the job ran; the job ran after it.
+        assert job.status == "done"
+        assert await _names(session) == [
+            "Tomato leaf metabolome",
+            "Tomato leaf metabolome (MTBLS2)",
+        ]
+
+    async def test_a_finished_job_s_panel_links_its_datasets_and_stops_polling(
+        self, app_db, tenant, session
+    ) -> None:
+        app = create_app()
+        with patch(IMPORTER, _importer):
+            await _post(
+                app, "/hub/import/jobs", {"profile": "metabolights", "identifiers": "MTBLS1"}
+            )
+            await app.state.import_jobs.wait()
+        job = (await session.execute(select(ImportJob))).scalars().one()
+        dataset = (await session.execute(select(Dataset))).scalars().one()
+
+        panel = await _get(app, f"/hub/import/jobs/{job.id}")
+
+        assert panel.status_code == 200
+        assert "hx-trigger" not in panel.text
+        assert 'data-testid="import-progress" max="1" value="1"' in panel.text
+        assert f'href="/hub/datasets/{dataset.id}"' in panel.text
+        told = json.loads(panel.headers["HX-Trigger-After-Swap"])["importJobProgress"]
+        assert told["status"] == "done"
+        assert told["imported"] == [{"id": dataset.id, "name": dataset.name}]
+        assert told["summary"] == "1 imported"
+
+    async def test_another_person_s_job_is_not_shown(self, app_db, tenant, session) -> None:
+        from tests.factories import make_user
+
+        other = make_user(tenant=tenant, keycloak_id="kc-other", email="other@example.org")
+        session.add(other)
+        await session.flush()
+        job = await start_job(
+            session, tenant_id=tenant.id, user_id=other.id, profile="ena", identifiers=["PRJEB1"]
         )
+        await session.commit()
 
-        assert rows.status_code == 200
-        assert rows.text.count('hx-post="/hub/import/record"') == 2
-        assert rows.text.count('hx-sync="#import-queue:queue all"') == 2
-        assert 'value="MTBLS1"' in rows.text and 'value="MTBLS2"' in rows.text
+        assert (await _get(create_app(), f"/hub/import/jobs/{job.id}")).status_code == 404
 
-    async def test_more_than_one_submission_takes_imports_nothing(self, app_db, tenant) -> None:
+    async def test_more_than_one_submission_takes_starts_nothing(
+        self, app_db, tenant, session
+    ) -> None:
         too_many = "\n".join(f"MTBLS{n}" for n in range(MAX_IDENTIFIERS + 1))
 
-        rows = await _post("/hub/import/rows", {"profile": "metabolights", "identifiers": too_many})
+        response = await _post(
+            create_app(), "/hub/import/jobs", {"profile": "metabolights", "identifiers": too_many}
+        )
 
-        assert 'data-testid="import-problem"' in rows.text
-        assert "hx-post" not in rows.text
+        assert 'data-testid="import-problem"' in response.text
+        assert (await session.execute(select(ImportJob))).scalars().all() == []
 
-    async def test_a_row_creates_its_dataset_and_links_it(self, app_db, tenant, session) -> None:
-        with patch(IMPORTER, _importer):
-            row = await _post(
-                "/hub/import/record", {"profile": "metabolights", "identifier": "MTBLS1"}
-            )
+    async def test_the_tab_lists_the_person_s_recent_jobs(self, app_db, tenant, session) -> None:
+        job = await start_job(
+            session,
+            tenant_id=tenant.id,
+            user_id=await _db_user_id(session),
+            profile="ena",
+            identifiers=["PRJEB1"],
+        )
+        job.status = "interrupted"
+        job.outcomes = [
+            {
+                "identifier": "PRJEB1",
+                "status": "not_checked",
+                "dataset_id": None,
+                "name": "",
+                "detail": "The hub restarted before this identifier was reached.",
+            }
+        ]
+        await session.commit()
 
-        assert row.status_code == 200
-        assert 'data-status="imported"' in row.text
-        dataset = (await session.execute(select(Dataset))).scalars().one()
-        assert dataset.name == "Tomato leaf metabolome"
-        assert f'href="/hub/datasets/{dataset.id}"' in row.text
+        page = await _get(create_app(), "/hub/datasets/new")
 
-    async def test_a_row_that_fails_still_answers_with_a_row(self, app_db, tenant, session) -> None:
-        with patch(IMPORTER, _nothing):
-            row = await _post(
-                "/hub/import/record", {"profile": "metabolights", "identifier": "MTBLS404"}
-            )
+        assert f'id="import-job-{job.id}"' in page.text
+        assert "interrupted by a hub restart" in page.text
 
-        assert row.status_code == 200
-        assert 'data-status="empty"' in row.text
-        assert await _names(session) == []
+
+def test_the_page_script_announces_imports_and_opens_the_tab_a_link_names() -> None:
+    script = (TEMPLATES.parent / "static" / "js" / "hub.js").read_text()
+
+    assert "addEventListener('importJobProgress'" in script
+    assert "showToast('Imported '" in script
+    assert "'.source-tab[data-tab=\"' + wanted + '\"]'" in script
 
 
 def test_the_header_has_no_import_entry_of_its_own() -> None:

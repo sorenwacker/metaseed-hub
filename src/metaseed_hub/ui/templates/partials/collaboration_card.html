@@ -1,0 +1,35 @@
+{# One collaboration on People: its signed-in members, and the viewer's choice
+   whether to be among them for the others. #}
+<section class="profile-card collaboration-card" data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
+    <h2>{{ collaboration.name }} <span class="collaboration-org">({{ collaboration.organisation }})</span></h2>
+    <p class="form-help">Your groups: {{ collaboration.groups|join(", ") }}</p>
+    <div class="member-list">
+        {% for person in members %}
+        <div class="member-row" data-testid="person-{{ person.email }}">
+            <span class="member-avatar">{{ (person.display_name or person.email)[0]|upper }}</span>
+            <span class="member-name">{{ person.display_name or person.email }}</span>
+            <code class="member-email">{{ person.email }}</code>
+            {% if person.id|string == viewer_id and collaboration.urn in opted_out %}
+            <span class="member-role member-hidden" data-testid="hidden-from-others">hidden from the others</span>
+            {% else %}
+            <span class="member-role">{% if person.last_login_at %}signed in {{ person.last_login_at.strftime("%Y-%m-%d") }}{% else %}never signed in{% endif %}</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {# The tick box sends "hidden" only when ticked; the card is answered with
+       the choice as it now stands. #}
+    <form class="collaboration-visibility"
+          hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+          hx-trigger="change"
+          hx-target="closest section"
+          hx-swap="outerHTML">
+        <label class="form-checkbox">
+            <input type="checkbox" name="hidden" value="1"
+                   data-testid="opt-out-{{ collaboration.organisation }}:{{ collaboration.name }}"
+                   {% if collaboration.urn in opted_out %}checked{% endif %}>
+            Hide my name and email from this collaboration
+        </label>
+    </form>
+    <p class="form-help">Only people who have signed in to the hub are listed. SRAM has the full membership.</p>
+</section>
