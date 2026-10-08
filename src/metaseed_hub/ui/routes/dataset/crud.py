@@ -46,6 +46,7 @@ from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 from metaseed_hub.ui.services.repository_import import (
     MAX_IDENTIFIERS,
+    recent_jobs,
     repositories,
     run_source_import,
 )
@@ -251,6 +252,7 @@ async def dataset_new(
             "error_message": NEW_DATASET_ERRORS.get(request.query_params.get("error", "")),
             "repositories": repositories(),
             "max_identifiers": MAX_IDENTIFIERS,
+            "import_jobs": await recent_jobs(session, db_user.id),
         },
     )
 

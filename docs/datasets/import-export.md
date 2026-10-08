@@ -40,7 +40,9 @@ On the **+ New Dataset** screen, open the **From a repository** tab. Enter the i
 
 The hub creates one dataset per identifier, in the latest version of the repository's profile. The **Name** field of the screen is not used: a dataset takes the title its root record carries at the repository, and the identifier where the record has no title. If you already have a dataset of that name, the identifier is appended in parentheses; if that name is taken as well, the record is reported as already imported and nothing is created.
 
-One submission takes up to 20 identifiers. They are fetched one after another, and the tab lists each with its outcome as it finishes:
+One submission takes up to 20 identifiers and runs as a background job: the tab shows a panel with a progress bar and one row per identifier, and the rows fill in as the identifiers are fetched, one after another. You can leave the screen; the job carries on, and when it is over a notification under the bell says how it went, for example *Finished importing 3 ena records: 2 imported, 1 failed*. Opening it returns to the tab, where the imports of the last 24 hours are listed below the form, each with its panel. While you are on the screen, each imported dataset and the end of the job are announced in a toast.
+
+A hub restart ends a job that is still running: its panel says *interrupted by a hub restart*, the identifiers it had not reached are marked **Not checked**, and the datasets it had already created stay. Submit those identifiers again.
 
 | Outcome | Meaning |
 |---------|---------|

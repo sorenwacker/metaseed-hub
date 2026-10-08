@@ -24,6 +24,7 @@ from .comments import (
 )
 from .datasets import Dataset, DatasetMember, DatasetVersion
 from .identity import Tenant, User
+from .import_jobs import ImportJob
 from .mixins import SoftDeleteMixin, TimestampMixin
 from .notifications import Notification
 from .operations import ApiToken, ErrorEvent, SeekConnection
@@ -47,6 +48,7 @@ __all__ = [
     "DatasetVersion",
     "ErrorEvent",
     "GroupMembership",
+    "ImportJob",
     "Notification",
     "ReactionType",
     "SeekConnection",

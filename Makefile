@@ -28,7 +28,9 @@ db-migrate: db-wait
 	uv run alembic check
 
 dev: up db-migrate
-	uv run uvicorn metaseed_hub.main:app --reload --host 0.0.0.0 --port 7001
+	# --reload-dir scopes the watcher to the source: a restart on a test edit
+	# cut a running background job short mid-test.
+	uv run uvicorn metaseed_hub.main:app --reload --reload-dir src --host 0.0.0.0 --port 7001
 
 test:
 	uv run pytest -m "not selenium"

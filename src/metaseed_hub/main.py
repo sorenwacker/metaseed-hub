@@ -16,6 +16,7 @@ from metaseed_hub.config import MOUNT_PREFIX, get_settings
 from metaseed_hub.database import db
 from metaseed_hub.security_headers import ContentSecurityPolicyMiddleware
 from metaseed_hub.ui.metaseed_ui import METASEED_STATIC_DIR as METASEED_STATIC
+from metaseed_hub.ui.services.repository_import import ImportJobRunner, mark_interrupted
 from metaseed_hub.websocket import WebSocketManager
 
 
@@ -38,6 +39,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "tokens are forgeable. Set SECRET_KEY (openssl rand -base64 48)."
         )
     await db.connect(settings.database_url, echo=settings.debug)
+    # Nothing can be running at startup; a job still marked so was cut off.
+    async with db.session_factory() as session:
+        await mark_interrupted(session)
+        await session.commit()
     manager: WebSocketManager = app.state.manager
     await manager.connect_redis()
 
@@ -52,6 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             yield
 
     # Shutdown
+    await app.state.import_jobs.shutdown()
     await manager.disconnect_redis()
     await db.disconnect()
 
@@ -105,6 +111,10 @@ def create_app() -> FastAPI:
         redoc_url=None,
     )
 
+    # Composed here with the session factory the jobs open their sessions
+    # from, so a route only ever asks the runner on the app it runs in.
+    app.state.import_jobs = ImportJobRunner(session_factory=lambda: db.session_factory())
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -140,6 +150,8 @@ def create_app() -> FastAPI:
     from metaseed_hub.ui.app import create_hub_app
 
     hub_app = create_hub_app()
+    # The import routes are the hub app's, and a request there sees that app.
+    hub_app.state.import_jobs = app.state.import_jobs
 
     # Mounted before /hub, and outside create_hub_app, deliberately. The hub app
     # applies a same-origin guard to every route, which an MCP client cannot

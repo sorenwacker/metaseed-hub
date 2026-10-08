@@ -426,6 +426,35 @@ function setEntityOverviewExpanded(button, expanded) {
     refreshEntityOverview(table);
 }
 
+// Repository imports run in the background and their panel polls for them.
+// Each answer says what has been imported so far; a dataset is announced
+// once and the end of the job once, however many answers repeat them.
+var announcedImports = {};
+document.body.addEventListener('importJobProgress', function(e) {
+    var d = e.detail || {};
+    var seen = announcedImports[d.job] = announcedImports[d.job] || {names: {}, finished: false};
+    (d.imported || []).forEach(function(item) {
+        if (seen.names[item.id]) return;
+        seen.names[item.id] = true;
+        showToast('Imported ' + item.name, 'success');
+    });
+    if (d.status !== 'running' && !seen.finished) {
+        seen.finished = true;
+        var over = d.status === 'done' ? 'finished' : 'interrupted';
+        showToast('Import ' + over + ': ' + (d.summary || 'nothing to report'),
+                  d.status === 'done' ? 'success' : 'error');
+    }
+});
+
+// A link may name the tab to open, as the notification of a finished import
+// does: /hub/datasets/new#repository.
+document.addEventListener('DOMContentLoaded', function() {
+    var wanted = location.hash.replace('#', '');
+    if (!wanted) return;
+    var tab = document.querySelector('.source-tab[data-tab="' + wanted + '"]');
+    if (tab) tab.click();
+});
+
 // Toggle sidebar
 // Sidebar tabs: the same markup on the dataset page, the spec builder and
 // the published-spec view, so one switcher serves all three. `button` is the
