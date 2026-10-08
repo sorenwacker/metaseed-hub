@@ -2,7 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.64.0] - 261008
+
+### Changed
+- **Built on metaseed 0.60.0.** The BrAPI import takes a trial's or a study's address as well as a server's base URL, and the local application's lists page in thousands; see metaseed's changelog.
 
 ### Added
 - **Opt out of showing your name and email to a collaboration.** Each collaboration's card on **People** has a tick box that keeps your entry from that collaboration's list and from the Sharing tab's suggestions to its members; your own row says so. Per collaboration, kept across sign-ins.
