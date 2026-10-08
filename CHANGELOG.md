@@ -2,16 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.63.0] - 261008
 
 ### Added
+- **The Explorer has the Tree layout.** A **Tree** button beside **Layout** arranges a specification as its containment tree, root at the top.
 - **A dataset exports as YAML.** A **YAML** button beside **Export** in the dataset sidebar downloads the profile, its version and every entity as one file, which the **Import File** tab of the New Dataset screen reads back as the same dataset.
 - **Datasets from repository records, on the New Dataset screen.** Its **From a repository** tab takes up to 20 identifiers and has one button per repository metaseed or a plugin can import from (ENA, PRIDE, MetaboLights, BrAPI). The hub creates one dataset per identifier, named by the title the record carries at the repository. The identifiers are fetched one after another and each row reports its outcome: imported with a link, nothing to import, already imported, failed, or not checked when the repository did not answer.
 - **An API reference page that renders.** `/docs` shows every `/api` operation in Swagger UI, and *Authorize* takes an access token so an operation can be called from the page. The profile page links it beside the access tokens. Swagger UI 5.33.1 is served from the hub's own static files.
 - The MCP tool `get_profile_schema` returns each field's `example` where the specification gives one, so an agent connected to the hub sees the expected form of a value as an agent on the standalone metaseed server already does.
 
 ### Changed
-- **Built on metaseed 0.58.0.** The `miappe-htp` profile is no longer offered, and a repository import in the standalone application is confined to an empty dataset, as it already was here.
+- **Built on metaseed 0.59.0.** The `miappe-htp` profile is no longer offered, and a repository import in the standalone application is confined to an empty dataset, as it already was here.
 - **The entity overview opens folded.** It listed every entity of a dataset in one table. It now lists the roots and their direct children; an entity that holds others has a toggle and the number directly below it, **Expand all** and **Collapse all** act on every level, and a list of more than 50 children shows 50 with a **Show more** row for the rest.
 
 ### Removed
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **`/redoc`, and the OpenAPI pages of the web interface.** `/hub/docs`, `/hub/redoc` and `/hub/openapi.json` listed every cookie-authenticated route of the web interface as though it were an API; they answer 404.
 
 ### Fixed
+- **The Builder's Tree button arranges the diagram.** The hub's own script for it looked the graph up where the shared script does not put it, so the button did nothing. The toggle now comes from metaseed's shared graph script, which the Builder and the Explorer both load.
 - **The Excel export of a dataset on a hub-stored specification has its heading notes and dropdowns again.** metaseed looked the specification up by name among installed profiles, found nothing for a draft or a published specification, and wrote a bare grid. Fixed in metaseed 0.58.0.
 - **The Explorer's dropdowns no longer list their own prompt.** "Profile" and "Version" appeared at the top of the lists as though they were choices; they are now prompts shown only in the closed control.
 - **The Import File tab sends the version of the profile that is chosen.** Each profile's versions were embedded unescaped in an attribute, which cut them off at the first quote, so the version list never followed the profile and a file imported under any profile but the first was sent with the first profile's version and refused.
