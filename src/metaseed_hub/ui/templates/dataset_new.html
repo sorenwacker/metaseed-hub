@@ -34,6 +34,9 @@
             <div class="source-tabs">
                 <button type="button" class="source-tab active" data-tab="standards">Standards</button>
                 <button type="button" class="source-tab" data-tab="import">Import File</button>
+                {% if repositories %}
+                <button type="button" class="source-tab" data-tab="repository" data-testid="tab-repository">From a repository</button>
+                {% endif %}
                 {% if user_specs %}
                 <button type="button" class="source-tab" data-tab="specs">Published Specs</button>
                 {% endif %}
@@ -120,6 +123,37 @@
                     <p class="import-hint">Supports JSON, YAML, or Excel files</p>
                 </div>
             </div>
+
+            <!-- Repository Tab: one button per importer metaseed's registry
+                 offers, so a plugin's importer appears here by declaring itself. -->
+            {% if repositories %}
+            <div class="source-panel" id="panel-repository">
+                <p class="form-hint">
+                    Each identifier becomes one dataset, named by the title the record
+                    carries at the repository; the name above is not used. Metadata only:
+                    data files are referenced by name, never downloaded.
+                </p>
+                <form class="import-form" data-testid="import-form"
+                      hx-post="/hub/import/rows"
+                      hx-target="#import-results"
+                      hx-swap="innerHTML">
+                    <label for="import-identifiers" class="form-label">Identifiers, one per line</label>
+                    <textarea id="import-identifiers" name="identifiers" class="form-input" rows="6"
+                              data-testid="import-identifiers" required></textarea>
+                    <p class="form-hint">Up to {{ max_identifiers }} in one submission. They are fetched one after another.</p>
+                    <div class="import-repositories">
+                        {% for repository in repositories %}
+                        <div class="import-repository">
+                            <button type="submit" name="profile" value="{{ repository.profile }}" class="btn btn-primary"
+                                    data-testid="btn-import-{{ repository.profile }}">{{ repository.button }}</button>
+                            <span class="form-hint">{{ repository.input_label }}, e.g. {{ repository.placeholder }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </form>
+                <div id="import-results" class="import-results" aria-live="polite"></div>
+            </div>
+            {% endif %}
 
             <!-- My Specs Tab -->
             {% if user_specs %}

@@ -25,6 +25,8 @@ A draft is identified by its name and version within your account, so you can ho
 
 The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth. A reply to a comment that no longer exists — deleted while you were writing — is refused rather than posted as a new top-level comment.
 
+The toolbar above the diagram arranges it the same way the [Explorer](../explorer.md) does: **Layout** by force, **Tree** as the containment tree with the root at the top.
+
 ### Entities
 
 Click **+ Entity** on the canvas to add an entity, then click an entity to edit it. From the entity editor you can rename the entity and mark one entity as the specification's **root**.

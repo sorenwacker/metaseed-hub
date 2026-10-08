@@ -7,7 +7,7 @@ The Explorer lets you browse the structure of a metadata profile and compare two
 1. Select a profile under **Base Profile (Reference)**.
 2. Click **Explore**.
 
-The profile's entities and fields are drawn as an entity–relationship diagram. Use the canvas controls to zoom, pan, **Fit** the diagram to the view, and switch between automatic (physics) and hierarchical **Layout**. Zoom in on an entity to read its fields.
+The profile's entities and fields are drawn as an entity–relationship diagram. Use the canvas controls to zoom, pan, **Fit** the diagram to the view, and arrange it: **Layout** places the entities by force, which keeps entities joined by a reference together, and **Tree** places them as the containment tree the specification describes, root at the top. **Tree** is a toggle and is highlighted while the tree is shown. Zoom in on an entity to read its fields.
 
 ## Comparing two profiles
 

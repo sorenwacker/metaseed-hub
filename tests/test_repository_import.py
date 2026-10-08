@@ -1,10 +1,11 @@
-"""Datasets from repository records: the service and the Import page.
+"""Datasets from repository records: the service and the repository tab.
 
 A dataset could be filled from ENA, PRIDE, MetaboLights or a BrAPI server only
 after it had been created, given a profile and named by hand. A route that
-created one from an accession existed and no page posted to it. The Import page
-takes the identifiers first: one dataset each, named by the record's title.
-See docs/datasets/import-export.md, *The Import page*.
+created one from an accession existed and no page posted to it. The repository
+tab of the New Dataset screen takes the identifiers first: one dataset each,
+named by the record's title.
+See docs/datasets/import-export.md, *From a public repository*.
 """
 
 from __future__ import annotations
@@ -225,7 +226,7 @@ async def _post(path: str, data: dict[str, str]) -> httpx.Response:
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
         ) as client:
-            page = await client.get("/hub/import")
+            page = await client.get("/hub/datasets/new")
             csrf = page.cookies[CSRF_TOKEN_COOKIE]
             return await client.post(
                 path,
@@ -237,16 +238,18 @@ async def _post(path: str, data: dict[str, str]) -> httpx.Response:
 
 @pytest.mark.asyncio
 class TestThePage:
-    async def test_it_offers_every_repository(self, app_db, tenant) -> None:
+    async def test_every_importer_adds_its_button_to_the_tab(self, app_db, tenant) -> None:
         with _signed_in():
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
             ) as client:
-                page = await client.get("/hub/import")
+                page = await client.get("/hub/datasets/new")
 
         assert page.status_code == 200
+        assert 'data-tab="repository"' in page.text
         for repository in repositories():
-            assert f'value="{repository.profile}"' in page.text
+            assert f'name="profile" value="{repository.profile}"' in page.text, repository.profile
+            assert f">{repository.button}</button>" in page.text
 
     async def test_each_identifier_gets_a_row_that_imports_in_turn(self, app_db, tenant) -> None:
         rows = await _post(
@@ -289,7 +292,8 @@ class TestThePage:
         assert await _names(session) == []
 
 
-def test_the_header_links_the_import_page() -> None:
+def test_the_header_has_no_import_entry_of_its_own() -> None:
+    """Importing is a way of creating a dataset, so it lives on that screen."""
     header = (TEMPLATES / "base.html").read_text()
 
-    assert 'href="/hub/import"' in header
+    assert "/hub/import" not in header

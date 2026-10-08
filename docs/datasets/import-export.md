@@ -25,22 +25,22 @@ A file that reads but whose entities cannot be loaded under the chosen profile a
 
 ### From a public repository
 
-There are two ways in: the **Import** page, which creates the datasets for you, and the import field of a dataset that is still empty.
+There are two ways in: the **From a repository** tab of the **+ New Dataset** screen, which creates the datasets for you, and the import field of a dataset that is still empty.
 
-#### The Import page
+#### When creating a dataset
 
-Select **Import** in the header. The page asks for two things: the repository, and the identifiers to fetch, one per line.
+On the **+ New Dataset** screen, open the **From a repository** tab. Enter the identifiers to fetch, one per line, and select the button of the repository they belong to. Every repository that metaseed or an installed plugin can import from adds its own button to this tab.
 
-| Repository | What to enter | Profile of the new dataset |
-|------------|---------------|----------------------------|
-| ENA | Accessions, e.g. `PRJEB1234` | `ena` |
-| PRIDE | ProteomeXchange accessions, e.g. `PXD000001` | `pride` |
-| MetaboLights | Study accessions, e.g. `MTBLS1` | `metabolights` |
-| BrAPI | BrAPI v2 server URLs | `miappe` |
+| Button | What to enter | Profile of the new dataset |
+|--------|---------------|----------------------------|
+| Import ENA accession | Accessions, e.g. `PRJEB1234` | `ena` |
+| Import PRIDE project | ProteomeXchange accessions, e.g. `PXD000001` | `pride` |
+| Import MetaboLights study | Study accessions, e.g. `MTBLS1` | `metabolights` |
+| Import BrAPI server | BrAPI v2 server URLs | `miappe` |
 
-Select **Import** and the hub creates one dataset per identifier, in the latest version of the repository's profile. You name nothing: a dataset takes the title its root record carries at the repository, and the identifier where the record has no title. If you already have a dataset of that name, the identifier is appended in parentheses; if that name is taken as well, the record is reported as already imported and nothing is created.
+The hub creates one dataset per identifier, in the latest version of the repository's profile. The **Name** field of the screen is not used: a dataset takes the title its root record carries at the repository, and the identifier where the record has no title. If you already have a dataset of that name, the identifier is appended in parentheses; if that name is taken as well, the record is reported as already imported and nothing is created.
 
-One submission takes up to 20 identifiers. They are fetched one after another, and the page lists each with its outcome as it finishes:
+One submission takes up to 20 identifiers. They are fetched one after another, and the tab lists each with its outcome as it finishes:
 
 | Outcome | Meaning |
 |---------|---------|
