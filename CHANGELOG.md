@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **The top bar reads Datasets, Explorer, Builder, and both overview pages describe the Explorer before the Builder.** Reading the existing standards comes first; the Builder is for when none of them fits.
+- `uv.lock` moves past audited vulnerabilities and stale pins: anyio 4.15.1, mako 1.4.3, pyjwt 2.15.1, urllib3 2.8.0, virtualenv 21.14.6, taking Dependabot's five open bumps in one.
+
 ## [0.64.0] - 261008
 
 ### Changed

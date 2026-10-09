@@ -102,3 +102,16 @@ def test_both_audiences_can_apply_for_beta_features() -> None:
     assert registration in home
     assert registration in landing, "the landing page does not say how to apply"
     assert "beta" in landing.lower()
+
+
+def test_explorer_comes_before_builder() -> None:
+    """Reading existing standards comes before building one: the Builder is for
+    when no standard fits. The top bar and both overview pages list them in that
+    order, with Datasets, the page most visits are for, first in the bar."""
+    base = _read("base.html")
+    nav = base[base.index("hub-nav-global") : base.index("header-breadcrumb")]
+    assert nav.index(">Datasets<") < nav.index(">Explorer<") < nav.index(">Builder<")
+
+    for page in ("overview_home.html", "partials/overview.html"):
+        text = _read(page)
+        assert text.index("Open Explorer") < text.index("Open Builder"), page
