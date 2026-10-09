@@ -33,7 +33,7 @@ On the **+ New Dataset** screen, open the **From a repository** tab. Enter the i
 
 | Button | What to enter | Profile of the new dataset |
 |--------|---------------|----------------------------|
-| Import ENA accession | Accessions, e.g. `PRJEB1234` | `ena` |
+| Import ENA accession | Accessions, e.g. `PRJDA51199` | `ena` |
 | Import PRIDE project | ProteomeXchange accessions, e.g. `PXD000001` | `pride` |
 | Import MetaboLights study | Study accessions, e.g. `MTBLS1` | `metabolights` |
 | Import from BrAPI | A BrAPI v2 server's base URL, or a trial's or a study's address on it | `miappe` |
@@ -60,7 +60,7 @@ A dataset whose profile has a matching public repository can also be filled from
 
 | Profile | Control | What to enter |
 |---------|---------|---------------|
-| `ena` | Import ENA accession | An ENA accession, e.g. `PRJEB1234` |
+| `ena` | Import ENA accession | An ENA accession, e.g. `PRJDA51199` |
 | `pride` | Import PRIDE project | A ProteomeXchange accession, e.g. `PXD000001` |
 | `metabolights` | Import MetaboLights study | A study accession, e.g. `MTBLS1` |
 | `miappe` | Import from BrAPI | A BrAPI v2 server's base URL (every study it holds), a trial's address (`<base>/trials/<trialDbId>`) or a study's |
