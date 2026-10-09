@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **The top bar reads Datasets, Explorer, Builder, and both overview pages describe the Explorer before the Builder.** Reading the existing standards comes first; the Builder is for when none of them fits.
+
 ## [0.64.0] - 261008
 
 ### Changed
