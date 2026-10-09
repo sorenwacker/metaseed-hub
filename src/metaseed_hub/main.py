@@ -192,6 +192,12 @@ def create_app() -> FastAPI:
         # under /hub/, so the disallow has to name the path that actually exists.
         return PlainTextResponse("User-agent: *\nDisallow: /api/\nDisallow: /matomo/\nAllow: /\n")
 
+    @app.get("/api", include_in_schema=False)
+    @app.get("/api/", include_in_schema=False)
+    async def api_root() -> RedirectResponse:
+        """The address a person guesses for the API leads to its reference."""
+        return RedirectResponse(url="/docs")
+
     @app.get("/docs", include_in_schema=False)
     async def api_reference() -> HTMLResponse:
         """The REST API rendered by Swagger UI, from the vendored bundle."""

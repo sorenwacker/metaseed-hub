@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.65.1] - 261009
+
+### Fixed
+- **`/api` leads to the API reference.** The address a person guesses answered Not Found; it now redirects to `/docs`.
+
 ## [0.65.0] - 261009
 
 ### Changed
