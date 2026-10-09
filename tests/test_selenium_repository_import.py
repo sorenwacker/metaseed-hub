@@ -42,10 +42,10 @@ def test_the_tab_opens_and_a_repository_button_sends_the_list(driver) -> None:  
     assert str(MAX_IDENTIFIERS) in _visible(driver, "import-problem").text
 
 
-#: What ENA calls PRJEB1234 today; the import names the dataset after it. A
+#: What ENA calls PRJDA51199 today; the import names the dataset after it. A
 #: soft-deleted dataset keeps its name, so the rows this test leaves are
 #: removed outright, before and after, or the next run finds both names taken.
-ENA_TITLE = "A haplotype map of foxtail millet genome"
+ENA_TITLE = "Arabidopsis thaliana tonagata-0004 transcriptome project"
 
 
 def _remove_outright(*, names: tuple[str, ...] = (), ids: tuple[str, ...] = ()) -> int:
@@ -74,16 +74,16 @@ def _remove_outright(*, names: tuple[str, ...] = (), ids: tuple[str, ...] = ()) 
 
 
 def test_an_import_runs_as_a_job_the_panel_follows(driver) -> None:  # noqa: F811
-    """One real ENA study, end to end: the panel polls the job, the bar fills,
+    """One real ENA study (four runs), end to end: the panel polls the job, the bar fills,
     the dataset and the end of the job are announced."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
 
-    _remove_outright(names=(ENA_TITLE, f"{ENA_TITLE} (PRJEB1234)"))
+    _remove_outright(names=(ENA_TITLE, f"{ENA_TITLE} (PRJDA51199)"))
     _login(driver)
     driver.get(f"{BASE}/hub/datasets/new")
     _visible(driver, "tab-repository").click()
-    _visible(driver, "import-identifiers").send_keys("PRJEB1234")
+    _visible(driver, "import-identifiers").send_keys("PRJDA51199")
     # The tab also lists the person's earlier jobs, each with a panel of its
     # own, so the new one is told apart by not having been there before.
     before = {
