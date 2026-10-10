@@ -332,7 +332,6 @@ body {
     display: none;
 }
 
-.notifications-page { max-width: 48rem; }
 .notification-list { list-style: none; margin: 0; padding: 0; }
 .notification-entry {
     display: flex;
@@ -2872,8 +2871,6 @@ a.spec-editor-close:hover {
 /* Welcome panels */
 .editor-welcome {
     padding: var(--space-xl);
-    max-width: 900px;
-    margin: 0 auto;
 }
 
 .editor-welcome h2 {
@@ -3046,8 +3043,6 @@ a.spec-editor-close:hover {
 
 /* New Spec Page */
 .new-spec-page {
-    max-width: 800px;
-    margin: 0 auto;
     padding: var(--space-xl);
 }
 
@@ -4246,8 +4241,6 @@ a.spec-editor-close:hover {
    ============================================================================= */
 
 .spec-list-page {
-    max-width: 1200px;
-    margin: 0 auto;
     padding: var(--space-xl);
 }
 
@@ -5104,8 +5097,7 @@ a.start-option-card:hover {
    ========================================================================== */
 
 .explore-page {
-    max-width: 1400px;
-    margin: 0 auto;
+
 }
 
 .explore-section {
@@ -5123,8 +5115,7 @@ a.start-option-card:hover {
 
 /* Compare Page */
 .compare-page {
-    max-width: 1600px;
-    margin: 0 auto;
+
 }
 
 .compare-selectors {
@@ -6022,8 +6013,6 @@ a.start-option-card:hover {
    ========================================================================== */
 
 .new-dataset-page {
-    max-width: 900px;
-    margin: 0 auto;
     padding: var(--space-lg);
 }
 
@@ -7469,13 +7458,9 @@ a.start-option-card:hover {
     color: var(--clr-ink-light);
 }
 
-/* The setup guide is a reading column, centred: a full-width panel left the
-   text stranded against a wide empty right margin. */
-.overview-page {
-    max-width: 56rem;
-    margin-left: auto;
-    margin-right: auto;
-}
+/* The setup guide fills the page like every other; its lede keeps a readable
+   measure of its own. */
+.overview-page { width: 100%; }
 
 /* Each step gets an icon, so the page scans as steps rather than as a wall of
    prose. Inline SVG: no extra requests, and it takes the theme colour. */
@@ -7784,7 +7769,7 @@ html, body {
 .seek-sidebar .sidebar-actions-row { display: grid; grid-template-columns: 1fr 1fr; }
 .seek-sidebar .seek-downloadable { margin: var(--space-xs) 0 0; }
 .seek-sidebar .seek-status { display: block; padding: 0; margin: 0; border: none; background: none; font-size: 0.75rem; }
-.seek-page { max-width: 52rem; }
+.seek-page { width: 100%; }
 .seek-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
 .seek-page-header .form-help { margin: 0; font-size: 0.875rem; }
 .seek-step {
@@ -7972,10 +7957,20 @@ html, body {
 }
 
 /* New Dataset, From a repository: datasets from repository records. */
-.import-repositories { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-md); }
-.import-repository { display: flex; align-items: center; gap: var(--space-md); }
-.import-repository .form-hint { margin: 0; }
 .import-form textarea { width: 100%; font-family: var(--font-mono, monospace); }
+/* One button per importer, all one width: a grid column sized to the widest
+   label, the hint beside each. In a flex row each button took its own width
+   and the longer labels wrapped. */
+.import-repositories {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-sm) var(--space-md);
+    align-items: center;
+    margin-top: var(--space-md);
+}
+.import-repository { display: contents; }
+.import-repository .btn { justify-self: stretch; white-space: nowrap; }
+.import-repository .form-hint { margin: 0; }
 .import-results { margin-top: var(--space-lg); }
 .import-job { margin-bottom: var(--space-lg); }
 .import-job[data-status="interrupted"] .import-progress progress { accent-color: var(--clr-error, #c62828); }
@@ -8002,3 +7997,6 @@ html, body {
 .consent-prompt { padding: var(--space-md); border: 1px solid var(--clr-border, #ddd); border-radius: var(--radius-md); margin-bottom: var(--space-sm); }
 .consent-prompt p { margin: 0 0 var(--space-sm); }
 .member-hidden { font-style: italic; }
+
+/* Notifications fill the page like every other. */
+.notifications-page { width: 100%; }

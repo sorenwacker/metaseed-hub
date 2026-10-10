@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.67.1] - 261010
+
+### Changed
+- **Pages use the full width of the window.** SEEK, Notifications, New Dataset, the Builder's start page, the specification list, Explorer, Compare and the setup guide each sat in a column of their own; only legal prose keeps a reading column. The buttons on the **From a repository** tab are one width and no longer wrap.
+
 ## [0.67.0] - 261010
 
 ### Added
