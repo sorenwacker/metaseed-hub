@@ -17,25 +17,34 @@ from metaseed_hub.ui.routes.dataset.editor import (
     dataset_export_adapter,
 )
 
+ALL_FEATURES = {"ena", "pride", "brapi", "metabolights", "seek", "dcat"}
+
+
+def _request():
+    """A request as remember_features leaves it for a person in every group."""
+    request = Mock()
+    request.state.features = set(ALL_FEATURES)
+    return request
+
 
 def test_export_options_come_from_the_metaseed_registry() -> None:
     """What the sidebar offers is whatever the registry declares, so these track
     metaseed rather than being restated here."""
     # One PRIDE export: submission.px and its SDRF are parts of one submission,
     # so they arrive together in a single archive.
-    assert {o["key"] for o in _adapter_export_options("pride")} == {
+    assert {o["key"] for o in _adapter_export_options("pride", ALL_FEATURES)} == {
         "pride",
         "dcat",
     }
     # A profile with no repository adapter still gets the DCAT catalogue record,
     # which describes a dataset under any profile — but no other profile's exporter.
-    assert {o["key"] for o in _adapter_export_options("darwin-core")} == {"dcat"}
+    assert {o["key"] for o in _adapter_export_options("darwin-core", ALL_FEATURES)} == {"dcat"}
 
 
 @pytest.mark.asyncio
 async def test_unknown_format_is_rejected() -> None:
     with pytest.raises(HTTPException) as exc:
-        await dataset_export_adapter("d1", "nonsense", Mock(), Mock())
+        await dataset_export_adapter(_request(), "d1", "nonsense", Mock(), Mock())
     assert exc.value.status_code == 404
 
 
@@ -49,5 +58,5 @@ async def test_format_not_offered_for_the_profile_is_rejected() -> None:
     ):
         with pytest.raises(HTTPException) as exc:
             # metabolights export exists, but not for a darwin-core dataset.
-            await dataset_export_adapter("d1", "metabolights", Mock(), Mock())
+            await dataset_export_adapter(_request(), "d1", "metabolights", Mock(), Mock())
     assert exc.value.status_code == 404

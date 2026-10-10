@@ -39,6 +39,7 @@ from metaseed_hub.ui.dependencies import (
     get_current_user_from_cookie,
     handle_auth_required_error,
     handle_duplicate_account_email,
+    remember_features,
 )
 from metaseed_hub.ui.explore_routes import create_explore_router
 from metaseed_hub.ui.helpers import (
@@ -128,7 +129,7 @@ def create_hub_app() -> FastAPI:
     # clients to depend on them. The REST API's reference is /docs.
     app = FastAPI(
         title="Metaseed Hub",
-        dependencies=[Depends(require_same_origin)],
+        dependencies=[Depends(require_same_origin), Depends(remember_features)],
         openapi_url=None,
     )
 

@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
+from metaseed_hub.collaborations import record_memberships
 from metaseed_hub.main import create_app
 from metaseed_hub.models import Dataset, DatasetVersion, ImportJob, Notification
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
@@ -36,7 +37,7 @@ from metaseed_hub.ui.services.repository_import import (
     start_job,
     summary,
 )
-from tests.conftest import _test_database_url
+from tests.conftest import FEATURE_GROUP_URNS, _test_database_url
 from tests.factories import make_dataset, make_tenant, make_user
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "metaseed_hub" / "ui" / "templates"
@@ -71,7 +72,10 @@ async def tenant(session: AsyncSession):
     tenant = make_tenant(slug=tenant_slug_for("kc-import"))
     session.add(tenant)
     await session.flush()
-    session.add(make_user(tenant=tenant, keycloak_id="kc-import", email="importer@example.org"))
+    user = make_user(tenant=tenant, keycloak_id="kc-import", email="importer@example.org")
+    session.add(user)
+    await session.flush()
+    await record_memberships(session, user.id, FEATURE_GROUP_URNS)
     await session.commit()
     return tenant
 

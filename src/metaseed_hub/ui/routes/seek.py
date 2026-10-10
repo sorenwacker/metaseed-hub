@@ -34,6 +34,7 @@ from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.crypto import decrypt_secret, encrypt_secret
+from metaseed_hub.features import granted
 from metaseed_hub.models import Dataset, SeekConnection
 from metaseed_hub.ui.dependencies import (
     DbSession,
@@ -56,9 +57,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/seek", tags=["seek"])
 
-# SEEK is an adapter: reachable to every signed-in user, usable only once
-# they configure their own SEEK connection (the API key IS the gate).
-SeekUser = Annotated[TokenUser, Depends(require_user)]
+
+async def require_seek(
+    request: Request, user: Annotated[TokenUser, Depends(require_user)]
+) -> TokenUser:
+    """A signed-in person whose SRAM groups grant SEEK.
+
+    The header shows SEEK to the same people; a typed address gets this.
+    """
+    if "seek" not in granted(request):
+        raise HTTPException(
+            status_code=403,
+            detail="SEEK is enabled per SRAM group; none of your groups grants it.",
+        )
+    return user
+
+
+SeekUser = Annotated[TokenUser, Depends(require_seek)]
 
 
 #: How long a push waits for one answer from SEEK. SEEK builds a Study or an

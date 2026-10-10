@@ -7,6 +7,7 @@ from fastapi import File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from metaseed import SkippedNode
 
+from metaseed_hub.features import feature_of_action, granted
 from metaseed_hub.models import (
     Dataset,
     Tenant,
@@ -185,13 +186,16 @@ async def dataset_editor(
             "tree_data": ctx["tree_data"],
             "overview": entity_overview(ctx["tree_data"]),
             "entity_descriptions": ctx["entity_descriptions"],
-            "seek_supported": spec_supports_seek(await dataset_profile_spec(session, dataset)),
+            "seek_supported": "seek" in granted(request)
+            and spec_supports_seek(await dataset_profile_spec(session, dataset)),
             "connection": await connection_for_user(session, user),
-            "export_options": _adapter_export_options(dataset.profile),
+            "export_options": _adapter_export_options(dataset.profile, granted(request)),
             # Offered only while the dataset is empty: the importer replaces the
             # whole tree, so it is a way to start, not a way to merge.
             "import_option": (
-                _source_import_option(dataset.profile) if not ctx["tree_data"] else None
+                _source_import_option(dataset.profile, granted(request))
+                if not ctx["tree_data"]
+                else None
             ),
             "nav_active": "home",
             "dcat_jsonld": (
@@ -698,8 +702,18 @@ async def dataset_export_yaml(
     )
 
 
-def _source_import_option(profile: str) -> dict[str, str] | None:
+def _not_granted(feature: str | None) -> str:
+    """What to tell a person whose groups do not grant a feature."""
+    return (
+        f"The {feature or 'requested'} integration is enabled per SRAM group; "
+        "none of your groups grants it."
+    )
+
+
+def _source_import_option(profile: str, features: set[str]) -> dict[str, str] | None:
     """The import control a profile offers, from metaseed's registry, or None.
+
+    None as well when the person's groups do not grant the importer's feature.
 
     Carries the action's own wording for the single value it takes, since an
     accession and a BrAPI server URL are not interchangeable and the hub should
@@ -708,7 +722,7 @@ def _source_import_option(profile: str) -> dict[str, str] | None:
     from metaseed_hub.ui.services.repository_import import source_import_action
 
     action = source_import_action(profile)
-    if action is None:
+    if action is None or feature_of_action(action.key) not in features:
         return None
     return {
         "label": action.label,
@@ -717,24 +731,26 @@ def _source_import_option(profile: str) -> dict[str, str] | None:
     }
 
 
-def _adapter_export_options(profile: str) -> list[dict[str, str]]:
-    """[{key, label}] adapter exports offered for a profile, from the registry.
+def _adapter_export_options(profile: str, features: set[str]) -> list[dict[str, str]]:
+    """[{key, label}] adapter exports offered for a profile, from the registry,
+    kept to those whose feature the person's SRAM groups grant.
 
-    The registry is the whole answer: adapters are plugins available to every
-    signed-in user, like the metaseed UI offers them. The per-group
-    FeatureGrant filter that sat here hid EVERY export from every user,
-    because nothing ever wrote a grant row.
+    The registry says what exists; the groups say who may use it. (A hub table
+    of grants sat here once and hid every export, because nothing wrote to
+    it; the groups are SRAM's, and their admins write them.)
     """
     from metaseed import adapters
 
     return [
         {"key": action.key, "label": action.label}
         for action in adapters.actions_for_profile(profile, kind="export")
+        if feature_of_action(action.key) in features
     ]
 
 
 @router.get("/{dataset_id}/export/adapter/{fmt}")
 async def dataset_export_adapter(
+    request: Request,
     dataset_id: str,
     fmt: str,
     session: DbSession,
@@ -754,6 +770,8 @@ async def dataset_export_adapter(
     action = adapters.find_action(fmt)
     if action is None or action.kind != "export":
         raise HTTPException(status_code=404, detail=f"Unknown export format: {fmt}")
+    if feature_of_action(fmt) not in granted(request):
+        raise HTTPException(status_code=403, detail=_not_granted(feature_of_action(fmt)))
 
     dataset = await get_dataset_for_user(dataset_id, session, user)
 

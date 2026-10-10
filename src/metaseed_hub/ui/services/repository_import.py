@@ -78,12 +78,19 @@ class Outcome:
     detail: str = ""
 
 
-def repositories() -> list[Repository]:
-    """The repositories on offer, from metaseed's adapter registry."""
+def repositories(features: set[str] | None = None) -> list[Repository]:
+    """The repositories on offer, from metaseed's adapter registry.
+
+    Args:
+        features: Keep to the repositories whose feature these SRAM groups
+            grant; every repository when omitted.
+    """
+    from metaseed_hub.features import feature_of_action
+
     found = []
     for profile in adapters.importable_profiles():
         action = source_import_action(profile)
-        if action is not None:
+        if action is not None and (features is None or feature_of_action(action.key) in features):
             found.append(
                 Repository(profile, action.label, action.input_label, action.input_placeholder)
             )

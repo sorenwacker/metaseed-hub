@@ -324,3 +324,31 @@ async def get_dataset_state_for_mutation(
     state = await ensure_dataset_facade_for_write(dataset, session)
 
     return dataset, state
+
+
+async def remember_features(request: Request) -> None:
+    """Keep the person's repository features on the request, for the page and its routes.
+
+    Every hub route depends on this. A signed-out request reads nothing and
+    touches no database; a signed-in one reads the membership snapshot once.
+    The rule is :mod:`metaseed_hub.features`. The cookie is read as
+    :func:`require_user` reads it, by calling the reader, so whatever stands
+    in for the reader stands in here too.
+    """
+    from metaseed_hub.access import live_user
+    from metaseed_hub.database import db
+    from metaseed_hub.features import features_of
+
+    features: set[str] = set()
+    user = await get_current_user_from_cookie(request)
+    if user is not None:
+        try:
+            async with db.session_factory() as session:
+                db_user = await live_user(session, user)
+                if db_user is not None:
+                    features = await features_of(session, db_user.id)
+        except RuntimeError:
+            # No database connected: a page served without one (the legal
+            # pages, a template rendered in a test) grants nothing.
+            features = set()
+    request.state.features = features

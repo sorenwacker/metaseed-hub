@@ -62,6 +62,12 @@ Removing a specification does not affect datasets already created against it. Th
 
 If the application is running with the default development `SECRET_KEY`, the dashboard shows a warning banner. Set a strong `SECRET_KEY` in the deployment environment to clear it; the secret is used to sign CSRF tokens.
 
+## Features and SRAM groups
+
+The repository integrations are enabled per person through SRAM groups: importing from and exporting to ENA, PRIDE, BrAPI and MetaboLights, pushing to SEEK, and the DCAT export. A person may use one when they are in a group named after it, `ena`, `pride`, `brapi`, `metabolights`, `seek` or `dcat`, in any collaboration they are in: the application offers the group names, and each collaboration's admins decide who in their collaboration gets them. This is deliberately the opposite of the admin rule above, which is the exact URN of one group.
+
+What a person is not granted they do not see: the repository's button on the **From a repository** tab, the import field of an empty dataset, the export button on a dataset, the **SEEK** entry in the header and everything under it. The server refuses the same requests, so a typed address does not get round the group. The membership read is the snapshot taken at sign-in, under the same limit as collaboration membership below, so a group granted in SRAM takes effect at the person's next sign-in.
+
 ## Collaboration membership
 
 The hub records each user's SRAM group membership at sign-in and trusts that record for `MEMBERSHIP_MAX_AGE_DAYS` (30 by default). A record older than that grants no access through a [collaboration grant](collaboration.md#collaborations) and lists nobody on **People** until the person signs in again. Lower it where membership changes often; raise it where people sign in rarely and rely on access tokens.

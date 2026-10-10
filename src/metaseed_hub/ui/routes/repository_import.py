@@ -15,6 +15,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 
+from metaseed_hub.features import granted
 from metaseed_hub.models import ImportJob
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_and_user
 from metaseed_hub.ui.render import render_template
@@ -73,6 +74,11 @@ async def start_import_job(
     problem = ""
     if profile not in {repository.profile for repository in repositories()}:
         problem = "Choose a repository from the list."
+    elif profile not in {repository.profile for repository in repositories(granted(request))}:
+        problem = (
+            "Importing from this repository is enabled per SRAM group; none of your "
+            "groups grants it."
+        )
     elif not wanted:
         problem = "Enter at least one identifier."
     elif len(wanted) > MAX_IDENTIFIERS:

@@ -75,7 +75,7 @@ An identifier the importer rejects as malformed, or an answer from the archive t
 
 The control appears only while the dataset has no entities, and the import is refused if any exist, because it replaces the whole entity tree rather than merging into it. To pull a repository record into a dataset you have already started, create a new dataset for it instead.
 
-Which repositories are on offer comes from metaseed's adapter registry, so the list above grows when metaseed adds an importer, without a hub change.
+Which repositories exist comes from metaseed's adapter registry, so the list above grows when metaseed adds an importer, without a hub change; which of them you see depends on your SRAM groups, as [Features and SRAM groups](../administration.md#features-and-sram-groups) describes.
 
 ## Exporting
 

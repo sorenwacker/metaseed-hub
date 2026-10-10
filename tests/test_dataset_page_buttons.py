@@ -1,9 +1,9 @@
 """Every adapter export the registry offers for the profile is a button.
 
 Rendered-page tests, not unit tests of the menu builder: what the template
-actually receives and draws is the contract. Adapters are plugins available
-to every signed-in user — the per-group FeatureGrant filter that used to
-decide these buttons hid ALL of them, because nothing ever wrote a grant.
+actually receives and draws is the contract. The signed-in user is in every
+feature group (conftest); tests/test_feature_groups.py covers a user who is
+not.
 """
 
 from __future__ import annotations

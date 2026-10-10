@@ -138,11 +138,16 @@ async def test_the_header_links_to_collaborations_and_the_old_address_still_arri
 
     assert 'data-testid="nav-collaborations">Collaborations</a>' in header
     assert ">People<" not in header
+    import httpx
+
     with patch(
         "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
         AsyncMock(return_value=_TOKEN),
     ):
-        moved = _client().get("/hub/people", follow_redirects=False)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
+        ) as client:
+            moved = await client.get("/hub/people", follow_redirects=False)
     assert (moved.status_code, moved.headers["location"]) == (301, "/hub/collaborations")
 
 
