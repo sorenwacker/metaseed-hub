@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.routing import Mount
 
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.collaborations import entitled_urns_of, record_memberships
+from metaseed_hub.collaborations import entitled_urns_of, record_memberships, set_consent
 from metaseed_hub.main import create_app
 from metaseed_hub.sharing import Role, add_grant, record_creator, resource_for
 from metaseed_hub.ui.dependencies import (
@@ -54,8 +54,11 @@ def _get(path: str, token: TokenUser = _TOKEN) -> str:
     return response.text
 
 
-async def _signed_in_people(session: AsyncSession):
-    """The page user (kc-1) and a colleague, both in cropxr, plus a stranger."""
+async def _signed_in_people(session: AsyncSession, *, colleague_shown: bool = True):
+    """The page user (kc-1) and a colleague, both in cropxr, plus a stranger.
+
+    The colleague has answered yes to being shown to cropxr unless told
+    otherwise: a member is listed only after that (test_people_consent.py)."""
     me_tenant = make_tenant(slug=tenant_slug_for("kc-1"))
     session.add(me_tenant)
     await session.flush()
@@ -71,6 +74,8 @@ async def _signed_in_people(session: AsyncSession):
     await session.flush()
     await record_memberships(session, me.id, [PHENO])
     await record_memberships(session, colleague.id, [PHENO])
+    if colleague_shown:
+        await set_consent(session, colleague.id, CROPXR, shown=True)
     await session.commit()
     return me_tenant, me, colleague
 

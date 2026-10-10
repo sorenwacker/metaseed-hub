@@ -11,7 +11,7 @@
 
     {% if cards %}
     {% for card in cards %}
-    {% with collaboration=card.collaboration, members=card.members, opted_out=card.opted_out, viewer_id=card.viewer_id %}
+    {% with collaboration=card.collaboration, members=card.members, decisions=card.decisions, viewer_id=card.viewer_id %}
     {% include "partials/collaboration_card.html" %}
     {% endwith %}
     {% endfor %}

@@ -10,7 +10,16 @@ removes a grant with the thing it is on, exactly as the member tables do.
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
@@ -40,19 +49,21 @@ class GroupMembership(Base):
     urn: Mapped[str] = mapped_column(String(URN_LENGTH), primary_key=True)
 
 
-class CollaborationOptOut(Base):
-    """A person's choice to keep their name and address from one collaboration.
+class CollaborationConsent(Base):
+    """A person's answer to one collaboration: show my name and address, or not.
 
-    A row is the choice; its absence is the default. Kept apart from the
+    A row is an answer, yes or no; no row means the question is still open,
+    and an open question shows nothing and is asked. Kept apart from the
     membership snapshot, which every sign-in replaces.
     """
 
-    __tablename__ = "collaboration_opt_outs"
+    __tablename__ = "collaboration_consents"
 
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     urn: Mapped[str] = mapped_column(String(URN_LENGTH), primary_key=True)
+    shown: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

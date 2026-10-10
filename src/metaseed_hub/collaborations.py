@@ -29,7 +29,7 @@ from metaseed_hub.entitlements import (
     group_urns,
     parse_group,
 )
-from metaseed_hub.models import CollaborationOptOut, GroupMembership, User
+from metaseed_hub.models import CollaborationConsent, GroupMembership, User
 
 
 class MembershipState(StrEnum):
@@ -227,7 +227,8 @@ async def collaborations_of(session: AsyncSession, user_id: str) -> list[Collabo
 
 
 async def people_in(session: AsyncSession, urn: str, *, viewer_id: str) -> list[User]:
-    """The live users whose fresh snapshot puts them in collaboration ``urn``.
+    """The live users whose fresh snapshot puts them in collaboration ``urn``
+    and who answered yes to being shown there, plus the viewer.
 
     By the collaboration's own URN or by any of its groups. Sorted by name,
     then address. Someone who has never signed in has no snapshot and is not
@@ -252,48 +253,62 @@ async def people_in(session: AsyncSession, urn: str, *, viewer_id: str) -> list[
         )
         .order_by(User.display_name, User.email)
     )
-    # Those who chose to keep their name and address from this collaboration,
-    # still shown to themselves: their own row is where the choice is seen.
-    hidden = set(
+    # Those who chose to be shown to this collaboration, and the viewer, whose
+    # own row is where the choice is made.
+    shown = set(
         (
             await session.execute(
-                select(CollaborationOptOut.user_id).where(CollaborationOptOut.urn == urn)
+                select(CollaborationConsent.user_id).where(
+                    CollaborationConsent.urn == urn, CollaborationConsent.shown.is_(True)
+                )
             )
         ).scalars()
     )
-    hidden.discard(str(viewer_id))
+    shown.add(str(viewer_id))
     people: dict[str, User] = {}
     for user, member_urn in result.all():
         group = parse_group(member_urn)
-        if group is not None and collaboration_urn(group) == urn and str(user.id) not in hidden:
+        if group is not None and collaboration_urn(group) == urn and str(user.id) in shown:
             people.setdefault(user.id, user)
     return list(people.values())
 
 
-async def opted_out_of(session: AsyncSession, user_id: str) -> set[str]:
-    """The collaboration URNs ``user_id`` keeps their name and address from."""
-    return set(
-        (
-            await session.execute(
-                select(CollaborationOptOut.urn).where(CollaborationOptOut.user_id == user_id)
-            )
-        ).scalars()
+async def decisions_of(session: AsyncSession, user_id: str) -> dict[str, bool]:
+    """Collaboration URN -> whether ``user_id`` chose to be shown to it.
+
+    A collaboration absent from the result has not been answered.
+    """
+    rows = await session.execute(
+        select(CollaborationConsent.urn, CollaborationConsent.shown).where(
+            CollaborationConsent.user_id == user_id
+        )
     )
+    return {urn: bool(shown) for urn, shown in rows.all()}
 
 
-async def set_opt_out(session: AsyncSession, user_id: str, urn: str, *, hidden: bool) -> None:
-    """Keep ``user_id``'s name and address from collaboration ``urn``, or stop.
+async def unanswered(session: AsyncSession, user_id: str) -> list[Collaboration]:
+    """The person's collaborations they have not yet answered for.
 
+    Each is asked about, on the landing page and on People, until it is.
+    """
+    decided = await decisions_of(session, user_id)
+    return [c for c in await collaborations_of(session, user_id) if c.urn not in decided]
+
+
+async def set_consent(session: AsyncSession, user_id: str, urn: str, *, shown: bool) -> None:
+    """Record ``user_id``'s answer for collaboration ``urn``: shown, or not.
+
+    A no is recorded as much as a yes, so the question is not asked again.
     The caller commits.
 
     Raises:
         NotInCollaborationError: If the person's snapshot does not put them in
-            it; a choice about a collaboration one is not in means nothing.
+            it; an answer about a collaboration one is not in means nothing.
     """
     if urn not in await entitled_urns_of(session, user_id):
         raise NotInCollaborationError(urn)
-    existing = await session.get(CollaborationOptOut, (user_id, urn))
-    if hidden and existing is None:
-        session.add(CollaborationOptOut(user_id=user_id, urn=urn))
-    elif not hidden and existing is not None:
-        await session.delete(existing)
+    existing = await session.get(CollaborationConsent, (user_id, urn))
+    if existing is None:
+        session.add(CollaborationConsent(user_id=user_id, urn=urn, shown=shown))
+    else:
+        existing.shown = shown

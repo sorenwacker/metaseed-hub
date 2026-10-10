@@ -10,7 +10,7 @@ from metaseed_hub.sharing import Role
 
 from .base import Base, _enum_values
 from .collaborations import (
-    CollaborationOptOut,
+    CollaborationConsent,
     DatasetCollaborationGrant,
     GroupMembership,
     SpecCollaborationGrant,
@@ -41,7 +41,7 @@ __all__ = [
     "Role",
     "ApiToken",
     "Base",
-    "CollaborationOptOut",
+    "CollaborationConsent",
     "Comment",
     "CommentReaction",
     "Dataset",

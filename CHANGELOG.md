@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.66.0] - 261010
+
+### Changed
+- **A person is shown to a collaboration only after saying so.** For each collaboration not yet answered for, the hub asks *Do you want to share your profile data (name and email) with this collaboration?*, on the landing page after sign-in and on the collaboration's card on **People**, with *Yes, share* and *No*; either answer is recorded and the question stops, and a *Share my name and email with this collaboration* tick box on the card changes it later. Until a yes, the member's name and address are in that collaboration's list for themselves alone and the Sharing tab does not suggest them. The opt-out of 0.64.0 is replaced; with this release every member starts with the question open.
+
 ## [0.65.1] - 261010
 
 ### Fixed

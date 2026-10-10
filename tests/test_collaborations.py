@@ -21,6 +21,7 @@ from metaseed_hub.collaborations import (
     grant_label,
     people_in,
     record_memberships,
+    set_consent,
 )
 from metaseed_hub.entitlements import entitled_urns
 from metaseed_hub.models import SpecDraft
@@ -148,6 +149,9 @@ async def test_people_in_a_collaboration_are_its_signed_in_members(
     session: AsyncSession, people
 ) -> None:
     (_, owner), (_, colleague), _ = people
+    # Shown only after answering yes; see test_people_consent.py.
+    await set_consent(session, colleague.id, CROPXR, shown=True)
+    await session.commit()
 
     found = await people_in(session, CROPXR, viewer_id=owner.id)
 
@@ -339,6 +343,8 @@ async def test_a_member_in_no_group_is_a_member(session: AsyncSession) -> None:
     await session.commit()
     await record_memberships(session, lone.id, [CROPXR])
     await record_memberships(session, grouped.id, [CROPXR, PHENO])
+    await set_consent(session, lone.id, CROPXR, shown=True)
+    await set_consent(session, grouped.id, CROPXR, shown=True)
     await session.commit()
 
     assert [c.urn for c in await collaborations_of(session, lone.id)] == [CROPXR]
