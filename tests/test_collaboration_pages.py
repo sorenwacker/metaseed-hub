@@ -104,7 +104,7 @@ async def test_people_lists_the_signed_in_members_of_each_collaboration(
 ) -> None:
     await _signed_in_people(session)
 
-    html = _get("/hub/people")
+    html = _get("/hub/collaborations")
 
     assert 'data-testid="collaboration-tudelft:cropxr"' in html
     assert "c@example.org" in html
@@ -125,14 +125,30 @@ async def test_people_says_so_when_you_are_in_no_collaboration(
     await record_memberships(session, user.id, [])
     await session.commit()
 
-    html = _get("/hub/people")
+    html = _get("/hub/collaborations")
 
     assert 'data-testid="no-collaborations"' in html
 
 
-async def test_the_header_links_to_people(session: AsyncSession, app_db) -> None:
+async def test_the_header_links_to_collaborations_and_the_old_address_still_arrives(
+    session: AsyncSession, app_db
+) -> None:
     await _signed_in_people(session)
-    assert 'href="/hub/people"' in _get("/hub/")
+    header = _get("/hub/")
+
+    assert 'data-testid="nav-collaborations">Collaborations</a>' in header
+    assert ">People<" not in header
+    import httpx
+
+    with patch(
+        "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+        AsyncMock(return_value=_TOKEN),
+    ):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
+        ) as client:
+            moved = await client.get("/hub/people", follow_redirects=False)
+    assert (moved.status_code, moved.headers["location"]) == (301, "/hub/collaborations")
 
 
 async def test_the_sharing_panel_offers_collaborations_and_suggests_people(

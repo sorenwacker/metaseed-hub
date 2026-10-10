@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from metaseed_hub.config import MOUNT_PREFIX, get_settings
+from metaseed_hub.features import granted
 from metaseed_hub.ui.helpers import get_or_create_csrf_token, set_csrf_cookie
 
 HUB_REPO = "sorenwacker/metaseed-hub"
@@ -201,6 +202,9 @@ def render_template(
     """
     templates = get_templates()
     csrf_token = standard_context(request, context)
+    # What the person may use, as the request remembered it: the header
+    # shows SEEK, a page its buttons, only to those whose groups grant them.
+    context.setdefault("features", granted(request))
 
     response = templates.TemplateResponse(
         request=request,

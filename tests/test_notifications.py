@@ -390,7 +390,7 @@ class TestTheBell:
 
     async def test_the_header_carries_the_bell(self, session, people, app_db) -> None:
         _, (_, second), _ = people
-        html = (await _get("/hub/people", second)).text
+        html = (await _get("/hub/collaborations", second)).text
         assert 'data-testid="notification-bell"' in html
         assert 'href="/hub/notifications"' in html
         assert 'hx-get="/hub/notifications/badge"' in html

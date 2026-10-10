@@ -1,4 +1,4 @@
-{# One collaboration on People: the signed-in members who answered yes, and
+{# One collaboration on Collaborations: the signed-in members who answered yes, and
    the viewer's own answer, asked for until given. #}
 <section class="profile-card collaboration-card" data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
     {# The title, and opposite it the viewer's own answer: the question until
@@ -10,7 +10,7 @@
         {# Not answered yet: the question, with both answers recorded. #}
         <div class="collaboration-visibility collaboration-question" data-testid="consent-question-{{ collaboration.organisation }}:{{ collaboration.name }}">
             <p>Share your name and email with this collaboration?</p>
-            <form hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+            <form hx-post="/hub/collaborations/{{ collaboration.urn | urlencode }}/visibility"
                   hx-target="closest section" hx-swap="outerHTML" class="collaboration-answers">
                 <button type="submit" name="shown" value="1" class="btn btn-sm btn-primary" data-testid="consent-yes">Yes, share</button>
                 <button type="submit" name="shown" value="0" class="btn btn-sm" data-testid="consent-no">No</button>
@@ -19,7 +19,7 @@
         {% else %}
         {# Answered: the tick box sends "1" when ticked and nothing when not. #}
         <form class="collaboration-visibility"
-              hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+              hx-post="/hub/collaborations/{{ collaboration.urn | urlencode }}/visibility"
               hx-trigger="change"
               hx-target="closest section"
               hx-swap="outerHTML">

@@ -27,10 +27,13 @@ from tests.factories import make_dataset, make_tenant, make_user
 
 # asyncio_mode is "auto", so the async tests here need no explicit mark.
 _CSRF = get_or_create_csrf_token(Mock(cookies={}))
+ALL_FEATURES = {"ena", "pride", "brapi", "metabolights", "seek", "dcat"}
 
 
 def _csrf_request() -> Mock:
     request = Mock()
+    # As remember_features would leave it for a person in every feature group.
+    request.state.features = set(ALL_FEATURES)
     request.cookies = {CSRF_TOKEN_COOKIE: _CSRF}
     request.headers = {"X-CSRF-Token": _CSRF}
     return request
@@ -62,22 +65,24 @@ async def _dataset(session: AsyncSession, profile: str = "pride") -> tuple[Datas
 def test_every_importable_profile_offers_its_own_control() -> None:
     """The label and prompt come from the registry, so a new adapter reaches the
     UI by being declared upstream rather than by editing the hub."""
-    pride = _source_import_option("pride")
+    pride = _source_import_option("pride", ALL_FEATURES)
     assert pride is not None
     assert "accession" in pride["input_label"].lower()
     assert pride["placeholder"].startswith("PXD")
 
     # BrAPI imports into miappe and asks for a server URL, not an accession.
-    miappe = _source_import_option("miappe")
+    miappe = _source_import_option("miappe", ALL_FEATURES)
     assert miappe is not None
     assert "URL" in miappe["input_label"]
 
     for profile in ("ena", "metabolights"):
-        assert _source_import_option(profile) is not None, f"{profile} offers no importer"
+        assert _source_import_option(profile, ALL_FEATURES) is not None, (
+            f"{profile} offers no importer"
+        )
 
 
 def test_a_profile_without_an_importer_offers_nothing() -> None:
-    assert _source_import_option("darwin-core") is None
+    assert _source_import_option("darwin-core", ALL_FEATURES) is None
 
 
 async def test_importing_into_an_empty_dataset_fills_it(session: AsyncSession) -> None:

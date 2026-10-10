@@ -1,4 +1,4 @@
-"""People: who is in the collaborations you are in.
+"""Collaborations: the ones you are in, and who in each chose to share.
 
 Names and addresses, so a collaboration's list is shown only to its members;
 the snapshot from the last sign-in decides who those are. A member is shown
@@ -26,7 +26,7 @@ from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_a
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
 
-router = APIRouter(prefix="/people", tags=["people"])
+router = APIRouter(prefix="/collaborations", tags=["collaborations"])
 
 
 async def _card_context(session: DbSession, viewer_id: str, collaboration: Any) -> dict[str, Any]:
@@ -45,10 +45,10 @@ async def people(request: Request, session: DbSession, user: CurrentUser) -> Res
     collaborations = await collaborations_of(session, db_user.id)
     return render_template(
         request,
-        "people.html",
+        "collaborations.html",
         {
             "user": user,
-            "nav_active": "people",
+            "nav_active": "collaborations",
             "membership_state": await membership_state(session, db_user.id),
             "cards": [await _card_context(session, db_user.id, c) for c in collaborations],
         },

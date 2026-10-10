@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
 from metaseed_hub.audience import visible_specs
+from metaseed_hub.features import feature_of_action, granted
 from metaseed_hub.models import (
     Spec,
     SpecDraft,
@@ -49,6 +50,7 @@ from metaseed_hub.ui.services.repository_import import (
     recent_jobs,
     repositories,
     run_source_import,
+    source_import_action,
 )
 
 from ._router import router
@@ -250,7 +252,7 @@ async def dataset_new(
             "user_specs": user_specs,
             "nav_active": "home",
             "error_message": NEW_DATASET_ERRORS.get(request.query_params.get("error", "")),
-            "repositories": repositories(),
+            "repositories": repositories(granted(request)),
             "max_identifiers": MAX_IDENTIFIERS,
             "import_jobs": await recent_jobs(session, db_user.id),
         },
@@ -480,6 +482,13 @@ async def dataset_import_source(
         return csrf_error_response()
 
     dataset = await get_dataset_for_editor(dataset_id, session, user)
+    importer = source_import_action(dataset.profile)
+    if importer is not None and feature_of_action(importer.key) not in granted(request):
+        return HTMLResponse(
+            f"<div class='notification error'>The {escape(feature_of_action(importer.key) or '')} "
+            "integration is enabled per SRAM group; none of your groups grants it.</div>",
+            status_code=403,
+        )
     state = await ensure_dataset_facade_for_write(dataset, session)
     if state.nodes_by_id:
         return HTMLResponse(

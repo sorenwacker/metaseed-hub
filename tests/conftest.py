@@ -155,9 +155,16 @@ async def app_db(session):
     await db.disconnect()
 
 
+FEATURE_GROUP_URNS = [
+    f"urn:mace:surf.nl:sram:group:tudelft:metaseed:{name}"
+    for name in ("ena", "pride", "brapi", "metabolights", "seek", "dcat")
+]
+
+
 @pytest.fixture
 async def ena_dataset(session):
     """An empty ena dataset in the account of the user rendered-page tests sign in as."""
+    from metaseed_hub.collaborations import record_memberships
     from metaseed_hub.ui.dependencies import tenant_slug_for
     from tests.factories import make_dataset, make_tenant, make_user
 
@@ -166,6 +173,9 @@ async def ena_dataset(session):
     await session.flush()
     user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
     session.add(user)
+    await session.flush()
+    # Every feature group: a page's buttons depend on them (tests/test_feature_groups.py).
+    await record_memberships(session, user.id, FEATURE_GROUP_URNS)
     dataset = make_dataset(tenant=tenant, profile="ena", version="1.0")
     session.add(dataset)
     await session.commit()

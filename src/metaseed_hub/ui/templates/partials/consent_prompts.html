@@ -9,9 +9,9 @@
             <p>
                 You are in <strong>{{ collaboration.name }}</strong> ({{ collaboration.organisation }}).
                 Do you want to share your profile data (name and email) with this collaboration?
-                Members who say yes are listed for each other under <a href="/hub/people">People</a> and suggested when sharing.
+                Members who say yes are listed for each other under <a href="/hub/collaborations">Collaborations</a> and suggested when sharing.
             </p>
-            <form hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+            <form hx-post="/hub/collaborations/{{ collaboration.urn | urlencode }}/visibility"
                   hx-target="closest li" hx-swap="delete" class="collaboration-answers">
                 <button type="submit" name="shown" value="1" class="btn btn-sm btn-primary" data-testid="consent-yes">Yes, share</button>
                 <button type="submit" name="shown" value="0" class="btn btn-sm" data-testid="consent-no">No</button>
