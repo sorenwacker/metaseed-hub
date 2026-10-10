@@ -1,8 +1,9 @@
 """People: who is in the collaborations you are in.
 
 Names and addresses, so a collaboration's list is shown only to its members;
-the snapshot from the last sign-in decides who those are. A member may keep
-their own name and address from a collaboration, per collaboration, from here.
+the snapshot from the last sign-in decides who those are. A member is shown
+to a collaboration only after answering yes, here or on the landing page,
+per collaboration; until then they are asked.
 """
 
 from __future__ import annotations
@@ -16,10 +17,10 @@ from starlette.responses import Response
 from metaseed_hub.collaborations import (
     NotInCollaborationError,
     collaborations_of,
+    decisions_of,
     membership_state,
-    opted_out_of,
     people_in,
-    set_opt_out,
+    set_consent,
 )
 from metaseed_hub.ui.dependencies import CurrentUser, DbSession, ensure_tenant_and_user
 from metaseed_hub.ui.render import render_template
@@ -32,7 +33,7 @@ async def _card_context(session: DbSession, viewer_id: str, collaboration: Any) 
     return {
         "collaboration": collaboration,
         "members": await people_in(session, collaboration.urn, viewer_id=viewer_id),
-        "opted_out": await opted_out_of(session, viewer_id),
+        "decisions": await decisions_of(session, viewer_id),
         "viewer_id": str(viewer_id),
     }
 
@@ -60,13 +61,13 @@ async def set_visibility(
     session: DbSession,
     user: CurrentUser,
     urn: str,
-    hidden: Annotated[str | None, Form()] = None,
+    shown: Annotated[str | None, Form()] = None,
 ) -> Response:
-    """Keep the viewer's name and address from one collaboration, or stop.
+    """Record the viewer's answer for one collaboration: shown, or not.
 
-    A tick box sends ``hidden`` when ticked and nothing when not, so the
-    field's absence is the choice to be listed again. Answers with the
-    collaboration's card as it now reads.
+    The question's buttons send ``shown`` as ``1`` or ``0``; the tick box of
+    an answered card sends ``1`` when ticked and nothing when not. Answers
+    with the collaboration's card as it now reads.
     """
     try:
         validate_csrf_or_error(request)
@@ -74,7 +75,7 @@ async def set_visibility(
         return csrf_error_response()
     _tenant, db_user = await ensure_tenant_and_user(session, user)
     try:
-        await set_opt_out(session, db_user.id, urn, hidden=hidden is not None)
+        await set_consent(session, db_user.id, urn, shown=shown == "1")
     except NotInCollaborationError as refused:
         raise HTTPException(status_code=404, detail="Not a collaboration you are in.") from refused
     await session.commit()

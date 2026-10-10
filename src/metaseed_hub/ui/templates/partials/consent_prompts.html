@@ -1,0 +1,23 @@
+{# Asked on the landing page for each collaboration not yet answered; an
+   answer removes its question here and is recorded for People as well. #}
+{% if unanswered %}
+<section class="home-section consent-prompts" data-testid="consent-prompts">
+    <h2 class="section-title">Your collaborations</h2>
+    <ul class="consent-prompt-list">
+        {% for collaboration in unanswered %}
+        <li class="consent-prompt" data-testid="consent-prompt-{{ collaboration.organisation }}:{{ collaboration.name }}">
+            <p>
+                You are in <strong>{{ collaboration.name }}</strong> ({{ collaboration.organisation }}).
+                Do you want to share your profile data (name and email) with this collaboration?
+                Members who say yes are listed for each other under <a href="/hub/people">People</a> and suggested when sharing.
+            </p>
+            <form hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+                  hx-target="closest li" hx-swap="delete" class="collaboration-answers">
+                <button type="submit" name="shown" value="1" class="btn btn-sm btn-primary" data-testid="consent-yes">Yes, share</button>
+                <button type="submit" name="shown" value="0" class="btn btn-sm" data-testid="consent-no">No</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}

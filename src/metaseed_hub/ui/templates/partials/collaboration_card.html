@@ -1,7 +1,38 @@
-{# One collaboration on People: its signed-in members, and the viewer's choice
-   whether to be among them for the others. #}
+{# One collaboration on People: the signed-in members who answered yes, and
+   the viewer's own answer, asked for until given. #}
 <section class="profile-card collaboration-card" data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
-    <h2>{{ collaboration.name }} <span class="collaboration-org">({{ collaboration.organisation }})</span></h2>
+    {# The title, and opposite it the viewer's own answer: the question until
+       given, the tick box after. #}
+    <div class="collaboration-card-header">
+        <h2>{{ collaboration.name }} <span class="collaboration-org">({{ collaboration.organisation }})</span></h2>
+        <div class="collaboration-card-answer">
+        {% if collaboration.urn not in decisions %}
+        {# Not answered yet: the question, with both answers recorded. #}
+        <div class="collaboration-visibility collaboration-question" data-testid="consent-question-{{ collaboration.organisation }}:{{ collaboration.name }}">
+            <p>Share your name and email with this collaboration?</p>
+            <form hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+                  hx-target="closest section" hx-swap="outerHTML" class="collaboration-answers">
+                <button type="submit" name="shown" value="1" class="btn btn-sm btn-primary" data-testid="consent-yes">Yes, share</button>
+                <button type="submit" name="shown" value="0" class="btn btn-sm" data-testid="consent-no">No</button>
+            </form>
+        </div>
+        {% else %}
+        {# Answered: the tick box sends "1" when ticked and nothing when not. #}
+        <form class="collaboration-visibility"
+              hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
+              hx-trigger="change"
+              hx-target="closest section"
+              hx-swap="outerHTML">
+            <label class="form-checkbox">
+                <input type="checkbox" name="shown" value="1"
+                       data-testid="share-with-{{ collaboration.organisation }}:{{ collaboration.name }}"
+                       {% if decisions[collaboration.urn] %}checked{% endif %}>
+                Share my name and email with this collaboration
+            </label>
+        </form>
+        {% endif %}
+        </div>
+    </div>
     <p class="form-help">Your groups: {{ collaboration.groups|join(", ") }}</p>
     <div class="member-list">
         {% for person in members %}
@@ -9,27 +40,13 @@
             <span class="member-avatar">{{ (person.display_name or person.email)[0]|upper }}</span>
             <span class="member-name">{{ person.display_name or person.email }}</span>
             <code class="member-email">{{ person.email }}</code>
-            {% if person.id|string == viewer_id and collaboration.urn in opted_out %}
-            <span class="member-role member-hidden" data-testid="hidden-from-others">hidden from the others</span>
+            {% if person.id|string == viewer_id and not decisions.get(collaboration.urn) %}
+            <span class="member-role member-hidden" data-testid="not-shared">not shared with the others</span>
             {% else %}
             <span class="member-role">{% if person.last_login_at %}signed in {{ person.last_login_at.strftime("%Y-%m-%d") }}{% else %}never signed in{% endif %}</span>
             {% endif %}
         </div>
         {% endfor %}
     </div>
-    {# The tick box sends "hidden" only when ticked; the card is answered with
-       the choice as it now stands. #}
-    <form class="collaboration-visibility"
-          hx-post="/hub/people/{{ collaboration.urn | urlencode }}/visibility"
-          hx-trigger="change"
-          hx-target="closest section"
-          hx-swap="outerHTML">
-        <label class="form-checkbox">
-            <input type="checkbox" name="hidden" value="1"
-                   data-testid="opt-out-{{ collaboration.organisation }}:{{ collaboration.name }}"
-                   {% if collaboration.urn in opted_out %}checked{% endif %}>
-            Hide my name and email from this collaboration
-        </label>
-    </form>
-    <p class="form-help">Only people who have signed in to the hub are listed. SRAM has the full membership.</p>
+    <p class="form-help">Only people who have signed in to the hub and chose to share are listed. SRAM has the full membership.</p>
 </section>

@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.audience import audience_label
+from metaseed_hub.collaborations import unanswered
 from metaseed_hub.database import get_session
 from metaseed_hub.models import SpecDraft
 from metaseed_hub.sharing import accessible_ids, granting_urns, resource_for
@@ -403,6 +404,8 @@ def create_hub_app() -> FastAPI:
             "specs": specs,
             "granted_by": granted_by,
             "nav_active": "home",
+            # Asked here, where a signed-in person lands, until answered.
+            "unanswered": await unanswered(session, db_user.id),
         }
         # A search or a filter arrives from the page itself and wants only the
         # list back; a plain visit wants the page.

@@ -62,11 +62,11 @@ A hub personal access token carries no group membership at all, which is why the
 
 ### People in your collaborations
 
-**People** in the header lists every collaboration you are in and, for each, the members who have signed in to the hub at least once, with the name and address on their profile and when they last signed in. You see only the collaborations you belong to. Someone who has never signed in is not listed, because the hub has no record of them; SRAM itself remains the authoritative list.
+**People** in the header lists every collaboration you are in and, for each, the members who have signed in to the hub at least once and chosen to be shown there, with the name and address on their profile and when they last signed in. You see only the collaborations you belong to. Someone who has never signed in is not listed, because the hub has no record of them; SRAM itself remains the authoritative list.
 
 The email field on the **Sharing** tab suggests these people as you type, so sharing with a colleague no longer means asking them for the address on their profile.
 
-Each collaboration's card on **People** has **Hide my name and email from this collaboration**. Ticked, your entry leaves that collaboration's list for everyone but you, and the **Sharing** tab stops suggesting you to its members; your own row says *hidden from the others*. The choice is per collaboration and holds across sign-ins. It changes nothing else: you still see the list, anyone who knows the address on your profile can still share with you, and grants to the collaboration reach you as before, because membership itself is SRAM's.
+Your name and address are shown to a collaboration only after you say so. For each collaboration you have not answered for, the hub asks *Do you want to share your profile data (name and email) with this collaboration?*, on the page you land on after signing in and on the collaboration's card on **People**, with **Yes, share** and **No**. Either answer is recorded and the question stops; a **Share my name and email with this collaboration** tick box on the card lets you change it later. Until you answer yes, your entry is in that collaboration's list for you alone, marked *not shared with the others*, and the **Sharing** tab does not suggest you to its members. The answer is per collaboration and holds across sign-ins. It changes nothing else: you see the list either way, anyone who knows the address on your profile can still share with you, and grants to the collaboration reach you as before, because membership itself is SRAM's.
 
 ### Publishing to a collaboration
 

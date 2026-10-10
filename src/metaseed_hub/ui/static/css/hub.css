@@ -7989,6 +7989,16 @@ html, body {
 .import-status-imported { color: var(--clr-success, #2e7d32); }
 .import-status-failed { color: var(--clr-error, #c62828); }
 
-/* People: the viewer's choice per collaboration. */
+/* People: the viewer's answer per collaboration, asked until given. */
+.collaboration-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-md); flex-wrap: wrap; }
+.collaboration-card-header h2 { margin: 0; }
+.collaboration-card-answer { text-align: right; }
+.collaboration-card-answer .collaboration-visibility { margin: 0; }
 .collaboration-visibility { margin: var(--space-sm) 0; }
+.collaboration-question p { margin: 0 0 var(--space-xs); }
+.collaboration-answers { display: flex; gap: var(--space-sm); }
+.consent-prompts { margin-bottom: var(--space-lg); }
+.consent-prompt-list { list-style: none; padding: 0; margin: 0; }
+.consent-prompt { padding: var(--space-md); border: 1px solid var(--clr-border, #ddd); border-radius: var(--radius-md); margin-bottom: var(--space-sm); }
+.consent-prompt p { margin: 0 0 var(--space-sm); }
 .member-hidden { font-style: italic; }
