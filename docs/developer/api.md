@@ -8,6 +8,7 @@ The hub serves an OpenAPI description of the REST API and a Swagger UI page that
 |------|---------|
 | `/docs` | Swagger UI: every `/api` operation with its parameters, request body and response schema |
 | `/openapi.json` | The OpenAPI document the page is generated from, for client generators |
+| `/api` | Nothing of its own: it leads to `/docs`, so the address a person guesses lands on the reference |
 
 To open the page from the web interface, select **API reference** in the *Access tokens* section of your profile page. The page is readable without signing in; it describes the operations and returns no data.
 

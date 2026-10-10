@@ -73,3 +73,12 @@ def test_the_profile_page_links_the_reference_beside_the_tokens() -> None:
 
     assert 'href="/docs"' in tokens
     assert "API reference" in tokens
+
+
+@pytest.mark.parametrize("path", ["/api", "/api/"])
+def test_the_api_root_leads_to_the_reference(client: TestClient, path: str) -> None:
+    """Reported: the address a person guesses answered Not Found."""
+    response = client.get(path, follow_redirects=False)
+
+    assert response.status_code in (302, 307)
+    assert response.headers["location"] == "/docs"

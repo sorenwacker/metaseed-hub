@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.65.1] - 261010
+
+### Fixed
+- **Built on metaseed 0.60.2: a dataset keeps every entity on reload.** An entity whose values validation refuses (a BrAPI entry type in capitals, a facility term outside MIAPPE's vocabulary, a FAIDARE identifier ending in `=`) was dropped when the dataset page rebuilt it, and its children showed as orphans; it is kept and **Validate** reports it. The BrAPI import writes MIAPPE's vocabularies, and the `miappe` profiles admit a server's own identifiers.
+- **`/api` leads to the API reference.** The address a person guesses answered Not Found; it now redirects to `/docs`.
+
 ## [0.65.0] - 261009
 
 ### Changed
