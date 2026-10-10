@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.67.0] - 261010
 
 ### Added
 - **Repository integrations are enabled per SRAM group.** ENA, PRIDE, BrAPI, MetaboLights, SEEK and the DCAT export are each usable by a person who is in a group of that name in any of their collaborations, as recorded at sign-in; otherwise the button, the import field, the export and the SEEK entry are absent and the server refuses the request. Since 0.57.0 every signed-in user had every integration; the landing page said otherwise.
