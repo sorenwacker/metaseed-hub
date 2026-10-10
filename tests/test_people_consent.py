@@ -78,7 +78,7 @@ async def _post(path: str, data: dict[str, str], token: TokenUser = _TOKEN) -> h
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=_app(token)), base_url="https://test"
         ) as client:
-            page = await client.get("/hub/people")
+            page = await client.get("/hub/collaborations")
             csrf = page.cookies[CSRF_TOKEN_COOKIE]
             return await client.post(
                 path,
@@ -159,7 +159,7 @@ class TestThePage:
     ) -> None:
         await _signed_in_people(session, colleague_shown=False)
 
-        html = await _get("/hub/people")
+        html = await _get("/hub/collaborations")
 
         assert 'data-testid="consent-question-tudelft:cropxr"' in html
         assert "Share your name and email with this collaboration?" in html
@@ -175,45 +175,45 @@ class TestThePage:
         await _signed_in_people(session, colleague_shown=False)
         assert 'data-testid="consent-prompt-tudelft:cropxr"' in await _get("/hub/")
 
-        await _post(f"/hub/people/{CROPXR}/visibility", {"shown": "0"})
+        await _post(f"/hub/collaborations/{CROPXR}/visibility", {"shown": "0"})
 
         assert 'data-testid="consent-prompts"' not in await _get("/hub/")
 
     async def test_yes_shows_you_to_the_others(self, session: AsyncSession, app_db) -> None:
         await _signed_in_people(session, colleague_shown=False)
-        assert "u@example.org" not in await _get("/hub/people", COLLEAGUE)
+        assert "u@example.org" not in await _get("/hub/collaborations", COLLEAGUE)
 
-        card = await _post(f"/hub/people/{CROPXR}/visibility", {"shown": "1"})
+        card = await _post(f"/hub/collaborations/{CROPXR}/visibility", {"shown": "1"})
 
         assert card.status_code == 200, card.text[:300]
         assert CARD in card.text
         assert 'data-testid="share-with-tudelft:cropxr"' in card.text and "checked" in card.text
         assert 'data-testid="consent-question-tudelft:cropxr"' not in card.text
         assert 'data-testid="not-shared"' not in card.text
-        assert "u@example.org" in await _get("/hub/people", COLLEAGUE)
+        assert "u@example.org" in await _get("/hub/collaborations", COLLEAGUE)
 
     async def test_no_closes_the_question_and_keeps_you_to_yourself(
         self, session: AsyncSession, app_db
     ) -> None:
         await _signed_in_people(session, colleague_shown=False)
 
-        card = await _post(f"/hub/people/{CROPXR}/visibility", {"shown": "0"})
+        card = await _post(f"/hub/collaborations/{CROPXR}/visibility", {"shown": "0"})
 
         assert card.status_code == 200
         assert 'data-testid="consent-question-tudelft:cropxr"' not in card.text
         assert 'data-testid="share-with-tudelft:cropxr"' in card.text and "checked" not in card.text
         assert 'data-testid="not-shared"' in card.text
-        assert "u@example.org" not in await _get("/hub/people", COLLEAGUE)
+        assert "u@example.org" not in await _get("/hub/collaborations", COLLEAGUE)
 
     async def test_unticking_the_box_hides_you_again(self, session: AsyncSession, app_db) -> None:
         await _signed_in_people(session, colleague_shown=False)
-        await _post(f"/hub/people/{CROPXR}/visibility", {"shown": "1"})
+        await _post(f"/hub/collaborations/{CROPXR}/visibility", {"shown": "1"})
 
-        card = await _post(f"/hub/people/{CROPXR}/visibility", {})
+        card = await _post(f"/hub/collaborations/{CROPXR}/visibility", {})
 
         assert card.status_code == 200
         assert 'data-testid="not-shared"' in card.text
-        assert "u@example.org" not in await _get("/hub/people", COLLEAGUE)
+        assert "u@example.org" not in await _get("/hub/collaborations", COLLEAGUE)
 
     async def test_the_sharing_tab_suggests_you_only_after_a_yes(
         self, session: AsyncSession, app_db
@@ -227,7 +227,7 @@ class TestThePage:
         members = f"/hub/sharing/dataset/{dataset.id}/members"
         assert "u@example.org" not in await _get(members, COLLEAGUE)
 
-        await _post(f"/hub/people/{CROPXR}/visibility", {"shown": "1"})
+        await _post(f"/hub/collaborations/{CROPXR}/visibility", {"shown": "1"})
 
         assert "u@example.org" in await _get(members, COLLEAGUE)
 
@@ -236,4 +236,6 @@ class TestThePage:
     ) -> None:
         await _signed_in_people(session, colleague_shown=False)
 
-        assert (await _post(f"/hub/people/{OTHER}/visibility", {"shown": "1"})).status_code == 404
+        assert (
+            await _post(f"/hub/collaborations/{OTHER}/visibility", {"shown": "1"})
+        ).status_code == 404

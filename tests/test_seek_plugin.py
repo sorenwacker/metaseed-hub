@@ -206,7 +206,7 @@ class TestTheSeekPage:
     either. The page holds the steps in the order they have to happen."""
 
     async def test_the_header_leads_to_it(self, dataset, app_db) -> None:
-        html = (await _get("/hub/people")).text
+        html = (await _get("/hub/collaborations")).text
         assert 'href="/hub/seek"' in html
         assert 'data-testid="nav-seek"' in html
 

@@ -161,7 +161,7 @@ def _page(path: str, sub: str, entitlements: list[str] | None = None) -> str:
     return response.text
 
 
-@pytest.mark.parametrize("path", ["/hub/auth/profile", "/hub/people"])
+@pytest.mark.parametrize("path", ["/hub/auth/profile", "/hub/collaborations"])
 async def test_a_page_tells_someone_never_read_to_sign_in_again(
     session: AsyncSession, app_db, path: str
 ) -> None:
@@ -176,7 +176,7 @@ async def test_a_page_tells_someone_never_read_to_sign_in_again(
     assert "reported no collaboration" not in html
 
 
-@pytest.mark.parametrize("path", ["/hub/auth/profile", "/hub/people"])
+@pytest.mark.parametrize("path", ["/hub/auth/profile", "/hub/collaborations"])
 async def test_a_page_says_so_when_the_provider_reported_none(
     session: AsyncSession, app_db, path: str
 ) -> None:

@@ -419,6 +419,13 @@ def create_hub_app() -> FastAPI:
             response.set_cookie(VIEW_COOKIE, filters.view, max_age=365 * 24 * 3600, samesite="lax")
         return response
 
+    @app.get("/people", response_class=Response, include_in_schema=False)
+    async def people_moved() -> Response:
+        """The page was called People until 0.67.0; a kept link still arrives."""
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse("/hub/collaborations", status_code=301)
+
     @app.get("/home", response_class=Response)
     async def overview_home(request: Request, user: OptionalUser) -> Response:
         """What the hub is for.

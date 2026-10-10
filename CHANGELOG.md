@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **The People tab is Collaborations.** The page is one card per collaboration with its members who chose to share, so it is named for what it is; `/hub/collaborations`, with `/hub/people` redirecting.
+
 ## [0.66.0] - 261010
 
 ### Changed
