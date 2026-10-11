@@ -5532,6 +5532,13 @@ a.start-option-card:hover {
     flex-wrap: wrap;
 }
 
+/* The foot of the sidebar: Delete alone, after the entity tree. */
+.sidebar-danger {
+    margin-top: auto;
+    display: flex;
+    justify-content: flex-end;
+}
+
 .sidebar-actions-row .btn {
     flex: 1;
     text-align: center;

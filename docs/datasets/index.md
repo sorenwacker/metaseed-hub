@@ -37,7 +37,7 @@ The editor has three areas:
 | Left sidebar | **+ &lt;Entity&gt;** buttons for entity types not yet added, the dataset actions, and two tabs: **Entities** (the entity tree) and **Sharing** |
 | Center | The [entity overview](entities.md#the-entity-overview) with **History** and **Comments** tabs when no entity is selected; otherwise the form for the selected entity |
 
-From the sidebar you can also **Validate** the dataset, open the **Graph** view, **Import** into the dataset, **Export** it, and **Delete** it.
+From the sidebar you can also **Validate** the dataset, open the **Graph** view, **Import** into the dataset and **Export** it. **Delete** stands alone at the foot of the sidebar, apart from the routine actions.
 
 ## Specification drift
 
@@ -56,7 +56,7 @@ See:
 
 ## Deleting a dataset
 
-Click **Delete** (the red button) in the dataset sidebar and confirm. A deleted dataset is removed from your list and excluded from all queries. Deletion is a soft delete: see [Versions and history](versions.md#soft-delete) for what this means.
+Click **Delete** (the red button at the foot of the dataset sidebar) and confirm. A deleted dataset is removed from your list and excluded from all queries. Deletion is a soft delete: see [Versions and history](versions.md#soft-delete) for what this means.
 
 ## FAIR exposure
 
