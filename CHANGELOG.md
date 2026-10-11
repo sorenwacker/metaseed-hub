@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.68.0] - 261011
+
+### Changed
+- **Published specifications are grouped like drafts.** One card per specification within the account it lives in, with a row per version, newest first, each with its date and its own View and Fork; the card carries the description and author of the newest version, and the audience when every version was published to the same one, otherwise each row names its own. Four releases of one profile were four cards with the same title.
+
 ## [0.67.2] - 261011
 
 ### Removed

@@ -7888,6 +7888,22 @@ html, body {
     color: var(--clr-ink-light);
 }
 
+/* The count and the audience share the right of a published card's header. */
+.spec-card-header-facts {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+/* A published card's author line sits above the version rows, so it is the
+   rows that take the divider, not the author line. */
+.spec-card.published > .spec-meta {
+    margin-top: 0;
+    margin-bottom: var(--space-sm);
+    padding-top: 0;
+    border-top: none;
+}
+
 /* The card's own divider and spacing belong to the card, not to each version
    inside it: left alone they drew a line beside every date. */
 .spec-version-row .spec-meta {
