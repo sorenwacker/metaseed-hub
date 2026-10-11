@@ -151,6 +151,38 @@ async def test_the_header_links_to_collaborations_and_the_old_address_still_arri
     assert (moved.status_code, moved.headers["location"]) == (301, "/hub/collaborations")
 
 
+async def test_the_guessed_datasets_address_leads_to_the_list(
+    session: AsyncSession, app_db
+) -> None:
+    """The list is the front page; ``/hub/datasets`` answered Method Not
+    Allowed, since only the create form posts there."""
+    import httpx
+
+    await _signed_in_people(session)
+    with patch(
+        "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+        AsyncMock(return_value=_TOKEN),
+    ):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app()), base_url="https://test"
+        ) as client:
+            guessed = await client.get("/hub/datasets", follow_redirects=False)
+    assert (guessed.status_code, guessed.headers["location"]) == (301, "/hub/")
+
+
+def test_no_page_still_calls_the_collaborations_page_people() -> None:
+    """Renamed in 0.67.0; the profile page kept the old name for a release."""
+    from pathlib import Path
+
+    templates = Path("src/metaseed_hub/ui/templates")
+    offenders = [
+        str(path.relative_to(templates))
+        for path in templates.rglob("*.html")
+        if ">People<" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
+
+
 async def test_the_sharing_panel_offers_collaborations_and_suggests_people(
     session: AsyncSession, app_db
 ) -> None:
