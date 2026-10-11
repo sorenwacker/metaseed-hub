@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.67.2] - 261011
+
+### Removed
+- **The beta-testers group.** It granted nothing since 0.67.0 made the integrations per-group, so the "apply to join as a beta tester" invitation on the landing page and the signed-in home is gone, as is the group in the dev realm. Both pages state the rule instead: a group named after the integration, in any collaboration.
+
 ## [0.67.1] - 261010
 
 ### Changed

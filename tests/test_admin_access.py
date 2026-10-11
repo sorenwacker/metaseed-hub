@@ -59,7 +59,7 @@ class TestSramGroupAdmin:
 
     def test_an_ordinary_group_does_not(self) -> None:
         assert not is_admin(
-            _user(entitlements=["urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers"])
+            _user(entitlements=["urn:mace:surf.nl:sram:group:tudelft:metaseed:ena"])
         )
 
     def test_a_group_merely_containing_admin_does_not(self) -> None:

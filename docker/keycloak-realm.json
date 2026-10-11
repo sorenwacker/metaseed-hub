@@ -130,8 +130,7 @@
         "/urn:mace:surf.nl:sram:group:tudelft:metaseed:pride",
         "/urn:mace:surf.nl:sram:group:tudelft:metaseed:brapi",
         "/urn:mace:surf.nl:sram:group:tudelft:metaseed:metabolights",
-        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:dcat",
-        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers"
+        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:dcat"
       ]
     },
     {
@@ -181,10 +180,6 @@
     {
       "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:dcat",
       "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:dcat"
-    },
-    {
-      "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers",
-      "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:beta-testers"
     },
     {
       "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin",

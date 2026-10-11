@@ -67,9 +67,15 @@ class TestTheGroups:
         for plugin in ("seek", "ena", "pride", "brapi", "metabolights", "dcat"):
             assert f"{SRAM_GROUP_PREFIX}tudelft:metaseed:{plugin}" in names
 
-    def test_beta_testers_cuts_across_the_plugins(self, realm: dict) -> None:
+    def test_no_other_group_exists(self, realm: dict) -> None:
+        # A group that grants nothing (beta-testers did, until 261011) only
+        # suggests a privilege the hub does not have.
         names = {g["name"] for g in realm["groups"]}
-        assert f"{SRAM_GROUP_PREFIX}tudelft:metaseed:beta-testers" in names
+        expected = {
+            f"{SRAM_GROUP_PREFIX}tudelft:metaseed:{name}"
+            for name in ("seek", "ena", "pride", "brapi", "metabolights", "dcat", "admin")
+        }
+        assert names == expected
 
     def test_they_share_one_collaboration(self, realm: dict) -> None:
         # So a single collaboration-level grant can cover all of them.
