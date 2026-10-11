@@ -1,9 +1,10 @@
-"""Grouping the drafts list by specification rather than by row.
+"""Grouping the specification lists by specification rather than by row.
 
-A draft is one name at one version, so holding several versions of a profile
-is ordinary rather than a mistake. Listed one card per row, that is several
-cards carrying the same title with only a version number to tell them apart.
-This turns the rows into one group per specification, newest version first.
+A draft is one name at one version, and a published specification is one
+release of a name, so holding several versions of a profile is ordinary rather
+than a mistake. Listed one card per row, that is several cards carrying the
+same title with only a version number to tell them apart. This turns the rows
+into one group per specification, newest version first.
 """
 
 from __future__ import annotations
@@ -14,43 +15,85 @@ from typing import TYPE_CHECKING, Any
 from metaseed.specs.versioning import version_sort_key
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Sequence
 
 
 @dataclass(frozen=True)
-class DraftGroup:
-    """Every draft of one specification, newest version first.
+class SpecificationGroup:
+    """Every version of one specification, newest first.
 
     Attributes:
         name: The specification's name, which is what makes the group.
-        label: What to show as the group's title, from the newest draft.
-        drafts: The drafts, newest version first.
+        label: What to show as the group's title, from the newest version.
+        versions: The rows, newest version first.
+        one_audience: Whether every published version went to the same
+            audience, so the card may name it once. False for drafts, which
+            have none, and when the versions' audiences differ.
+        audience_urn: That audience when ``one_audience``; None is everyone.
     """
 
     name: str
     label: str
-    drafts: Sequence[Any]
+    versions: Sequence[Any]
+    one_audience: bool = False
+    audience_urn: str | None = None
 
 
-def group_by_specification(drafts: Iterable[Any]) -> list[DraftGroup]:
-    """The drafts as one group per specification name, groups sorted by label.
+def group_by_specification(
+    rows: Iterable[Any], *, key: Callable[[Any], Hashable] | None = None
+) -> list[SpecificationGroup]:
+    """The rows as one group per specification, groups sorted by label.
 
     Args:
-        drafts: Draft rows, in any order.
+        rows: Draft or published specification rows, in any order.
+        key: What makes two rows the same specification; the name by default.
 
     Returns:
-        One :class:`DraftGroup` per distinct name. Within a group the drafts
-        are newest version first; the label comes from that newest draft, so a
-        display name added in the latest version is the one shown.
+        One :class:`SpecificationGroup` per distinct key. Within a group the
+        rows are newest version first; the label comes from that newest row,
+        so a display name added in the latest version is the one shown.
     """
     from metaseed_hub.ui.spec_builder_helpers import spec_label
 
-    by_name: dict[str, list[Any]] = {}
-    for draft in drafts:
-        by_name.setdefault(draft.name, []).append(draft)
+    same = key or (lambda row: row.name)
+    by_key: dict[Hashable, list[Any]] = {}
+    for row in rows:
+        by_key.setdefault(same(row), []).append(row)
 
     groups = []
-    for name, rows in by_name.items():
-        ordered = sorted(rows, key=lambda d: version_sort_key(d.version), reverse=True)
-        groups.append(DraftGroup(name=name, label=spec_label(ordered[0]), drafts=ordered))
+    for same_rows in by_key.values():
+        ordered = sorted(same_rows, key=lambda r: version_sort_key(r.version), reverse=True)
+        groups.append(
+            SpecificationGroup(name=ordered[0].name, label=spec_label(ordered[0]), versions=ordered)
+        )
     return sorted(groups, key=lambda g: g.label.lower())
+
+
+def group_published(specs: Iterable[Any]) -> list[SpecificationGroup]:
+    """Published specifications grouped within the account each lives in.
+
+    Two accounts may each release a specification of the same name; those are
+    two cards. The group carries the one audience all its versions were
+    published to, so the card can say it once; versions released to different
+    audiences leave it unset and each row says its own.
+
+    Args:
+        specs: Published ``Spec`` rows, in any order.
+
+    Returns:
+        One group per account and name, as :func:`group_by_specification`.
+    """
+    groups = group_by_specification(specs, key=lambda spec: (spec.tenant_id, spec.name))
+    published = []
+    for group in groups:
+        audiences = {spec.audience_urn for spec in group.versions}
+        published.append(
+            SpecificationGroup(
+                name=group.name,
+                label=group.label,
+                versions=group.versions,
+                one_audience=len(audiences) == 1,
+                audience_urn=audiences.pop() if len(audiences) == 1 else None,
+            )
+        )
+    return published

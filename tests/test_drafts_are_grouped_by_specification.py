@@ -73,7 +73,7 @@ async def test_one_group_per_specification_newest_version_first(
     assert [g.name for g in groups] == ["cropxr-phenotyping", "cropxr-sequencing"]
     sequencing = groups[1]
     # 1.10 is a later minor than 1.3, which a string sort gets wrong.
-    assert [d.version for d in sequencing.drafts] == ["1.10", "1.3", "1.2"]
+    assert [d.version for d in sequencing.versions] == ["1.10", "1.3", "1.2"]
     assert sequencing.label == "Cropxr Sequencing"
 
 
@@ -86,7 +86,7 @@ async def test_a_version_that_is_not_two_numbers_still_lists(
 
     groups = group_by_specification(drafts)
 
-    assert [d.version for d in groups[0].drafts] == ["1.0", "draft-two"]
+    assert [d.version for d in groups[0].versions] == ["1.0", "draft-two"]
 
 
 def test_a_version_row_carries_none_of_the_cards_own_dividers() -> None:

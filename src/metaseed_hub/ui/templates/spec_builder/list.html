@@ -32,12 +32,12 @@
             <div class="spec-card draft" data-testid="draft-group-{{ group.name }}">
                 <div class="spec-card-header">
                     <span class="spec-badge draft">Draft</span>
-                    {% if group.drafts|length > 1 %}
-                    <span class="spec-count">{{ group.drafts|length }} versions</span>
+                    {% if group.versions|length > 1 %}
+                    <span class="spec-count">{{ group.versions|length }} versions</span>
                     {% endif %}
                 </div>
                 <h3 class="spec-name">{{ group.label }}</h3>
-                {% for draft in group.drafts %}
+                {% for draft in group.versions %}
                 <div class="spec-version-row" data-testid="draft-version-{{ group.name }}-{{ draft.version }}">
                     <div class="spec-version-facts">
                         <span class="spec-version">v{{ draft.version }}</span>
@@ -73,45 +73,66 @@
     <!-- Published Specs Section -->
     <section class="spec-section">
         <h2>Published Specifications</h2>
-        {% if specs %}
+        {% if published_groups %}
         <div class="spec-grid">
-            {% for spec in specs %}
-            <div class="spec-card published">
+            {# One card per specification, within the account it lives in; its
+               versions are rows inside it, as under My Drafts. #}
+            {% for group in published_groups %}
+            {% set newest = group.versions[0] %}
+            <div class="spec-card published" data-testid="published-group-{{ group.name }}">
                 <div class="spec-card-header">
                     <span class="spec-badge published">Published</span>
-                    {# Who can see it: everyone, or one collaboration. #}
-                    <span class="audience-badge" data-testid="audience-{{ spec.name }}"
-                          title="Who can see this specification">{{ spec.audience_urn|audience_label }}</span>
+                    <span class="spec-card-header-facts">
+                        {% if group.versions|length > 1 %}
+                        <span class="spec-count">{{ group.versions|length }} versions</span>
+                        {% endif %}
+                        {# Who can see it, when every version went to the same
+                           audience; otherwise each row says its own. #}
+                        {% if group.one_audience %}
+                        <span class="audience-badge" data-testid="audience-{{ group.name }}"
+                              title="Who can see this specification">{{ group.audience_urn|audience_label }}</span>
+                        {% endif %}
+                    </span>
                 </div>
-                <h3 class="spec-name">{{ spec|spec_label }}</h3>
-                <p class="spec-version">v{{ spec.version }}</p>
-                {% if spec.description %}
-                <p class="spec-description">{{ spec.description[:100] }}{% if spec.description|length > 100 %}...{% endif %}</p>
+                <h3 class="spec-name">{{ group.label }}</h3>
+                {% if newest.description %}
+                <p class="spec-description">{{ newest.description[:100] }}{% if newest.description|length > 100 %}...{% endif %}</p>
                 {% endif %}
                 <div class="spec-meta">
                     <span class="spec-author">
                         by
-                        {% if spec.created_by %}
-                        <a href="mailto:{{ spec.created_by.email }}?subject=Specification%20{{ spec.name|urlencode }}%20v{{ spec.version|urlencode }}"
-                           title="Contact the author about this specification">{{ spec.created_by.display_name }}</a>
+                        {% if newest.created_by %}
+                        <a href="mailto:{{ newest.created_by.email }}?subject=Specification%20{{ newest.name|urlencode }}%20v{{ newest.version|urlencode }}"
+                           title="Contact the author about this specification">{{ newest.created_by.display_name }}</a>
                         {% else %}Unknown{% endif %}
-                        {% set owner = owners.get(spec.tenant_id) if owners else None %}
-                        {% if owner and spec.created_by and owner.id != spec.created_by.id %}
+                        {% set owner = owners.get(newest.tenant_id) if owners else None %}
+                        {% if owner and newest.created_by and owner.id != newest.created_by.id %}
                         <span title="A specification published from a shared draft lives in the account it was shared from">
                             (in {{ owner.display_name }}'s account)
                         </span>
                         {% endif %}
                     </span>
-                    <span title="{{ spec.created_at }}">
-                        {{ spec.created_at.strftime('%Y-%m-%d') }}
-                    </span>
                 </div>
-                <div class="spec-actions">
-                    <a href="/hub/spec-builder/spec/{{ spec.id }}" class="btn btn-sm btn-primary">View</a>
-                    <form action="/hub/spec-builder/spec/{{ spec.id }}/edit" method="POST" class="inline-form">
-                        <button type="submit" class="btn btn-sm btn-ghost" title="Create a new draft from this spec">Fork</button>
-                    </form>
+                {% for spec in group.versions %}
+                <div class="spec-version-row" data-testid="published-version-{{ group.name }}-{{ spec.version }}">
+                    <div class="spec-version-facts">
+                        <span class="spec-version">v{{ spec.version }}</span>
+                        <span class="spec-meta" title="{{ spec.created_at }}">
+                            {{ spec.created_at.strftime('%Y-%m-%d') }}
+                        </span>
+                        {% if not group.one_audience %}
+                        <span class="audience-badge" data-testid="audience-{{ group.name }}-{{ spec.version }}"
+                              title="Who can see this version">{{ spec.audience_urn|audience_label }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="spec-actions">
+                        <a href="/hub/spec-builder/spec/{{ spec.id }}" class="btn btn-sm btn-primary">View</a>
+                        <form action="/hub/spec-builder/spec/{{ spec.id }}/edit" method="POST" class="inline-form">
+                            <button type="submit" class="btn btn-sm btn-ghost" title="Create a new draft from this version">Fork</button>
+                        </form>
+                    </div>
                 </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>

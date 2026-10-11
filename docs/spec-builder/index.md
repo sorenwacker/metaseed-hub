@@ -9,7 +9,7 @@ A specification exists in two states:
 
 A draft is identified by its name and version within your account, so you can hold several versions of one specification as drafts at once, for instance the version in use and the next one. Creating or importing a second draft at a name and version you already hold is refused; a draft whose name arrives from a template or an import gets a suffix instead.
 
-**My Drafts** groups the versions of one specification together, newest first, under a single card. A profile with three versions in progress is one entry in the list rather than three cards carrying the same title, which is what made a list of a few specifications unreadable.
+Both lists group the versions of one specification together, newest first, under a single card. A profile with three versions in progress, or four releases behind it, is one entry in the list rather than several cards carrying the same title, which is what made a list of a few specifications unreadable. The card carries the name, the description and the author of the newest version; each version is a row with its number, its date and its own buttons. Under **Published Specifications** the audience is on the card when every version was published to the same one, and on the row otherwise. Published specifications are grouped within the account they live in, so two accounts that each release a specification of the same name are two cards.
 
 ## Creating a specification
 
