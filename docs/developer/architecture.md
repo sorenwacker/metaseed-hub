@@ -144,4 +144,4 @@ The same rule holds inside the hub: a rule written twice drifts. A draft or spec
 
 ## Page width
 
-A page's outermost container carries no `max-width`: pages use the full width of the window, and only a block of legal prose keeps a reading column. `tests/test_pages_use_the_full_width.py` fails when a page container caps its width.
+A page's outermost container carries no `max-width` and no padding of its own: pages use the full width of the window inside the one gutter `.hub-main` gives every page, and only a block of legal prose keeps a reading column. Every page opens with the same header, `.page-header`: the title with its one-line description under it on the left, and the page's actions on the right. `tests/test_pages_use_the_full_width.py` fails when a page container caps its width or adds a gutter, and when the header's description is laid out beside the title instead of under it.

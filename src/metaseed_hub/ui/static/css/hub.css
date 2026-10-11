@@ -489,9 +489,19 @@ body {
 /* Cards */
 .page-header {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-lg);
+}
+
+/* The one-line description goes under the title, the actions stay on the
+   right: as a plain flex child it sat beside the title on one line. */
+.page-header > p {
+    order: 3;
+    flex-basis: 100%;
+    margin: var(--space-xs) 0 0;
+    color: var(--clr-ink-light);
 }
 
 .page-header h1 {
@@ -2869,10 +2879,6 @@ a.spec-editor-close:hover {
 }
 
 /* Welcome panels */
-.editor-welcome {
-    padding: var(--space-xl);
-}
-
 .editor-welcome h2 {
     margin-bottom: var(--space-lg);
     color: var(--clr-ink);
@@ -3042,10 +3048,6 @@ a.spec-editor-close:hover {
 }
 
 /* New Spec Page */
-.new-spec-page {
-    padding: var(--space-xl);
-}
-
 .new-spec-page .page-header {
     margin-bottom: var(--space-xl);
 }
@@ -4239,10 +4241,6 @@ a.spec-editor-close:hover {
 /* =============================================================================
    Spec Builder - List Page
    ============================================================================= */
-
-.spec-list-page {
-    padding: var(--space-xl);
-}
 
 .spec-section {
     margin-bottom: var(--space-xl);
@@ -6012,10 +6010,6 @@ a.start-option-card:hover {
    New Dataset Page Styles
    ========================================================================== */
 
-.new-dataset-page {
-    padding: var(--space-lg);
-}
-
 .new-dataset-page .page-header {
     margin-bottom: var(--space-xl);
 }
@@ -6836,9 +6830,7 @@ a.start-option-card:hover {
 
 /* Admin Dashboard */
 .admin-dashboard {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: var(--space-xl);
+    width: 100%;
 }
 
 .admin-header {
@@ -7433,7 +7425,6 @@ a.start-option-card:hover {
 
 .setup-steps p {
     margin: 0 0 var(--space-md);
-    max-width: 46rem;
     line-height: 1.65;
     color: var(--clr-ink-light);
 }
@@ -7770,8 +7761,6 @@ html, body {
 .seek-sidebar .seek-downloadable { margin: var(--space-xs) 0 0; }
 .seek-sidebar .seek-status { display: block; padding: 0; margin: 0; border: none; background: none; font-size: 0.75rem; }
 .seek-page { width: 100%; }
-.seek-page-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
-.seek-page-header .form-help { margin: 0; font-size: 0.875rem; }
 .seek-step {
     background: white;
     border: 1px solid var(--clr-border, #ddd);
