@@ -21,8 +21,8 @@ The filters live in the page address, so a filtered table can be bookmarked or s
 
 1. Click **+ New Dataset**.
 2. On the **Standards** tab, select a **profile** and version. The newest version of each profile carries a *latest* badge. The supported profiles are listed in the [profiles reference](../reference/profiles.md).
-3. Optionally enable example data to populate the dataset with a worked example.
-4. Click **Create**.
+3. Click **Create**, or **With Example** to start from the profile's worked example.
+4. Name the dataset in the dialog that opens and confirm. The name is asked after the standard and version, as the local metaseed app asks it; a file import suggests the file's name, an example the profile's, and a repository import takes the name from the record and asks nothing.
 
 A dataset name is unique within your account, and a deleted dataset keeps its name. A name you already use, or one held by a dataset you deleted, is refused and nothing is created; the form stays open and says why, so you can choose another name. The same applies when you import a file or a repository record. When creating a dataset fails for another reason, such as an accession that resolves to nothing, the form says that instead.
 

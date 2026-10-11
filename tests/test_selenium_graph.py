@@ -31,13 +31,19 @@ def _dataset_with_example_data(browser) -> str:
     _login(browser)
 
     browser.get(f"{BASE}/hub/datasets/new")
-    WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.ID, "dataset-name")))
-    browser.find_element(By.ID, "dataset-name").send_keys(record_name("graph"))
     card = WebDriverWait(browser, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.standard-card[data-profile="pride"]'))
     )
     example = next(b for b in card.find_elements(By.TAG_NAME, "button") if "Example" in b.text)
     browser.execute_script("arguments[0].click();", example)
+    # The name is asked once the standard is chosen; unique, since the
+    # account enforces unique dataset names.
+    field = WebDriverWait(browser, 20).until(
+        EC.visibility_of_element_located((By.ID, "dataset-name"))
+    )
+    field.clear()
+    field.send_keys(record_name("graph"))
+    browser.find_element(By.CSS_SELECTOR, '[data-testid="name-dialog-create"]').click()
 
     WebDriverWait(browser, 45).until(
         lambda d: "/hub/datasets/" in d.current_url and "/new" not in d.current_url

@@ -6129,11 +6129,6 @@ a.start-option-card:hover {
     box-shadow: var(--shadow-sm);
 }
 
-.standard-card.disabled {
-    opacity: 0.5;
-    pointer-events: none;
-    filter: grayscale(0.3);
-}
 
 .standard-header {
     display: flex;

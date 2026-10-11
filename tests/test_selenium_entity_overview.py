@@ -11,6 +11,7 @@ import pytest
 
 pytest.importorskip("selenium")
 from selenium.webdriver.common.by import By  # noqa: E402
+from selenium.webdriver.support import expected_conditions as EC  # noqa: E402, N812
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
 from tests.test_selenium_export import BASE, driver  # noqa: E402, F401
@@ -96,8 +97,7 @@ def test_a_long_list_shows_a_batch_and_then_more(driver, tmp_path) -> None:  # n
     samples = OVERVIEW_BATCH + 20
     _login(driver)
     driver.get(f"{BASE}/hub/datasets/new")
-    WebDriverWait(driver, 20).until(lambda d: d.find_element(By.ID, "dataset-name").is_displayed())
-    driver.find_element(By.ID, "dataset-name").send_keys(record_name("overview"))
+    WebDriverWait(driver, 20).until(lambda d: d.find_element(By.ID, "import-zone") is not None)
     driver.find_element(By.CSS_SELECTOR, '.source-tab[data-tab="import"]').click()
     WebDriverWait(driver, 10).until(
         lambda d: d.find_element(By.ID, "import-profile").is_displayed()
@@ -105,6 +105,13 @@ def test_a_long_list_shows_a_batch_and_then_more(driver, tmp_path) -> None:  # n
     Select(driver.find_element(By.ID, "import-profile")).select_by_value("ena")
     Select(driver.find_element(By.ID, "import-version")).select_by_value("1.0")
     driver.find_element(By.ID, "import-file").send_keys(str(_study_file(tmp_path, samples)))
+    # The name is asked once the file is chosen, with the file's name suggested.
+    field = WebDriverWait(driver, 20).until(
+        EC.visibility_of_element_located((By.ID, "dataset-name"))
+    )
+    field.clear()
+    field.send_keys(record_name("overview"))
+    driver.find_element(By.CSS_SELECTOR, '[data-testid="name-dialog-create"]').click()
     WebDriverWait(driver, 45).until(
         lambda d: "/hub/datasets/" in d.current_url and "/new" not in d.current_url
     )
