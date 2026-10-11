@@ -46,6 +46,29 @@ async def test_a_spec_builder_page_carries_the_configured_base_url(
     assert response.body.decode() == "/hub|True"
 
 
+@pytest.mark.asyncio
+async def test_a_spec_builder_page_knows_the_granted_features(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The header shows SEEK only to those whose groups grant it, so every
+    render path has to carry the feature set. From 0.67.0 to 0.68.0 only
+    ``render_template`` did, and every Builder page lost the SEEK entry."""
+    (tmp_path / "probe.html").write_text("{{ 'seek' in features }}")
+    monkeypatch.setattr(
+        "metaseed_hub.ui.spec_builder.routes._common.get_current_user_from_cookie",
+        Mock(return_value=None),
+        raising=False,
+    )
+    request = _request()
+    request.state.features = frozenset({"seek"})
+
+    response = await render_with_context(
+        Jinja2Templates(directory=str(tmp_path)), request, "probe.html", {"user": None}
+    )
+
+    assert response.body.decode() == "True"
+
+
 def test_only_render_builds_the_standard_context() -> None:
     markers = ('context["version_info"] =', 'context["csrf_token"] =', 'context["base_url"] =')
     offenders = [

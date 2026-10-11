@@ -175,6 +175,9 @@ def standard_context(request: Request, context: dict[str, Any]) -> str:
     context["matomo_site_id"] = settings.matomo_site_id
     context["base_url"] = MOUNT_PREFIX
     context["app_url"] = settings.app_url
+    # What the person may use, as the request remembered it: the header
+    # shows SEEK, a page its buttons, only to those whose groups grant them.
+    context.setdefault("features", granted(request))
     return csrf_token
 
 
@@ -202,9 +205,6 @@ def render_template(
     """
     templates = get_templates()
     csrf_token = standard_context(request, context)
-    # What the person may use, as the request remembered it: the header
-    # shows SEEK, a page its buttons, only to those whose groups grant them.
-    context.setdefault("features", granted(request))
 
     response = templates.TemplateResponse(
         request=request,
