@@ -70,7 +70,7 @@ What a person is not granted they do not see: the repository's button on the **F
 
 ## Collaboration membership
 
-The hub records each user's SRAM group membership at sign-in and trusts that record for `MEMBERSHIP_MAX_AGE_DAYS` (30 by default). A record older than that grants no access through a [collaboration grant](collaboration.md#collaborations) and lists nobody on **People** until the person signs in again. Lower it where membership changes often; raise it where people sign in rarely and rely on access tokens.
+The hub records each user's SRAM group membership at sign-in and trusts that record for `MEMBERSHIP_MAX_AGE_DAYS` (30 by default). A record older than that grants no access through a [collaboration grant](collaboration.md#collaborations) and lists nobody on **Collaborations** until the person signs in again. Lower it where membership changes often; raise it where people sign in rarely and rely on access tokens.
 
 ## SRAM application tokens
 

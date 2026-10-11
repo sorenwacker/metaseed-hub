@@ -43,7 +43,7 @@ class TestTheRule:
         assert (
             features_in([PREFIX + "tudelft:metaseed", PREFIX + "tudelft:metaseed:admin"]) == set()
         )
-        assert features_in([PREFIX + "tudelft:metaseed:beta-testers"]) == set()
+        assert features_in([PREFIX + "tudelft:metaseed:reviewers"]) == set()
 
     def test_an_action_belongs_to_its_adapter_s_feature(self) -> None:
         assert feature_of_action("ena-import") == "ena"
