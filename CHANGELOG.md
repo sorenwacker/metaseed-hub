@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.69.0] - 261011
+
+### Fixed
+- **SEEK stayed in the header on the Builder pages.** The Builder and the Explorer render through helpers of their own, which did not carry the integrations a person's groups grant, so the SEEK entry vanished there from 0.67.0 to 0.68.0. The shared page context carries it now, for every render path.
+- **The profile page called the Collaborations page People**, a release after the rename. A guessed `/hub/datasets` answered Method Not Allowed; it leads to the list.
+- **Two drafts with one display name are told apart.** Two drafts cloned from one template carried the same title and nothing else; such a card now names the specification in brackets.
+- **"not shared with the others" is a sentence**, no longer set in Title Case by the role badge's style.
+
+### Changed
+- **New Dataset asks the name after the standard and version**, in a dialog, as the local metaseed app asks it since 0.59.0: a file import suggests the file's name, an example the profile's, and a repository import takes the name from the record. The grid of standards is no longer greyed until a name is typed.
+- **One page header and one gutter.** Every page opens with its title, the one-line description under it and the page's actions on the right; four pages had the description beside the title. Every page shares the gutter the main area gives it; the specification list, New Dataset, New Specification and the Builder's start page padded theirs again, and the Admin dashboard sat in a centred column of its own. The setup guide's steps use the width.
+- **Builder breadcrumbs start at Builder**, since the logo is the way home; the published view had a bare separator and no Builder crumb. Its owner line is set at the author line's size. The "?" help markers stay inside the Builder instead of marking the header's chip and the footer's version string, with metaseed 0.61.0.
+- **Delete stands alone at the foot of the dataset sidebar**, apart from the routine actions it sat among.
+- **The Explorer opens on the first profile**, so a first visit has a diagram to read instead of an empty canvas.
+
 ## [0.68.0] - 261011
 
 ### Changed

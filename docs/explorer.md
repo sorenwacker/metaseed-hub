@@ -4,6 +4,8 @@ The Explorer lets you browse the structure of a metadata profile and compare two
 
 ## Browsing a profile
 
+The Explorer opens on the first profile in the list, so there is a diagram to read before anything is chosen. To look at another:
+
 1. Select a profile under **Base Profile (Reference)**.
 2. Click **Explore**.
 

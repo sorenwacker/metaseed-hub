@@ -4242,6 +4242,8 @@ a.spec-editor-close:hover {
    Spec Builder - List Page
    ============================================================================= */
 
+.spec-list-page { width: 100%; }
+
 .spec-section {
     margin-bottom: var(--space-xl);
 }

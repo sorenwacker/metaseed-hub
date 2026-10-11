@@ -386,6 +386,18 @@ function showEntity() {
     closeContextMenu();
 }
 
+// Open on the first profile: an empty canvas with a one-line hint gave a
+// first visit nothing to read.
+function exploreFirstProfile() {
+    const base = document.getElementById('base-profile');
+    if (base.value || base.options.length < 2) return;
+    base.selectedIndex = 1;
+    updateVersions('base');
+    runComparison();
+}
+
+document.addEventListener('DOMContentLoaded', exploreFirstProfile);
+
 function showNotification(message, type = 'info') {
     const container = document.getElementById('notification-container');
     const el = document.createElement('div');
