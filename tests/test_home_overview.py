@@ -112,3 +112,30 @@ def test_explorer_comes_before_builder() -> None:
     for page in ("overview_home.html", "partials/overview.html"):
         text = _read(page)
         assert text.index("Open Explorer") < text.index("Open Builder"), page
+
+
+def test_builder_breadcrumbs_start_at_builder_and_name_the_owner_line_small() -> None:
+    """The logo is the home button, so no breadcrumb starts with Home; the
+    published view had no Builder crumb at all, only a bare separator, and
+    its owner line was set in body size under a small author line."""
+    for page in (
+        "spec_builder/base.html",
+        "spec_builder/new.html",
+        "spec_builder/view.html",
+    ):
+        text = _read(page)
+        start = text.index("{% block nav %}") + len("{% block nav %}")
+        nav = text[start : text.index("{% endblock %}", start)]
+        assert ">Home</a>" not in nav, page
+        assert nav.lstrip().startswith(
+            '<a href="/hub/spec-builder" class="nav-item">Builder</a>'
+        ), page
+    view = _read("spec_builder/view.html")
+    assert '<div class="spec-author">\n                In the account of' in view
+
+
+def test_the_builder_confines_the_help_markers_to_itself() -> None:
+    """The library's script marks every ``title`` under the element carrying
+    ``data-help-root``; without one it marks the whole page, which put a "?"
+    on the header's development chip and the footer's version string."""
+    assert 'class="spec-builder-layout" data-help-root' in _read("spec_builder/base.html")
