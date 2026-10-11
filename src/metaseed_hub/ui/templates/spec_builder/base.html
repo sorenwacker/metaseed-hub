@@ -7,8 +7,6 @@
 {% endblock %}
 
 {% block nav %}
-<a href="/hub/" class="nav-item">Home</a>
-<span class="nav-sep">/</span>
 <a href="/hub/spec-builder" class="nav-item">Builder</a>
 {% if spec.name %}
 <span class="nav-sep">/</span>
@@ -21,7 +19,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="spec-builder-layout">
+<div class="spec-builder-layout" data-help-root>
     <!-- Header toolbar -->
     <div class="spec-builder-toolbar">
         <div class="toolbar-left">

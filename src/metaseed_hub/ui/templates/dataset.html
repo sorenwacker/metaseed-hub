@@ -107,13 +107,6 @@
             </div>
             {% endif %}
             <input type="file" id="import-file" accept=".json,.yaml,.yml,.xlsx,.xls" hidden onchange="handleDatasetImport(this)">
-            <div class="sidebar-actions-row">
-                <button class="btn btn-sm btn-danger"
-                        hx-delete="/hub/datasets/{{ dataset.id }}"
-                        hx-confirm="Delete '{{ dataset.name }}'? This cannot be undone."
-                        hx-target="body"
-                        title="Delete this dataset">Delete</button>
-            </div>
         </div>
 
         <!-- Entities and sharing -->
@@ -139,6 +132,16 @@
                      hx-trigger="load" hx-swap="innerHTML">
                 </div>
             </div>
+        </div>
+
+        {# The one destructive action, at the foot and on its own: among the
+           routine actions it sat one slip away from Import. #}
+        <div class="sidebar-section sidebar-danger">
+            <button class="btn btn-sm btn-danger"
+                    hx-delete="/hub/datasets/{{ dataset.id }}"
+                    hx-confirm="Delete '{{ dataset.name }}'? This cannot be undone."
+                    hx-target="body"
+                    title="Delete this dataset">Delete</button>
         </div>
 
     </aside>

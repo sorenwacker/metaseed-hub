@@ -239,3 +239,14 @@ class TestThePage:
         assert (
             await _post(f"/hub/collaborations/{OTHER}/visibility", {"shown": "1"})
         ).status_code == 404
+
+
+def test_the_not_shared_note_is_a_sentence_not_a_title() -> None:
+    """The note reuses the role badge, which capitalises every word, so it
+    read *Not Shared With The Others*."""
+    from pathlib import Path
+
+    css = Path("src/metaseed_hub/ui/static/css/hub.css").read_text()
+    rule = css[css.index(".member-hidden {") :]
+    rule = rule[: rule.index("}")]
+    assert "text-transform: none" in rule

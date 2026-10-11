@@ -7,6 +7,7 @@
 {% endblock %}
 
 {% block nav %}
+<a href="/hub/spec-builder" class="nav-item">Builder</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ spec_record.name }}</span>
 {% endblock %}
@@ -34,7 +35,7 @@
                 {% endif %}
             </div>
             {% if owner %}
-            <div>
+            <div class="spec-author">
                 In the account of
                 <a href="mailto:{{ owner.email }}?subject=Specification%20{{ spec_record.name|urlencode }}%20v{{ spec_record.version|urlencode }}">{{ owner.display_name }}</a>
                 {% if spec_record.created_by and owner.id != spec_record.created_by.id %}

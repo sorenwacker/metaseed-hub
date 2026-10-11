@@ -23,13 +23,6 @@
         <input type="hidden" id="tenant-id" value="{{ tenant_id }}">
 
         <div class="form-section">
-            <label for="dataset-name" class="form-label">Name</label>
-            <input type="text" id="dataset-name" name="name" required
-                   class="form-input form-input-lg"
-                   placeholder="Enter dataset name" autofocus>
-        </div>
-
-        <div class="form-section">
             <label class="form-label">Source</label>
             <div class="source-tabs">
                 <button type="button" class="source-tab active" data-tab="standards">Standards</button>
@@ -130,7 +123,7 @@
             <div class="source-panel" id="panel-repository">
                 <p class="form-hint">
                     Each identifier becomes one dataset, named by the title the record
-                    carries at the repository; the name above is not used. Metadata only:
+                    carries at the repository, so no name is asked. Metadata only:
                     data files are referenced by name, never downloaded.
                 </p>
                 <form class="import-form" data-testid="import-form"
@@ -179,7 +172,7 @@
                         </p>
                         <div class="standard-actions">
                             <button type="button" class="btn btn-primary"
-                                    onclick="createDatasetFromSpec('{{ spec.id }}', '{{ spec.version }}', 'spec')">
+                                    onclick="createDatasetFromSpec('{{ spec.id }}', '{{ spec.version }}', 'spec', '{{ spec.name }}')">
                                 Use Spec
                             </button>
                         </div>
@@ -189,6 +182,32 @@
             </div>
             {% endif %}
         </div>
+    </div>
+</div>
+
+{# The name is asked once the standard and version are chosen, as the local
+   metaseed app asks it: a name typed before the choice sat above a greyed
+   grid, and the two apps asked in opposite orders. #}
+<div class="modal-overlay hidden" id="name-dialog" data-testid="name-dialog">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>Name the dataset</h3>
+            <button type="button" class="btn-close" onclick="closeNameDialog()" aria-label="Cancel">&times;</button>
+        </div>
+        <form id="name-dialog-form">
+            <div class="modal-body">
+                <p class="form-help" id="name-dialog-choice" data-testid="dataset-name-choice"></p>
+                <div class="form-group">
+                    <label class="form-label" for="dataset-name">Name</label>
+                    <input type="text" id="dataset-name" name="name" class="form-input"
+                           placeholder="Dataset name" autocomplete="off" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeNameDialog()">Cancel</button>
+                <button type="submit" class="btn btn-primary" data-testid="name-dialog-create">Create</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -231,170 +250,117 @@ function updateImportVersions() {
     });
 }
 
-async function handleImport(input) {
-    const file = input.files[0];
-    if (!file) return;
+// The name is asked once a way to start is chosen. `create` receives the
+// name typed in the dialog.
+let pendingCreate = null;
 
-    const name = document.getElementById('dataset-name').value || file.name.replace(/\.(json|yaml|yml|xlsx|xls)$/i, '');
-    document.getElementById('dataset-name').value = name;
-
-    const csrfToken = document.getElementById('csrf-token')?.value || '';
-    const tenantId = document.getElementById('tenant-id')?.value || '';
-    const profile = document.getElementById('import-profile')?.value || 'miappe';
-    const version = document.getElementById('import-version')?.value || '1.1';
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('name', name);
-    formData.append('profile', profile);
-    formData.append('version', version);
-    formData.append('_csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/hub/datasets/import', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected || response.ok) {
-            window.location.href = response.url || '/hub/';
-        } else {
-            const text = await response.text();
-            alert('Import error: ' + text.substring(0, 200));
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-    }
+function askName(choice, suggestion, create) {
+    pendingCreate = create;
+    document.getElementById('name-dialog-choice').textContent = choice;
+    const field = document.getElementById('dataset-name');
+    field.value = suggestion;
+    field.classList.remove('error');
+    document.getElementById('name-dialog').classList.remove('hidden');
+    field.focus();
+    field.select();
 }
 
-async function createDataset(profile, version) {
-    const name = document.getElementById('dataset-name').value;
+function closeNameDialog() {
+    pendingCreate = null;
+    document.getElementById('name-dialog').classList.add('hidden');
+    // A file chosen and then cancelled must be choosable again.
+    document.getElementById('import-file').value = '';
+}
+
+document.getElementById('name-dialog-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const field = document.getElementById('dataset-name');
+    const name = field.value.trim();
     if (!name) {
-        document.getElementById('dataset-name').focus();
-        document.getElementById('dataset-name').classList.add('error');
+        field.classList.add('error');
+        field.focus();
         return;
     }
-
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-
-    const csrfToken = document.getElementById('csrf-token')?.value || '';
-
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('profile', profile);
-    formData.append('version', version);
-    formData.append('_csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/hub/datasets', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected) {
-            window.location.href = response.url;
-        } else if (response.ok) {
-            window.location.href = response.url || '/hub/';
-        } else {
-            const text = await response.text();
-            alert('Error: ' + text.substring(0, 200));
-            btn.disabled = false;
-            btn.textContent = 'Create';
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-        btn.disabled = false;
-        btn.textContent = 'Create';
-    }
-}
-
-async function createDatasetWithExample(profile, version) {
-    const btn = event.target;
-    btn.disabled = true;
-    btn.textContent = 'Loading...';
-
-    const name = document.getElementById('dataset-name').value || `${profile} Example`;
-
-    const csrfToken = document.getElementById('csrf-token')?.value || '';
-
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('profile', profile);
-    formData.append('version', version);
-    formData.append('_csrf_token', csrfToken);
-    formData.append('load_example', 'true');
-
-    try {
-        const response = await fetch('/hub/datasets', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected) {
-            window.location.href = response.url;
-        } else if (response.ok) {
-            window.location.href = response.url || '/hub/';
-        } else {
-            const text = await response.text();
-            alert('Error: ' + text.substring(0, 200));
-            btn.disabled = false;
-            btn.textContent = 'With Example';
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-        btn.disabled = false;
-        btn.textContent = 'With Example';
-    }
-}
-
-async function createDatasetFromSpec(specId, version, kind) {
-    kind = kind || 'spec';
-    const name = document.getElementById('dataset-name').value;
-    if (!name) {
-        document.getElementById('dataset-name').focus();
-        document.getElementById('dataset-name').classList.add('error');
-        return;
-    }
-
-    const csrfToken = document.getElementById('csrf-token')?.value || '';
-
-    const formData = new FormData();
-    formData.append('name', name);
-    formData.append('profile', kind + ':' + specId);
-    formData.append('version', version);
-    formData.append('_csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/hub/datasets', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (response.redirected || response.ok) {
-            window.location.href = response.url || '/hub/';
-        } else {
-            const text = await response.text();
-            alert('Error: ' + text.substring(0, 200));
-        }
-    } catch (error) {
-        alert('Network error: ' + error.message);
-    }
-}
-
-// Remove error state on input and toggle card disabled state
-const nameInput = document.getElementById('dataset-name');
-nameInput.addEventListener('input', function() {
-    this.classList.remove('error');
-    const hasName = this.value.trim().length > 0;
-    document.querySelectorAll('.standard-card').forEach(card => {
-        card.classList.toggle('disabled', !hasName);
+    const create = pendingCreate;
+    const submit = event.target.querySelector('[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = 'Creating...';
+    create(name).finally(() => {
+        submit.disabled = false;
+        submit.textContent = 'Create';
     });
 });
-// Initial state: disable cards
-document.querySelectorAll('.standard-card').forEach(card => {
-    card.classList.add('disabled');
-});
+
+function csrfToken() {
+    return document.getElementById('csrf-token')?.value || '';
+}
+
+async function postDataset(url, formData) {
+    formData.append('_csrf_token', csrfToken());
+    try {
+        const response = await fetch(url, { method: 'POST', body: formData });
+        if (response.redirected || response.ok) {
+            window.location.href = response.url || '/hub/';
+        } else {
+            const text = await response.text();
+            alert('Error: ' + text.substring(0, 200));
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+}
+
+function profileLabel(profile, version) {
+    const card = document.querySelector(`.standard-card[data-profile="${profile}"] h3`);
+    return `${card ? card.textContent.trim() : profile} v${version}`;
+}
+
+function handleImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const profile = document.getElementById('import-profile')?.value || 'miappe';
+    const version = document.getElementById('import-version')?.value || '1.1';
+    const suggestion = file.name.replace(/\.(json|yaml|yml|xlsx|xls)$/i, '');
+    askName(`${file.name} as ${profile} v${version}`, suggestion, name => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('name', name);
+        formData.append('profile', profile);
+        formData.append('version', version);
+        return postDataset('/hub/datasets/import', formData);
+    });
+}
+
+function createDataset(profile, version) {
+    askName(profileLabel(profile, version), '', name => {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('profile', profile);
+        formData.append('version', version);
+        return postDataset('/hub/datasets', formData);
+    });
+}
+
+function createDatasetWithExample(profile, version) {
+    askName(`${profileLabel(profile, version)}, with its example`, `${profile} Example`, name => {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('profile', profile);
+        formData.append('version', version);
+        formData.append('load_example', 'true');
+        return postDataset('/hub/datasets', formData);
+    });
+}
+
+function createDatasetFromSpec(specId, version, kind, label) {
+    kind = kind || 'spec';
+    askName(`${label || specId} v${version}`, '', name => {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('profile', kind + ':' + specId);
+        formData.append('version', version);
+        return postDataset('/hub/datasets', formData);
+    });
+}
 </script>
 {% endblock %}

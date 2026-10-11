@@ -427,6 +427,14 @@ def create_hub_app() -> FastAPI:
 
         return RedirectResponse("/hub/collaborations", status_code=301)
 
+    @app.get("/datasets", response_class=Response, include_in_schema=False)
+    async def datasets_list_is_the_front_page() -> Response:
+        """The list lives at ``/hub/``; the address a person guesses answered
+        Method Not Allowed, because only the create form posts here."""
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse("/hub/", status_code=301)
+
     @app.get("/home", response_class=Response)
     async def overview_home(request: Request, user: OptionalUser) -> Response:
         """What the hub is for.

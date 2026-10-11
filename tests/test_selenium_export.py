@@ -88,15 +88,20 @@ def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
     # Create a PRIDE dataset with the example loaded (so the export has content)
     # by driving the profile-picker UI the way a user does.
     driver.get(f"{BASE}/hub/datasets/new")
-    WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "dataset-name")))
-    # Unique: the tenant enforces unique dataset names.
-    driver.find_element(By.ID, "dataset-name").send_keys(record_name("export"))
     card = WebDriverWait(driver, 20).until(
         EC.presence_of_element_located((By.CSS_SELECTOR, '.standard-card[data-profile="pride"]'))
     )
     # "Create with Example" -> createDatasetWithExample('pride', version)
     example_btn = next(b for b in card.find_elements(By.TAG_NAME, "button") if "Example" in b.text)
     driver.execute_script("arguments[0].click();", example_btn)
+    # The name is asked once the standard is chosen; unique, since the
+    # account enforces unique dataset names.
+    field = WebDriverWait(driver, 20).until(
+        EC.visibility_of_element_located((By.ID, "dataset-name"))
+    )
+    field.clear()
+    field.send_keys(record_name("export"))
+    driver.find_element(By.CSS_SELECTOR, '[data-testid="name-dialog-create"]').click()
 
     # On the dataset page the adapter export buttons must render.
     WebDriverWait(driver, 45).until(

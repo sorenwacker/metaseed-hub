@@ -58,7 +58,7 @@
         <div class="profile-section">
             <h2>Your collaborations</h2>
             {% if collaborations %}
-            <p>Recorded from your identity provider at your last sign-in. <a href="/hub/collaborations">People</a> lists who else is in them.</p>
+            <p>Recorded from your identity provider at your last sign-in. <a href="/hub/collaborations">Collaborations</a> lists who else is in them.</p>
             <ul class="collaboration-list">
                 {% for collaboration in collaborations %}
                 <li data-testid="collaboration-{{ collaboration.organisation }}:{{ collaboration.name }}">
