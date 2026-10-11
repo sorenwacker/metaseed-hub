@@ -66,7 +66,29 @@ def group_by_specification(
         groups.append(
             SpecificationGroup(name=ordered[0].name, label=spec_label(ordered[0]), versions=ordered)
         )
-    return sorted(groups, key=lambda g: g.label.lower())
+    return sorted(_told_apart(groups), key=lambda g: g.label.lower())
+
+
+def _told_apart(groups: list[SpecificationGroup]) -> list[SpecificationGroup]:
+    """Name the specification in a label that another group also carries.
+
+    A display name is copied from the template a draft was cloned from, so two
+    drafts cloned from one template have the same title and nothing else on
+    the card to tell them apart.
+    """
+    shared = {
+        label for label in (g.label for g in groups) if sum(g.label == label for g in groups) > 1
+    }
+    return [
+        SpecificationGroup(
+            name=g.name,
+            label=f"{g.label} ({g.name})" if g.label in shared and g.label != g.name else g.label,
+            versions=g.versions,
+            one_audience=g.one_audience,
+            audience_urn=g.audience_urn,
+        )
+        for g in groups
+    ]
 
 
 def group_published(specs: Iterable[Any]) -> list[SpecificationGroup]:

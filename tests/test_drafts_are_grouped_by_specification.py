@@ -107,3 +107,21 @@ def test_a_card_is_as_tall_as_its_own_versions() -> None:
 
     grid = css[css.index(".spec-grid {") : css.index("}", css.index(".spec-grid {"))]
     assert "align-items: start" in grid
+
+
+async def test_two_specifications_with_one_display_name_are_told_apart(
+    session: AsyncSession,
+) -> None:
+    """A display name is copied from the template a draft was cloned from, so
+    two drafts cloned from one template carry the same title. Two cards both
+    reading *SEEK-ready template (ISA)* told nobody which was which."""
+    drafts = await _drafts(session, [("to-seek", "3.0"), ("seek-ready-template", "3.0")])
+    for draft in drafts:
+        draft.spec_data["spec"]["display_name"] = "SEEK-ready template (ISA)"
+
+    groups = group_by_specification(drafts)
+
+    assert [g.label for g in groups] == [
+        "SEEK-ready template (ISA) (seek-ready-template)",
+        "SEEK-ready template (ISA) (to-seek)",
+    ]

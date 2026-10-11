@@ -8012,7 +8012,8 @@ html, body {
 .consent-prompt-list { list-style: none; padding: 0; margin: 0; }
 .consent-prompt { padding: var(--space-md); border: 1px solid var(--clr-border, #ddd); border-radius: var(--radius-md); margin-bottom: var(--space-sm); }
 .consent-prompt p { margin: 0 0 var(--space-sm); }
-.member-hidden { font-style: italic; }
+/* A sentence, not a role: the role badge capitalises every word. */
+.member-hidden { font-style: italic; text-transform: none; }
 
 /* Notifications fill the page like every other. */
 .notifications-page { width: 100%; }
