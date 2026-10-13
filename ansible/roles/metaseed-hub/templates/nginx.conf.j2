@@ -30,6 +30,10 @@ server {
     error_log /var/log/nginx/metaseed-error.log;
 
     client_max_body_size 50M;
+    # The session is two cookies (SRAM's access JWT and the refresh token) and
+    # SRAM decides their size. They must fit the Cookie header of every request;
+    # the default of 8k is too close (tests/test_deploy_config.py).
+    large_client_header_buffers 4 16k;
 
     location / {
         proxy_pass http://metaseed_backend;
@@ -44,6 +48,12 @@ server {
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
+        # The sign-in callback's 302 carries both session cookies in its
+        # header; with the default one-page buffer it does not fit and nginx
+        # answers 502 (production, 261013). See tests/test_deploy_config.py.
+        proxy_buffer_size 16k;
+        proxy_buffers 4 16k;
+        proxy_busy_buffers_size 32k;
     }
 
     location /hub/hub-static/ {
