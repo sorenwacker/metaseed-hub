@@ -6,6 +6,7 @@ that the template still declares each one -- a template edit that drops a header
 fails here rather than in production.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -100,3 +101,28 @@ def test_no_hub_template_loads_a_cdn_script() -> None:
         if "unpkg.com" in p.read_text() or "cdn.jsdelivr" in p.read_text()
     ]
     assert not offenders, f"templates load an external CDN: {offenders}"
+
+
+_MIN_HEADER_BUFFER_KB = 16
+
+
+def _buffer_kb(conf: str, directive: str) -> int:
+    # The last size on the directive line, in KB; 0 when the directive is absent.
+    match = re.search(rf"^\s*{directive}\s+(?:\d+\s+)?(\d+)k;", conf, re.MULTILINE)
+    return int(match.group(1)) if match else 0
+
+
+def test_nginx_response_header_buffer_fits_the_session_cookies() -> None:
+    # The sign-in callback sets the SRAM access and refresh tokens as cookies;
+    # with nginx's default one-page buffer the 302 does not fit and the browser
+    # sees 502 Bad Gateway (production, 261013).
+    conf = _NGINX_TEMPLATE.read_text()
+    assert _buffer_kb(conf, "proxy_buffer_size") >= _MIN_HEADER_BUFFER_KB
+    assert _buffer_kb(conf, "proxy_busy_buffers_size") >= _MIN_HEADER_BUFFER_KB
+
+
+def test_nginx_request_header_buffer_fits_the_session_cookies() -> None:
+    # Every request after sign-in carries the same cookies back; the request
+    # side needs the same headroom or nginx answers 400 instead.
+    conf = _NGINX_TEMPLATE.read_text()
+    assert _buffer_kb(conf, "large_client_header_buffers") >= _MIN_HEADER_BUFFER_KB
