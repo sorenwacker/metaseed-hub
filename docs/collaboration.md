@@ -36,7 +36,30 @@ Each person has their own account, and sharing reaches across accounts: the pers
 
 - The address is matched without regard to capitalisation. `Ada@Example.org` and `ada@example.org` name the same account. Addresses are stored lowercased; the profile page still shows the address exactly as your identity provider reports it.
 - One account exists per address, so a share never has to choose between candidates.
-- The person must have signed in to the hub at least once. An account is created on first sign-in, and there is nothing to share with before that. If the hub says no account uses an address, ask them to sign in once and try again.
+- If no account uses the address yet, the share becomes an [invitation](#invitations).
+
+### Invitations
+
+An account is created on first sign-in, so a colleague who has never opened the hub has nothing to share with yet. Sharing with their address records an invitation instead: the item, the role you chose, the address, and who invited them. The **Sharing** tab lists it under **Invited**, with the role, and an owner can change the role or withdraw it like any membership.
+
+The hub does not send mail. Tell the person yourself; what the invitation does is make their first sign-in land ready: the moment an account is created for an address, every invitation to that address becomes a membership with the invited role, the invitations are removed, and the person is [notified](#notifications) of each item that is now theirs to open. The address is matched the way a share is, without regard to capitalisation.
+
+An invitation to an address that already has an account is never created: the share is made directly. An invitation is deleted with the item it is on, and an owner who withdraws one leaves nothing behind. Invitations are not pending memberships for the [last-owner rule](#handing-something-over): an invited owner counts only once they have signed in.
+
+### Notifications
+
+The hub tells you about things that happened to your items while you were not looking, in the interface itself: the bell in the header shows how many notifications are unread, and opens the list. Each entry names what happened, who did it, when, and links to the item. Opening the list marks what it shows as read; **Mark all read** clears the count. Entries are kept for 90 days.
+
+You are notified when
+
+- someone shares an item with you, changes your role on it, or removes your access, and when an invitation to you is redeemed at your first sign-in;
+- a collaboration you are in is granted access to an item, or loses it;
+- someone comments on a dataset or draft you own, or on a specification you published, or replies to a comment of yours;
+- someone publishes a specification to a collaboration you are in.
+
+You are not notified of your own actions, and one action produces one entry per person it concerns, however many items it touches. A request made with an access token (metaseed, MCP clients) neither reads nor produces notifications; the list is part of the web interface.
+
+Administrators are additionally notified of [errors on the platform](administration.md#errors).
 
 ## Collaborations
 
@@ -89,7 +112,7 @@ The **Comments** tab provides threaded discussion on a dataset.
 - React to a comment with **Like** or **Dislike**.
 - Delete a comment you authored.
 
-Specification drafts have their own **Comments** tab that works the same way.
+Specification drafts have their own **Comments** tab that works the same way, and so does a published specification: a release can be discussed by everyone who can see it, which is the collaboration it was published to, or every user of the hub. Comments on a release belong to that version: a new version starts with none, and forking a specification into a draft does not carry them over. The people who published it are notified of each comment.
 
 ## Notifications
 
