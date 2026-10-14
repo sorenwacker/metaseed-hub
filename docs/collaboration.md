@@ -44,7 +44,7 @@ The hosted hub authenticates through SURF Research Access Management (SRAM), whe
 
 ### Bringing your own collaboration
 
-Collaborations, their members and their groups are managed by SURF in SRAM ([sram.surf.nl](https://sram.surf.nl/)), not in the hub; joining, leaving and inviting happen there. Any SRAM collaboration can use the hosted hub: an admin of the collaboration connects it to the Metaseed Hub application in SRAM. Its members can then sign in, are listed to each other under **Collaborations**, can share items with the whole collaboration and publish a specification to it alone. A group named after a repository integration (`ena`, `pride`, `brapi`, `metabolights`, `seek` or `dcat`) enables that integration for its members ([Features and SRAM groups](administration.md#features-and-sram-groups)). The **Collaborations** page summarises this in an info box.
+Collaborations, their members and their groups are managed by SURF in SRAM ([sram.surf.nl](https://sram.surf.nl/)), not in the hub; joining, leaving and inviting happen there. Any SRAM collaboration can use the hosted hub: an admin of the collaboration connects it to the Metaseed Hub application in SRAM. Its members can then sign in, are listed to each other under **Collaborations**, can share items with the whole collaboration and publish a specification to it alone. A group named after a repository integration (`ena`, `pride`, `brapi`, `metabolights`, `seek` or `dcat`) enables that integration for its members, also when SRAM reports it with a prefix such as `metaseed-seek` ([Features and SRAM groups](administration.md#features-and-sram-groups)). The **Collaborations** page summarises this in an info box.
 
 ### Your collaborations
 

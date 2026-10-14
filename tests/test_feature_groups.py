@@ -45,6 +45,23 @@ class TestTheRule:
         )
         assert features_in([PREFIX + "tudelft:metaseed:reviewers"]) == set()
 
+    def test_a_prefixed_group_grants_its_feature(self) -> None:
+        # SRAM reports metaseed-seek once a second collaboration is connected
+        # to the application (261013), while the group is named seek.
+        urns = [PREFIX + "tudelft:cropxr:metaseed-seek", PREFIX + "tudelft:metaseed:metaseed-ena"]
+
+        assert features_in(urns) == {"seek", "ena"}
+
+    def test_a_name_merely_containing_a_feature_grants_nothing(self) -> None:
+        urns = [
+            PREFIX + "tudelft:cropxr:seeker",
+            PREFIX + "tudelft:cropxr:seek-old",
+            PREFIX + "tudelft:cropxr:metaseedseek",
+            PREFIX + "tudelft:cropxr:-",
+        ]
+
+        assert features_in(urns) == set()
+
     def test_an_action_belongs_to_its_adapter_s_feature(self) -> None:
         assert feature_of_action("ena-import") == "ena"
         assert feature_of_action("pride") == "pride"
