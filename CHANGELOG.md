@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.70.0] - 261014
+
+### Fixed
+- **Nobody was admin on the hosted hub.** SRAM now reports the admin group as `metaseed-admin`; `ADMIN_ROLE` is `urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin`, and a test holds production to the group the development realm defines.
+- **The repository integrations were off for everyone.** Since a second collaboration was connected to the application, SRAM reports a group named `seek` as `metaseed-seek`. A group whose name is a feature, or ends in a hyphen followed by one, grants it; `seeker` and `seek-old` do not.
+- **The header has an Admin link again**, for administrators only. It was hidden on 260604 until SRAM was configured and never restored, so the dashboard was reachable only by typing its address.
+- **Sign-in ended in 502** when SRAM's session cookies outgrew nginx's default header buffers; the buffers are larger (applied by ansible).
+- **The backups page ran the playbook from the repository root**, where `ansible/ansible.cfg` is not read and `become_user` fails; it runs from `ansible/`, and a test refuses the root form in the docs.
+
+### Added
+- **The Collaborations page says where collaborations come from**: they are managed by SURF in SRAM, any collaboration can be connected to the Metaseed Hub application, and groups named after an integration switch it on.
+
 ## [0.69.0] - 261011
 
 ### Fixed
