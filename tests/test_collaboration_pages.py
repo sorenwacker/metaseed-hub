@@ -312,3 +312,25 @@ async def test_a_granted_draft_card_names_the_collaboration(session: AsyncSessio
 
     assert 'data-testid="granted-by"' in html
     assert "cropxr" in html
+
+
+class TestTheSramInfoBox:
+    """The page says where collaborations come from and how to bring your own."""
+
+    @staticmethod
+    def _box(html: str) -> str:
+        start = html.index('data-testid="collaborations-sram-info"')
+        return html[start : html.index("</aside>", start)]
+
+    async def test_a_member_sees_it(self, session: AsyncSession, app_db) -> None:
+        await _signed_in_people(session)
+        box = self._box(_get("/hub/collaborations"))
+        assert "SURF Research Access Management" in box
+        assert 'href="https://sram.surf.nl/"' in box
+        assert "Metaseed Hub application" in box
+        assert "seek" in box
+
+    async def test_someone_in_no_collaboration_sees_it(self, session: AsyncSession, app_db) -> None:
+        loner = TokenUser(sub="kc-9", email="n@example.org", name="N", roles=[], entitlements=[])
+        box = self._box(_get("/hub/collaborations", token=loner))
+        assert "SURF Research Access Management" in box

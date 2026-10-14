@@ -1733,6 +1733,21 @@ body {
     color: var(--clr-success);
 }
 
+.alert-info {
+    background: var(--clr-surface);
+    border: 1px solid var(--clr-border);
+    border-left: 3px solid var(--clr-primary);
+    color: var(--clr-ink);
+}
+
+.alert-info p {
+    margin: 0 0 var(--space-xs);
+}
+
+.alert-info p:last-child {
+    margin-bottom: 0;
+}
+
 /* Sidebar tabs */
 .sidebar-tabs {
     display: flex;

@@ -9,6 +9,12 @@
         <p>The collaborations you are in, as your identity provider reported them at your last sign-in, and who in each chose to share their name and email.</p>
     </header>
 
+    <aside class="alert alert-info" data-testid="collaborations-sram-info">
+        <p><strong>Collaborations are managed in SRAM, not in the hub.</strong> SURF Research Access Management (<a href="https://sram.surf.nl/" target="_blank" rel="noopener">SRAM</a>) holds every collaboration, its members and its groups. Joining, leaving and inviting people happen there, and the hub reads the result each time you sign in.</p>
+        <p><strong>Your own collaboration can use the hub.</strong> An admin of the collaboration connects it to the Metaseed Hub application in SRAM. Its members can then sign in, see each other here, share datasets and specifications with the whole collaboration, and publish a specification to the collaboration only.</p>
+        <p><strong>Groups switch on the repository integrations.</strong> A member of a group named <code>ena</code>, <code>pride</code>, <code>brapi</code>, <code>metabolights</code>, <code>seek</code> or <code>dcat</code> can use that integration. The collaboration's admins decide who is in each group. <a href="https://sorenwacker.github.io/metaseed-hub/collaboration/#bringing-your-own-collaboration" target="_blank" rel="noopener">How collaborations work</a></p>
+    </aside>
+
     {% if cards %}
     {% for card in cards %}
     {% with collaboration=card.collaboration, members=card.members, decisions=card.decisions, viewer_id=card.viewer_id %}
