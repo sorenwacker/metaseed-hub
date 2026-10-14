@@ -147,3 +147,18 @@ def test_the_deployed_admin_group_is_the_dev_realms_admin_group() -> None:
     realm = json.loads(_REALM.read_text())
     admin = next(u for u in realm["users"] if u["username"] == "admin")
     assert [f"/{deployed}"] == admin["groups"]
+
+
+def test_documented_playbook_runs_start_in_the_ansible_directory() -> None:
+    """ansible.cfg (pipelining, inventory) is read only from the directory ansible runs in.
+
+    Run from the repository root, become_user failed on the host with
+    "chmod: invalid mode: 'A+user:app:rx:allow'" (261014).
+    """
+    docs = Path(__file__).resolve().parent.parent / "docs"
+    offenders = [
+        str(page.relative_to(docs))
+        for page in docs.rglob("*.md")
+        if page.name != "REVIEW.md" and "ansible/deploy.yml" in page.read_text(encoding="utf-8")
+    ]
+    assert not offenders, f"run the playbook from ansible/: {offenders}"
