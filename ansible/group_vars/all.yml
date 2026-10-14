@@ -56,7 +56,7 @@ oidc_scope: "openid email profile eduperson_entitlement offline_access"
 app_url: https://metaseed.ewi.tudelft.nl
 
 # Admin role (SRAM entitlement)
-admin_role: "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+admin_role: "urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin"
 
 # Nginx
 nginx_server_name: metaseed.ewi.tudelft.nl

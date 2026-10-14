@@ -73,7 +73,7 @@ class TestTheGroups:
         names = {g["name"] for g in realm["groups"]}
         expected = {
             f"{SRAM_GROUP_PREFIX}tudelft:metaseed:{name}"
-            for name in ("seek", "ena", "pride", "brapi", "metabolights", "dcat", "admin")
+            for name in ("seek", "ena", "pride", "brapi", "metabolights", "dcat", "metaseed-admin")
         }
         assert names == expected
 
@@ -93,5 +93,7 @@ class TestTheDevUser:
         # without anyone hand-editing Keycloak first -- but seeing features and
         # administering the hub are different privileges, so demo is not admin.
         demo = next(u for u in realm["users"] if u["username"] == "demo")
-        expected = {f"/{g['name']}" for g in realm["groups"] if not g["name"].endswith(":admin")}
+        expected = {
+            f"/{g['name']}" for g in realm["groups"] if not g["name"].endswith(":metaseed-admin")
+        }
         assert set(demo.get("groups", [])) == expected

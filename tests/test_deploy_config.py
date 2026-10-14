@@ -126,3 +126,24 @@ def test_nginx_request_header_buffer_fits_the_session_cookies() -> None:
     # side needs the same headroom or nginx answers 400 instead.
     conf = _NGINX_TEMPLATE.read_text()
     assert _buffer_kb(conf, "large_client_header_buffers") >= _MIN_HEADER_BUFFER_KB
+
+
+_GROUP_VARS = Path(__file__).resolve().parent.parent / "ansible" / "group_vars" / "all.yml"
+_REALM = Path(__file__).resolve().parent.parent / "docker" / "keycloak-realm.json"
+
+
+def test_the_deployed_admin_group_is_the_dev_realms_admin_group() -> None:
+    """Production's ADMIN_ROLE names the group the dev admin user is in.
+
+    SRAM renamed the admin group to metaseed-admin (261013) and production kept
+    asking for the old URN, so nobody was admin. Dev and production must name
+    the same group, or admin works in one and not the other.
+    """
+    import json
+
+    import yaml
+
+    deployed = yaml.safe_load(_GROUP_VARS.read_text())["admin_role"]
+    realm = json.loads(_REALM.read_text())
+    admin = next(u for u in realm["users"] if u["username"] == "admin")
+    assert [f"/{deployed}"] == admin["groups"]

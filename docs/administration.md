@@ -1,6 +1,6 @@
 # Administration
 
-The admin dashboard provides aggregated usage statistics. It is available only to users whose OIDC token carries the configured admin role; it does not appear in the navigation for other users.
+The admin dashboard provides aggregated usage statistics. It is available only to members of the SRAM group named by `ADMIN_ROLE`, matched exactly against the group URNs SRAM reports at sign-in; it does not appear in the navigation for other users. The hosted hub uses the `metaseed-admin` group of the metaseed collaboration, `urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin`; the development Keycloak defines the same group.
 
 Open it at `/hub/admin/`.
 

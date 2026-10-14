@@ -152,7 +152,7 @@
         "admin"
       ],
       "groups": [
-        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+        "/urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin"
       ]
     }
   ],
@@ -182,8 +182,8 @@
       "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:dcat"
     },
     {
-      "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin",
-      "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+      "name": "urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin",
+      "path": "/urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin"
     }
   ]
 }
