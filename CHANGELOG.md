@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.71.0] - 261014
+
+### Fixed
+- **The Explorer's comparison says what changed on a modified field** (metaseed 0.62.0). A field changed only in its example or description showed a bare `~` on the canvas and identical `- string` / `+ string` lines in the panel; the canvas now names the changed attributes and the panel shows each with its old and new value.
+- **The explorer scripts carry the release version.** They were pinned as `?v=3` and `?v=4` by hand, so a metaseed upgrade that changed them would have kept running the cached copies; a test refuses a hand-kept version on any asset.
+
+### Changed
+- Built on metaseed 0.62.0.
+
 ## [0.70.0] - 261014
 
 ### Fixed
