@@ -327,7 +327,7 @@ async def get_dataset_state_for_mutation(
 
 
 async def remember_features(request: Request) -> None:
-    """Keep the person's repository features on the request, for the page and its routes.
+    """Keep the person's repository features and admin standing on the request.
 
     Every hub route depends on this. A signed-out request reads nothing and
     touches no database; a signed-in one reads the membership snapshot once.
@@ -338,6 +338,7 @@ async def remember_features(request: Request) -> None:
     from metaseed_hub.access import live_user
     from metaseed_hub.database import db
     from metaseed_hub.features import features_of
+    from metaseed_hub.ui.routes.admin import is_admin
 
     features: set[str] = set()
     user = await get_current_user_from_cookie(request)
@@ -352,3 +353,4 @@ async def remember_features(request: Request) -> None:
             # pages, a template rendered in a test) grants nothing.
             features = set()
     request.state.features = features
+    request.state.is_admin = user is not None and is_admin(user)

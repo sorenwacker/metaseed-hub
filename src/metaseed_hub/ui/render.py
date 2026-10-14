@@ -178,6 +178,10 @@ def standard_context(request: Request, context: dict[str, Any]) -> str:
     # What the person may use, as the request remembered it: the header
     # shows SEEK, a page its buttons, only to those whose groups grant them.
     context.setdefault("features", granted(request))
+    # The header links the admin dashboard for administrators only.
+    context.setdefault(
+        "is_hub_admin", getattr(getattr(request, "state", None), "is_admin", False) is True
+    )
     return csrf_token
 
 

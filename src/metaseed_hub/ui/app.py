@@ -57,7 +57,6 @@ from metaseed_hub.ui.routes import (
     init_admin_templates,
     init_dataset_templates,
     init_entity_templates,
-    is_admin,
     notifications_router,
     ontology_router,
     people_router,
@@ -293,9 +292,6 @@ def create_hub_app() -> FastAPI:
     init_dataset_templates(templates)
     init_entity_templates(templates)
     init_admin_templates(templates)
-
-    # Register is_admin as template global for conditional nav rendering
-    templates.env.globals["is_admin"] = is_admin
 
     # Expose the cached GitHub star count to the footer on every page
     templates.env.globals["get_repo_stars"] = get_repo_stars
