@@ -115,7 +115,7 @@ class TestTheDevRealmHasAnAdmin:
         realm = json.loads(
             (Path(__file__).parent.parent / "docker" / "keycloak-realm.json").read_text()
         )
-        urn = "urn:mace:surf.nl:sram:group:tudelft:metaseed:admin"
+        urn = "urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin"
         assert any(g["name"] == urn for g in realm["groups"])
         admin = next(u for u in realm["users"] if u["username"] == "admin")
         assert f"/{urn}" in admin.get("groups", [])
