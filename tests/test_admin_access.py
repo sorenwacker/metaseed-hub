@@ -119,3 +119,46 @@ class TestTheDevRealmHasAnAdmin:
         assert any(g["name"] == urn for g in realm["groups"])
         admin = next(u for u in realm["users"] if u["username"] == "admin")
         assert f"/{urn}" in admin.get("groups", [])
+
+
+class TestTheHeaderLinksTheDashboard:
+    """An administrator reaches the dashboard from the header, nobody else sees it.
+
+    The link was commented out on 260604 "until SRAM is configured" and never
+    restored, so the dashboard was reachable only by typing its address.
+    """
+
+    URN = "urn:mace:surf.nl:sram:group:tudelft:metaseed:metaseed-admin"
+
+    @pytest.fixture(autouse=True)
+    def _urn_admin_role(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setattr("metaseed_hub.ui.routes.admin.get_admin_role", lambda: self.URN)
+
+    async def _home(self, user: TokenUser) -> str:
+        from unittest.mock import AsyncMock, patch
+
+        import httpx
+        from starlette.routing import Mount
+
+        from metaseed_hub.main import create_app
+        from metaseed_hub.ui.dependencies import get_current_user_from_cookie
+
+        app = create_app()
+        hub = next(r.app for r in app.routes if isinstance(r, Mount) and r.path == "/hub")
+        hub.dependency_overrides[get_current_user_from_cookie] = lambda: user
+        with patch(
+            "metaseed_hub.ui.dependencies.get_current_user_from_cookie",
+            AsyncMock(return_value=user),
+        ):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="https://test"
+            ) as client:
+                return (await client.get("/hub/")).text
+
+    async def test_an_administrator_sees_the_admin_link(self, app_db) -> None:
+        page = await self._home(_user(entitlements=[self.URN]))
+        assert 'data-testid="nav-admin"' in page
+
+    async def test_anyone_else_does_not(self, app_db) -> None:
+        page = await self._home(_user(entitlements=[self.URN + "s"]))
+        assert 'data-testid="nav-admin"' not in page

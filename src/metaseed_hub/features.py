@@ -36,9 +36,23 @@ if TYPE_CHECKING:
 FEATURES = frozenset({"ena", "pride", "brapi", "metabolights", "seek", "dcat"})
 
 
+def feature_named(group_name: str | None) -> str | None:
+    """The feature a group name grants: the name itself, or what follows its last hyphen.
+
+    SRAM reports ``metaseed-seek`` for a group named ``seek`` once a second
+    collaboration is connected to the application, so the prefix is SRAM's,
+    not the collaboration's choice. Only a whole hyphen-separated suffix counts:
+    ``seeker`` and ``seek-old`` grant nothing.
+    """
+    if group_name is None:
+        return None
+    name = group_name.rsplit("-", 1)[-1]
+    return name if name in FEATURES else None
+
+
 def features_in(urns: Iterable[str]) -> set[str]:
     """The features the group URNs grant: a group named after one, anywhere."""
-    return {group.group for group in groups(urns) if group.group in FEATURES}
+    return {feature for group in groups(urns) if (feature := feature_named(group.group))}
 
 
 async def features_of(session: AsyncSession, user_id: str) -> set[str]:

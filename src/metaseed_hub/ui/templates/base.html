@@ -62,7 +62,9 @@
                 {% endif %}
                 {% endif %}
                 <a href="https://sorenwacker.github.io/metaseed-hub/" class="nav-btn" target="_blank" rel="noopener">Docs</a>
-                {# Admin hidden until SRAM configured #}
+                {% if is_hub_admin %}
+                <a href="/hub/admin/" class="nav-btn {% if nav_active == 'admin' %}active{% endif %}" data-testid="nav-admin">Admin</a>
+                {% endif %}
             </nav>
             {# Short here, in full on the sign-in page: a link cannot live in a
                title attribute, and someone already signed in has seen it. #}
