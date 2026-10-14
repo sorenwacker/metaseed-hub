@@ -33,9 +33,11 @@ def test_every_explorer_script_is_loaded_with_a_version() -> None:
     page = TEMPLATE.read_text()
 
     for script in SCRIPTS:
-        assert re.search(rf"{re.escape(script)}\?v=\d+", page), (
-            f"{script} is loaded without a ?v= query, so a browser that has "
-            "the page cached keeps running the previous version of it"
+        # The release version, not a hand-kept number: the scripts come from
+        # the metaseed package, which changes them without touching this page.
+        assert re.search(rf"{re.escape(script)}\?v=\{{\{{ version_info\.version", page), (
+            f"{script} is not loaded with the release version, so a browser that "
+            "has the page cached keeps running the previous version of it"
         )
 
 

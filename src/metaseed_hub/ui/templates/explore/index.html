@@ -4,9 +4,9 @@
 
 {% block head %}
 <script src="/hub/hub-static/js/vis-network.min.js"></script>
-<script src="/hub/static/js/erd-common.js?v=2"></script>
-<script src="/hub/static/js/explore-graph.js?v=3"></script>
-<script src="/hub/static/js/explore-panel.js?v=4"></script>
+<script src="/hub/static/js/erd-common.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+<script src="/hub/static/js/explore-graph.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+<script src="/hub/static/js/explore-panel.js?v={{ version_info.version if version_info else 'dev' }}"></script>
 {% endblock %}
 
 {% block nav %}

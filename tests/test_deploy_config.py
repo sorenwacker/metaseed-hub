@@ -162,3 +162,19 @@ def test_documented_playbook_runs_start_in_the_ansible_directory() -> None:
         if page.name != "REVIEW.md" and "ansible/deploy.yml" in page.read_text(encoding="utf-8")
     ]
     assert not offenders, f"run the playbook from ansible/: {offenders}"
+
+
+def test_no_static_asset_is_versioned_by_hand() -> None:
+    """Every asset carries the release version, so an upgrade reaches the browser.
+
+    The explorer scripts come from the metaseed package and were pinned as
+    ?v=3 and ?v=4 by hand; metaseed 0.62.0 changed them and a cached browser
+    would have kept drawing the old comparison.
+    """
+    templates = Path(__file__).resolve().parent.parent / "src" / "metaseed_hub" / "ui" / "templates"
+    pinned = [
+        f"{page.relative_to(templates)}: {match.group(0)}"
+        for page in templates.rglob("*.html")
+        for match in re.finditer(r"\.(?:js|css)\?v=\d+", page.read_text(encoding="utf-8"))
+    ]
+    assert not pinned, pinned
