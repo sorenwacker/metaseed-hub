@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.72.0] - 261015
+
+### Changed
+- Built on metaseed 0.63.0: dataset saves are atomic and a failed save is reported, an ontology lookup outage is shown as not searched rather than "no terms found", spec merge resolves fields only some profiles have and no longer fails on profiles that mark different label fields, and the DCAT card and SEEK re-push fixes. See metaseed's changelog for v0.63.0.
+- The README and docs index open with metaseed's shared summary, and no longer link to a `metaseed-hub` PyPI project, which does not exist.
+
 ## [0.71.0] - 261014
 
 ### Fixed
