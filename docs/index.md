@@ -5,12 +5,32 @@
 # Metaseed Hub
 
 - **Use it** — [the hub](https://metaseed.ewi.tudelft.nl/hub/), signed in with your institutional account
-- **Run it yourself** — [`metaseed` on PyPI](https://pypi.org/project/metaseed/) · [`metaseed-hub` on PyPI](https://pypi.org/project/metaseed-hub/)
+- **Run metaseed yourself** — [`metaseed` on PyPI](https://pypi.org/project/metaseed/); the hub itself is not published on PyPI and runs from [its source](https://github.com/sorenwacker/metaseed-hub)
 - **Source** — [metaseed-hub](https://github.com/sorenwacker/metaseed-hub) · [metaseed](https://github.com/sorenwacker/metaseed)
 - **The library's documentation** — [metaseed itself](https://sorenwacker.github.io/metaseed/)
 
 
 Metaseed Hub is a collaborative platform for building standardized research metadata. Teams create **datasets** that follow an established metadata **profile** (MIAPPE, ISA, DiSSCo, Darwin Core, or a custom specification), edit them through schema-driven forms, and share them with collaborators. It is built on [metaseed](https://github.com/sorenwacker/metaseed).
+
+## Installing metaseed
+
+The hub is a hosted service; the `metaseed` library and command-line tool it is built on can be installed locally.
+
+As a command-line tool, isolated in its own environment (recommended):
+
+```bash
+uv tool install metaseed
+metaseed --help
+```
+
+As a library in a project:
+
+```bash
+uv add metaseed        # in a uv-managed project
+pip install metaseed   # in any virtual environment
+```
+
+Optional importers and exporters are extras, for example `pip install "metaseed[pride]"` or `uv tool install "metaseed[pride]"`.
 
 ## What you can do
 
