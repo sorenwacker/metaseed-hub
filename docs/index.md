@@ -10,7 +10,9 @@
 - **The library's documentation** — [metaseed itself](https://sorenwacker.github.io/metaseed/)
 
 
-Metaseed Hub is a collaborative platform for building standardized research metadata. Teams create **datasets** that follow an established metadata **profile** (MIAPPE, ISA, DiSSCo, Darwin Core, or a custom specification), edit them through schema-driven forms, and share them with collaborators. It is built on [metaseed](https://github.com/sorenwacker/metaseed).
+Metaseed Hub is the hosted, shared version of [metaseed](https://github.com/sorenwacker/metaseed). Metaseed helps research teams create, validate and share standardized metadata. It supports domain standards such as MIAPPE, ISA and Darwin Core, and the submission formats of repositories such as ENA, PRIDE and MetaboLights. Each standard becomes a guided form with automated checks and suggestions from controlled vocabularies. Researchers can import public records, export files in the format a repository expects, and compare or combine standards without programming. Metaseed runs in the browser (locally or on the hosted hub), from the command line, from Python, or through an AI assistant.
+
+In the hub, teams create **datasets** that follow a metadata **profile** (an established standard or a custom specification), edit them through generated forms, and share them with collaborators.
 
 ## Installing metaseed
 

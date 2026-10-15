@@ -6,9 +6,11 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Metaseed Hub is the shared, deployed counterpart of [metaseed](https://github.com/sorenwacker/metaseed): a web application where a group creates, edits, shares, and publishes standardized research metadata. Metaseed runs on one machine for one person; the hub runs for a team, with accounts, sharing, and a place to publish specifications.
+Metaseed Hub is the hosted, shared version of [metaseed](https://github.com/sorenwacker/metaseed). Metaseed helps research teams create, validate and share standardized metadata. It supports domain standards such as MIAPPE, ISA and Darwin Core, and the submission formats of repositories such as ENA, PRIDE and MetaboLights. Each standard becomes a guided form with automated checks and suggestions from controlled vocabularies. Researchers can import public records, export files in the format a repository expects, and compare or combine standards without programming. Metaseed runs in the browser (locally or on the hosted hub), from the command line, from Python, or through an AI assistant.
 
-[Documentation](https://sorenwacker.github.io/metaseed-hub/) · [Live instance](https://metaseed.ewi.tudelft.nl) · [PyPI](https://pypi.org/project/metaseed-hub/) · [Changelog](CHANGELOG.md)
+Metaseed runs on one machine for one person; the hub runs for a team, with accounts, sharing, and a place to publish specifications.
+
+[Documentation](https://sorenwacker.github.io/metaseed-hub/) · [Live instance](https://metaseed.ewi.tudelft.nl) · [Changelog](CHANGELOG.md)
 
 ## What it does
 
