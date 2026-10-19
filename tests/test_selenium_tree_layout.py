@@ -24,23 +24,30 @@ pytestmark = pytest.mark.selenium
 _HAS_GRAPH = (
     "return Boolean(typeof ERD !== 'undefined' && ERD.getNetwork() && ERD.getNodes().length)"
 )
-_LEVELS = """
-const positions = ERD.getNetwork().getPositions();
-return [...new Set(Object.values(positions).map(p => Math.round(p.y)))].sort((a, b) => a - b);
+#: Per level (entities sharing a y position), the top of its highest box and
+#: the bottom of its lowest, top to bottom.
+_LEVEL_EXTENTS = """
+const network = ERD.getNetwork();
+const levels = new Map();
+for (const [id, p] of Object.entries(network.getPositions())) {
+    const key = Math.round(p.y);
+    const node = ERD.getNodes().get(id) !== null ? id : Number(id);
+    const box = network.getBoundingBox(node);
+    const extent = levels.get(key) || [Infinity, -Infinity];
+    levels.set(key, [Math.min(extent[0], box.top), Math.max(extent[1], box.bottom)]);
+}
+return [...levels.entries()].sort((a, b) => a[0] - b[0]).map(([, extent]) => extent);
 """
 
-#: The distance the tree layout puts between one level and the next.
-LEVEL_SEPARATION = 120
 
+def _press_tree_and_measure_clearances(browser) -> list[float]:
+    """Press Tree; the space between each level's lowest box and the next level's highest.
 
-def _whole_levels_apart(gaps: list[int]) -> bool:
-    """A free arrangement puts entities at arbitrary heights; a tree puts every
-    level a whole number of level distances below the one above."""
-    return all(min(gap % LEVEL_SEPARATION, -gap % LEVEL_SEPARATION) <= 1 for gap in gaps)
-
-
-def _press_tree_and_measure_levels(browser) -> list[int]:
-    """Press Tree; the distances between the levels the entities then sit on."""
+    metaseed spaces tree levels by the size of their boxes (0.64): a level
+    starts below the tallest box of the one above, so every clearance is
+    positive. A fixed level distance let tall entity boxes overlap, and the
+    free arrangement has no levels to speak of.
+    """
     WebDriverWait(browser, 30).until(lambda d: d.execute_script(_HAS_GRAPH))
     button = WebDriverWait(browser, 20).until(
         expected_conditions.visibility_of_element_located(
@@ -49,27 +56,27 @@ def _press_tree_and_measure_levels(browser) -> list[int]:
     )
     button.click()
     assert "active" in button.get_attribute("class")
-    levels = browser.execute_script(_LEVELS)
-    return [lower - upper for upper, lower in zip(levels, levels[1:], strict=False)]
+    extents = browser.execute_script(_LEVEL_EXTENTS)
+    return [lower[0] - upper[1] for upper, lower in zip(extents, extents[1:], strict=False)]
 
 
-def test_the_builder_s_tree_button_puts_entities_on_evenly_spaced_levels(driver) -> None:  # noqa: F811
+def test_the_builder_s_tree_button_puts_entities_on_levels_that_do_not_overlap(driver) -> None:  # noqa: F811
     _login(driver)
     driver.set_window_size(1500, 1000)
     _draft_from_the_seek_ready_template(driver)
 
-    gaps = _press_tree_and_measure_levels(driver)
+    clearances = _press_tree_and_measure_clearances(driver)
 
-    assert gaps and _whole_levels_apart(gaps), gaps
+    assert clearances and min(clearances) > 0, clearances
 
 
-def test_the_explorer_s_tree_button_puts_entities_on_evenly_spaced_levels(driver) -> None:  # noqa: F811
+def test_the_explorer_s_tree_button_puts_entities_on_levels_that_do_not_overlap(driver) -> None:  # noqa: F811
     _login(driver)
     driver.set_window_size(1500, 1000)
     driver.get(f"{BASE}/hub/explore/")
     Select(driver.find_element(By.ID, "base-profile")).select_by_value("miappe")
     driver.find_element(By.ID, "compare-btn").click()
 
-    gaps = _press_tree_and_measure_levels(driver)
+    clearances = _press_tree_and_measure_clearances(driver)
 
-    assert gaps and _whole_levels_apart(gaps), gaps
+    assert clearances and min(clearances) > 0, clearances
