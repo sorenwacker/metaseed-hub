@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.0] - 261019
+
+### Changed
+- Built on metaseed 0.64.0: a SEEK push refuses an Investigation, Study, Assay or Sample without a title instead of sending it as `New Study`, the explorer exports its graph as a PNG, and compared profiles show each profile's version of a differing validation rule, now also in the explorer sidebar. See metaseed's changelog for v0.63.1 and v0.64.0.
+
 ## [0.72.0] - 261015
 
 ### Changed
