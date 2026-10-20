@@ -102,6 +102,9 @@
                 <button class="btn btn-sm" id="btn-hierarchical" onclick="toggleHierarchicalLayout()"
                         data-testid="btn-tree-layout"
                         title="Arrange entities as the containment tree they describe, root at the top">Tree</button>
+                <button class="btn btn-sm" onclick="ERD.exportPng(currentProfiles.join('_vs_').replaceAll('/', '-'))"
+                        data-testid="export-png"
+                        title="Download the whole graph as a PNG image">PNG</button>
             </div>
         </div>
         <div class="erd-canvas-wrapper">

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- The explorer toolbar has a PNG button; 0.73.0 shipped the PNG export in the shared script but no button on the hub's page called it.
+
 ## [0.73.0] - 261019
 
 ### Changed
