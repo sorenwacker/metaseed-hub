@@ -51,5 +51,26 @@ def test_each_column_carries_the_note_the_exported_heading_carries() -> None:
     assert "required" in notes["unique_id"].lower()
 
 
-def test_the_heading_shows_the_note_on_hover() -> None:
-    assert 'title="{{ column_notes[col] }}"' in TEMPLATE.read_text(encoding="utf-8")
+def test_the_rendered_heading_shows_the_note_on_hover() -> None:
+    """Rendered, not grepped: the template once named ``column_notes`` in its
+    ``title`` but never read it from the table data, so no heading had one."""
+    from html import unescape
+
+    from jinja2 import Environment, FileSystemLoader
+
+    from metaseed_hub.ui.app import TEMPLATES_DIR
+    from metaseed_hub.ui.helpers.text import humanize_field_name
+
+    state, inv_id = _state()
+    tables = build_inline_tables(state, inv_id, [{"name": "studies", "item_type": "Study"}])
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
+    env.filters["humanize"] = humanize_field_name
+    html = env.get_template("partials/inline_table.html").render(
+        field={"name": "studies", "item_type": "Study"},
+        inline_tables=tables,
+        dataset_id="d",
+        node_id=inv_id,
+    )
+
+    note = tables["studies"]["column_notes"]["unique_id"]
+    assert f'title="{note}"' in unescape(html)

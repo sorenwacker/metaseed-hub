@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.1] - 261021
+
+### Added
+- The explorer's PNG export carries the legend shown under the canvas (metaseed 0.65.0).
+- Ontology-term columns of an inline table carry an icon whose tooltip says how to search the term.
+
+### Fixed
+- Inline table headings show the field's description, type, pattern and rules on hover; the template never read the notes it was given.
+- The Actions column of an inline table is as wide as its icons instead of 150 px or more.
+- The explorer toolbar has a PNG button; 0.73.0 shipped the PNG export in the shared script but no button on the hub's page called it.
+
 ## [0.73.0] - 261019
 
 ### Changed

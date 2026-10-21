@@ -102,6 +102,9 @@
                 <button class="btn btn-sm" id="btn-hierarchical" onclick="toggleHierarchicalLayout()"
                         data-testid="btn-tree-layout"
                         title="Arrange entities as the containment tree they describe, root at the top">Tree</button>
+                <button class="btn btn-sm" onclick="ERD.exportPng(currentProfiles.join('_vs_').replaceAll('/', '-'), visibleLegend())"
+                        data-testid="export-png"
+                        title="Download the whole graph as a PNG image">PNG</button>
             </div>
         </div>
         <div class="erd-canvas-wrapper">
@@ -124,7 +127,7 @@
             <span class="legend-item"><span class="legend-line-dashed"></span> Reference</span>
             <span class="legend-item"><span class="legend-line-rule"></span> Rule</span>
             <span class="legend-item"><code>*</code> Required</span>
-            <span class="legend-item" style="margin-left: 12px;">Right-click to hide</span>
+            <span class="legend-item" style="margin-left: 12px;" data-legend-hint>Right-click to hide</span>
         </div>
 
         <!-- Context Menu for nodes -->
