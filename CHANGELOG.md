@@ -2,9 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.73.1] - 261021
 
 ### Added
+- The explorer's PNG export carries the legend shown under the canvas (metaseed 0.65.0).
 - Ontology-term columns of an inline table carry an icon whose tooltip says how to search the term.
 
 ### Fixed
