@@ -5,9 +5,10 @@ from dataclasses import field as dc_field
 from typing import Annotated, Any
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt import PyJWK, PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.config import Settings, get_settings
@@ -251,7 +252,7 @@ class OIDCAuth:
             issuer = oidc_config.get("issuer", self._settings.effective_issuer)
             payload = jwt.decode(
                 token,
-                rsa_key,
+                PyJWK(rsa_key).key,
                 algorithms=list(ALLOWED_SIGNING_ALGORITHMS),
                 audience=self._settings.effective_client_id,
                 issuer=issuer,
@@ -279,7 +280,7 @@ class OIDCAuth:
                 entitlements=entitlements,
             )
 
-        except JWTError as e:
+        except PyJWTError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid token: {e}",

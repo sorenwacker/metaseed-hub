@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Access tokens are verified with PyJWT instead of python-jose, whose algorithm-confusion guard is bypassed by a DER-encoded public key and has no patched release.
+- mcp raised to 1.30, which bounds the sessions the StreamableHTTP transport keeps.
+
 ## [0.73.1] - 261021
 
 ### Added
