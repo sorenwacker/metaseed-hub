@@ -208,6 +208,7 @@ def _build_single_entity_table(
         "nested_entity_type": item_type,
         "required_columns": list(required_columns),
         "column_notes": _column_notes(helper, columns, profile_spec),
+        "column_choices": _column_choices(helper, columns, profile_spec),
         "reference_fields": _reference_fields(helper),
         "ontology_fields": _ontology_fields(helper),
         "is_single_entity": True,
@@ -299,6 +300,7 @@ def _build_entity_list_table(
         "inherited_columns": list(inherited_columns),
         "required_columns": list(required_columns),
         "column_notes": _column_notes(helper, display_columns, profile_spec),
+        "column_choices": _column_choices(helper, display_columns, profile_spec),
         "reference_fields": _reference_fields(helper),
         "ontology_fields": _ontology_fields(helper),
     }
@@ -363,6 +365,37 @@ def _column_notes(helper: Any, columns: list[str], profile_spec: Any) -> dict[st
         else []
     )
     return {col: heading_note(col, fields[col], rules) for col in columns if col in fields}
+
+
+def _column_choices(helper: Any, columns: list[str], profile_spec: Any) -> dict[str, list[str]]:
+    """Column -> its allowed values, for the columns that have them.
+
+    The same values the heading note lists as allowed: the field's ``options``,
+    else its ``constraints.enum``, else the enum of a validation rule on that
+    field. A cell of such a column is a dropdown of them.
+    """
+    from metaseed.specs.schema import applies_to_entity
+
+    fields = {f.name: f for f in getattr(getattr(helper, "spec", None), "fields", None) or []}
+    rules = (
+        [r for r in profile_spec.validation_rules if applies_to_entity(r.applies_to, helper.name)]
+        if profile_spec is not None
+        else []
+    )
+    choices: dict[str, list[str]] = {}
+    for col in columns:
+        field = fields.get(col)
+        if field is None:
+            continue
+        constraints = getattr(field, "constraints", None)
+        allowed = (
+            getattr(field, "options", None)
+            or (getattr(constraints, "enum", None) if constraints else None)
+            or next((r.enum for r in rules if r.field == col and getattr(r, "enum", None)), None)
+        )
+        if allowed:
+            choices[col] = [str(value) for value in allowed]
+    return choices
 
 
 def build_inline_tables(

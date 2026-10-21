@@ -53,7 +53,10 @@ def test_each_column_carries_the_note_the_exported_heading_carries() -> None:
 
 def test_the_rendered_heading_shows_the_note_on_hover() -> None:
     """Rendered, not grepped: the template once named ``column_notes`` in its
-    ``title`` but never read it from the table data, so no heading had one."""
+    ``title`` but never read it from the table data, so no heading had one.
+
+    The note is ``data-note``, drawn by hub.js on hover: a native ``title``
+    tooltip is delayed, and not shown at all in an unfocused window."""
     from html import unescape
 
     from jinja2 import Environment, FileSystemLoader
@@ -73,4 +76,9 @@ def test_the_rendered_heading_shows_the_note_on_hover() -> None:
     )
 
     note = tables["studies"]["column_notes"]["unique_id"]
-    assert f'title="{note}"' in unescape(html)
+    assert f'data-note="{note}"' in unescape(html)
+
+
+def test_the_page_draws_the_note_on_hover() -> None:
+    script = (TEMPLATE.parents[2] / "static" / "js" / "hub.js").read_text(encoding="utf-8")
+    assert "[data-note]" in script and "note-tooltip" in script
