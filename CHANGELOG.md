@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.73.2] - 261021
 
 ### Security
 - Access tokens are verified with PyJWT instead of python-jose, whose algorithm-confusion guard is bypassed by a DER-encoded public key and has no patched release.
