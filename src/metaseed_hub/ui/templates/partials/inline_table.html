@@ -35,7 +35,7 @@
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th{% if column_notes and column_notes.get(col) %} title="{{ column_notes[col] }}"{% endif %}>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}</th>
+                    <th data-col="{{ col }}"{% if column_notes and column_notes.get(col) %} title="{{ column_notes[col] }}"{% endif %}>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}{% if col in ontology_fields %}<span class="ontology-icon" title="Ontology term: click a cell and type, or press Tab, to search {{ ontology_fields[col]|upper or 'all ontologies' }}" aria-label="ontology term"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="3" r="2"/><circle cx="3" cy="13" r="2"/><circle cx="13" cy="13" r="2"/><path d="M8 5 3 11M8 5l5 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>{% endif %}</th>
                     {% endfor %}
                     {% if columns|length > 0 %}
                     <th style="width: 60px;">Actions</th>

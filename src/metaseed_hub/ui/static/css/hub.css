@@ -6754,6 +6754,15 @@ a.start-option-card:hover {
     flex: 1;
 }
 
+.ontology-icon {
+    display: inline-flex;
+    margin-left: 6px;
+    vertical-align: middle;
+    color: var(--clr-moss);
+    fill: currentColor;
+    cursor: help;
+}
+
 .ontology-badge {
     font-size: 0.7rem;
     font-weight: 600;
