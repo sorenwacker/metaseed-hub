@@ -17,3 +17,8 @@ def test_the_toolbar_has_a_png_button() -> None:
 
     assert 'data-testid="export-png"' in template
     assert "ERD.exportPng(" in template
+
+
+def test_the_png_carries_the_legend_the_page_shows() -> None:
+    """metaseed 0.65 draws legend entries into the image; the page passes them."""
+    assert "visibleLegend()" in EXPLORE_TEMPLATE.read_text()
