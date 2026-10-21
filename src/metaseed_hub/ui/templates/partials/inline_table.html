@@ -10,6 +10,7 @@
 {% set is_single_entity = table_data.is_single_entity or false %}
 {% set inherited_columns = table_data.inherited_columns or [] %}
 {% set required_columns = table_data.required_columns or [] %}
+{% set column_notes = table_data.column_notes or {} %}
 
 <div class="inline-table-section" id="inline-table-{{ field_name }}">
     <div class="inline-table-header">
