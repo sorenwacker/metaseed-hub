@@ -2321,8 +2321,17 @@ textarea {
 }
 
 td.row-actions {
+    display: table-cell;
     vertical-align: middle;
     text-align: center;
+    white-space: nowrap;
+}
+
+/* metaseed's min-width for readable data cells; the icons need far less. */
+.inline-data-table td.row-actions,
+.inline-data-table th:last-child {
+    min-width: 0;
+    width: 1%;
 }
 
 .btn-icon.danger:hover {
