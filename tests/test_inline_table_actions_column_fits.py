@@ -30,3 +30,13 @@ def test_the_actions_cells_shrink_to_their_content() -> None:
 def test_the_actions_cell_stays_a_table_cell() -> None:
     """``.row-actions`` lays out the icons as flex; the cell must override it."""
     assert "display: table-cell" in _rule("td.row-actions")
+
+
+def test_the_edit_and_delete_icons_sit_side_by_side() -> None:
+    """The icon buttons are flex blocks elsewhere; in the cell they stacked and
+    doubled every row's height."""
+    assert "display: inline-flex" in _rule("td.row-actions .btn-icon")
+
+
+def test_the_add_row_button_never_shrinks_out_of_its_header() -> None:
+    assert "flex-shrink: 0" in _rule(".inline-table-header .btn")

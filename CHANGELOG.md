@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.73.3] - 261021
+
+### Added
+- A table cell of a column with allowed values is a dropdown of those values.
+
+### Changed
+- A heading's field note is a tooltip the page draws: it appears at once, lays out the description, allowed values and rules as rows, scrolls when long, and stays open while the pointer is on it. The native tooltip it replaces was delayed and not shown in an unfocused window. Headings with a note are underlined.
+
+### Fixed
+- The entities overview shows a row's arrow, name and child count on one line.
+- The edit and delete icons in a table row sit side by side; the Add Row button keeps its size.
+- certifi raised to 2026.10.19 (critical advisory).
+
 ## [0.73.2] - 261021
 
 ### Security

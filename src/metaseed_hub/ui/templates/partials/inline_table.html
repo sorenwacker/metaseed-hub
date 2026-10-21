@@ -11,6 +11,7 @@
 {% set inherited_columns = table_data.inherited_columns or [] %}
 {% set required_columns = table_data.required_columns or [] %}
 {% set column_notes = table_data.column_notes or {} %}
+{% set column_choices = table_data.column_choices or {} %}
 
 <div class="inline-table-section" id="inline-table-{{ field_name }}">
     <div class="inline-table-header">
@@ -35,7 +36,7 @@
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th data-col="{{ col }}"{% if column_notes and column_notes.get(col) %} title="{{ column_notes[col] }}"{% endif %}>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}{% if col in ontology_fields %}<span class="ontology-icon" title="Ontology term: click a cell and type, or press Tab, to search {{ ontology_fields[col]|upper or 'all ontologies' }}" aria-label="ontology term"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="3" r="2"/><circle cx="3" cy="13" r="2"/><circle cx="13" cy="13" r="2"/><path d="M8 5 3 11M8 5l5 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>{% endif %}</th>
+                    <th data-col="{{ col }}"{% if column_notes and column_notes.get(col) %} data-note="{{ column_notes[col] }}"{% endif %}>{{ col|humanize }}{% if col in required_columns %}<span class="required">*</span>{% endif %}{% if col in ontology_fields %}<span class="ontology-icon" data-note="Ontology term: click a cell and type, or press Tab, to search {{ ontology_fields[col]|upper or 'all ontologies' }}" aria-label="ontology term"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="3" r="2"/><circle cx="3" cy="13" r="2"/><circle cx="13" cy="13" r="2"/><path d="M8 5 3 11M8 5l5 6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>{% endif %}</th>
                     {% endfor %}
                     {% if columns|length > 0 %}
                     <th style="width: 60px;">Actions</th>
@@ -89,6 +90,16 @@
                                hx-post="/hub/datasets/{{ dataset_id }}/table/{{ node_id }}/single/{{ field_name }}"
                                hx-trigger="change, blur"
                                hx-swap="none">
+                        {% elif column_choices.get(col) %}
+                        <select class="cell-input" name="{{ col }}"
+                                hx-post="/hub/datasets/{{ dataset_id }}/table/{{ row._node_id }}/cell"
+                                hx-trigger="change"
+                                hx-swap="none">
+                            <option value=""></option>
+                            {% for choice in column_choices[col] %}
+                            <option value="{{ choice }}"{% if choice == row.get(col, '')|string %} selected{% endif %}>{{ choice }}</option>
+                            {% endfor %}
+                        </select>
                         {% else %}
                         <input type="{% if col_type == 'integer' or col_type == 'float' %}number{% elif col_type == 'date' %}date{% elif col_type == 'datetime' %}datetime-local{% else %}text{% endif %}"
                                class="cell-input{% if reference_fields.get(col) or col in ontology_fields %} lookup-input{% endif %}"
