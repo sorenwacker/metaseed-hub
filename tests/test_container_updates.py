@@ -231,3 +231,15 @@ def test_a_release_deploy_applies_the_container_pins_afterwards() -> None:
     tail = script[update:]
     assert "exit 1" not in tail, "the container update must not fail the deploy"
     assert "log_error" in tail, "a failed update is logged"
+
+
+def test_matomo_stays_off_until_php2shell_is_fixed() -> None:
+    """Matomo serves PHP publicly and no released image carries the PHP2Shell
+    fix (PHP 8.4.27). A compose profile keeps ``docker compose up -d`` -- which
+    every deploy runs -- from starting it. Remove this gate with the profile;
+    see docs/matomo.md.
+    """
+    compose = yaml.safe_load(_PROD_COMPOSE.read_text())
+    assert "php2shell-disabled" in compose["services"]["matomo"].get("profiles", []), (
+        "matomo would start on the next deploy while its PHP is vulnerable to PHP2Shell"
+    )
