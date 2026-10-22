@@ -352,3 +352,64 @@ async def test_a_workbook_imported_against_a_draft_reads_its_sheets(
     dataset = (await session.execute(select(Dataset).where(Dataset.name == name))).scalar_one()
     state = await ensure_dataset_facade(dataset, session)
     assert [n.entity_type for n in state.nodes_by_id.values()] == ["Project"]
+
+
+async def test_a_workbook_imports_into_a_dataset_of_a_published_spec(
+    session: AsyncSession,
+) -> None:
+    """A dataset of a published spec, exported to Excel and imported back."""
+    from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
+    from metaseed.ui.services.export import build_workbook_from_facade
+
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+    from tests.factories import make_spec
+
+    sub = f"importer-{uuid4().hex[:8]}"
+    tenant = make_tenant(slug=tenant_slug_for(sub))
+    session.add(tenant)
+    await session.flush()
+    owner = make_user(tenant=tenant, keycloak_id=sub)
+    session.add(owner)
+    await session.flush()
+    spec = ProfileSpec(
+        name="wbpub",
+        version="1.0",
+        root_entity="Project",
+        entities={
+            "Project": EntityDefSpec(
+                description="root",
+                fields=[
+                    FieldSpec(name="unique_id", type=FieldType.STRING, example="P-1"),
+                    FieldSpec(name="title", type=FieldType.STRING, example="T"),
+                ],
+            )
+        },
+    )
+    published = make_spec(
+        tenant=tenant,
+        created_by=owner,
+        name="wbpub",
+        version="1.0",
+        spec_data=SpecBuilderState(spec=spec).to_dict(),
+    )
+    session.add(published)
+    await session.flush()
+    dataset = make_dataset(tenant=tenant, profile="wbpub", version="1.0")
+    dataset.spec_id = published.id
+    session.add(dataset)
+    await session.commit()
+    client = MetaseedClient.from_spec(spec)
+    client.create_entity("Project", {"unique_id": "P-1", "title": "From Excel"})
+    raw = BytesIO()
+    build_workbook_from_facade(client.facade).save(raw)
+
+    response = await dataset_import_into_existing(
+        _csrf_request(),
+        dataset.id,
+        session,
+        TokenUser(sub=sub, email="i@example.org", name="I", roles=[]),
+        file=_upload(raw.getvalue(), "export.xlsx"),
+    )
+
+    assert response.status_code == 200, response.body.decode()
+    assert "imported 1" in response.body.decode().lower()
