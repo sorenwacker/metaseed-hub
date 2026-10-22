@@ -61,7 +61,9 @@ def _inferred_identifier_spec() -> ProfileSpec:
 def _declared_identifier_spec() -> ProfileSpec:
     """The same draft with the identifier declared, so nothing is inferred."""
     return _spec_with(
-        [FieldSpec(name="notes", type=FieldType.STRING, is_identifier=True)],
+        # With an example: metaseed 0.67 also advises on a value field without
+        # one, and the draft is meant to draw no advice at all.
+        [FieldSpec(name="notes", type=FieldType.STRING, is_identifier=True, example="S-1")],
     )
 
 

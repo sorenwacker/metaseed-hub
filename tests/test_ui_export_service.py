@@ -49,9 +49,8 @@ def test_export_creates_sheet_per_entity_type_with_rows() -> None:
     assert set(facade.entities) <= set(workbook.sheetnames)
     inv_sheet = workbook["Investigation"]
     header = [cell.value for cell in inv_sheet[1]]
-    # The trailing _parent column carries the tree; without it the export
-    # cannot be reimported with its structure intact.
-    assert header == [*getattr(facade, "Investigation").all_fields, "_parent"]
+    # The root is held by nothing, so its sheet has no Belongs to column.
+    assert header == list(getattr(facade, "Investigation").all_fields)
     row = dict(zip(header, [cell.value for cell in inv_sheet[2]], strict=True))
     assert row["unique_id"] == "inv-1"
     assert row["title"] == "Trial"
@@ -59,6 +58,8 @@ def test_export_creates_sheet_per_entity_type_with_rows() -> None:
     study_header = [cell.value for cell in study_sheet[1]]
     study_row = dict(zip(study_header, [cell.value for cell in study_sheet[2]], strict=True))
     assert study_row["unique_id"] == "st-1"
+    # A held type's sheet places each row by the record that holds it.
+    assert study_row["Belongs to"] == "Investigation: inv-1"
 
 
 def test_a_heading_note_says_what_a_valid_value_is() -> None:
@@ -70,7 +71,8 @@ def test_a_heading_note_says_what_a_valid_value_is() -> None:
     headings = {cell.value: cell for cell in workbook["Study"][1]}
     note = headings["start_date"].comment.text.splitlines()
 
-    assert "Optional · Date and time" in note
+    # metaseed 0.67 appends the field's example to the summary line.
+    assert any(line.startswith("Optional · Date and time") for line in note)
     assert any(line.startswith("Pattern: ") for line in note)
     assert any(line.startswith("Rules: ") for line in note)
 
