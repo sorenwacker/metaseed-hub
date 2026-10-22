@@ -34,6 +34,10 @@ def build_entity_form_context(
     Returns:
         Dictionary with form context including fields and values.
     """
+    # The note a label shows on hover: the one a table heading shows.
+    facade = state.facade
+    notes = _column_notes(helper, list(helper.all_fields), getattr(facade, "profile_spec", None))
+
     # Build field data for template
     fields = []
     for field_name in helper.all_fields:
@@ -54,6 +58,7 @@ def build_entity_form_context(
                 "is_nested": is_nested,
                 "is_single_entity": field_type == "entity" and info.get("items") is not None,
                 "ontologies": ontologies,
+                "note": notes.get(field_name, ""),
             }
         )
 

@@ -72,7 +72,7 @@
             <div class="form-section-fields">
                 {% for field in required_fields %}
                 <div class="form-group">
-                    <label class="form-label" for="{{ field.name }}">
+                    <label class="form-label" for="{{ field.name }}"{% if field.note %} data-note="{{ field.note }}"{% endif %}>
                         {{ field.name | humanize }}
                         <span class="required">*</span>
                     </label>
@@ -179,7 +179,7 @@
             <div class="collapsible-content">
                 {% for field in optional_fields %}
                 <div class="form-group">
-                    <label class="form-label" for="{{ field.name }}">
+                    <label class="form-label" for="{{ field.name }}"{% if field.note %} data-note="{{ field.note }}"{% endif %}>
                         {{ field.name | humanize }}
                     </label>
 
