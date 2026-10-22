@@ -11,6 +11,10 @@ The Explorer opens on the first profile in the list, so there is a diagram to re
 
 The profile's entities and fields are drawn as an entity–relationship diagram. Use the canvas controls to zoom, pan, **Fit** the diagram to the view, and arrange it: **Layout** places the entities by force, which keeps entities joined by a reference together, and **Tree** places them as the containment tree the specification describes, root at the top. **Tree** is a toggle and is highlighted while the tree is shown. Zoom in on an entity to read its fields.
 
+## Exporting
+
+The toolbar after **Tree** exports what is shown. **PNG** is the whole diagram as an image, with its legend. **MD**, **CSV** and **XLSX** document the first profile's model: the entities in containment order, root first, each field with its type, whether it is required, description, constraints and example; MD as a Markdown file, CSV as one row per field, XLSX as a workbook with Entities, Fields and Rules sheets. In the spec builder the same three buttons next to **Export** document the draft.
+
 ## Comparing two profiles
 
 1. Select a **Base Profile (Reference)**.

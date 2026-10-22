@@ -40,6 +40,9 @@
                     onclick="showPreview()"
                     title="Preview YAML output">Preview</button>
             <a href="/hub/spec-builder/{{ draft_id }}/export" class="btn btn-sm" download title="Download YAML">Export</a>
+            <a href="/hub/spec-builder/{{ draft_id }}/export/doc/markdown" class="btn btn-sm" download title="The model as Markdown: every entity, root first, with its fields, descriptions, constraints and examples">MD</a>
+            <a href="/hub/spec-builder/{{ draft_id }}/export/doc/csv" class="btn btn-sm" download title="The fields as CSV, one row per field">CSV</a>
+            <a href="/hub/spec-builder/{{ draft_id }}/export/doc/xlsx" class="btn btn-sm" download title="The model as an Excel workbook: Entities, Fields and Rules sheets">XLSX</a>
         </div>
         <div class="toolbar-right">
             <form method="post" action="/hub/spec-builder/{{ draft_id }}/reset"

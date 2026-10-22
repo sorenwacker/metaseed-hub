@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.74.0] - 261022
+
+### Added
+- Model documentation export, built on metaseed 0.66.1: MD, CSV and XLSX buttons in the explorer toolbar document the first profile's model, and the same buttons in the spec builder document the draft.
+
 ## [0.73.3] - 261021
 
 ### Added

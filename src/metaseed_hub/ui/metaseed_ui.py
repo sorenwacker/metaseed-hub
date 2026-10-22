@@ -24,11 +24,14 @@ Re-exported internals:
   removed the quote the export puts in front of a formula-triggering cell, and
   never split a scalar list back out of the cell the export joined it into, so
   every round trip through the hub changed those values.
+- ``documentation_download``: a profile's model as Markdown, a fields CSV or
+  an Excel workbook, the response the standalone explorer and builder send.
 """
 
 from pathlib import Path
 
 import metaseed.ui
+from metaseed.ui.routes.explore import documentation_download
 from metaseed.ui.services.export import build_workbook_from_facade
 from metaseed.ui.services.heading_note import heading_note
 from metaseed.ui.services.import_excel import workbook_to_payload
@@ -42,6 +45,7 @@ METASEED_TEMPLATES_DIR = _METASEED_UI_DIR / "templates"
 __all__ = [
     "METASEED_STATIC_DIR",
     "build_workbook_from_facade",
+    "documentation_download",
     "heading_note",
     "METASEED_TEMPLATES_DIR",
     "AppState",

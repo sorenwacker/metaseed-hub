@@ -543,6 +543,32 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
             {"yaml_content": yaml_content, "draft_id": ctx.draft.id},
         )
 
+    @router.get("/{draft_id}/export/doc/{format_type}", response_model=None)
+    async def export_documentation(
+        request: Request,
+        draft_id: str,
+        format_type: str,
+        session: SessionDep,
+    ) -> Response:
+        """Download the draft's model as Markdown, a fields CSV or an ``xlsx`` workbook."""
+        from metaseed_hub.ui.metaseed_ui import documentation_download
+        from metaseed_hub.ui.spec_builder.access import (
+            get_user_context,
+            load_state_for_draft,
+        )
+
+        user_id, _tenant_id = await get_user_context(request, session)
+        try:
+            state, _draft = await load_state_for_draft(session, draft_id, user_id)
+        except HTTPException as e:
+            if e.status_code == 403:
+                return RedirectResponse(url="/hub/auth/login", status_code=302)
+            raise
+        if state.spec is None:
+            raise HTTPException(status_code=400, detail="No spec in progress")
+        download: Response = documentation_download(state.spec, format_type)
+        return download
+
     @router.get("/{draft_id}/export", response_model=None)
     async def export_yaml(
         request: Request,
