@@ -156,9 +156,9 @@ async def test_catalog_offers_published_specs_without_tenant_row(
     caller = TokenUser(sub="fresh-user-no-tenant", email="f@example.org", name="F", roles=[])
     profiles, profile_versions, display_names = await _build_explore_catalog(session, caller)
 
-    assert f"spec:{spec.id}" in profiles
-    assert profile_versions[f"spec:{spec.id}"] == [spec.version]
-    assert "Published" in display_names[f"spec:{spec.id}"]
+    assert f"spec:{spec.name}" in profiles
+    assert profile_versions[f"spec:{spec.name}"] == [spec.version]
+    assert "Published" in display_names[f"spec:{spec.name}"]
 
 
 @pytest.mark.asyncio

@@ -62,28 +62,14 @@ async def dataset_profile_spec(session: AsyncSession, dataset: Dataset) -> Profi
         a profile that cannot be loaded is already reported by the caller's own
         validation path, and failing here would turn a report into a crash.
     """
-    from metaseed_hub.models import Spec, SpecDraft
-    from metaseed_hub.ui.spec_builder.state import dict_to_spec
-
     try:
-        stored: dict[str, Any] | None = None
-        if dataset.spec_draft_id:
-            draft = await session.get(SpecDraft, dataset.spec_draft_id)
-            stored = draft.spec_data if draft else None
-        elif dataset.spec_id:
-            published = await session.get(Spec, dataset.spec_id)
-            stored = published.spec_data if published else None
-        else:
-            from metaseed.specs.loader import SpecLoader
-
-            profile_spec: ProfileSpec = SpecLoader().load_profile(dataset.version, dataset.profile)
-            return profile_spec
-
-        if not stored:
-            return None
-        # Both drafts and published specs store a SpecBuilderState envelope with
-        # the ProfileSpec under "spec"; older rows stored the spec directly.
-        return dict_to_spec(stored.get("spec", stored))
+        return await bound_profile_spec(
+            session,
+            profile=dataset.profile,
+            version=dataset.version,
+            spec_draft_id=dataset.spec_draft_id,
+            spec_id=dataset.spec_id,
+        )
     except Exception as exc:
         logger.debug(
             "No content hash for dataset %s: its profile %r could not be resolved (%s)",
@@ -92,6 +78,51 @@ async def dataset_profile_spec(session: AsyncSession, dataset: Dataset) -> Profi
             exc,
         )
         return None
+
+
+async def bound_profile_spec(
+    session: AsyncSession,
+    *,
+    profile: str,
+    version: str,
+    spec_draft_id: str | None,
+    spec_id: str | None,
+) -> ProfileSpec | None:
+    """The specification a profile binding resolves to: draft, published spec or built-in.
+
+    Args:
+        session: Database session.
+        profile: The profile name.
+        version: The profile version.
+        spec_draft_id: The bound draft, if any.
+        spec_id: The bound published spec, if any.
+
+    Returns:
+        The specification, or None when the bound row holds none.
+
+    Raises:
+        SpecLoadError: When a built-in profile of that name and version does not exist.
+    """
+    from metaseed.specs.loader import SpecLoader
+
+    from metaseed_hub.models import Spec, SpecDraft
+    from metaseed_hub.ui.spec_builder.state import dict_to_spec
+
+    stored: dict[str, Any] | None = None
+    if spec_draft_id:
+        draft = await session.get(SpecDraft, spec_draft_id)
+        stored = draft.spec_data if draft else None
+    elif spec_id:
+        published = await session.get(Spec, spec_id)
+        stored = published.spec_data if published else None
+    else:
+        profile_spec: ProfileSpec = SpecLoader().load_profile(version, profile)
+        return profile_spec
+    if not stored:
+        return None
+    # Both drafts and published specs store a SpecBuilderState envelope with
+    # the ProfileSpec under "spec"; older rows stored the spec directly.
+    return dict_to_spec(stored.get("spec", stored))
 
 
 async def dataset_spec_hash(session: AsyncSession, dataset: Dataset) -> str | None:

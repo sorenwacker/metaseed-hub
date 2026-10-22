@@ -147,16 +147,26 @@ async def load_profile_spec(
         # to: everyone, or one collaboration. Drafts above stay scoped to the
         # caller's account: those are the private form and must not be
         # reachable by id.
-        spec_id = profile_key[5:]
+        # The catalog keys a published specification by name, with its
+        # versions beside it; a key naming an id still resolves. Republished
+        # under the same name and version, the newest is the one meant.
+        wanted = profile_key[5:]
+        identifies = (
+            Spec.id == wanted
+            if _is_uuid(wanted)
+            else and_(Spec.name == wanted, Spec.version == version)
+        )
         result = await session.execute(
-            select(Spec).where(
-                Spec.id == spec_id,
+            select(Spec)
+            .where(
+                identifies,
                 Spec.status == SpecStatus.PUBLISHED,
                 Spec.deleted_at.is_(None),
                 await visible_specs(session, user_id),
             )
+            .order_by(Spec.created_at.desc(), Spec.id.desc())
         )
-        db_spec = result.scalar_one_or_none()
+        db_spec = result.scalars().first()
         if db_spec and db_spec.spec_data:
             spec_data = _extract_spec_data(db_spec.spec_data)
             spec = dict_to_spec(spec_data)
@@ -320,20 +330,24 @@ async def _build_explore_catalog(
             display_name = spec_data.get("display_name") or spec_data.get("name") or draft.name
         profile_display_names[draft_key] = f"{display_name} (Draft)"
 
+    # One entry per published specification, as for drafts: each published
+    # version is its own row, and keyed by id they showed as identical entries.
+    for spec in published_specs:
+        spec_key = f"spec:{spec.name}"
+        if spec_key not in profiles:
+            profiles.append(spec_key)
+            profile_versions[spec_key] = []
+        if spec.version not in profile_versions[spec_key]:
+            profile_versions[spec_key].append(spec.version)
+        display_name = spec.name
+        if spec.spec_data:
+            spec_data = _extract_spec_data(spec.spec_data)
+            display_name = spec_data.get("display_name") or spec_data.get("name") or spec.name
+        profile_display_names[spec_key] = f"{display_name} (Published)"
+
     for versions in profile_versions.values():
         # Oldest first: the picker selects the last as the default.
         versions.sort(key=version_sort_key)
-
-    for spec in published_specs:
-        spec_key = f"spec:{spec.id}"
-        if spec_key not in profiles:
-            profiles.append(spec_key)
-            profile_versions[spec_key] = [spec.version]
-            display_name = spec.name
-            if spec.spec_data:
-                spec_data = _extract_spec_data(spec.spec_data)
-                display_name = spec_data.get("display_name") or spec_data.get("name") or spec.name
-            profile_display_names[spec_key] = f"{display_name} (Published)"
 
     return profiles, profile_versions, profile_display_names
 
