@@ -10,6 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from metaseed.facade import ProfileFacade
 from metaseed.specs.versioning import version_sort_key
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -41,7 +42,7 @@ from metaseed_hub.ui.helpers import (
     read_upload_capped,
     save_dataset_state,
 )
-from metaseed_hub.ui.helpers.spec_hash import dataset_profile_spec
+from metaseed_hub.ui.helpers.spec_hash import bound_profile_spec, dataset_profile_spec
 from metaseed_hub.ui.metaseed_ui import AppState
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
@@ -327,17 +328,34 @@ async def dataset_import(
             version = versions[0] if versions else "1.1"
 
         if is_workbook:
-            # A facade of the settled profile, only so the parser knows which
-            # sheets are entity types. The dataset's own facade does not exist
-            # yet, and parsing before the row is created keeps an unreadable
-            # upload from leaving an empty dataset behind.
-            probe = AppState(profile=profile, version=version)
+            # A facade of the chosen specification, only so the parser knows
+            # which sheets are entity types. The dataset's own facade does not
+            # exist yet, and parsing before the row is created keeps an
+            # unreadable upload from leaving an empty dataset behind. A facade
+            # loaded by the picker's name knew no entity of a draft or a
+            # published spec, and every workbook exported from one was refused.
+            try:
+                choice = await resolve_profile_choice(
+                    session, profile, version, tenant.id, db_user.id
+                )
+            except ProfileChoiceNotFoundError as missing:
+                return RedirectResponse(f"/hub/datasets/new?error={missing.code}", status_code=302)
+            chosen, chosen_version, draft_id, published_id = choice
+            spec = await bound_profile_spec(
+                session,
+                profile=chosen,
+                version=chosen_version,
+                spec_draft_id=draft_id,
+                spec_id=published_id,
+            )
+            probe = (
+                ProfileFacade(chosen, spec=spec)
+                if spec is not None
+                else AppState(profile=chosen, version=chosen_version).get_or_create_facade()
+            )
             data = {
                 "_entities_by_type": parse_workbook_sheets(
-                    content,
-                    profile=profile,
-                    version=version,
-                    facade=probe.get_or_create_facade(),
+                    content, profile=chosen, version=chosen_version, facade=probe
                 )
             }
 

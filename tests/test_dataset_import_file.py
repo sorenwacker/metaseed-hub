@@ -286,3 +286,69 @@ async def test_a_file_imported_against_a_draft_binds_the_dataset_to_it(
     assert dataset.profile == "mydraft"
     state = await ensure_dataset_facade(dataset, session)
     assert [n.entity_type for n in state.nodes_by_id.values()] == ["Investigation"]
+
+
+async def test_a_workbook_imported_against_a_draft_reads_its_sheets(
+    session: AsyncSession,
+) -> None:
+    """The workbook was read against a profile loaded by name before the
+    choice was resolved; a draft's name loads nothing, so every sheet was
+    unknown and the import said the workbook came from another profile."""
+    from metaseed.specs.schema import EntityDefSpec, FieldSpec, FieldType, ProfileSpec
+    from metaseed.ui.services.export import build_workbook_from_facade
+
+    from metaseed_hub.ui.spec_builder.state import SpecBuilderState
+    from tests.factories import make_spec_draft
+
+    sub = f"importer-{uuid4().hex[:8]}"
+    tenant = make_tenant(slug=tenant_slug_for(sub))
+    session.add(tenant)
+    await session.flush()
+    owner = make_user(tenant=tenant, keycloak_id=sub)
+    session.add(owner)
+    await session.flush()
+    spec = ProfileSpec(
+        name="wbdraft",
+        version="1.0",
+        root_entity="Project",
+        entities={
+            "Project": EntityDefSpec(
+                description="root",
+                fields=[
+                    FieldSpec(name="unique_id", type=FieldType.STRING, example="P-1"),
+                    FieldSpec(name="title", type=FieldType.STRING, example="T"),
+                ],
+            )
+        },
+    )
+    session.add(
+        make_spec_draft(
+            tenant=tenant,
+            user=owner,
+            name="wbdraft",
+            version="1.0",
+            spec_data=SpecBuilderState(spec=spec).to_dict(),
+        )
+    )
+    await session.commit()
+    client = MetaseedClient.from_spec(spec)
+    client.create_entity("Project", {"unique_id": "P-1", "title": "From Excel"})
+    raw = BytesIO()
+    build_workbook_from_facade(client.facade).save(raw)
+    name = f"wb-draft-{uuid4().hex[:6]}"
+
+    response = await dataset_import(
+        _csrf_request(),
+        session,
+        TokenUser(sub=sub, email="i@example.org", name="I", roles=[]),
+        file=_upload(raw.getvalue(), "export.xlsx"),
+        name=name,
+        profile="draft:wbdraft",
+        version="1.0",
+        csrf_token=_CSRF,
+    )
+
+    assert response.status_code == 303, response.headers.get("location")
+    dataset = (await session.execute(select(Dataset).where(Dataset.name == name))).scalar_one()
+    state = await ensure_dataset_facade(dataset, session)
+    assert [n.entity_type for n in state.nodes_by_id.values()] == ["Project"]
