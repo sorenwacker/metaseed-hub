@@ -386,7 +386,7 @@ class TestSpecExportAuth:
             # Find the export route handler
             export_route = None
             for route in router.routes:
-                if hasattr(route, "path") and "/export" in route.path:
+                if hasattr(route, "path") and route.path.endswith("/export"):
                     export_route = route
                     break
 
@@ -448,7 +448,7 @@ class TestSpecExportAuth:
             # Find the export route handler
             export_route = None
             for route in router.routes:
-                if hasattr(route, "path") and "/export" in route.path:
+                if hasattr(route, "path") and route.path.endswith("/export"):
                     export_route = route
                     break
 
