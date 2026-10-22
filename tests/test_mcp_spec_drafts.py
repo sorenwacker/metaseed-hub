@@ -134,7 +134,11 @@ class TestSpecTools:
         validate = await _tool(server, "spec_validate")
         with _calling_with(secret):
             await add_entity("Declared", "Sample")
-            await add_field("Declared", "Sample", "notes", "string", is_identifier=True)
+            # With an example: metaseed 0.67 also advises on a value field
+            # without one, and this test is about the identifier advice alone.
+            await add_field(
+                "Declared", "Sample", "notes", "string", is_identifier=True, example="S-1"
+            )
             result = json.loads(await validate("Declared"))
 
         assert result["warnings"] == []
