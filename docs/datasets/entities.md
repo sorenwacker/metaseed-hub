@@ -23,7 +23,7 @@ An entity with more than 50 direct children lists the first 50. A **Show more** 
 ## Editing an entity
 
 1. Select the entity in the tree.
-2. The form groups **Required Fields** (marked with `*`) and **Optional Fields**, which are collapsed by default.
+2. The form groups **Required Fields** (marked with `*`) and **Optional Fields**, which are collapsed by default. Hover a field's label for its note: the description, whether it is required, its type, an example, and its pattern, range, allowed values and the rules that name it, the same note a table heading shows.
 3. Edit the values and click **Save**. Each save records a new [version](versions.md).
 
 A value the profile does not accept, such as text in a number field or an ORCID entered as a URL where the profile expects the bare identifier, is saved as typed rather than rejected or discarded. The form shows the problem as a warning after saving. Cells in inline tables, bulk edits and pasted blocks are saved as typed in the same way, without a warning; the problem is reported the next time you run [validation](#validating).

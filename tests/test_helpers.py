@@ -317,6 +317,7 @@ class TestBuildEntityFormContext:
         helper.all_fields = ["title", "description"]
         helper.nested_fields = []
         helper.description = "Test entity"
+        helper.spec = None
         helper.field_info = Mock(
             side_effect=lambda name: {
                 "title": {"type": "string", "required": True},
@@ -603,3 +604,20 @@ class TestEntityImportHelpers:
         assert imported == 0
         assert len(errors) == 1
         assert "miappe" in errors[0]
+
+
+def test_form_fields_carry_the_note_their_label_shows() -> None:
+    """The form labels said nothing on hover, required or optional."""
+    from metaseed import MetaseedClient
+
+    client = MetaseedClient("miappe", "1.2")
+    state = AppState(profile="miappe", version="1.2")
+    helper = client.facade.Investigation
+
+    result = build_entity_form_context(state, helper)
+
+    for field in result["required_fields"] + result["optional_fields"]:
+        assert field["note"], f"no note for {field['name']}"
+    title = next(f for f in result["required_fields"] if f["name"] == "title")
+    assert title["note"].startswith((helper.field_info("title").get("description") or "")[:20])
+    assert "Required" in title["note"]
