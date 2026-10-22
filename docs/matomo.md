@@ -29,18 +29,19 @@ Metaseed Hub uses a self-hosted [Matomo](https://matomo.org/) for privacy-friend
 4. Set the site id and redeploy the hub config:
    - Set `matomo_site_id` in `ansible/group_vars/all.yml` (or the env) to the id from step 1, and re-run the playbook (or edit `/app/.env` `MATOMO_SITE_ID` and restart the service).
 
-## Disabled until PHP2Shell is fixed (since 261021)
+## PHP2Shell (261021-261022)
 
-Matomo is a PHP application, and nginx routes `/matomo/matomo.php` publicly. PHP2Shell (CVE-2026-109618, CVE-2026-109619) is a pair of critical remote code execution flaws in PHP; the reported fix for the 8.4 branch is PHP 8.4.27. On 261021 the deployed `matomo:5.13.0-apache` ran PHP 8.4.25, and no released matomo image carried 8.4.27 (`5.14.0-apache` ships 8.4.26).
+Matomo is a PHP application, and nginx routes `/matomo/matomo.php` publicly. PHP2Shell (CVE-2026-109618, CVE-2026-109619) is a pair of critical remote code execution flaws in PHP, fixed in PHP 8.4.27 for the 8.4 branch. The deployed `matomo:5.13.0-apache` ran PHP 8.4.25.
 
-The `matomo` service in the production compose file therefore carries the profile `php2shell-disabled`. `docker compose up -d`, which both the container update script and the deploy run, starts only the services without a profile, so Matomo stays down across deploys and reboots. The hub is unaffected; the tracker requests fail and no visits are recorded. The data in `matomo-db` is kept.
+On 261021 Matomo was stopped on the host and the `matomo` service got the compose profile `php2shell-disabled`, so that `docker compose up -d` would skip it. The live compose file is replaced from `main` by every deploy, and a deploy at 261021 16:05 ran before the profile was merged; it recreated Matomo on 5.13.0, which then served until 261022.
 
-To re-enable, once a matomo image with PHP 8.4.27 or later is released:
+On 261022 the docker library rebuilt `matomo:5.14.0-apache` on PHP 8.4.27. The production compose file pins that tag and the profile is gone. `test_matomo_pin_carries_the_php2shell_fix` fails if the pin falls below 5.14.0, the first matomo release whose apache image carries the fix; check a new tag's PHP before pinning it:
 
-1. Check the PHP version of the candidate image: `docker run --rm --entrypoint php matomo:<tag> -r 'echo PHP_VERSION;'`.
-2. In `ansible/roles/metaseed-hub/files/docker-compose.yml`, set the `matomo` image to that tag and remove the `profiles` line.
-3. Remove the gate `test_matomo_stays_off_until_php2shell_is_fixed` in `tests/test_container_updates.py`.
-4. Merge. The next deploy recreates the container, and the update script syncs the application files and runs `core:update`.
+```
+docker run --rm --entrypoint php matomo:<tag> -r 'echo PHP_VERSION;'
+```
+
+The pin is the Matomo version, not the PHP version: the same tag was rebuilt on 261021 with PHP 8.4.26 and on 261022 with 8.4.27, so a host that pulled `5.14.0-apache` before 261022 05:11 UTC keeps the vulnerable build until it pulls again.
 
 ## Why the dashboard is tunnel-only
 
