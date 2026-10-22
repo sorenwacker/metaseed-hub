@@ -233,13 +233,14 @@ def test_a_release_deploy_applies_the_container_pins_afterwards() -> None:
     assert "log_error" in tail, "a failed update is logged"
 
 
-def test_matomo_stays_off_until_php2shell_is_fixed() -> None:
-    """Matomo serves PHP publicly and no released image carries the PHP2Shell
-    fix (PHP 8.4.27). A compose profile keeps ``docker compose up -d`` -- which
-    every deploy runs -- from starting it. Remove this gate with the profile;
-    see docs/matomo.md.
+def test_matomo_pin_carries_the_php2shell_fix() -> None:
+    """Matomo serves PHP publicly. 5.14.0 is the first matomo release whose
+    apache image carries PHP 8.4.27, the PHP2Shell fix (CVE-2026-109618,
+    CVE-2026-109619); an older pin would bring the vulnerable PHP back on the
+    next deploy. The service must also run: a leftover profile would keep it
+    out of ``docker compose up -d``. See docs/matomo.md.
     """
-    compose = yaml.safe_load(_PROD_COMPOSE.read_text())
-    assert "php2shell-disabled" in compose["services"]["matomo"].get("profiles", []), (
-        "matomo would start on the next deploy while its PHP is vulnerable to PHP2Shell"
-    )
+    matomo = yaml.safe_load(_PROD_COMPOSE.read_text())["services"]["matomo"]
+    version = tuple(int(part) for part in matomo["image"].split(":")[1].split("-")[0].split("."))
+    assert version >= (5, 14, 0), f"{matomo['image']} predates the PHP2Shell fix"
+    assert not matomo.get("profiles"), "a profile keeps matomo from starting on deploy"
