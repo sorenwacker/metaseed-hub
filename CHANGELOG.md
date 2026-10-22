@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.75.0] - 261022
+
+### Changed
+- Built on metaseed 0.67.0: an exported workbook opens with a **How to add data** sheet and places each row with a **Belongs to** column (`Type: identifier`) whose dropdown lists every record that may hold it; a dataset carrying stale embedded copies no longer exports every child twice.
+
+### Fixed
+- An imported row goes under the record of the type that holds it in the stated field: a study's person no longer lands under an investigation sharing the study's identifier.
+
 ## [0.74.0] - 261022
 
 ### Added
