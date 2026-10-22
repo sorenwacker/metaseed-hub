@@ -105,6 +105,12 @@
                 <button class="btn btn-sm" onclick="ERD.exportPng(currentProfiles.join('_vs_').replaceAll('/', '-'), visibleLegend())"
                         data-testid="export-png"
                         title="Download the whole graph as a PNG image">PNG</button>
+                <button class="btn btn-sm" onclick="exportModel('markdown')"
+                        title="The model of the first profile as Markdown: every entity, root first, with its fields, descriptions, constraints and examples">MD</button>
+                <button class="btn btn-sm" onclick="exportModel('csv')"
+                        title="The fields of the first profile as CSV, one row per field">CSV</button>
+                <button class="btn btn-sm" onclick="exportModel('xlsx')"
+                        title="The model of the first profile as an Excel workbook: Entities, Fields and Rules sheets">XLSX</button>
             </div>
         </div>
         <div class="erd-canvas-wrapper">
@@ -166,6 +172,12 @@ const profileVersions = {{ profile_versions | tojson | safe }};
 
 // State
 let currentProfiles = [];
+
+// The model of the first (base) profile as a file: the documentation export.
+function exportModel(format) {
+    if (!currentProfiles.length) return;
+    window.location.href = `${BASE_URL}/explore/doc/${format}/${currentProfiles[0]}`;
+}
 let comparisonData = null;
 let originalGraphData = null;
 let hiddenEntities = new Set();

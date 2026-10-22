@@ -516,4 +516,40 @@ def create_explore_router(templates: Jinja2Templates) -> APIRouter:
                 status_code=500,
             )
 
+    @router.get("/doc/{format_type}/{profile:path}", response_model=None)
+    async def get_model_documentation(
+        request: Request,
+        format_type: str,
+        profile: str,
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Response:
+        """One profile's model as Markdown, a fields CSV, or an ``xlsx`` workbook.
+
+        The profile is loaded as the explorer loads it, so a caller gets the
+        documentation of exactly the specs they may open.
+        """
+        from metaseed_hub.ui.dependencies import (
+            AuthRequiredError,
+            get_current_user_from_cookie,
+            get_tenant_for_user,
+        )
+        from metaseed_hub.ui.metaseed_ui import documentation_download
+
+        user = await get_current_user_from_cookie(request)
+        if not user:
+            raise AuthRequiredError()
+        key, _, version = profile.rpartition("/")
+        tenant = await get_tenant_for_user(session, user)
+        loaded = await load_profile_spec(
+            session,
+            key,
+            version,
+            tenant.id if tenant else None,
+            user_id=await _db_user_id_of(session, user),
+        )
+        if loaded is None:
+            return JSONResponse({"error": f"No profile {profile} you can open"}, status_code=404)
+        download: Response = documentation_download(loaded[1], format_type)
+        return download
+
     return router
