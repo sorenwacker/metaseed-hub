@@ -56,10 +56,8 @@ services:
       retries: 5
 
   matomo:
-    image: matomo:5.13.0-apache
+    image: matomo:5.14.0-apache
     container_name: metaseed-matomo
-    # Off until a matomo image carries PHP >= 8.4.27 (PHP2Shell); see docs/matomo.md.
-    profiles: ["php2shell-disabled"]
     restart: always
     depends_on:
       matomo-db:
