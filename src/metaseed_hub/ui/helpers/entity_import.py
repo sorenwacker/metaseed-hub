@@ -137,6 +137,23 @@ def _containment_order(facade: Any, root_entity: str) -> list[str]:
     return order
 
 
+def _holding_node(
+    facade: Any, child_type: str, field: str | None, candidates: list[tuple[str, str]]
+) -> str | None:
+    """The record among ``candidates`` that holds ``child_type`` in ``field``.
+
+    The loader in metaseed chooses the same way. Without a field, or when no
+    candidate's type has it, the first record carrying the identifier is
+    taken, as before.
+    """
+    if field:
+        for node_id, entity_type in candidates:
+            helper = getattr(facade, entity_type, None)
+            if (getattr(helper, "child_fields", {}) or {}).get(field) == child_type:
+                return node_id
+    return candidates[0][0] if candidates else None
+
+
 def add_entities_in_order(
     state: AppState,
     facade: Any,
@@ -167,9 +184,11 @@ def add_entities_in_order(
         count = len(entities_by_type[entity_type])
         errors.append(f"{entity_type}: not an entity type of this profile ({count} skipped)")
 
-    # Identifier value -> created node id, so a child's ``_parent`` column can
-    # land it under its parent instead of every import flattening the tree.
-    node_by_identifier: dict[str, str] = {}
+    # Identifier value -> the (node id, entity type) of every record carrying
+    # it, so a child's ``_parent`` lands under its parent instead of every
+    # import flattening the tree. Records of different types may share an
+    # identifier; the row's ``_parent_field`` says which type holds it.
+    nodes_by_identifier: dict[str, list[tuple[str, str]]] = {}
 
     for entity_type in entity_order:
         for entity_data in entities_by_type.get(entity_type, []):
@@ -180,7 +199,10 @@ def add_entities_in_order(
                 parent_key = str(
                     entity_data.get("_parent") or entity_data.get("_parent_unique_id") or ""
                 ).strip()
-                parent_node_id = node_by_identifier.get(parent_key)
+                parent_field = entity_data.get("_parent_field") or None
+                parent_node_id = _holding_node(
+                    facade, entity_type, parent_field, nodes_by_identifier.get(parent_key, [])
+                )
                 if parent_key and parent_node_id is None:
                     # The child still imports (losing it would be worse), but
                     # a _parent naming nothing must be said out loud: quietly
@@ -205,6 +227,7 @@ def add_entities_in_order(
                         entity_type,
                         clean_data,
                         parent_id=parent_node_id,
+                        parent_field=parent_field if parent_node_id else None,
                     )
                     imported += 1
                     # Only the declared identifier joins the parent map: any
@@ -214,7 +237,9 @@ def add_entities_in_order(
                     id_field = getattr(helper_for, "identifier_field", None)
                     identifier = clean_data.get(id_field) if id_field else None
                     if isinstance(identifier, str) and identifier:
-                        node_by_identifier.setdefault(identifier, node.id)
+                        nodes_by_identifier.setdefault(identifier, []).append(
+                            (node.id, entity_type)
+                        )
             except Exception as e:
                 # One bad payload must not abort the rest of the import.
                 errors.append(f"{entity_type}: {e}")

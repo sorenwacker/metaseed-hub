@@ -47,6 +47,7 @@ def add_entity_node(
     data: dict[str, Any],
     parent_id: str | None = None,
     helper: Any = None,
+    parent_field: str | None = None,
 ) -> TreeNode:
     """Add an entity node through the facade without validation.
 
@@ -61,6 +62,7 @@ def add_entity_node(
         data: Field values for the entity.
         parent_id: Optional parent node ID for hierarchy.
         helper: Optional entity helper. If not provided, will be fetched from facade.
+        parent_field: The field of the parent that holds the entity, when known.
 
     Returns:
         Created TreeNode.
@@ -72,7 +74,13 @@ def add_entity_node(
     # Create instance using model_construct (skips validation)
     instance = helper.model.model_construct(**data)
 
-    return state.add_node(entity_type, instance, parent_id=parent_id, skip_validation=True)
+    return state.add_node(
+        entity_type,
+        instance,
+        parent_id=parent_id,
+        skip_validation=True,
+        parent_field=parent_field,
+    )
 
 
 def update_entity_node(
