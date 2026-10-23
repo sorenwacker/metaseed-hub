@@ -71,8 +71,9 @@ def test_a_heading_note_says_what_a_valid_value_is() -> None:
     headings = {cell.value: cell for cell in workbook["Study"][1]}
     note = headings["start_date"].comment.text.splitlines()
 
-    # metaseed 0.67 appends the field's example to the summary line.
-    assert any(line.startswith("Optional · Date and time") for line in note)
+    # metaseed 0.68 states the requirement and the type on lines of their own.
+    assert "Optional" in note
+    assert "Format: Date and time" in note
     assert any(line.startswith("Pattern: ") for line in note)
     assert any(line.startswith("Rules: ") for line in note)
 

@@ -619,5 +619,5 @@ def test_form_fields_carry_the_note_their_label_shows() -> None:
     for field in result["required_fields"] + result["optional_fields"]:
         assert field["note"], f"no note for {field['name']}"
     title = next(f for f in result["required_fields"] if f["name"] == "title")
-    assert title["note"].startswith((helper.field_info("title").get("description") or "")[:20])
+    assert (helper.field_info("title").get("description") or "")[:20] in title["note"]
     assert "Required" in title["note"]
