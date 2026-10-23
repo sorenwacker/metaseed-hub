@@ -125,6 +125,8 @@
 
     <script src="/hub/hub-static/js/hub.js?v={{ version_info.version if version_info else 'dev' }}"></script>
     <script src="/static/js/lookup.js?v={{ version_info.version if version_info else 'dev' }}"></script>
+    {# The field-note box over every [data-note]: metaseed's, shared rather than copied. #}
+    <script src="/static/js/field-notes.js?v={{ version_info.version if version_info else 'dev' }}"></script>
     {% block scripts %}{% endblock %}
 
     {# Matomo, only when a site id is configured. Cookieless (disableCookies),

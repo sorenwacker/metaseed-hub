@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.76.0] - 261023
+
+### Changed
+- Built on metaseed 0.68.0: taxon fields (`ontology_term` scoped to NCBITaxon) are chosen by name and exported to ENA and SEEK as the NCBI number; the ontology search finds a typed identifier first.
+- The field-note box is metaseed's `field-notes.js` rather than a copy in `hub.js`.
+- The metaseed dependency is bounded, `>=0.68.0,<1`.
+
+### Added
+- Form labels, required and optional, show the field's note on hover, as table headings do.
+
+### Fixed
+- A published specification is one explorer entry with its versions in the version selector, not one entry per version.
+- A new dataset created from an Excel workbook of a draft or published specification was refused as "from a different profile".
+- Matomo is no longer started by `compose up`.
+
 ## [0.75.0] - 261022
 
 ### Changed
