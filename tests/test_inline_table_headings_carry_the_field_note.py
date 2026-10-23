@@ -79,6 +79,13 @@ def test_the_rendered_heading_shows_the_note_on_hover() -> None:
     assert f'data-note="{note}"' in unescape(html)
 
 
-def test_the_page_draws_the_note_on_hover() -> None:
+def test_the_page_draws_the_note_with_metaseeds_script() -> None:
+    """One hover box for both applications, not a copy in hub.js.
+
+    The copy read a note by position and lost the field's type once metaseed
+    listed the type before the description.
+    """
+    base = (TEMPLATE.parents[1] / "base.html").read_text(encoding="utf-8")
     script = (TEMPLATE.parents[2] / "static" / "js" / "hub.js").read_text(encoding="utf-8")
-    assert "[data-note]" in script and "note-tooltip" in script
+    assert "/static/js/field-notes.js" in base
+    assert "note-tooltip" not in script
