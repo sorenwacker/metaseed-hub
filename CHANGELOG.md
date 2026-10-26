@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.77.0] - 261026
+
+### Changed
+- Built on metaseed 0.69.0. Saving a table row in its own form now writes the dataset; it answered "Saved" while only the session held the change, so a record added that way was gone at the next login (metaseed #356). A row added with **+ Add** has the ontology lookup and an Edit button. A dataset load that could not build every entity says so.
+- seek-ready-template 4.0 and the SOP role are available, and the SEEK sync result counts data files and SOPs.
+- The MCP field tools `spec_add_field` and `spec_update_field` accept `seek_isa_only`.
+- The metaseed dependency is bounded, `>=0.69.0,<1`.
+
 ## [0.76.0] - 261023
 
 ### Changed
