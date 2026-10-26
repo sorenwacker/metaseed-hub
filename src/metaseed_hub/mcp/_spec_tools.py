@@ -411,6 +411,7 @@ def register_spec_tools(  # noqa: C901
         seek_attribute_type: str | None = None,
         seek_controlled_vocab: str | None = None,
         seek_cv_free_text: bool | None = None,
+        seek_isa_only: bool | None = None,
     ) -> str:
         """Add a field to an entity in a draft specification.
 
@@ -471,6 +472,8 @@ def register_spec_tools(  # noqa: C901
             seek_controlled_vocab: The SEEK controlled vocabulary the attribute draws its
                 values from.
             seek_cv_free_text: Whether that controlled vocabulary also accepts free text.
+            seek_isa_only: Whether the field reaches SEEK only inside the ISA-JSON
+                export, because SEEK's record has no attribute for it.
         """
         markers = _markers(
             {
@@ -492,6 +495,7 @@ def register_spec_tools(  # noqa: C901
                 "seek_attribute_type": seek_attribute_type,
                 "seek_controlled_vocab": seek_controlled_vocab,
                 "seek_cv_free_text": seek_cv_free_text,
+                "seek_isa_only": seek_isa_only,
             }
         )
         constraints = _constraints(
@@ -570,6 +574,7 @@ def register_spec_tools(  # noqa: C901
         seek_attribute_type: str | None = None,
         seek_controlled_vocab: str | None = None,
         seek_cv_free_text: bool | None = None,
+        seek_isa_only: bool | None = None,
         clear: list[str] | None = None,
     ) -> str:
         """Change a field in place. Arguments left unset keep their values.
@@ -628,6 +633,8 @@ def register_spec_tools(  # noqa: C901
             seek_controlled_vocab: The SEEK controlled vocabulary the attribute draws its
                 values from.
             seek_cv_free_text: Whether that controlled vocabulary also accepts free text.
+            seek_isa_only: Whether the field reaches SEEK only inside the ISA-JSON
+                export, because SEEK's record has no attribute for it.
             clear: Constraint names to remove, e.g. ["pattern"]. Constraints
                 only: a marker is unset by passing its own empty value.
         """
@@ -653,6 +660,7 @@ def register_spec_tools(  # noqa: C901
                 "seek_attribute_type": seek_attribute_type,
                 "seek_controlled_vocab": seek_controlled_vocab,
                 "seek_cv_free_text": seek_cv_free_text,
+                "seek_isa_only": seek_isa_only,
             }
         )
         constraints = _constraint_values(
