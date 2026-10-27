@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.78.0] - 261027
+
+### Changed
+- Built on metaseed 0.70.0. An Excel import reads integer, float, boolean, date and datetime cells as their declared type instead of text; a value that does not convert keeps its text and validation reports it.
+- The metaseed dependency is bounded, `>=0.70.0,<1`.
+
 ## [0.77.0] - 261026
 
 ### Changed
