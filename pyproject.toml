@@ -15,7 +15,7 @@ keywords = [
     "darwin-core",
     "dissco",
     "fairdom-seek",
-    "metaseed>=0.69.0,<1",
+    "metaseed>=0.70.0,<1",
     "fastapi",
     "htmx",
     "mcp",
@@ -49,7 +49,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "pyjwt[crypto]>=2.10,<3",
     "httpx>=0.28.0",
-    "metaseed[dcat,seek]>=0.69.0,<1",
+    "metaseed[dcat,seek]>=0.70.0,<1",
     "mcp>=1.30,<2",
     "types-pyyaml>=6.0.12.20260408",
 ]
