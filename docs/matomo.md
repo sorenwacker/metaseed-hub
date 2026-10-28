@@ -41,7 +41,7 @@ On 261022 the docker library rebuilt `matomo:5.14.0-apache` on PHP 8.4.27. The p
 docker run --rm --entrypoint php matomo:<tag> -r 'echo PHP_VERSION;'
 ```
 
-The pin is the Matomo version, not the PHP version: the same tag was rebuilt on 261021 with PHP 8.4.26 and on 261022 with 8.4.27, so a host that pulled `5.14.0-apache` before 261022 05:11 UTC keeps the vulnerable build until it pulls again.
+The same tag was rebuilt on 261021 with PHP 8.4.26 and on 261022 with 8.4.27, and a deploy runs `docker compose up -d` without a pull, so a host that pulled `5.14.0-apache` before 261022 05:11 UTC would keep the vulnerable build. The image is therefore pinned by digest as well as tag (`matomo:5.14.0-apache@sha256:40680f8e…`, PHP 8.4.27 on amd64 and arm64): a digest names one build, which the host fetches if it does not hold it. `test_matomo_is_pinned_to_the_build_that_carries_the_fix` fails if the digest is dropped. Renovate updates the digest with each rebuild; check the new build's PHP as above before merging that PR.
 
 ## Why the dashboard is tunnel-only
 

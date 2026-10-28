@@ -56,7 +56,7 @@ services:
       retries: 5
 
   matomo:
-    image: matomo:5.14.0-apache
+    image: matomo:5.14.0-apache@sha256:40680f8e7ab659c55659dd69e069e261825ef1d4a0bfd881b52714536c935b6e
     container_name: metaseed-matomo
     restart: always
     depends_on:
