@@ -76,6 +76,7 @@ def _remove_outright(*, names: tuple[str, ...] = (), ids: tuple[str, ...] = ()) 
 def test_an_import_runs_as_a_job_the_panel_follows(driver) -> None:  # noqa: F811
     """One real ENA study (four runs), end to end: the panel polls the job, the bar fills,
     the dataset and the end of the job are announced."""
+    from selenium.common.exceptions import StaleElementReferenceException
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
 
@@ -104,7 +105,9 @@ def test_an_import_runs_as_a_job_the_panel_follows(driver) -> None:  # noqa: F81
     )
     # A job that ENA answers at once is done before the panel can be read, so
     # nothing is asserted about the running state; the end is what matters.
-    WebDriverWait(driver, 180).until(
+    # The panel polls and replaces itself, so a read can land on the element
+    # just swapped out; that read is retried, not taken as a failure.
+    WebDriverWait(driver, 180, ignored_exceptions=(StaleElementReferenceException,)).until(
         lambda d: d.find_element(By.ID, panel_id).get_attribute("data-status") != "running"
     )
     panel = driver.find_element(By.ID, panel_id)
