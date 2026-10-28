@@ -30,7 +30,9 @@ _UPDATE_SCRIPT = _ROLE / "templates" / "update-containers.sh.j2"
 # PostgreSQL 10 and later version as MAJOR.MINOR only -- 16.15 is a complete
 # version, not a truncated one -- so the third component is optional. An
 # optional variant suffix (-alpine, -apache) may follow.
-_FULL_PIN = re.compile(r"^[a-z0-9][a-z0-9./_-]*:\d+\.\d+(\.\d+)?(-[a-z0-9.]+)?$")
+_FULL_PIN = re.compile(
+    r"^[a-z0-9][a-z0-9./_-]*:\d+\.\d+(\.\d+)?(-[a-z0-9.]+)?(@sha256:[0-9a-f]{64})?$"
+)
 
 # Databases that cannot open a data directory written by a newer major.
 _MAJOR_LOCKED = ["postgres", "mariadb"]
@@ -233,13 +235,27 @@ def test_a_release_deploy_applies_the_container_pins_afterwards() -> None:
     assert "log_error" in tail, "a failed update is logged"
 
 
-def test_matomo_stays_off_until_php2shell_is_fixed() -> None:
-    """Matomo serves PHP publicly and no released image carries the PHP2Shell
-    fix (PHP 8.4.27). A compose profile keeps ``docker compose up -d`` -- which
-    every deploy runs -- from starting it. Remove this gate with the profile;
-    see docs/matomo.md.
+def test_matomo_pin_carries_the_php2shell_fix() -> None:
+    """Matomo serves PHP publicly. 5.14.0 is the first matomo release whose
+    apache image carries PHP 8.4.27, the PHP2Shell fix (CVE-2026-109618,
+    CVE-2026-109619); an older pin would bring the vulnerable PHP back on the
+    next deploy. The service must also run: a leftover profile would keep it
+    out of ``docker compose up -d``. See docs/matomo.md.
     """
-    compose = yaml.safe_load(_PROD_COMPOSE.read_text())
-    assert "php2shell-disabled" in compose["services"]["matomo"].get("profiles", []), (
-        "matomo would start on the next deploy while its PHP is vulnerable to PHP2Shell"
+    matomo = yaml.safe_load(_PROD_COMPOSE.read_text())["services"]["matomo"]
+    version = tuple(
+        int(part) for part in matomo["image"].split("@")[0].split(":")[1].split("-")[0].split(".")
     )
+    assert version >= (5, 14, 0), f"{matomo['image']} predates the PHP2Shell fix"
+    assert not matomo.get("profiles"), "a profile keeps matomo from starting on deploy"
+
+
+def test_matomo_is_pinned_to_the_build_that_carries_the_fix() -> None:
+    """``matomo:5.14.0-apache`` was rebuilt under the same tag, on PHP 8.4.26 at
+    261021 and on 8.4.27 at 261022. A deploy runs ``docker compose up -d``
+    without a pull, so a host holding the earlier build would keep running the
+    vulnerable PHP. A digest names one build, which the host must fetch if it
+    does not have it. See docs/matomo.md.
+    """
+    image = yaml.safe_load(_PROD_COMPOSE.read_text())["services"]["matomo"]["image"]
+    assert "@sha256:" in image, f"{image} names a tag, not a build"
