@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.79.0] - 261029
+
+### Changed
+- Built on metaseed 0.71.0. The hierarchical graph layout is the containment tree, with reference edges drawn over it rather than deciding where a node goes. Records stored with the same id no longer get a new one on every load, which redrew them on every graph poll. A dataset whose profile version is not installed is named on the datasets page instead of answering with a server error.
+- The metaseed dependency is bounded, `>=0.71.0,<1`.
+
 ## [0.78.0] - 261027
 
 ### Changed
