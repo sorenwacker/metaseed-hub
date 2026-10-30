@@ -14,6 +14,7 @@ collaboration keeps reaching its items without signing in again.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -165,6 +166,21 @@ async def _fresh_rows(session: AsyncSession, user_id: str) -> list[GroupMembersh
         select(GroupMembership).where(GroupMembership.user_id == user_id)
     )
     return list(result.scalars().all())
+
+
+async def users_in_groups(session: AsyncSession, matches: Callable[[str], bool]) -> list[str]:
+    """Every user with a fresh recorded membership of a group ``matches`` accepts.
+
+    Args:
+        session: Database session.
+        matches: Decides whether a group URN is one of those wanted.
+    """
+    rows = await session.execute(
+        select(GroupMembership.user_id, GroupMembership.urn)
+        .join(User, User.id == GroupMembership.user_id)
+        .where(User.memberships_read_at >= _fresh_after())
+    )
+    return sorted({str(user_id) for user_id, urn in rows.all() if matches(urn)})
 
 
 async def entitled_urns_of(session: AsyncSession, user_id: str) -> set[str]:
