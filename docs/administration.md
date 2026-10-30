@@ -38,6 +38,8 @@ These are recorded in the database rather than read from the host's journal, for
 
 Only the exception type and message are kept — never request bodies or headers — so the list does not accumulate a copy of users' data. Messages longer than 2000 characters are truncated. The user column is empty when the caller was not identified, and becomes empty if that account is later deleted; the error itself is kept.
 
+Administrators are told of new errors through the [notification bell](collaboration.md#notifications). An error is notified when no error of the same exception type on the same path was recorded in the hour before it, so a failure that repeats produces one notification per hour rather than one per request; every occurrence is still listed here. An administrator is anyone whose collaboration membership, recorded at their last sign-in, includes the admin group, so someone who has not signed in since joining it, or whose reading has gone stale, is not notified until they sign in again. Clicking the notification opens the **Errors** tab.
+
 Records are removed automatically 30 days after they occur. Recording never interferes with the error itself: the exception propagates unchanged, so the usual 500 response and the log line are exactly as before, and a failure to record is logged rather than raised.
 
 ## Removing a dataset or specification
