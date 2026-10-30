@@ -19,7 +19,7 @@ from metaseed_hub.ui.routes.admin import is_admin
 @pytest.fixture(autouse=True)
 def _bare_admin_role(monkeypatch: pytest.MonkeyPatch):
     """Pin the default configuration; the environment may override it."""
-    monkeypatch.setattr("metaseed_hub.ui.routes.admin.get_admin_role", lambda: "admin")
+    monkeypatch.setattr("metaseed_hub.admins.get_admin_role", lambda: "admin")
 
 
 def _user(roles: list[str] | None = None, entitlements: list[str] | None = None):
@@ -92,7 +92,7 @@ class TestUrnConfiguredAdmin:
 
     @pytest.fixture(autouse=True)
     def _urn_admin_role(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr("metaseed_hub.ui.routes.admin.get_admin_role", lambda: self.URN)
+        monkeypatch.setattr("metaseed_hub.admins.get_admin_role", lambda: self.URN)
 
     def test_the_configured_group_grants_admin(self) -> None:
         assert is_admin(_user(entitlements=[self.URN]))
@@ -132,7 +132,7 @@ class TestTheHeaderLinksTheDashboard:
 
     @pytest.fixture(autouse=True)
     def _urn_admin_role(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr("metaseed_hub.ui.routes.admin.get_admin_role", lambda: self.URN)
+        monkeypatch.setattr("metaseed_hub.admins.get_admin_role", lambda: self.URN)
 
     async def _home(self, user: TokenUser) -> str:
         from unittest.mock import AsyncMock, patch

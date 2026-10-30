@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
+from metaseed_hub.admins import grants_admin
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.container_drift import check as check_container_drift
@@ -40,15 +41,6 @@ def init_templates(templates: "Jinja2Templates") -> None:  # noqa: F821
     _init_render_templates(templates)
 
 
-def get_admin_role() -> str:
-    """Get the admin role name from settings.
-
-    Returns:
-        Role name that grants admin access (default: "admin").
-    """
-    return get_settings().admin_role
-
-
 def _has_admin_role(user: TokenUser) -> bool:
     """Whether the token grants admin.
 
@@ -67,13 +59,7 @@ def _has_admin_role(user: TokenUser) -> bool:
     Returns:
         True if the user is in the admin group.
     """
-    admin_role = get_admin_role()
-    if ":" in admin_role:
-        return admin_role in user.entitlements
-    return any(
-        urn.endswith(f":{admin_role}") or urn.endswith(f"#{admin_role}")
-        for urn in user.entitlements
-    )
+    return grants_admin(user.entitlements)
 
 
 async def require_admin(
