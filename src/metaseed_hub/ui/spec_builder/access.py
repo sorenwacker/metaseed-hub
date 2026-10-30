@@ -245,6 +245,47 @@ async def require_draft_access(
     return draft
 
 
+async def require_visible_spec(session: AsyncSession, spec_id: str, user_id: str) -> Spec:
+    """Load a published specification the caller may see.
+
+    Seeing it is the audience rule every listing applies, or holding a role on
+    it, so its publisher keeps sight of it after leaving the collaboration it
+    went to. Someone outside both gets the 404 of a specification that does
+    not exist: a release to a collaboration is absent for everyone else, not
+    listed and then refused.
+
+    Args:
+        session: Database session.
+        spec_id: Specification identifier.
+        user_id: Database User.id (not keycloak_id) of the caller.
+
+    Returns:
+        The specification, with its tenant and publisher loaded.
+
+    Raises:
+        HTTPException: 404 if it does not exist or the caller may not see it.
+    """
+    from metaseed_hub.audience import visible_specs
+
+    if not _is_uuid(spec_id):
+        raise HTTPException(status_code=404, detail="Spec not found")
+    spec = (
+        await session.execute(
+            select(Spec)
+            .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
+            .where(Spec.id == spec_id, Spec.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
+    if spec is None:
+        raise HTTPException(status_code=404, detail="Spec not found")
+    visible = await session.scalar(
+        select(Spec.id).where(Spec.id == spec_id, await visible_specs(session, user_id))
+    )
+    if visible is None and await role_of(session, resource_for("spec"), spec_id, user_id) is None:
+        raise HTTPException(status_code=404, detail="Spec not found")
+    return spec
+
+
 def state_of(source: Any) -> SpecBuilderState:
     """The ``SpecBuilderState`` a draft or specification row holds.
 

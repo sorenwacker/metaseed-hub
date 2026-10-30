@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -117,11 +118,20 @@ class CommentReaction(Base):
 
 
 class SpecComment(TimestampMixin, Base):
-    """Threaded comments on spec drafts."""
+    """Threaded comments on a spec draft or on a published specification.
+
+    A comment belongs to exactly one of the two: a release is discussed by
+    whoever can see it, a draft by whoever it is shared with, and the threads
+    never mix.
+    """
 
     __tablename__ = "spec_comments"
     __table_args__ = (
+        CheckConstraint(
+            "num_nonnulls(spec_draft_id, spec_id) = 1", name="ck_spec_comments_one_subject"
+        ),
         Index("ix_spec_comments_spec_draft_id", "spec_draft_id"),
+        Index("ix_spec_comments_spec_id", "spec_id"),
         Index("ix_spec_comments_parent_id", "parent_id"),
         Index("ix_spec_comments_created_at", "created_at"),
     )
@@ -131,10 +141,15 @@ class SpecComment(TimestampMixin, Base):
         primary_key=True,
         default=lambda: str(uuid4()),
     )
-    spec_draft_id: Mapped[str] = mapped_column(
+    spec_draft_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("spec_drafts.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    spec_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("specs.id", ondelete="CASCADE"),
+        nullable=True,
     )
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -149,7 +164,7 @@ class SpecComment(TimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relationships
-    spec_draft: Mapped["SpecDraft"] = relationship("SpecDraft", back_populates="comments")
+    spec_draft: Mapped["SpecDraft | None"] = relationship("SpecDraft", back_populates="comments")
     user: Mapped["User"] = relationship("User", back_populates="spec_comments")
     parent: Mapped["SpecComment | None"] = relationship(
         "SpecComment", remote_side="SpecComment.id", back_populates="replies"

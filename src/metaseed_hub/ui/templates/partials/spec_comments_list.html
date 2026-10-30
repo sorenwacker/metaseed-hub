@@ -1,4 +1,4 @@
-{% macro render_spec_comment(comment, draft_id, current_user_id, depth=0) %}
+{% macro render_spec_comment(comment, comments_url, current_user_id, depth=0) %}
 <div class="comment {% if depth > 0 %}comment-reply{% endif %}" data-comment-id="{{ comment.id }}">
     <div class="comment-header">
         <span class="comment-avatar">{{ (comment.user.display_name or comment.user.email)[0]|upper }}</span>
@@ -8,7 +8,7 @@
         </span>
         {% if comment.user_id == current_user_id %}
         <button class="btn-icon btn-danger-text comment-delete"
-                hx-delete="/hub/spec-builder/{{ draft_id }}/comments/{{ comment.id }}"
+                hx-delete="{{ comments_url }}/comments/{{ comment.id }}"
                 hx-target="#spec-comments-list"
                 hx-swap="innerHTML"
                 hx-confirm="Delete this comment?"
@@ -25,7 +25,7 @@
 
             <input type="hidden" id="sc-like-{{ comment.id }}" name="reaction" value="like">
             <button class="reaction-btn {% if user_liked %}active{% endif %}"
-                    hx-post="/hub/spec-builder/{{ draft_id }}/comments/{{ comment.id }}/react"
+                    hx-post="{{ comments_url }}/comments/{{ comment.id }}/react"
                     hx-target="#spec-comments-list"
                     hx-swap="innerHTML"
                     hx-include="#sc-like-{{ comment.id }}"
@@ -37,7 +37,7 @@
             </button>
             <input type="hidden" id="sc-dislike-{{ comment.id }}" name="reaction" value="dislike">
             <button class="reaction-btn {% if user_disliked %}active{% endif %}"
-                    hx-post="/hub/spec-builder/{{ draft_id }}/comments/{{ comment.id }}/react"
+                    hx-post="{{ comments_url }}/comments/{{ comment.id }}/react"
                     hx-target="#spec-comments-list"
                     hx-swap="innerHTML"
                     hx-include="#sc-dislike-{{ comment.id }}"
@@ -55,7 +55,7 @@
 
     <!-- Reply form (hidden by default) -->
     <form class="reply-form hidden" id="spec-reply-form-{{ comment.id }}"
-          hx-post="/hub/spec-builder/{{ draft_id }}/comments"
+          hx-post="{{ comments_url }}/comments"
           hx-target="#spec-comments-list"
           hx-swap="innerHTML">
         <input type="hidden" name="parent_id" value="{{ comment.id }}">
@@ -70,7 +70,7 @@
     {% if comment.replies %}
     <div class="comment-replies">
         {% for reply in comment.replies %}
-            {{ render_spec_comment(reply, draft_id, current_user_id, depth + 1) }}
+            {{ render_spec_comment(reply, comments_url, current_user_id, depth + 1) }}
         {% endfor %}
     </div>
     {% endif %}
@@ -80,7 +80,7 @@
 {% if comments %}
 <div class="comments-thread">
     {% for comment in comments %}
-        {{ render_spec_comment(comment, draft_id, current_user_id) }}
+        {{ render_spec_comment(comment, comments_url, current_user_id) }}
     {% endfor %}
 </div>
 {% else %}
