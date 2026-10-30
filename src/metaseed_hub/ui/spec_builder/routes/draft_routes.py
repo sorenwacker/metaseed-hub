@@ -18,7 +18,8 @@ from starlette.responses import Response
 
 from metaseed_hub.collaborations import NotInCollaborationError, collaborations_of
 from metaseed_hub.models import Dataset, Spec, SpecDraft, SpecDraftMember, SpecStatus, User
-from metaseed_hub.sharing import account_owner
+from metaseed_hub.notifications import collaboration_reached
+from metaseed_hub.sharing import account_owner, resource_for
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.helpers.text import safe_filename
 from metaseed_hub.ui.spec_builder.access import (
@@ -278,6 +279,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
                         f"again."
                     )
                 },
+            )
+        if audience is not None:
+            await collaboration_reached(
+                session, resource_for("spec"), spec.id, actor_id=user_id, urn=audience
             )
 
         # Publish is the moment the draft becomes the spec, so the datasets

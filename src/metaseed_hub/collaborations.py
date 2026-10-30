@@ -183,6 +183,27 @@ async def users_in_groups(session: AsyncSession, matches: Callable[[str], bool])
     return sorted({str(user_id) for user_id, urn in rows.all() if matches(urn)})
 
 
+async def users_entitled_to(session: AsyncSession, urn: str) -> list[str]:
+    """Every user whose fresh recorded membership entitles them to ``urn``.
+
+    The reverse of :func:`entitled_urns_of`, under the same rule: a grant to a
+    collaboration reaches everyone in any of its groups.
+
+    Args:
+        session: Database session.
+        urn: A collaboration or group URN, as a grant or an audience names it.
+    """
+    rows = await session.execute(
+        select(GroupMembership.user_id, GroupMembership.urn)
+        .join(User, User.id == GroupMembership.user_id)
+        .where(User.memberships_read_at >= _fresh_after())
+    )
+    groups: dict[str, list[str]] = {}
+    for user_id, group_urn in rows.all():
+        groups.setdefault(str(user_id), []).append(group_urn)
+    return sorted(user_id for user_id, urns in groups.items() if urn in entitled_urns(urns))
+
+
 async def entitled_urns_of(session: AsyncSession, user_id: str) -> set[str]:
     """Every URN a grant may be matched against for this user, from the snapshot.
 

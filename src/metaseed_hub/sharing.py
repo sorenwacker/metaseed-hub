@@ -566,8 +566,13 @@ async def add_grant(
         existing.role = role
         await session.commit()
         return existing
+    from metaseed_hub.notifications import collaboration_reached
+
     grant = resource.grant_model(**{resource.foreign_key: resource_id}, urn=urn, role=role)
     session.add(grant)
+    await collaboration_reached(
+        session, resource, resource_id, actor_id=actor_id, urn=urn, role=role
+    )
     await session.commit()
     return grant
 
