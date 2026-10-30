@@ -161,11 +161,14 @@ async def comment_posted(
     *,
     actor_id: str,
     parent_author_id: str | None,
+    publisher_id: str | None = None,
 ) -> None:
     """Tell the owners of an item of a comment, and the author replied to of the reply.
 
     One entry per person: an owner who wrote the comment replied to gets the
-    reply, which says more.
+    reply, which says more. A published specification often has no member
+    rows at all, so whoever published it is named by the caller and told as
+    an owner.
     """
     told: set[str] = set()
     if parent_author_id is not None:
@@ -183,8 +186,9 @@ async def comment_posted(
             resource.owns_column() == resource_id, resource.member_model.role == Role.OWNER
         )
     )
-    for owner_id in owners.scalars().all():
+    for owner_id in [*owners.scalars().all(), *([publisher_id] if publisher_id else [])]:
         if str(owner_id) not in told:
+            told.add(str(owner_id))
             await record(
                 session,
                 user_id=owner_id,

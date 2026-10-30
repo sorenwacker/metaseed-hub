@@ -29,6 +29,7 @@ from metaseed_hub.ui.spec_builder.access import (
     datasets_using_spec,
     load_state_for_draft,
     require_owner_role,
+    require_visible_spec,
     save_state_to_draft,
     state_of,
     unpublish_spec,
@@ -343,21 +344,10 @@ def register_draft_routes(router: APIRouter, templates: Jinja2Templates) -> None
     ) -> Response:
         """View a published spec (read-only)."""
         user_id, _tenant_id = user_ctx
-
-        result = await session.execute(
-            select(Spec)
-            .options(selectinload(Spec.tenant), selectinload(Spec.created_by))
-            .where(Spec.id == spec_id, Spec.deleted_at.is_(None))
-        )
-        spec = result.scalar_one_or_none()
-
-        if not spec:
-            raise HTTPException(status_code=404, detail="Spec not found")
-
-        # No tenant check: a published specification is readable by every
-        # signed-in user, which is what publishing it means. Editing and
-        # unpublishing still go through can_edit_spec, so only its author or a
-        # tenant admin can change it.
+        # Not every signed-in user: a specification published to a
+        # collaboration is for its members, and reading it by its address
+        # must follow the rule the listings follow.
+        spec = await require_visible_spec(session, spec_id, user_id)
         builder = state_of(spec)
 
         return await render(

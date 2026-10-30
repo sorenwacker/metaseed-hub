@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+- A published specification has a **Comments** tab. Everyone who can see the specification can discuss it, and whoever published it is notified of each comment. The thread belongs to that version.
+
+### Fixed
+- A specification published to a collaboration could be opened by anyone signed in who had its address. It now answers 404 to everyone outside its audience, as the listings already did.
+
 ## [0.79.0] - 261029
 
 ### Changed

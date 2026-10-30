@@ -93,7 +93,7 @@ The **Comments** tab provides threaded discussion on a dataset.
 - React to a comment with **Like** or **Dislike**.
 - Delete a comment you authored.
 
-Specification drafts have their own **Comments** tab that works the same way.
+Specification drafts have their own **Comments** tab that works the same way, and so does a published specification: a release can be discussed by everyone who can see it, which is the collaboration it was published to, or every user of the hub. Comments on a release belong to that version: a new version starts with none, and forking a specification into a draft does not carry them over. Someone who cannot see a specification can neither open it nor read or write its comments.
 
 ## Notifications
 
@@ -102,7 +102,7 @@ The hub tells you about things that happened to your items while you were not lo
 You are notified when
 
 - someone shares a dataset, a specification draft or a published specification with you, changes your role on it, or removes your access;
-- someone comments on a dataset or a draft you own, or replies to a comment of yours.
+- someone comments on a dataset or a draft you own, or on a specification you published, or replies to a comment of yours.
 
 You are not notified of your own actions, and one action produces at most one entry per person: the owner of a dataset who is also the author of the comment replied to gets the reply, not a second entry for the comment. Access gained or lost through a [collaboration grant](#sharing-with-a-collaboration) produces no notification.
 

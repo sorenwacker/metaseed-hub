@@ -80,6 +80,7 @@
                 <button class="sidebar-tab" data-tab="sharing" onclick="showSidebarTab(this)" data-testid="tab-sharing">
                     Sharing <span class="tab-badge" id="sharing-count"></span>
                 </button>
+                <button class="sidebar-tab" data-tab="comments" onclick="showSidebarTab(this)" data-testid="tab-comments">Comments</button>
             </div>
             <div class="sidebar-tab-content active" data-tab="entities">
                 <div class="entity-tree">
@@ -116,6 +117,24 @@
                      hx-get="/hub/sharing/spec/{{ spec_record.id }}/members"
                      hx-trigger="load" hx-swap="innerHTML">
                 </div>
+            </div>
+            <div class="sidebar-tab-content" data-tab="comments">
+                {# Everyone who can see this release can discuss it; the thread
+                   belongs to this version and is not carried into a fork. #}
+                <div id="spec-comments-list"
+                     hx-get="/hub/spec-builder/spec/{{ spec_record.id }}/comments"
+                     hx-trigger="load"
+                     hx-swap="innerHTML">
+                    Loading comments...
+                </div>
+                <form class="comment-add-form" data-testid="spec-comment-form"
+                      hx-post="/hub/spec-builder/spec/{{ spec_record.id }}/comments"
+                      hx-target="#spec-comments-list"
+                      hx-swap="innerHTML"
+                      data-after-request-reset>
+                    <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
+                    <button type="submit" class="btn btn-sm btn-primary">Post</button>
+                </form>
             </div>
         </aside>
 
