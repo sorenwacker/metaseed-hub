@@ -27,6 +27,8 @@ from metaseed_hub.audience import visible_specs
 from metaseed_hub.auth import TokenUser, get_current_user
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
+from metaseed_hub.notifications import collaboration_reached
+from metaseed_hub.sharing import resource_for
 from metaseed_hub.ui.spec_builder.access import state_of
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
@@ -333,6 +335,11 @@ async def _publish(
             detail=f"'{spec.name}' {spec.version} was published meanwhile",
         ) from exc
     await session.refresh(row)
+    if audience is not None:
+        await collaboration_reached(
+            session, resource_for("spec"), row.id, actor_id=caller.id, urn=audience
+        )
+        await session.commit()
     response.status_code = status.HTTP_201_CREATED
     return _spec_summary(row, tenant.id)
 

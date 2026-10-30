@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Added
+- Members of a collaboration are notified when an item is shared with it, or a specification is published to it. A grant's role change or removal, and a publication to everyone, notify nobody.
 - Administrators are notified of server errors, once per exception type and path per hour. The notification opens the **Errors** tab of the dashboard.
 - A published specification has a **Comments** tab. Everyone who can see the specification can discuss it, and whoever published it is notified of each comment. The thread belongs to that version.
 

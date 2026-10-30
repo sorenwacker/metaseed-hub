@@ -43,6 +43,8 @@ class Kind(StrEnum):
     REPLY = "reply"
     IMPORT_FINISHED = "import_finished"
     SERVER_ERROR = "server_error"
+    COLLABORATION_SHARED = "collaboration_shared"
+    PUBLISHED_TO_COLLABORATION = "published_to_collaboration"
 
 
 #: Each kind as the words before the item's title and the words after it.
@@ -54,6 +56,8 @@ _PHRASES: dict[Kind, tuple[str, str]] = {
     Kind.REPLY: ("replied to your comment on the {word}", "."),
     Kind.IMPORT_FINISHED: ("Finished importing", ": {detail}."),
     Kind.SERVER_ERROR: ("A server error occurred:", "."),
+    Kind.COLLABORATION_SHARED: ("shared the {word}", " with {detail}."),
+    Kind.PUBLISHED_TO_COLLABORATION: ("published the {word}", " to {detail}."),
 }
 
 #: Kinds with nobody behind them to name: the person's own background work,
@@ -200,6 +204,47 @@ async def error_recorded(session: AsyncSession, event: ErrorEvent) -> None:
                 resource_id=event.id,
                 resource_title=title,
             )
+        )
+
+
+async def collaboration_reached(
+    session: AsyncSession,
+    resource: SharedResource,
+    resource_id: str,
+    *,
+    actor_id: str,
+    urn: str,
+    role: Role | None = None,
+) -> None:
+    """Tell everyone in ``urn`` that an item was shared with it or published to it.
+
+    With a ``role`` it was shared through a grant; without one, a
+    specification was published to ``urn`` as its audience. Members are read
+    from the memberships recorded at sign-in. Added to the session for the
+    caller to commit with the change.
+
+    Args:
+        session: Database session.
+        resource: The kind of item.
+        resource_id: The item.
+        actor_id: Who shared or published it, who is not told.
+        urn: The collaboration or group.
+        role: The role the grant gives, or None for a publication.
+    """
+    from metaseed_hub.collaborations import grant_label, users_entitled_to
+
+    label = grant_label(urn)
+    kind = Kind.PUBLISHED_TO_COLLABORATION if role is None else Kind.COLLABORATION_SHARED
+    detail = label if role is None else f"{label} as {role.value}"
+    for user_id in await users_entitled_to(session, urn):
+        await record(
+            session,
+            user_id=user_id,
+            actor_id=actor_id,
+            kind=kind,
+            resource=resource,
+            resource_id=resource_id,
+            detail=detail[:64],
         )
 
 
