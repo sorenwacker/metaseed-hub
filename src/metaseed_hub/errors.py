@@ -26,6 +26,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from metaseed_hub.models import ErrorEvent, User
+from metaseed_hub.notifications import error_recorded
 
 #: Opens a database session as an async context manager.
 SessionFactory = Callable[[], AsyncContextManager[AsyncSession]]
@@ -51,21 +52,27 @@ async def record_error(
     """Store one unhandled error. Never raises."""
     try:
         user_id = await _caller_id(session, request, resolve_caller)
-        session.add(
-            ErrorEvent(
-                method=request.method,
-                path=str(request.url.path)[:500],
-                exception_type=type(exc).__name__[:200],
-                message=(str(exc) or repr(exc))[:_MAX_MESSAGE],
-                user_id=user_id,
-            )
+        event = ErrorEvent(
+            method=request.method,
+            path=str(request.url.path)[:500],
+            exception_type=type(exc).__name__[:200],
+            message=(str(exc) or repr(exc))[:_MAX_MESSAGE],
+            user_id=user_id,
         )
+        session.add(event)
         await session.execute(
             delete(ErrorEvent).where(ErrorEvent.occurred_at < datetime.now(UTC) - RETENTION)
         )
         await session.commit()
     except Exception:
         logger.exception("Could not record an error event")
+        return
+    # After the commit, so a failure to notify cannot lose the record itself.
+    try:
+        await error_recorded(session, event)
+        await session.commit()
+    except Exception:
+        logger.exception("Could not notify the admins of an error event")
 
 
 async def _caller_id(

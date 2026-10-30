@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, select, update
 
-from metaseed_hub.models import Notification, User
+from metaseed_hub.models import ErrorEvent, Notification, User
 from metaseed_hub.sharing import Role
 
 if TYPE_CHECKING:
@@ -42,6 +42,7 @@ class Kind(StrEnum):
     COMMENT = "comment"
     REPLY = "reply"
     IMPORT_FINISHED = "import_finished"
+    SERVER_ERROR = "server_error"
 
 
 #: Each kind as the words before the item's title and the words after it.
@@ -52,16 +53,19 @@ _PHRASES: dict[Kind, tuple[str, str]] = {
     Kind.COMMENT: ("commented on the {word}", "."),
     Kind.REPLY: ("replied to your comment on the {word}", "."),
     Kind.IMPORT_FINISHED: ("Finished importing", ": {detail}."),
+    Kind.SERVER_ERROR: ("A server error occurred:", "."),
 }
 
-#: Kinds that report the person's own background work, so no actor is named.
-_OWN_WORK = frozenset({Kind.IMPORT_FINISHED})
+#: Kinds with nobody behind them to name: the person's own background work,
+#: and an error the platform reports.
+_WITHOUT_ACTOR = frozenset({Kind.IMPORT_FINISHED, Kind.SERVER_ERROR})
 
 _WORDS = {
     "dataset": "dataset",
     "draft": "specification draft",
     "spec": "specification",
     "import": "import",
+    "error": "error",
 }
 
 _URLS = {
@@ -69,6 +73,7 @@ _URLS = {
     "draft": "/hub/spec-builder/{id}",
     "spec": "/hub/spec-builder/spec/{id}",
     "import": "/hub/datasets/new#repository",
+    "error": "/hub/admin/#errors",
 }
 
 
@@ -154,6 +159,50 @@ async def import_finished(
     )
 
 
+#: How long one exception type on one path is notified once. An error that
+#: repeats on every request would otherwise fill every admin's bell.
+ERROR_QUIET_PERIOD = timedelta(hours=1)
+
+
+async def error_recorded(session: AsyncSession, event: ErrorEvent) -> None:
+    """Tell every admin of ``event``, unless its like was told within the hour.
+
+    "Its like" is the same exception type on the same path; the message is
+    left out, since it often carries an id that differs on every request.
+    Added to the session for the caller to commit with the event.
+
+    Args:
+        session: Database session, with ``event`` flushed into it.
+        event: The error just recorded.
+    """
+    from metaseed_hub.admins import admin_ids
+
+    earlier = await session.scalar(
+        select(ErrorEvent.id)
+        .where(
+            ErrorEvent.id != event.id,
+            ErrorEvent.exception_type == event.exception_type,
+            ErrorEvent.path == event.path,
+            ErrorEvent.occurred_at >= datetime.now(UTC) - ERROR_QUIET_PERIOD,
+        )
+        .limit(1)
+    )
+    if earlier is not None:
+        return
+    title = f"{event.exception_type} on {event.method} {event.path}"[:255]
+    for admin_id in await admin_ids(session):
+        session.add(
+            Notification(
+                user_id=admin_id,
+                actor_id=None,
+                kind=Kind.SERVER_ERROR.value,
+                resource_kind="error",
+                resource_id=event.id,
+                resource_title=title,
+            )
+        )
+
+
 async def comment_posted(
     session: AsyncSession,
     resource: SharedResource,
@@ -235,7 +284,7 @@ class Entry:
 def _entry(notification: Notification, actor_name: str | None) -> Entry:
     kind = Kind(notification.kind)
     before, after = _PHRASES[kind]
-    actor = "" if kind in _OWN_WORK else (actor_name or "Someone")
+    actor = "" if kind in _WITHOUT_ACTOR else (actor_name or "Someone")
     lead = before.format(word=_WORDS[notification.resource_kind])
     if actor:
         lead = f"{actor} {lead}"
