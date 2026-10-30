@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.80.0] - 261030
 
 ### Added
 - Members of a collaboration are notified when an item is shared with it, or a specification is published to it. A grant's role change or removal, and a publication to everyone, notify nobody.
