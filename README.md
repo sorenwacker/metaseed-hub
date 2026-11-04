@@ -8,6 +8,8 @@
 
 Metaseed Hub is the hosted, shared version of [metaseed](https://github.com/sorenwacker/metaseed). Metaseed helps research teams create, validate and share standardized metadata. It supports domain standards such as MIAPPE, ISA and Darwin Core, and the submission formats of repositories such as ENA, PRIDE and MetaboLights. Each standard becomes a guided form with automated checks and suggestions from controlled vocabularies. Researchers can import public records, export files in the format a repository expects, and compare or combine standards without programming. Metaseed runs in the browser (locally or on the hosted hub), from the command line, from Python, or through an AI assistant.
 
+Each standard becomes a self-describing context that people and AI agents share: people work in forms, agents connect through the Model Context Protocol (MCP), and both are checked against the same rules. FAIR starts before the data is even created: Metaseed plants the seed from which FAIR data grows.
+
 Metaseed runs on one machine for one person; the hub runs for a team, with accounts, sharing, and a place to publish specifications.
 
 [Documentation](https://sorenwacker.github.io/metaseed-hub/) · [Live instance](https://metaseed.ewi.tudelft.nl) · [Changelog](CHANGELOG.md)
