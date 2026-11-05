@@ -13,6 +13,7 @@ directory written by a newer major. And something on the host must actually
 apply a merged pin -- a bump that only lands in `main` changes nothing.
 """
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -259,3 +260,24 @@ def test_matomo_is_pinned_to_the_build_that_carries_the_fix() -> None:
     """
     image = yaml.safe_load(_PROD_COMPOSE.read_text())["services"]["matomo"]["image"]
     assert "@sha256:" in image, f"{image} names a tag, not a build"
+
+
+def test_renovate_config_sets_no_schedule_of_its_own() -> None:
+    """The workflow cron is the only schedule. GitHub starts scheduled runs hours
+    late, so a schedule in renovate.json (``schedule:weekly`` is before 04:00
+    Monday) put every run outside its own window and no image update was ever
+    proposed. See docs/container-updates.md.
+    """
+    config = json.loads(_RENOVATE.read_text())
+
+    def schedules(node: object) -> list[str]:
+        if isinstance(node, dict):
+            found = [str(node["schedule"])] if "schedule" in node else []
+            return found + [s for value in node.values() for s in schedules(value)]
+        if isinstance(node, list):
+            return [s for item in node for s in schedules(item)] + [
+                item for item in node if isinstance(item, str) and item.startswith("schedule:")
+            ]
+        return []
+
+    assert schedules(config) == []
