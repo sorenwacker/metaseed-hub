@@ -166,7 +166,8 @@ async def get_spec(
     one from the caller's tenant, then any published one.
 
     Raises:
-        HTTPException: 404 when nothing the caller can see matches.
+        HTTPException: 404 when nothing the caller can see matches; 409 when
+            the caller's own draft of that name and version holds nothing yet.
     """
     caller = await _caller(session, user)
     draft = (
@@ -178,6 +179,14 @@ async def get_spec(
             )
         )
     ).scalar_one_or_none()
+    if draft is not None and state_of(draft).spec is None:
+        # Listed by GET /specs, so "not found" would contradict what the same
+        # caller was just shown.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Your draft {name} {version} holds no specification yet; "
+            "open it in the Builder and save it first",
+        )
     spec_data = draft.spec_data if draft is not None else None
     if not spec_data:
         rows = list(

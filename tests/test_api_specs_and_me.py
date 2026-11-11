@@ -206,3 +206,28 @@ async def test_a_document_that_is_not_a_profile_is_refused(
     async with _build_client(session, caller) as client:
         response = await client.post("/api/specs", json={"yaml": "just: text"})
     assert response.status_code == 422
+
+
+async def test_a_draft_that_holds_no_specification_says_so(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    """A draft started in the Builder and never filled is listed by the API but
+    held nothing to send, so fetching it answered "Specification not found" for
+    a draft the same caller had just been shown."""
+    user = (await session.execute(select(User).where(User.keycloak_id == CALLER_SUB))).scalar_one()
+    session.add(
+        SpecDraft(
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            name="test-empty",
+            version="0.2",
+            spec_data={},
+        )
+    )
+    await session.commit()
+    async with _build_client(session, caller) as client:
+        listed = await client.get("/api/specs")
+        response = await client.get("/api/specs/test-empty/0.2")
+    assert any(s["name"] == "test-empty" for s in listed.json())
+    assert response.status_code == 409
+    assert "holds no specification" in response.json()["detail"]
