@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.81.0] - 261111
+
+### Added
+- The admin dashboard shows active users in the last 30 days (signed in, saved a dataset), users per month, specifications by source and audience, datasets by sharing state and profile source, individual and collaboration shares, and a **Shared with them** column in the user directory.
+
+### Fixed
+- A pooled database connection that Postgres had closed, as on its restart on 261105, was handed to the next request, which failed with "connection is closed". Connections are now checked before use.
+- The container drift check reported matomo, the one image pinned by digest, as behind its pin while it ran it. It now compares the image each container was created from.
+- Container pins raised for matomo 5.14.2, mariadb 11.8.9 and redis 7.4.12, and Renovate proposes image updates again.
+
 ## [0.80.0] - 261030
 
 ### Added
