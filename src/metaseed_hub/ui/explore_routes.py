@@ -349,7 +349,30 @@ async def _build_explore_catalog(
         # Oldest first: the picker selects the last as the default.
         versions.sort(key=version_sort_key)
 
-    return profiles, profile_versions, profile_display_names
+    return profiles, profile_versions, _told_apart(profile_display_names)
+
+
+def _told_apart(labels: dict[str, str]) -> dict[str, str]:
+    """Append the name to every label another entry also carries.
+
+    Two specifications can share a display name: a draft created at a name
+    already taken is saved as ``<name>-2`` with its display name unchanged.
+    Labelled by display name alone they were indistinguishable in the picker.
+
+    Args:
+        labels: Picker key (``draft:<name>``, ``spec:<name>`` or a built-in
+            profile) to label.
+
+    Returns:
+        The labels, with ``· <name>`` added to each that is not unique.
+    """
+    counts: dict[str, int] = {}
+    for label in labels.values():
+        counts[label] = counts.get(label, 0) + 1
+    return {
+        key: f"{label} · {key.split(':', 1)[-1]}" if counts[label] > 1 else label
+        for key, label in labels.items()
+    }
 
 
 def create_explore_router(templates: Jinja2Templates) -> APIRouter:
