@@ -91,3 +91,33 @@ def test_every_template_class_has_a_rule_or_a_script_that_uses_it() -> None:
         "classes the templates use that no stylesheet defines and no script "
         f"reads (drop them, or style them): {unknown}"
     )
+
+
+def _properties(css: str, selector: str) -> dict[str, str]:
+    """The declarations of the top-level rule for exactly ``selector``."""
+    for found, body in _top_level_blocks(css):
+        if found == selector:
+            pairs = (part.split(":", 1) for part in body.split(";") if ":" in part)
+            return {name.strip(): value.strip() for name, value in pairs}
+    return {}
+
+
+def test_the_checks_success_card_overrides_every_library_success_property() -> None:
+    """The page loads the library's stylesheet before the hub's, and the library
+    styles ``.validation-success`` as centred green text. The hub's Checks card
+    carries that class too, so it rendered centred and green, its heading
+    spilling past the card in the narrow sidebar. The hub's rule must set every
+    property the library's does, so a property the library adds later cannot
+    leak in the same way."""
+    library = _properties((LIBRARY_STATIC / "css/style.css").read_text(), ".validation-success")
+    hub = _properties(HUB_CSS.read_text(), ".validation-summary.validation-success")
+    assert library, "the library no longer styles .validation-success; drop this test"
+    assert sorted(set(library) - set(hub)) == []
+
+
+def test_the_checks_summary_text_wraps_inside_the_card() -> None:
+    """A flex item does not shrink below its longest word unless told to, so
+    "specification" overflowed the card's border in the sidebar."""
+    text = _properties(HUB_CSS.read_text(), ".validation-summary-text")
+    assert text.get("min-width") == "0"
+    assert text.get("overflow-wrap") == "anywhere"
