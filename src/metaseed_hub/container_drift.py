@@ -140,17 +140,31 @@ def read_pins(compose_path: Path = DEFAULT_COMPOSE_PATH) -> Mapping[str, str]:
 
 
 def read_running() -> Mapping[str, str]:
-    """Read the image of each running container from Docker.
+    """Read the image reference each running container was created from.
+
+    The reference comes from each container's configuration, not from the
+    ``docker ps`` listing: the listing drops the digest of a ``name:tag@digest``
+    reference and shows the tag alone, so a container on its digest pin would
+    never match that pin.
 
     Returns:
-        Mapping of container name to the image it runs.
+        Mapping of container name to the image reference it runs.
 
     Raises:
         OSError: If the Docker CLI is absent.
         subprocess.SubprocessError: If Docker cannot be queried.
     """
+    ids = subprocess.run(  # noqa: S603
+        ["docker", "ps", "-q"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+    ).stdout.split()
+    if not ids:
+        return {}
     result = subprocess.run(  # noqa: S603
-        ["docker", "ps", "--format", "{{.Names}}\t{{.Image}}"],  # noqa: S607
+        ["docker", "inspect", "--format", "{{.Name}}\t{{.Config.Image}}", *ids],  # noqa: S607
         capture_output=True,
         text=True,
         check=True,
@@ -160,7 +174,7 @@ def read_running() -> Mapping[str, str]:
     for line in result.stdout.splitlines():
         if "\t" in line:
             name, image = line.split("\t", 1)
-            running[name.strip()] = image.strip()
+            running[name.strip().lstrip("/")] = image.strip()
     return running
 
 
