@@ -9,8 +9,13 @@ Open it at `/hub/admin/`.
 | Section | Contents |
 |---------|----------|
 | **System Overview** | Total active users and total datasets |
+| **Active users (last 30 days)** | Users who signed in, and users who saved a dataset version, in the last 30 days |
+| **Users over time** | Registered users at the end of each month |
+| **Specifications** | Built-in profiles, published specifications by audience, and drafts by sharing state |
+| **Datasets** | Datasets by sharing state and by the kind of profile they are built on |
+| **Sharing** | Shares with individuals and with collaborations, in total and per collaboration |
 | **Activity (Last 30 Days)** | Daily counts of user registrations and dataset creations |
-| **User Directory** | Registered users with email, display name, registration date, dataset count, and last sign-in |
+| **User Directory** | Registered users with email, display name, registration date, dataset count, specification count, shares received, and last sign-in |
 
 The dashboard reports aggregated counts and directory information only; it does not expose the contents of users' datasets.
 
@@ -23,6 +28,44 @@ The **Datasets** column counts the datasets in that user's own account, excludin
 The **Specs** column counts the published specifications that user **authored**, wherever they live. Authorship rather than account, because the two can differ: publishing a draft shared from another account puts the specification in that account while recording the publisher as its author.
 
 Withdrawn and unpublished specifications are excluded, so the column reports what is actually published.
+
+### Active users
+
+The hub does not record each request, so it cannot say who used it in a period. The section reports two counts that it can measure and labels each for what it is. **Signed in** counts users whose last sign-in falls in the last 30 days; a user who has stayed signed in since an earlier sign-in is not counted. **Saved a dataset** counts the distinct users who saved at least one dataset version in the last 30 days. A user who only read content in that period appears in neither count.
+
+### Users over time
+
+For each month from the first registration to the current month, the number of users registered by the end of that month who have not been deleted. A deleted user is removed from every month, so the series describes today's users, not historical totals.
+
+### Specifications
+
+| Row | Counts |
+|-----|--------|
+| **Built-in** | Profile versions shipped with the metaseed library the hub runs. They are not stored in the hub's database. |
+| **Published to everyone** | Published specifications without an audience restriction |
+| **Published to a collaboration** | Published specifications visible only to the members of one collaboration or group |
+| **Drafts** | Specification drafts, with subtotals for those shared with at least one individual and those granted to at least one collaboration. A draft in neither subtotal is visible only to its owner. |
+
+Withdrawn, archived and deleted specifications are excluded.
+
+### Datasets
+
+Datasets are never public; each is private to its owner until shared. The section counts deleted datasets nowhere.
+
+| Row | Counts |
+|-----|--------|
+| **Private** | Datasets shared with nobody |
+| **Shared with individuals** | Datasets with at least one member other than an owner |
+| **Shared with a collaboration** | Datasets granted to at least one collaboration |
+| **On a built-in profile** | Datasets whose profile is a built-in one |
+| **On a published specification** | Datasets built on a specification published on the hub |
+| **On a draft** | Datasets built on a specification draft |
+
+A dataset shared both with individuals and with a collaboration is counted in both sharing rows, so those rows do not add up to the total. The three profile rows do.
+
+### Sharing
+
+An **individual share** is one person holding the editor or viewer role on one dataset, specification or draft; owners are not counted. A **collaboration share** is one collaboration or group granted a role on one dataset, specification or draft. The section shows both totals and the collaboration shares per collaboration, labelled by collaboration and group. The **Shared with them** column of the user directory counts the individual shares a user holds.
 
 ### Last sign-in
 

@@ -41,6 +41,18 @@ def installed_versions(profile: str) -> list[str]:
     return list(loader.list_versions(profile.lower()))
 
 
+def builtin_profile_versions() -> int:
+    """Count the profile versions the metaseed library ships.
+
+    Returns:
+        The number of ``(profile, version)`` pairs the installed library loads.
+    """
+    from metaseed.specs.loader import SpecLoader
+
+    loader = SpecLoader()
+    return sum(len(loader.list_versions(profile)) for profile in loader.list_profiles())
+
+
 async def published_spec(
     session: AsyncSession,
     profile: str,

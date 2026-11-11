@@ -1,0 +1,99 @@
+{# Aggregate usage figures. What each one counts, and what it cannot, is in
+   docs/administration.md; the titles repeat the limits where a number would
+   otherwise be read as more than it is. #}
+<section class="admin-section" data-testid="admin-active-users">
+    <h2>Active users (last 30 days)</h2>
+    <p class="section-description">The hub records sign-ins and saves, not every request: a user who only read content is in neither count.</p>
+    <div class="stats-grid">
+        <div class="stat-card" title="Users whose last sign-in is in the last 30 days">
+            <div class="stat-value">{{ active_users.signed_in }}</div>
+            <div class="stat-label">Signed in</div>
+        </div>
+        <div class="stat-card" title="Distinct users who saved a dataset version in the last 30 days">
+            <div class="stat-value">{{ active_users.saved_a_dataset }}</div>
+            <div class="stat-label">Saved a dataset</div>
+        </div>
+    </div>
+</section>
+
+<section class="admin-section" data-testid="admin-content-counts">
+    <h2>Specifications and datasets</h2>
+    <div class="activity-grid">
+        <div class="activity-panel">
+            <h3>Specifications</h3>
+            <table class="admin-table">
+                <tbody>
+                    <tr title="Profile versions shipped with the metaseed library; not stored in the hub"><td>Built-in</td><td>{{ spec_totals.builtin }}</td></tr>
+                    <tr><td>Published to everyone</td><td>{{ spec_totals.published_to_everyone }}</td></tr>
+                    <tr><td>Published to a collaboration</td><td>{{ spec_totals.published_to_a_collaboration }}</td></tr>
+                    <tr><td>Drafts</td><td>{{ spec_totals.drafts }}</td></tr>
+                    <tr><td>&nbsp;&nbsp;shared with individuals</td><td>{{ spec_totals.drafts_shared_with_individuals }}</td></tr>
+                    <tr><td>&nbsp;&nbsp;shared with a collaboration</td><td>{{ spec_totals.drafts_shared_with_a_collaboration }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="activity-panel">
+            <h3>Datasets</h3>
+            <table class="admin-table">
+                <tbody>
+                    <tr><td>Private</td><td>{{ dataset_totals.private }}</td></tr>
+                    <tr title="Also counted below if shared with a collaboration too"><td>Shared with individuals</td><td>{{ dataset_totals.shared_with_individuals }}</td></tr>
+                    <tr><td>Shared with a collaboration</td><td>{{ dataset_totals.shared_with_a_collaboration }}</td></tr>
+                    <tr><td>On a built-in profile</td><td>{{ dataset_totals.on_builtin_profile }}</td></tr>
+                    <tr><td>On a published specification</td><td>{{ dataset_totals.on_published_spec }}</td></tr>
+                    <tr><td>On a draft</td><td>{{ dataset_totals.on_draft }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="admin-section" data-testid="admin-sharing">
+    <h2>Sharing</h2>
+    <div class="activity-grid">
+        <div class="activity-panel">
+            <div class="stats-grid">
+                <div class="stat-card" title="People holding the editor or viewer role on a dataset, specification or draft">
+                    <div class="stat-value">{{ shares.individual }}</div>
+                    <div class="stat-label">Individual shares</div>
+                </div>
+                <div class="stat-card" title="Collaborations or groups granted a role on a dataset, specification or draft">
+                    <div class="stat-value">{{ shares.collaboration }}</div>
+                    <div class="stat-label">Collaboration shares</div>
+                </div>
+            </div>
+        </div>
+        <div class="activity-panel">
+            <h3>Per collaboration</h3>
+            {% if shares.by_collaboration %}
+            <table class="admin-table">
+                <thead><tr><th>Collaboration</th><th>Shares</th></tr></thead>
+                <tbody>
+                    {% for label, count in shares.by_collaboration %}
+                    <tr><td>{{ label }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-state">Nothing is shared with a collaboration.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="admin-section" data-testid="admin-users-over-time">
+    <h2>Users over time</h2>
+    <p class="section-description">Current users registered by the end of each month.</p>
+    {% if users_by_month %}
+    <table class="admin-table">
+        <thead><tr><th>Month</th><th>Users</th></tr></thead>
+        <tbody>
+            {% for month, count in users_by_month|reverse %}
+            <tr><td>{{ month }}</td><td>{{ count }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty-state">No users registered yet.</p>
+    {% endif %}
+</section>
