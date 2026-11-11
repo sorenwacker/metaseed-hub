@@ -34,6 +34,10 @@ CREATE TABLE projects (
 );
 ```
 
+### Connection pool
+
+The engine keeps a pool of open Postgres connections and checks each one with a ping before handing it to a request (`pool_pre_ping` in `database.py`). Postgres closes a client connection when it restarts, when a backend is terminated, or when the network between the two drops, and the pool cannot observe that. Without the ping the next request receives the dead connection and fails on its first query with `InterfaceError: connection is closed`; the production error log recorded this from 261021 to 261105. With it, a dead connection is discarded and replaced before use, at the cost of one round trip per checkout. `tests/test_database_pool.py` terminates a pooled connection's backend and requires the next session to succeed.
+
 ## Sessions and expiry
 
 A browser session is two cookies: `metaseed_access_token` (the OIDC access token, lifetime set by the issuer) and `metaseed_refresh_token` (30 days, or shorter if the issuer's session idles out first). `TokenRefreshMiddleware` verifies the access token on every request and, when it has expired, exchanges the refresh token for a new one and rewrites both cookies. A session therefore survives an expired access token silently, and ends only when the refresh fails.

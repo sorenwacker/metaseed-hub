@@ -20,12 +20,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
 
+from metaseed_hub import usage_stats
 from metaseed_hub.admins import grants_admin
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.config import get_settings
 from metaseed_hub.container_drift import check as check_container_drift
 from metaseed_hub.database import get_session
 from metaseed_hub.models import Dataset, ErrorEvent, Spec, SpecStatus, User
+from metaseed_hub.specifications import builtin_profile_versions
 from metaseed_hub.ui.dependencies import require_user
 from metaseed_hub.ui.helpers import validate_csrf_token
 from metaseed_hub.ui.render import init_templates as _init_render_templates
@@ -343,6 +345,8 @@ async def admin_dashboard(
     - Total counts of users and datasets
     - User registration activity over last 30 days
     - Dataset creation activity over last 30 days
+    - Active users, users per month, specifications and datasets by
+      audience and sharing, and share counts (``usage_stats``)
     - User directory for admin contact purposes
     """
     # Aggregated counts
@@ -407,6 +411,14 @@ async def admin_dashboard(
             "dataset_counts": await _dataset_counts_by_user(session),
             "spec_counts": await _spec_counts_by_user(session),
             "specs_in_use": specs_in_use,
+            "active_users": await usage_stats.active_users(session, now=datetime.now(UTC)),
+            "users_by_month": await usage_stats.users_by_month(session, now=datetime.now(UTC)),
+            "spec_totals": await usage_stats.spec_counts(
+                session, builtin=await run_in_threadpool(builtin_profile_versions)
+            ),
+            "dataset_totals": await usage_stats.dataset_counts(session),
+            "shares": await usage_stats.share_counts(session),
+            "shares_received": await usage_stats.shares_received_by_user(session),
             "spec_usage": spec_usage,
             "recent_errors": await _recent_errors(session),
             "error_counts": await _error_counts_by_day(session),

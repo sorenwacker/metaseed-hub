@@ -39,7 +39,7 @@ class Database:
             url: Database connection URL (must use async driver like asyncpg).
             echo: If True, log all SQL statements.
         """
-        self._engine = create_async_engine(url, echo=echo)
+        self._engine = create_async_engine(url, echo=echo, pool_pre_ping=True)
         self._session_factory = async_sessionmaker(
             self._engine,
             expire_on_commit=False,

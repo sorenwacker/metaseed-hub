@@ -69,6 +69,8 @@ sudo -u app /app/.venv/bin/python -m metaseed_hub.container_drift
 
 It exits non-zero and names every container whose running image does not match its pin. The administration dashboard shows the same comparison, so drift is visible without shell access. A side that cannot be read — Docker unreachable, or a compose file that is missing, empty or not a service mapping — is reported as not checked, never as drift: an unreadable side is not evidence that the host is behind. Drift means the timer has not applied a pin change — either it has not fired since the merge, or it failed; `journalctl -u metaseed-containers.service` says which.
 
+The running side is the image reference each container was created from, read from the container's configuration with `docker inspect`. The `docker ps` listing is not used: for an image pinned as `name:tag@digest` it shows only `name:tag`, so matomo, the one image pinned by digest, was reported as behind its pin while running it.
+
 ## Compose version requirement
 
 All of this needs Docker Compose v2 (`docker compose`). Compose 1.29.2 cannot recreate containers against the installed Docker Engine — it fails with `KeyError: 'ContainerConfig'` after having already stopped the old container, which takes the service down and leaves it down. The role installs the `docker-compose-v2` package for this reason, and the update script refuses to run if only v1 is present.

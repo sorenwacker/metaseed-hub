@@ -153,3 +153,39 @@ def test_a_null_service_entry_reports_not_checked(tmp_path: Path) -> None:
     report = check(path)
     assert not report.checked
     assert "compose file unreadable" in report.summary
+
+
+_DIGEST_PIN = (
+    "matomo:5.14.2-apache@sha256:436425bb6af32f5644c675f46e93256bfeac5d309913a70c05e12d26eddd2870"
+)
+
+
+def _docker_as_it_reports_a_digest_pin(args: list[str], **_: object) -> subprocess.CompletedProcess:
+    """Answer the Docker CLI the way Docker 29 does for a container created from
+    ``name:tag@digest``: ``docker ps`` lists the tag alone, while the container's
+    own configuration keeps the reference it was created from."""
+    if args[:2] == ["docker", "ps"] and "-q" in args:
+        out = "3f1c0ffee\n"
+    elif args[:2] == ["docker", "ps"]:
+        out = "metaseed-matomo\tmatomo:5.14.2-apache\n"
+    elif args[:2] == ["docker", "inspect"]:
+        out = f"/metaseed-matomo\t{_DIGEST_PIN}\n"
+    else:
+        raise AssertionError(f"unexpected command {args}")
+    return subprocess.CompletedProcess(args, 0, stdout=out, stderr="")
+
+
+def test_a_digest_pinned_container_on_its_pin_is_not_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``docker ps`` drops the digest, so comparing its listing with a digest pin
+    reported matomo as behind on every page load while it ran the pinned image."""
+    monkeypatch.setattr(
+        "metaseed_hub.container_drift.subprocess.run", _docker_as_it_reports_a_digest_pin
+    )
+    path = _compose(
+        tmp_path, {"matomo": {"image": _DIGEST_PIN, "container_name": "metaseed-matomo"}}
+    )
+    report = check(path)
+    assert report.containers[0].running == _DIGEST_PIN
+    assert report.drifted == ()
