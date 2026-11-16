@@ -231,3 +231,55 @@ async def test_a_draft_that_holds_no_specification_says_so(
     assert any(s["name"] == "test-empty" for s in listed.json())
     assert response.status_code == 409
     assert "holds no specification" in response.json()["detail"]
+
+
+async def test_withdrawing_beside_an_existing_draft_leaves_one_draft(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    """Unpublishing a version the owner also held as a draft created a renamed
+    ``<name>-2`` draft beside it (hub #289)."""
+    async with _build_client(session, caller) as client:
+        await client.post("/api/specs", json={"yaml": PROFILE_YAML})
+        published = (
+            await client.post("/api/specs", json={"yaml": PROFILE_YAML, "publish": True})
+        ).json()
+        withdrawn = await client.post(f"/api/specs/{published['id']}/unpublish")
+        assert withdrawn.status_code == 200, withdrawn.text
+        listed = (await client.get("/api/specs")).json()
+    assert [(s["name"], s["version"], s["visibility"]) for s in listed] == [
+        ("test-push-profile", "1.0", "draft")
+    ]
+
+
+async def test_an_owner_deletes_their_own_draft(session: AsyncSession, caller: TokenUser) -> None:
+    async with _build_client(session, caller) as client:
+        await client.post("/api/specs", json={"yaml": PROFILE_YAML})
+        deleted = await client.delete("/api/specs/test-push-profile/1.0")
+        listed = (await client.get("/api/specs")).json()
+    assert deleted.status_code == 204, deleted.text
+    assert listed == []
+
+
+async def test_another_persons_draft_cannot_be_deleted(
+    session: AsyncSession, caller: TokenUser
+) -> None:
+    other_tenant = make_tenant(name="Other Tenant", slug="other-tenant-specs-api")
+    session.add(other_tenant)
+    await session.flush()
+    other = make_user(tenant=other_tenant, email="other@example.org", keycloak_id="other-specs-api")
+    session.add(other)
+    await session.flush()
+    session.add(
+        SpecDraft(
+            tenant_id=other_tenant.id,
+            user_id=other.id,
+            name="test-push-profile",
+            version="1.0",
+            spec_data={},
+        )
+    )
+    await session.commit()
+    async with _build_client(session, caller) as client:
+        response = await client.delete("/api/specs/test-push-profile/1.0")
+    assert response.status_code == 404
+    assert len((await session.execute(select(SpecDraft))).scalars().all()) == 1

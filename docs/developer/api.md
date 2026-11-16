@@ -28,10 +28,11 @@ The web interface mounted at `/hub` is not an API: its routes return HTML fragme
 | GET | `/api/datasets/{id}` | One dataset with its entities |
 | PATCH | `/api/datasets/{id}` | Replace a dataset's name or entities through the same save path as the web interface, which records a version; 409 when the new name is taken |
 | DELETE | `/api/datasets/{id}` | Soft-delete a dataset |
-| GET | `/api/specs` | Published specifications |
+| GET | `/api/specs` | The caller's drafts and the published specifications the caller may see |
 | GET | `/api/specs/{name}/{version}` | One specification as YAML, the caller's own draft first; 409 when that draft holds nothing yet |
 | POST | `/api/specs` | Push a profile document (`{"yaml": ...}`) as a private draft, one per name and version; `"publish": true` publishes it, 409 under the version-bump gate; `"audience": "<urn>"` publishes to one collaboration instead of to everyone |
-| POST | `/api/specs/{id}/unpublish` | Withdraw a published specification to a private draft |
+| POST | `/api/specs/{id}/unpublish` | Withdraw a published specification to the caller's draft of that name and version, replacing an existing one |
+| DELETE | `/api/specs/{name}/{version}` | Delete the caller's own draft of that name and version; 404 when the caller holds none, so another person's draft cannot be deleted; 409 naming the datasets built on it |
 
 ### Publishing to a collaboration
 

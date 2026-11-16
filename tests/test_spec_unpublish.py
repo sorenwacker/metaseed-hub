@@ -161,31 +161,28 @@ async def test_a_plain_colleague_may_not_withdraw_someone_elses_spec(
     assert await can_edit_spec(session, colleague.id, spec.id) is False
 
 
-async def test_withdrawing_over_a_draft_of_the_same_name_does_not_collide(
+async def test_withdrawing_over_a_draft_of_the_same_name_replaces_it(
     session: AsyncSession,
 ) -> None:
     """A draft is one name at one version per user. Unpublishing a spec whose
     name and version match a draft the author already holds hit the unique
-    index; the withdrawn spec now comes back under a collision-avoiding name."""
+    index, and was then fixed by restoring it under a renamed ``<name>-2`` copy
+    nobody asked for (hub #289). The withdrawn spec now replaces that draft."""
     tenant, author, _colleague, spec = await _published(session)
-    # A draft the author already holds at the spec's own name and the version
-    # its document declares, which is what the withdrawn draft comes back as.
-    session.add(
-        make_spec_draft(
-            tenant=tenant, user=author, name=spec.name, version=spec.spec_data["spec"]["version"]
-        )
+    held = make_spec_draft(
+        tenant=tenant, user=author, name=spec.name, version=spec.spec_data["spec"]["version"]
     )
+    session.add(held)
     await session.commit()
-    clashing = spec.name
 
     draft = await unpublish_spec(session, spec, author.id)
 
-    assert draft.name != clashing, "the name was deduplicated"
-    assert draft.spec_data["spec"]["name"] == "Secret", "the specification is unchanged"
+    assert draft.id == held.id, "the held draft is reused"
+    assert draft.name == spec.name
+    assert draft.spec_data["spec"]["name"] == "Secret", "it carries the withdrawn specification"
     drafts = (
         (await session.execute(select(SpecDraft).where(SpecDraft.user_id == author.id)))
         .scalars()
         .all()
     )
-    assert len(drafts) == 2, "both drafts coexist"
-    assert clashing in {d.name for d in drafts}, "the original draft keeps its name"
+    assert len(drafts) == 1, "one draft, no renamed copy"

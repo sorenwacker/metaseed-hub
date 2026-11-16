@@ -29,7 +29,7 @@ from metaseed_hub.database import get_session
 from metaseed_hub.models import Spec, SpecDraft, SpecStatus, User
 from metaseed_hub.notifications import collaboration_reached
 from metaseed_hub.sharing import resource_for
-from metaseed_hub.ui.spec_builder.access import state_of
+from metaseed_hub.ui.spec_builder.access import delete_draft, state_of
 from metaseed_hub.ui.spec_builder.state import SpecBuilderState
 from metaseed_hub.ui.spec_builder.versioning import bump_refusal, latest_published_spec
 from metaseed_hub.ui.spec_builder_helpers import parse_spec_from_yaml, spec_to_yaml
@@ -391,6 +391,45 @@ async def push_spec(
             ),
         )
     return await _push_draft(session, caller, spec, response)
+
+
+@router.delete("/{name}/{version}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_own_draft(
+    name: str,
+    version: str,
+    user: Annotated[TokenUser, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Response:
+    """Delete the caller's own draft of a name and version, as the Builder does.
+
+    Only the caller's drafts are looked up, so another person's draft answers
+    404 rather than being deleted.
+
+    Raises:
+        HTTPException: 404 when the caller holds no such draft; 409 naming the
+            datasets built on it, in which case nothing is deleted.
+    """
+    caller = await _caller(session, user)
+    draft = (
+        await session.execute(
+            select(SpecDraft).where(
+                SpecDraft.user_id == caller.id,
+                SpecDraft.name == name,
+                SpecDraft.version == version,
+            )
+        )
+    ).scalar_one_or_none()
+    if draft is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"You hold no draft {name} {version}"
+        )
+    dependents = await delete_draft(session, draft)
+    if dependents:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Datasets are built on draft {name} {version}: {', '.join(dependents)}",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{spec_id}/unpublish", response_model=SpecSummary)
