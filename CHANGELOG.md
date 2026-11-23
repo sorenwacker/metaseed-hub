@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.82.0] - 261123
+
+### Added
+- Owners can delete a draft specification over the API, as they could in the browser.
+
+### Changed
+- Unpublishing a specification returns it to its existing draft instead of creating a `-2` copy.
+
+### Fixed
+- The Checks card in the specification builder took metaseed's centred green success style and its heading overflowed the sidebar. A test fails if the library's rule gains a property the hub does not override.
+- Specifications that share a display name are told apart in the explorer picker.
+- The API answers 409 for an empty draft, which it listed and then reported as not found.
 
 ### Security
 - Postgres raised to 16.16 (52 CVEs fixed on 261112, including CVE-2026-6460) and matomo to 5.14.3, whose image ships PHP 8.4.28 with the fix for CVE-2026-126714 (phpAfterShell). Both were listed in the TU Delft vulnerability scan of 261123.
