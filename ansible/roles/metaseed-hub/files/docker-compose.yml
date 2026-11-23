@@ -11,7 +11,7 @@
 # container unable to open its data directory. See docs/container-updates.md.
 services:
   postgres:
-    image: postgres:16.15
+    image: postgres:16.16
     container_name: metaseed-postgres
     restart: always
     environment:
@@ -56,7 +56,7 @@ services:
       retries: 5
 
   matomo:
-    image: matomo:5.14.2-apache@sha256:436425bb6af32f5644c675f46e93256bfeac5d309913a70c05e12d26eddd2870
+    image: matomo:5.14.3-apache@sha256:ba13c4fc70f67c5b68a441cba06ae12904e58318ba86fcbf6603bd4bf5ee35c6
     container_name: metaseed-matomo
     restart: always
     depends_on:
