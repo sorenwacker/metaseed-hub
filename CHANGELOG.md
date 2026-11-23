@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Postgres raised to 16.16 (52 CVEs fixed on 261112, including CVE-2026-6460) and matomo to 5.14.3, whose image ships PHP 8.4.28 with the fix for CVE-2026-126714 (phpAfterShell). Both were listed in the TU Delft vulnerability scan of 261123.
+
 ## [0.81.0] - 261111
 
 ### Added
