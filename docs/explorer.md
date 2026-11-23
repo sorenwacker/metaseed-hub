@@ -21,7 +21,7 @@ The toolbar after **Tree** exports what is shown. **PNG** is the whole diagram a
 2. Select a second profile under **Compare Against**.
 3. Click **Compare**.
 
-Both lists hold the built-in standards, the published specifications you may see, shown as `<name> (Published)`, and drafts: your own and those shared with you, shown as `<name> (Draft)`. A published specification and a draft each have one entry per name, with its versions in the version selector beside it. When a draft shared with you has the same name and version as one of your own, the entry loads your own.
+Both lists hold the built-in standards, the published specifications you may see, shown as `<name> (Published)`, and drafts: your own and those shared with you, shown as `<name> (Draft)`. A published specification and a draft each have one entry per name, with its versions in the version selector beside it. When a draft shared with you has the same name and version as one of your own, the entry loads your own. Two entries with the same display name, such as a draft created at a taken name and saved as `<name>-2`, each show their name after the label, as in `CropXR data analysis (SEEK) (Draft) · cropxr-data-analysis-2`.
 
 The diagram overlays both profiles and highlights the differences:
 

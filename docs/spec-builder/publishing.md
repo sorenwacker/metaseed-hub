@@ -92,7 +92,7 @@ Unpublishing:
 
 - Removes the specification from **Published Specifications**, from the profile choices offered when creating a dataset, and from the Explorer.
 - Removes it for anyone you shared it with.
-- Creates a new draft owned by you, carrying the full specification, so no work is lost. You are taken straight to it.
+- Returns the specification to you as your draft of that name and version, carrying the full specification. If you already hold a draft of that name and version, the withdrawn specification replaces its content, so you hold one draft, not a renamed copy beside it. You are taken straight to it.
 - Is available to the person who published the specification and to tenant admins and owners — the same people who may edit it.
 
 Unpublishing does not delete anything permanently: the specification is withdrawn rather than erased, so an administrator can still account for what existed and when it was withdrawn.

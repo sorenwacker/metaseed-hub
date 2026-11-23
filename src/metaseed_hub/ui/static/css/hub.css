@@ -2736,9 +2736,17 @@ a.spec-editor-close:hover {
     margin-bottom: var(--space-lg);
 }
 
+/* The library's stylesheet, loaded first, styles .validation-success as
+   centred green text; every property it sets is restated here so none of it
+   reaches this card (gate: tests/test_stylesheet.py). */
 .validation-summary.validation-success {
+    padding: var(--space-md);
     background: var(--clr-success-bg);
     border: 1px solid var(--clr-success);
+    border-radius: var(--radius-md);
+    color: var(--clr-ink);
+    text-align: left;
+    font-weight: normal;
 }
 
 .validation-summary.validation-error {
@@ -2766,6 +2774,11 @@ a.spec-editor-close:hover {
 .validation-error .validation-icon {
     background: var(--clr-error);
     color: white;
+}
+
+.validation-summary-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .validation-summary-text strong {

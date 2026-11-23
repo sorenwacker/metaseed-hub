@@ -600,7 +600,8 @@ async def unpublish_spec(
         user_id: Who is unpublishing, and who owns the resulting draft.
 
     Returns:
-        The new private draft carrying the specification.
+        The private draft carrying the specification: the caller's existing
+        draft of that name and version, its content replaced, or a new one.
 
     Raises:
         ValueError: If the spec holds no usable specification, in which case
@@ -622,14 +623,36 @@ async def unpublish_spec(
     # duplicate draft beside it, nor withdraw it with the work gone.
     spec.soft_delete()
 
-    return await create_draft_at_a_free_name(
-        session,
-        user_id=user_id,
-        tenant_id=spec.tenant_id,
-        name=spec.name,
-        spec=builder.spec,
-        source_spec_id=spec.id,
-    )
+    # The withdrawn version becomes the owner's draft of that name and version.
+    # One already held there is replaced rather than joined by a renamed
+    # ``<name>-2`` copy nobody asked for (hub #289).
+    existing = (
+        await session.execute(
+            select(SpecDraft).where(
+                SpecDraft.user_id == user_id,
+                SpecDraft.tenant_id == spec.tenant_id,
+                SpecDraft.name == spec.name,
+                SpecDraft.version == builder.spec.version,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        return await create_new_draft(
+            session,
+            user_id=user_id,
+            tenant_id=spec.tenant_id,
+            name=spec.name,
+            spec=builder.spec,
+            source_spec_id=spec.id,
+        )
+    state = SpecBuilderState()
+    state.spec = builder.spec
+    existing.spec_data = state.to_dict()
+    existing.source_spec_id = spec.id
+    await session.commit()
+    await session.refresh(existing)
+    state_cache.set(existing.id, state, revision=existing.updated_at)
+    return existing
 
 
 async def create_draft_at_a_free_name(
