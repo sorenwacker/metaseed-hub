@@ -18,13 +18,15 @@ The second reason applies to the databases and is the more serious one. PostgreS
 
 ## How updates arrive
 
-Renovate (`renovate.json`, on the `config:best-practices` preset) watches the compose file and opens a pull request when a pinned image has a newer version, pinning it to its digest. Major bumps are disabled for images, so PostgreSQL 16 stays on 16 and MariaDB 11 stays on 11; crossing a major is a deliberate, separately planned piece of work. Minor and patch bumps are grouped into a single weekly pull request, which Renovate merges itself once CI passes (`automerge` for minor, patch, pin and digest updates). The weekly cadence comes only from the workflow's cron in `.github/workflows/renovate.yml`; `renovate.json` sets no schedule of its own. Until 261105 it also extended `schedule:weekly` (before 04:00 Monday, Amsterdam time), and because GitHub starts scheduled workflows hours late, every run from 260928 to 261102 fell outside that window and opened no pull request: redis, MariaDB and Matomo stayed on their old pins although Renovate had found the updates.
+Renovate (`renovate.json`, on the `config:best-practices` preset) watches the compose file and opens a pull request when a pinned image has a newer version, pinning it to its digest. Major bumps are disabled for images, so PostgreSQL 16 stays on 16 and MariaDB 11 stays on 11; crossing a major is a deliberate, separately planned piece of work. Minor and patch bumps are grouped into one pull request, which Renovate merges itself once CI passes (`automerge` for minor, patch, pin and digest updates). Renovate runs daily; the cadence comes only from the workflow's cron in `.github/workflows/renovate.yml`, and `renovate.json` sets no schedule of its own. Until 261105 it also extended `schedule:weekly` (before 04:00 Monday, Amsterdam time), and because GitHub starts scheduled workflows hours late, every run from 260928 to 261102 fell outside that window and opened no pull request: redis, MariaDB and Matomo stayed on their old pins although Renovate had found the updates.
+
+Renovate's vulnerability alerts cover language packages, not container images: it cannot tell that a new PostgreSQL minor fixes a CVE. The only lever for images is how often it looks, which is why it runs daily rather than weekly. Until 261124 it ran weekly, and the PostgreSQL 16.16 security release (published 261112, image on Docker Hub 261119) would have reached the host on 261130 had it not been applied by hand.
 
 The result is that keeping the images current is not per-container manual work. Merging happens without intervention; the version change lands in `main` as a reviewable commit either way.
 
 ## How updates reach the host
 
-`metaseed-containers.timer` runs weekly on the deployment host. It fetches `origin/main`, reads the compose file from there, and if the pins differ from what is deployed it pulls the new images and recreates the containers whose image changed. Containers whose pins did not move are left running untouched.
+`metaseed-containers.timer` runs daily at 04:15 host time (Europe/Amsterdam) on the deployment host. It fetches `origin/main`, reads the compose file from there, and if the pins differ from what is deployed it pulls the new images and recreates the containers whose image changed. Containers whose pins did not move are left running untouched.
 
 This follows `main` rather than a release tag, unlike the application. Application deploys are tag-driven because the version is derived from the tag by setuptools-scm and a dev build must never reach production; an image pin has no such property. Tying container updates to tags would mean an auto-merged security bump waits in `main` until someone decides to cut an unrelated application release, which is the gap this timer exists to close.
 
@@ -32,7 +34,7 @@ The application path is untouched by this: `deploy.sh` handles git checkout, `uv
 
 ## Applied on every release too
 
-A release deploy (`deploy.sh`, on a new tag) finishes by running the container update script, so a pin merged with a release lands with it rather than waiting for the next Monday. The weekly timer still covers pins merged without a release. The update runs after the release is healthy and its failure is logged but does not fail the deploy: the application is on the new version either way, and the pins get another chance on the timer.
+A release deploy (`deploy.sh`, on a new tag) finishes by running the container update script, so a pin merged with a release lands with it rather than waiting for the next morning. The daily timer still covers pins merged without a release. The update runs after the release is healthy and its failure is logged but does not fail the deploy: the application is on the new version either way, and the pins get another chance on the timer.
 
 ## Guards on the unattended update
 
@@ -42,7 +44,9 @@ A backup from the last 24 hours exists in `/var/backups/metaseed-hub`. This guar
 
 The hub answers its health endpoint after the recreate, checked the same way `deploy.sh` checks it. A failed health check is logged as an error to the journal, so a broken update cannot pass for a quiet week.
 
-The timer fires at 04:15 UTC on Mondays with `Persistent=false`, so it runs in a low-traffic window and does not fire on boot. A missed week is picked up the following Monday.
+The timer fires at 04:15 host time with `Persistent=false`, so it runs in a low-traffic window, after the 02:30 backup, and does not fire on boot. A missed day is picked up the next morning. A run whose pins match the deployed ones restarts nothing, so a daily check restarts PostgreSQL only on the days an update was merged.
+
+The timer used to fire on Mondays only. GitHub starts the scheduled Renovate run hours late (10:20 to 11:33 UTC in November 2026), so an update merged on a Monday missed that Monday's 04:15 window and waited a further week.
 
 ## Applying an update by hand
 
@@ -50,7 +54,7 @@ The timer fires at 04:15 UTC on Mondays with `Persistent=false`, so it runs in a
 sudo -u app /opt/metaseed-docker/update-containers.sh
 ```
 
-The script is the same one the timer runs. To apply a pin change immediately after merging it, run this rather than waiting for Monday.
+The script is the same one the timer runs. To apply a pin change immediately after merging it, run this rather than waiting for the next morning.
 
 Confirm what came up:
 
@@ -81,6 +85,6 @@ The matomo image keeps the application in the `/var/www/html` volume, and its en
 
 ## Where Renovate runs
 
-Renovate runs from this repository's own workflow, `.github/workflows/renovate.yml`: weekly (early Monday, UTC) and on demand from the Actions tab (**Renovate > Run workflow**), reading `renovate.json`. The hosted Mend app is installed but has never run on this repository; a workflow here has a visible log and needs nothing enabled elsewhere.
+Renovate runs from this repository's own workflow, `.github/workflows/renovate.yml`: daily (03:00 UTC, started hours later by GitHub) and on demand from the Actions tab (**Renovate > Run workflow**), reading `renovate.json`. The hosted Mend app is installed but has never run on this repository; a workflow here has a visible log and needs nothing enabled elsewhere.
 
 The workflow needs one secret, `RENOVATE_TOKEN`: a fine-grained personal access token for this repository with read and write access to *Contents*, *Pull requests*, *Issues*, and *Workflows*. It can't use the workflow's own `GITHUB_TOKEN`, because pull requests opened with that token trigger no other workflows — the CI gate would never run on an update and nothing could auto-merge. If the hosted app starts running as well, disable one of the two, or every update arrives twice.

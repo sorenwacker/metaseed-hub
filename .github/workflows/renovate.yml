@@ -12,8 +12,10 @@ name: Renovate
 
 on:
   schedule:
-    # Weekly, early Monday (UTC), matching the schedule in renovate.json.
-    - cron: "0 3 * * 1"
+    # Daily (UTC). Renovate cannot see CVEs in container images, so how often
+    # it looks is what bounds how long a fixed image waits. See
+    # docs/container-updates.md.
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       logLevel:

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Applies merged container image pins to this host.
 #
-# Runs weekly via metaseed-containers.timer. Follows origin/main rather than a
+# Runs daily via metaseed-containers.timer. Follows origin/main rather than a
 # release tag: the application is tag-driven because its version comes from the
 # tag, but an image pin has no such property, and tying it to tags would leave a
 # security bump waiting in main until someone cut an unrelated app release.

@@ -42,7 +42,11 @@ backup_keep_monthly: 6
 
 # Container image updates (see docs/container-updates.md). Applying one restarts
 # PostgreSQL unattended, so the window is fixed and quiet rather than on boot.
-container_update_schedule: "Mon *-*-* 04:15:00"
+# Daily: a run whose pins match restarts nothing.
+container_update_schedule: "*-*-* 04:15:00"
+
+# Unattended OS updates (see docs/os-updates.md); host time, after apt-daily-upgrade.
+os_reboot_time: "07:30"
 
 # OIDC (SURF SRAM)
 oidc_url: https://proxy.sram.surf.nl

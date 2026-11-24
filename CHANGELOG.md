@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Renovate and the host's container update timer run daily instead of weekly. Renovate's run started hours after the Monday timer, so a merged image update waited a further week; PostgreSQL 16.16 would have reached the host on 261130.
+- The host installs Ubuntu's `noble-updates` pocket unattended, not only security updates, and a reboot a kernel update asks for happens at 07:30 host time. Ansible adds these in its own file next to the host's base configuration. See the new **Operating system updates** page.
+
 ## [0.82.0] - 261123
 
 ### Added
