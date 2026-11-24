@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.83.0] - 261124
 
 ### Changed
 - Renovate and the host's container update timer run daily instead of weekly. Renovate's run started hours after the Monday timer, so a merged image update waited a further week; PostgreSQL 16.16 would have reached the host on 261130.
