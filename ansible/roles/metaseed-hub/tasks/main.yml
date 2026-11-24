@@ -380,3 +380,14 @@
     state: link
   notify: Reload nginx
   tags: nginx
+
+# A separate file read after the host's base unattended-upgrades file, which this role does
+# not own. See docs/os-updates.md.
+- name: Install unattended-upgrades additions
+  ansible.builtin.template:
+    src: unattended-upgrades.conf.j2
+    dest: /etc/apt/apt.conf.d/52metaseed-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [setup, os-updates]

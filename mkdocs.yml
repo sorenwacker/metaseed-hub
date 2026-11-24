@@ -75,6 +75,7 @@ nav:
     - Overview: administration.md
     - Backups and restore: backups.md
     - Container updates: container-updates.md
+    - Operating system updates: os-updates.md
   - Developer:
     - Architecture: developer/architecture.md
     - API Reference: developer/api.md

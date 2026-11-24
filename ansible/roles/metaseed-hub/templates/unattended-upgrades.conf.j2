@@ -1,0 +1,12 @@
+// Managed by ansible (metaseed-hub). See docs/os-updates.md.
+// Read after 50unattended-upgrades: lists here add to its lists, scalars override.
+
+// Most fixes ship in -updates, not -security; on 261124 all 40 pending packages did.
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-updates";
+};
+
+// apt-daily-upgrade runs between 06:00 and 07:00 host time; reboot after it,
+// on the same morning, rather than the moment a kernel update finishes.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ os_reboot_time }}";
