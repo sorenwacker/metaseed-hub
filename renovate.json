@@ -32,7 +32,7 @@
       "groupName": "github actions"
     },
     {
-      "description": "Production images: one weekly PR, pinned to digests; a major (PostgreSQL 16 -> 17, MariaDB 11 -> 12) is separately planned work.",
+      "description": "Production images: one grouped PR, pinned to digests; a major (PostgreSQL 16 -> 17, MariaDB 11 -> 12) is separately planned work.",
       "matchManagers": [
         "docker-compose",
         "dockerfile"
@@ -53,7 +53,7 @@
       "enabled": false
     },
     {
-      "description": "A major bump of a Python dependency is a migration, not an update. Held for explicit approval and kept out of the weekly group so it cannot be merged as routine: in metaseed a widened mcp bound admitted 2.x, which had removed the API the code imports, and every locked test suite stayed green.",
+      "description": "A major bump of a Python dependency is a migration, not an update. Held for explicit approval and kept out of the routine groups so it cannot be merged as routine: in metaseed a widened mcp bound admitted 2.x, which had removed the API the code imports, and every locked test suite stayed green.",
       "matchManagers": [
         "pep621",
         "uv"

@@ -281,3 +281,16 @@ def test_renovate_config_sets_no_schedule_of_its_own() -> None:
         return []
 
     assert schedules(config) == []
+
+
+def test_renovate_and_the_timer_check_daily() -> None:
+    """A weekly Renovate run starts hours after the Monday timer, so a merged
+    update waited a further week; PostgreSQL 16.16 would have taken until
+    261130. Renovate cannot see image CVEs, so daily cadence is the lever."""
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "renovate.yml").read_text())
+    crons = [entry["cron"] for entry in workflow[True]["schedule"]]
+    assert crons and all(cron.split()[4] == "*" for cron in crons), crons
+
+    group_vars = yaml.safe_load((_REPO / "ansible" / "group_vars" / "all.yml").read_text())
+    schedule = group_vars["container_update_schedule"]
+    assert schedule.startswith("*-*-* "), f"the container timer is not daily: {schedule}"
