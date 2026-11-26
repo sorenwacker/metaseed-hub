@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.84.0] - 261126
 
 ### Changed
 - Repository integrations (ENA, PRIDE, BrAPI, MetaboLights, SEEK, DCAT) are switched on by each user under **Integrations** on their profile page, instead of being granted by an SRAM group named after the integration. SRAM groups no longer affect integrations. Every integration starts off for every user, including users who had it through a group; they switch it on once. The migration adds the `user_features` table.
