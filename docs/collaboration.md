@@ -4,7 +4,7 @@ Datasets and specification drafts can be shared with other people and discussed 
 
 ## Sharing and roles
 
-Datasets, specification drafts and published specifications are shared the same way: open the item, click **Share** in its header, add a person by the email on their [profile](getting-started.md#your-profile), and choose a role.
+Datasets, specification drafts and published specifications are shared the same way: open the item, click **Share** at the top of its sidebar, add a person by the email on their [profile](getting-started.md#your-profile), and choose a role.
 
 | Role | Can do |
 |------|--------|
