@@ -504,7 +504,7 @@ async def dataset_import_source(
     if importer is not None and feature_of_action(importer.key) not in granted(request):
         return HTMLResponse(
             f"<div class='notification error'>The {escape(feature_of_action(importer.key) or '')} "
-            "integration is enabled per SRAM group; none of your groups grants it.</div>",
+            "integration is off; switch it on under Integrations on your profile page.</div>",
             status_code=403,
         )
     state = await ensure_dataset_facade_for_write(dataset, session)

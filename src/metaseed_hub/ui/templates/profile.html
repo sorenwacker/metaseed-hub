@@ -73,6 +73,32 @@
             {% endif %}
         </div>
 
+        <div class="profile-section" id="integrations">
+            <h2>Integrations</h2>
+            <p>
+                Repository integrations are off until you switch them on. An integration
+                that is on shows its import and export buttons; SEEK also adds the SEEK
+                page to the header.
+            </p>
+            <ul class="integration-list">
+                {% for integration in integrations %}
+                <li data-testid="feature-{{ integration.key }}">
+                    <form method="post" action="/hub/auth/profile/features">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="feature" value="{{ integration.key }}">
+                        <label>
+                            <input type="checkbox" name="enabled" onchange="this.form.submit()"
+                                   data-testid="feature-{{ integration.key }}-{{ 'on' if integration.enabled else 'off' }}"
+                                   {% if integration.enabled %}checked{% endif %}>
+                            {{ integration.name }}
+                        </label>
+                        <noscript><button type="submit" class="btn btn-sm">Save</button></noscript>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
         <div class="profile-section">
             <h2>Access tokens</h2>
             <p>

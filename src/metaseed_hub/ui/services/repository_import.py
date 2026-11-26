@@ -82,8 +82,8 @@ def repositories(features: set[str] | None = None) -> list[Repository]:
     """The repositories on offer, from metaseed's adapter registry.
 
     Args:
-        features: Keep to the repositories whose feature these SRAM groups
-            grant; every repository when omitted.
+        features: Keep to the repositories whose feature the person switched on;
+            every repository when omitted.
     """
     from metaseed_hub.features import feature_of_action
 

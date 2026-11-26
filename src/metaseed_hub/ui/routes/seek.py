@@ -61,14 +61,14 @@ router = APIRouter(prefix="/seek", tags=["seek"])
 async def require_seek(
     request: Request, user: Annotated[TokenUser, Depends(require_user)]
 ) -> TokenUser:
-    """A signed-in person whose SRAM groups grant SEEK.
+    """A signed-in person who has switched SEEK on.
 
     The header shows SEEK to the same people; a typed address gets this.
     """
     if "seek" not in granted(request):
         raise HTTPException(
             status_code=403,
-            detail="SEEK is enabled per SRAM group; none of your groups grants it.",
+            detail="SEEK is off; switch it on under Integrations on your profile page.",
         )
     return user
 

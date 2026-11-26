@@ -76,8 +76,8 @@ async def start_import_job(
         problem = "Choose a repository from the list."
     elif profile not in {repository.profile for repository in repositories(granted(request))}:
         problem = (
-            "Importing from this repository is enabled per SRAM group; none of your "
-            "groups grants it."
+            "Importing from this repository is off; "
+            "switch it on under Integrations on your profile page."
         )
     elif not wanted:
         problem = "Enter at least one identifier."

@@ -24,7 +24,7 @@ from .comments import (
     SpecCommentReaction,
 )
 from .datasets import Dataset, DatasetMember, DatasetVersion
-from .identity import Tenant, User
+from .identity import Tenant, User, UserFeature
 from .import_jobs import ImportJob
 from .mixins import SoftDeleteMixin, TimestampMixin
 from .notifications import Notification
@@ -67,5 +67,6 @@ __all__ = [
     "Tenant",
     "TimestampMixin",
     "User",
+    "UserFeature",
     "_enum_values",
 ]

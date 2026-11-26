@@ -328,7 +328,7 @@ class TestTheSramInfoBox:
         assert "SURF Research Access Management" in box
         assert 'href="https://sram.surf.nl/"' in box
         assert "Metaseed Hub application" in box
-        assert "seek" in box
+        assert "seek" not in box, "SRAM groups no longer switch on integrations"
 
     async def test_someone_in_no_collaboration_sees_it(self, session: AsyncSession, app_db) -> None:
         loner = TokenUser(sub="kc-9", email="n@example.org", name="N", roles=[], entitlements=[])

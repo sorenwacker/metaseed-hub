@@ -703,10 +703,10 @@ async def dataset_export_yaml(
 
 
 def _not_granted(feature: str | None) -> str:
-    """What to tell a person whose groups do not grant a feature."""
+    """What to tell a person who has not switched a feature on."""
     return (
-        f"The {feature or 'requested'} integration is enabled per SRAM group; "
-        "none of your groups grants it."
+        f"The {feature or 'requested'} integration is off; "
+        "switch it on under Integrations on your profile page."
     )
 
 
@@ -733,7 +733,7 @@ def _source_import_option(profile: str, features: set[str]) -> dict[str, str] | 
 
 def _adapter_export_options(profile: str, features: set[str]) -> list[dict[str, str]]:
     """[{key, label}] adapter exports offered for a profile, from the registry,
-    kept to those whose feature the person's SRAM groups grant.
+    kept to those whose feature the person has switched on.
 
     The registry says what exists; the groups say who may use it. (A hub table
     of grants sat here once and hid every export, because nothing wrote to

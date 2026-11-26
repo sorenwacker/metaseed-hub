@@ -409,6 +409,7 @@ async def auth_profile(request: Request, session: DbSession) -> Response:
             "collaborations": await collaborations_of(session, db_user.id),
             # Never asked is not the same as asked and told nothing.
             "membership_state": await membership_state(session, db_user.id),
+            "integrations": await _integrations(session, db_user.id),
             # Shown once, immediately after minting, and never retrievable
             # again: read from the one-shot cookie and expired below.
             "new_token": new_token,
@@ -427,6 +428,53 @@ minute, and the profile page deletes it on first read.
 """
 
 NEW_TOKEN_TTL_SECONDS = 60
+
+
+async def _integrations(session: "AsyncSession", user_id: str) -> list[dict[str, object]]:
+    """Every repository integration with its name and whether the user switched it on."""
+    from metaseed import adapters
+
+    from metaseed_hub.features import FEATURES, features_of
+
+    names = {info.key: info.name for info in adapters.all_adapters()}
+    on = await features_of(session, user_id)
+    return [
+        {"key": key, "name": names.get(key, key), "enabled": key in on} for key in sorted(FEATURES)
+    ]
+
+
+@router.post("/profile/features")
+async def auth_set_feature(
+    request: Request,
+    session: DbSession,
+    feature: Annotated[str, Form()],
+    enabled: Annotated[str | None, Form()] = None,
+) -> Response:
+    """Switch one repository integration on or off for the signed-in user.
+
+    A checkbox posts ``enabled`` only when ticked, so its absence means off.
+    """
+    from metaseed_hub.features import FEATURES, set_feature
+    from metaseed_hub.ui.dependencies import (
+        AuthRequiredError,
+        ensure_tenant_and_user,
+        get_current_user_from_cookie,
+    )
+    from metaseed_hub.ui.helpers import validate_csrf_token
+
+    user = await get_current_user_from_cookie(request)
+    if not user:
+        raise AuthRequiredError()
+    submitted = (await request.form()).get("_csrf_token")
+    if not validate_csrf_token(request, submitted if isinstance(submitted, str) else None):
+        return RedirectResponse(url="/hub/auth/profile?error=csrf", status_code=302)
+    if feature not in FEATURES:
+        raise HTTPException(status_code=400, detail=f"Unknown integration: {feature}")
+
+    _, db_user = await ensure_tenant_and_user(session, user)
+    await set_feature(session, db_user.id, feature, enabled=enabled is not None)
+    await session.commit()
+    return RedirectResponse(url="/hub/auth/profile#integrations", status_code=303)
 
 
 @router.post("/profile/tokens")

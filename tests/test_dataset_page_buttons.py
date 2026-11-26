@@ -1,9 +1,9 @@
 """Every adapter export the registry offers for the profile is a button.
 
 Rendered-page tests, not unit tests of the menu builder: what the template
-actually receives and draws is the contract. The signed-in user is in every
-feature group (conftest); tests/test_feature_groups.py covers a user who is
-not.
+actually receives and draws is the contract. The signed-in user has every
+integration switched on (conftest); tests/test_features_are_switched_on_by_the_user.py
+covers a user who has not.
 """
 
 from __future__ import annotations
