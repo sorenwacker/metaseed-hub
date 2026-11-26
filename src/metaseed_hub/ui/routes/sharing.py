@@ -91,6 +91,24 @@ async def _seen_or_404(
     return viewer_id
 
 
+def access_summary(others: int, collaborations: list[str]) -> str:
+    """What the Share button says: who has access besides the viewer.
+
+    Args:
+        others: People other than the viewer with a membership.
+        collaborations: Short names of the collaborations granted access.
+
+    Returns:
+        ``Private`` when nobody else has access, otherwise the count of other
+        people and the collaboration names, joined by `` · ``.
+    """
+    parts = []
+    if others:
+        parts.append(f"{others} {'person' if others == 1 else 'people'}")
+    parts.extend(collaborations)
+    return " · ".join(parts) or "Private"
+
+
 async def _panel(
     request: Request,
     session: DbSession,
@@ -117,8 +135,10 @@ async def _panel(
             "grants": [(grant, short_name(grant.urn)) for grant in grants],
             "collaborations": collaborations,
             "people_suggestions": sorted(suggestions.items()),
-            "shared_with": sum(1 for m in members if str(m.user_id) != str(viewer_id))
-            + len(grants),
+            "access": access_summary(
+                sum(1 for m in members if str(m.user_id) != str(viewer_id)),
+                [short_name(grant.urn) for grant in grants],
+            ),
             "kind": resource.kind,
             "resource_id": resource_id,
             "viewer_id": viewer_id,

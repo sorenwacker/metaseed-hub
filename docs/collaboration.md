@@ -4,7 +4,7 @@ Datasets and specification drafts can be shared with other people and discussed 
 
 ## Sharing and roles
 
-Datasets, specification drafts and published specifications are shared the same way: open the item, click the **Sharing** tab in the sidebar, add a person by the email on their [profile](getting-started.md#your-profile), and choose a role.
+Datasets, specification drafts and published specifications are shared the same way: open the item, click **Share** in its header, add a person by the email on their [profile](getting-started.md#your-profile), and choose a role.
 
 | Role | Can do |
 |------|--------|
@@ -20,7 +20,7 @@ Datasets created before memberships were recorded at creation were given their a
 
 Every page of the web interface reads that rule, and so does the REST API when it is given a dataset's id. Two paths do not, and are scoped to your own account instead: the REST list of datasets together with every REST specification route, and the MCP tools. An item shared with you, or granted to your collaboration, is therefore reachable in the browser but not yet through a token or an agent.
 
-The number on the **Sharing** tab is how many other people and collaborations have access: it leaves you out, so an item nobody else can reach shows no number. Only an owner can add someone, change a role, or remove access. Anyone can remove themselves, which is how you leave something shared with you.
+The **Share** button says who has access besides you: **Private** when nobody else does, otherwise the number of other people and the collaborations, for example **2 people · CropXR**. It changes as soon as a share is added or removed. Only an owner can add someone, change a role, or remove access. Anyone can remove themselves, which is how you leave something shared with you.
 
 ### Handing something over
 
@@ -68,9 +68,9 @@ A hub personal access token carries no group membership at all, which is why the
 
 **Collaborations** in the header lists every collaboration you are in and, for each, the members who have signed in to the hub at least once and chosen to be shown there, with the name and address on their profile and when they last signed in. You see only the collaborations you belong to. Someone who has never signed in is not listed, because the hub has no record of them; SRAM itself remains the authoritative list.
 
-The email field on the **Sharing** tab suggests these people as you type, so sharing with a colleague no longer means asking them for the address on their profile.
+The email field in the **Share** dialog suggests these people as you type, so sharing with a colleague no longer means asking them for the address on their profile.
 
-Your name and address are shown to a collaboration only after you say so. For each collaboration you have not answered for, the hub asks *Do you want to share your profile data (name and email) with this collaboration?*, on the page you land on after signing in and on the collaboration's card under **Collaborations**, with **Yes, share** and **No**. Either answer is recorded and the question stops; a **Share my name and email with this collaboration** tick box on the card lets you change it later. Until you answer yes, your entry is in that collaboration's list for you alone, marked *not shared with the others*, and the **Sharing** tab does not suggest you to its members. The answer is per collaboration and holds across sign-ins. It changes nothing else: you see the list either way, anyone who knows the address on your profile can still share with you, and grants to the collaboration reach you as before, because membership itself is SRAM's.
+Your name and address are shown to a collaboration only after you say so. For each collaboration you have not answered for, the hub asks *Do you want to share your profile data (name and email) with this collaboration?*, on the page you land on after signing in and on the collaboration's card under **Collaborations**, with **Yes, share** and **No**. Either answer is recorded and the question stops; a **Share my name and email with this collaboration** tick box on the card lets you change it later. Until you answer yes, your entry is in that collaboration's list for you alone, marked *not shared with the others*, and the **Share** dialog does not suggest you to its members. The answer is per collaboration and holds across sign-ins. It changes nothing else: you see the list either way, anyone who knows the address on your profile can still share with you, and grants to the collaboration reach you as before, because membership itself is SRAM's.
 
 ### Publishing to a collaboration
 
@@ -78,7 +78,7 @@ A specification can be published so that only a collaboration's members see it, 
 
 ### Sharing with a collaboration
 
-On the **Sharing** tab, under **Collaborations**, an owner can grant a whole collaboration a role. The choice lists the collaborations the owner is in. A grant gives every member of the collaboration the role **Editor** or **Viewer**; **Owner** cannot be granted to a collaboration, because ownership is what lets a person share, hand over and delete, and an item whose owners are "whoever is in a group this month" cannot keep the [last-owner rule](#handing-something-over). An owner can change a grant's role or remove it.
+In the **Share** dialog, under **Collaborations**, an owner can grant a whole collaboration a role. The choice lists the collaborations the owner is in. A grant gives every member of the collaboration the role **Editor** or **Viewer**; **Owner** cannot be granted to a collaboration, because ownership is what lets a person share, hand over and delete, and an item whose owners are "whoever is in a group this month" cannot keep the [last-owner rule](#handing-something-over). An owner can change a grant's role or remove it.
 
 A grant is a fallback. A person's explicit membership on the item always wins, so someone in the collaboration can still be given a different role individually. The item's creator and the account it lives in stay owners regardless of any grant.
 

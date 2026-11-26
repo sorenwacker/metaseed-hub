@@ -10,6 +10,10 @@
 <a href="/hub/" class="nav-item">Datasets</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ dataset.name }}</span>
+<span class="nav-share">
+    {% set share_url = "/hub/sharing/dataset/" ~ dataset.id %}
+    {% include "partials/share_button.html" %}
+</span>
 {% endblock %}
 
 {% block content %}
@@ -113,9 +117,6 @@
         <div class="sidebar-section sidebar-section-grow">
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="entities" onclick="showSidebarTab(this)" data-testid="tab-entities">Entities</button>
-                <button class="sidebar-tab" data-tab="sharing" onclick="showSidebarTab(this)" data-testid="tab-sharing">
-                    Sharing <span class="tab-badge" id="sharing-count"></span>
-                </button>
             </div>
             <div class="sidebar-tab-content active" data-tab="entities">
                 <div id="entity-tree"
@@ -123,13 +124,6 @@
                      hx-trigger="load, entityChanged from:body"
                      hx-swap="innerHTML">
                     Loading...
-                </div>
-            </div>
-            <div class="sidebar-tab-content" data-tab="sharing">
-                {# One panel for every shared thing: see partials/members_panel.html #}
-                <div id="members-panel"
-                     hx-get="/hub/sharing/dataset/{{ dataset.id }}/members"
-                     hx-trigger="load" hx-swap="innerHTML">
                 </div>
             </div>
         </div>

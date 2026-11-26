@@ -103,4 +103,4 @@ To publish again after fixing whatever was wrong, publish the draft as usual.
 
 ## Sharing a draft
 
-Drafts have a **Sharing** tab with the same Owner / Editor / Viewer roles as datasets, so collaborators can work on a specification together. See [Collaboration](../collaboration.md#sharing-and-roles).
+Drafts and published specifications have the same **Share** button as datasets, with the same Owner / Editor / Viewer roles as datasets, so collaborators can work on a specification together. See [Collaboration](../collaboration.md#sharing-and-roles).

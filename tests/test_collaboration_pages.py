@@ -200,7 +200,9 @@ async def test_the_sharing_panel_offers_collaborations_and_suggests_people(
     assert '<option value="c@example.org"' in html
 
 
-async def test_an_owner_can_grant_and_the_badge_counts_it(session: AsyncSession, app_db) -> None:
+async def test_an_owner_can_grant_and_the_share_button_names_it(
+    session: AsyncSession, app_db
+) -> None:
     tenant, me, _ = await _signed_in_people(session)
     dataset = make_dataset(tenant=tenant, profile="ena", version="1.0")
     session.add(dataset)
@@ -217,8 +219,7 @@ async def test_an_owner_can_grant_and_the_badge_counts_it(session: AsyncSession,
         )
     assert response.status_code == 200, response.text[:300]
     assert 'data-testid="grant-tudelft:cropxr"' in response.text
-    assert 'data-testid="sharing-count"' in response.text
-    assert ">1</span>" in response.text
+    assert 'data-testid="share-summary">tudelft:cropxr<' in response.text
 
 
 async def test_a_dataset_granted_to_your_collaboration_is_on_your_list(

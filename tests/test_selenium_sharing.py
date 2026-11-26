@@ -128,11 +128,14 @@ def test_a_spec_draft_can_be_shared_with_a_colleague(driver) -> None:
         lambda d: "/hub/spec-builder/" in d.current_url and "/new" not in d.current_url
     )
 
-    # Open the Sharing tab and add the colleague by the address on their profile.
-    sharing_tab = WebDriverWait(driver, 20).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.sidebar-tab[data-tab="sharing"]'))
+    # Open the Share dialog and add the colleague by the address on their profile.
+    share_button = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="share-button"]'))
     )
-    driver.execute_script("arguments[0].click();", sharing_tab)
+    share_button.click()
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, '[data-testid="share-dialog"]'))
+    )
     email_field = WebDriverWait(driver, 20).until(
         EC.visibility_of_element_located(
             (By.CSS_SELECTOR, '[data-testid="share-form"] input[name="email"]')
@@ -181,10 +184,13 @@ def test_the_share_form_shows_its_text_in_full(driver) -> None:
 
     dataset_id = _dataset_with_example_data(driver)
     driver.get(f"{BASE}/hub/datasets/{dataset_id}")
-    sharing_tab = WebDriverWait(driver, 20).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.sidebar-tab[data-tab="sharing"]'))
+    share_button = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="share-button"]'))
     )
-    driver.execute_script("arguments[0].click();", sharing_tab)
+    share_button.click()
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, '[data-testid="share-dialog"]'))
+    )
 
     form = '[data-testid="share-form"]'
     for selector in (

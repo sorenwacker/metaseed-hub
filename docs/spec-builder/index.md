@@ -23,7 +23,7 @@ Both lists group the versions of one specification together, newest first, under
 
 ## The draft editor
 
-The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks**, **Comments**, and **Sharing** tabs in the sidebar. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth. A reply to a comment that no longer exists — deleted while you were writing — is refused rather than posted as a new top-level comment.
+The editor combines an entity tree, a diagram (ERD) canvas, and a form editor, with **Profile**, **Rules**, **Checks** and **Comments** tabs in the sidebar, and **Share** in the header. Comments are threaded: a reply can itself be replied to, and the panel shows the whole thread at any depth. A reply to a comment that no longer exists — deleted while you were writing — is refused rather than posted as a new top-level comment.
 
 The toolbar above the diagram arranges it the same way the [Explorer](../explorer.md) does: **Layout** by force, **Tree** as the containment tree with the root at the top.
 

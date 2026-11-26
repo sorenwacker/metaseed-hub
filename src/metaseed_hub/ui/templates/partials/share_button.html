@@ -1,0 +1,20 @@
+{# One Share button for every shared thing: datasets, drafts, published
+   specifications. The including page sets share_url (e.g. /hub/sharing/dataset/<id>).
+   The panel loads with the page, so its out-of-band summary fills the button
+   at once, and opens in a dialog. See docs/collaboration.md. #}
+<button type="button" class="btn btn-sm share-button" data-testid="share-button"
+        onclick="document.getElementById('share-dialog').showModal()"
+        title="Who has access, and sharing">
+    Share <span id="share-summary" class="share-summary" data-testid="share-summary"></span>
+</button>
+<dialog id="share-dialog" class="share-dialog" data-testid="share-dialog">
+    <div class="share-dialog-header">
+        <h3>Share</h3>
+        <button type="button" class="btn-icon" data-testid="share-close"
+                onclick="this.closest('dialog').close()" title="Close">&times;</button>
+    </div>
+    <div id="members-panel"
+         hx-get="{{ share_url }}/members"
+         hx-trigger="load" hx-swap="innerHTML">
+    </div>
+</dialog>
