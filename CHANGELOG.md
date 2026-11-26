@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Sharing is a **Share** button in the header of every dataset, draft and published specification, instead of a sidebar tab. The button says who has access besides you (**Private**, **2 people**, **2 people · tudelft:cropxr**) and opens the sharing panel in a dialog.
 
+### Fixed
+- The spec builder's diagram follows field edits without a reload: adding, changing, moving or removing a field redraws that entity's box and its relationship lines, and the other entities keep their positions. Needs metaseed 0.74.0, which ships the updated diagram script.
+
 ## [0.84.0] - 261126
 
 ### Changed

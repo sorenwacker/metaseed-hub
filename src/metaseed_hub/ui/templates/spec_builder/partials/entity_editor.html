@@ -1,4 +1,11 @@
 <div class="entity-editor">
+    {# The entity's current fields, read by metaseed's spec-builder-core.js so
+       the ERD follows every edit without a reload. Same shape as view.html's map. #}
+    <script type="application/json" data-entity-fields="{{ entity_name }}">[
+        {%- for field in entity.fields %}
+        {"name": {{ field.name | tojson }}, "type": {{ field.type.value | tojson }}, "required": {{ field.required | tojson }}, "items": {{ field.items | tojson }}, "reference": {{ field.reference | tojson }}}{% if not loop.last %},{% endif %}
+        {%- endfor %}
+    ]</script>
     {% if error %}
     <div class="alert alert-error">{{ error }}</div>
     {% endif %}

@@ -47,7 +47,7 @@ The section shows the settings a specification already carries, including one im
 
 ### Fields
 
-Add fields to an entity with **+ Field**. Each field has:
+Add fields to an entity with **+ Field**. The diagram follows every field edit without a reload: adding, changing, moving or removing a field redraws that entity's box and its relationship lines, and the other entities keep their positions. Each field has:
 
 | Property | Purpose |
 |----------|---------|
