@@ -415,3 +415,35 @@ class TestEntityRenameRewritesEverything:
     async def test_the_entity_keeps_its_position(self, renamed: DraftContext) -> None:
         assert list(renamed.spec.entities) == ["Trial", "Sample"]
         assert renamed.spec.root_entity == "Trial"
+
+
+async def test_an_added_field_reaches_the_diagram(session: AsyncSession) -> None:
+    """The ERD reads the entity's fields from the editor the add returns
+    (spec-builder-core.js syncEntityFromEditor); without that block the diagram
+    kept the old fields until a reload (261126)."""
+    import json
+    import re
+
+    draft, tenant, owner = await _owned_draft(session, _cross_referencing_spec())
+    ctx = await _context(session, draft, tenant, owner)
+    endpoint = _endpoint(register_field_routes, "/entity/{entity_name}/field", "POST")
+
+    response = await endpoint(
+        request=_request("POST"),
+        entity_name="Study",
+        ctx=ctx,
+        session=session,
+        name="brand_new",
+        field_type="string",
+    )
+
+    block = re.search(
+        rb'<script type="application/json" data-entity-fields="Study">(.*?)</script>',
+        response.body,
+        re.S,
+    )
+    assert block, "the editor carries no field data for the diagram"
+    fields = json.loads(block.group(1))
+    assert {"name": "brand_new", "type": "string"} | {
+        k: fields[-1][k] for k in ("required", "items", "reference")
+    } == fields[-1]
