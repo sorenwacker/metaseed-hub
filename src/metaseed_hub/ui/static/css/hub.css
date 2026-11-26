@@ -8090,3 +8090,14 @@ td.row-actions .btn-icon {
     flex-shrink: 0;
     white-space: nowrap;
 }
+
+/* Profile page: the repository integrations a user switches on. */
+.integration-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.integration-list li {
+    padding: var(--space-xs) 0;
+}

@@ -119,3 +119,21 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     api_tokens: Mapped[list["ApiToken"]] = relationship(
         "ApiToken", back_populates="user", passive_deletes=True
     )
+
+
+class UserFeature(Base):
+    """A repository integration a user switched on for themselves.
+
+    A row means on; no row means off. Removed with the user by the foreign key,
+    so account deletion needs no step of its own.
+    See docs/administration.md, *Repository integrations*.
+    """
+
+    __tablename__ = "user_features"
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    feature: Mapped[str] = mapped_column(String(50), primary_key=True)

@@ -21,7 +21,7 @@ ALL_FEATURES = {"ena", "pride", "brapi", "metabolights", "seek", "dcat"}
 
 
 def _request():
-    """A request as remember_features leaves it for a person in every group."""
+    """A request as remember_features leaves it for a person with every integration switched on."""
     request = Mock()
     request.state.features = set(ALL_FEATURES)
     return request

@@ -24,11 +24,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
-from metaseed_hub.collaborations import record_memberships
 from metaseed_hub.crypto import decrypt_secret, encrypt_secret
 from metaseed_hub.main import create_app
 from metaseed_hub.models import SeekConnection
-from tests.conftest import FEATURE_GROUP_URNS, _test_database_url
+from tests.conftest import _test_database_url, enable_every_feature
 from tests.factories import make_dataset, make_spec, make_spec_draft, make_tenant, make_user
 
 PROFILE = "/hub/auth/profile"
@@ -58,7 +57,7 @@ async def dataset(session: AsyncSession):
     user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
     session.add(user)
     await session.flush()
-    await record_memberships(session, user.id, FEATURE_GROUP_URNS)
+    await enable_every_feature(session, user.id)
     ds = make_dataset(tenant=tenant, profile="seek-ready-template", version="3.0")
     session.add(ds)
     await session.commit()
@@ -89,7 +88,7 @@ async def _hub_spec_dataset(session: AsyncSession, *, published: bool):
     user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
     session.add(user)
     await session.flush()
-    await record_memberships(session, user.id, FEATURE_GROUP_URNS)
+    await enable_every_feature(session, user.id)
     ds = make_dataset(tenant=tenant, profile=HUB_SPEC, version="3.0")
     if published:
         spec = make_spec(
@@ -583,7 +582,7 @@ class TestTheIsaTemplates:
         user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
         session.add(user)
         await session.flush()
-        await record_memberships(session, user.id, FEATURE_GROUP_URNS)
+        await enable_every_feature(session, user.id)
         ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
         session.add(ena)
         await session.commit()
@@ -635,7 +634,7 @@ class TestThePanelOnlyAppearsWhereItWorks:
         user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
         session.add(user)
         await session.flush()
-        await record_memberships(session, user.id, FEATURE_GROUP_URNS)
+        await enable_every_feature(session, user.id)
         ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
         session.add(ena)
         await session.commit()
@@ -655,7 +654,7 @@ class TestThePanelOnlyAppearsWhereItWorks:
         user = make_user(tenant=tenant, keycloak_id="kc-1", email="u@example.org")
         session.add(user)
         await session.flush()
-        await record_memberships(session, user.id, FEATURE_GROUP_URNS)
+        await enable_every_feature(session, user.id)
         ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
         session.add(ena)
         await session.commit()

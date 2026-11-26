@@ -20,8 +20,8 @@ member; the second is added per group the person is in. A member in no group
 has the first alone, and must count as a member: production had one who was
 listed nowhere and reached by no grant.
 
-Which features a group may use is *not* here — that is hub state, because
-neither Keycloak nor SRAM models "feature X enabled".
+Which repository integrations a person uses is *not* here: each user switches
+them on in the hub (:mod:`metaseed_hub.features`), and groups play no part.
 """
 
 from __future__ import annotations

@@ -90,13 +90,14 @@ def test_signed_out_navigation_does_not_lead_nowhere() -> None:
 
 
 def test_both_audiences_read_the_same_feature_rule() -> None:
-    """The integrations are enabled per SRAM group, in any collaboration. Both
+    """The integrations are off until each user switches them on (261126). Both
     the signed-in home and the landing page say so, and neither invites beta
     testers any more: that group was removed on 261011, and a registration link
     that grants nothing would mislead."""
     for page in ("partials/overview.html", "overview_home.html"):
         text = _read(page)
-        assert "enabled per SRAM group" in text, page
+        assert "until you" in text and "switch them on" in text, page
+        assert "SRAM group" not in text, page
         assert "beta" not in text.lower(), page
         assert "sram.surf.nl/registration" not in text, page
 

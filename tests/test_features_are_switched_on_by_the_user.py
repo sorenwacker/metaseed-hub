@@ -1,12 +1,10 @@
-"""Repository integrations are enabled per SRAM group, named after the feature.
+"""Each user switches the repository integrations on for themselves (261126).
 
-Since 0.57.0 every signed-in user had every importer and exporter: a hub
-table of grants sat in the way once, nothing wrote to it, and it was taken
-out, while the landing page kept promising integrations rolled out per group.
-The groups are SRAM's now: a person in a group named ena, pride, brapi,
-metabolights, seek or dcat, in any of their collaborations, may use that
-integration; nobody else sees it, and the server refuses it.
-See docs/administration.md, *Features and SRAM groups*.
+Until 261126 an integration was granted by an SRAM group named after it. The
+hub no longer reads SRAM groups for this: every signed-in user may use every
+integration, each is off until the user switches it on under *Integrations* on
+their profile page, and the server refuses what is switched off.
+See docs/administration.md, *Repository integrations*.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from metaseed_hub.auth import TokenUser
 from metaseed_hub.collaborations import record_memberships
-from metaseed_hub.features import feature_of_action, features_in
+from metaseed_hub.features import FEATURES, feature_of_action, features_of, set_feature
 from metaseed_hub.main import create_app
 from metaseed_hub.ui.dependencies import get_current_user_from_cookie, tenant_slug_for
 from metaseed_hub.ui.helpers import CSRF_TOKEN_COOKIE
@@ -29,57 +27,24 @@ PREFIX = "urn:mace:surf.nl:sram:group:"
 TOKEN = TokenUser(sub="kc-feat", email="feat@example.org", name="F", roles=[])
 
 
-class TestTheRule:
-    def test_a_group_named_after_a_feature_grants_it_in_any_collaboration(self) -> None:
-        urns = [
-            PREFIX + "tudelft:cropxr",
-            PREFIX + "tudelft:cropxr:ena",
-            PREFIX + "wur:breeding:brapi",
-        ]
-
-        assert features_in(urns) == {"ena", "brapi"}
-
-    def test_other_groups_and_the_collaboration_itself_grant_nothing(self) -> None:
-        assert (
-            features_in([PREFIX + "tudelft:metaseed", PREFIX + "tudelft:metaseed:admin"]) == set()
-        )
-        assert features_in([PREFIX + "tudelft:metaseed:reviewers"]) == set()
-
-    def test_a_prefixed_group_grants_its_feature(self) -> None:
-        # SRAM reports metaseed-seek once a second collaboration is connected
-        # to the application (261013), while the group is named seek.
-        urns = [PREFIX + "tudelft:cropxr:metaseed-seek", PREFIX + "tudelft:metaseed:metaseed-ena"]
-
-        assert features_in(urns) == {"seek", "ena"}
-
-    def test_a_name_merely_containing_a_feature_grants_nothing(self) -> None:
-        urns = [
-            PREFIX + "tudelft:cropxr:seeker",
-            PREFIX + "tudelft:cropxr:seek-old",
-            PREFIX + "tudelft:cropxr:metaseedseek",
-            PREFIX + "tudelft:cropxr:-",
-        ]
-
-        assert features_in(urns) == set()
-
-    def test_an_action_belongs_to_its_adapter_s_feature(self) -> None:
-        assert feature_of_action("ena-import") == "ena"
-        assert feature_of_action("pride") == "pride"
-        assert feature_of_action("brapi-import") == "brapi"
-        assert feature_of_action("dcat") == "dcat"
-        assert feature_of_action("nope") is None
+def test_an_action_belongs_to_its_adapter_s_feature() -> None:
+    assert feature_of_action("ena-import") == "ena"
+    assert feature_of_action("pride") == "pride"
+    assert feature_of_action("brapi-import") == "brapi"
+    assert feature_of_action("dcat") == "dcat"
+    assert feature_of_action("nope") is None
 
 
 @pytest.fixture
 async def person(session: AsyncSession):
-    """A signed-in person in the ena group only, with an empty ena dataset and a pride one."""
+    """A signed-in person with ena switched on only, an empty ena dataset and a pride one."""
     tenant = make_tenant(slug=tenant_slug_for("kc-feat"))
     session.add(tenant)
     await session.flush()
     user = make_user(tenant=tenant, keycloak_id="kc-feat", email="feat@example.org")
     session.add(user)
     await session.flush()
-    await record_memberships(session, user.id, [PREFIX + "tudelft:cropxr:ena"])
+    await set_feature(session, user.id, "ena", enabled=True)
     ena = make_dataset(tenant=tenant, profile="ena", version="1.0")
     pride = make_dataset(tenant=tenant, profile="pride", version="2.0", name="test-pride")
     session.add_all([ena, pride])
@@ -139,7 +104,7 @@ class TestWhatThePersonSees:
         refused = await _post("/hub/import/jobs", {"profile": "pride", "identifiers": "PXD000001"})
 
         assert 'data-testid="import-problem"' in refused.text
-        assert "enabled per SRAM group" in refused.text
+        assert "profile page" in refused.text
 
     async def test_their_dataset_offers_its_import_and_export(self, app_db, person) -> None:
         _, ena, _ = person
@@ -172,12 +137,57 @@ class TestWhatThePersonSees:
         assert 'data-testid="nav-seek"' not in home
         assert (await _get("/hub/seek")).status_code == 403
 
-    async def test_the_seek_group_shows_it(self, app_db, person, session: AsyncSession) -> None:
-        user, _, _ = person
+    async def test_switching_seek_on_shows_it(self, app_db, person) -> None:
+        enabled = await _post("/hub/auth/profile/features", {"feature": "seek", "enabled": "on"})
+
+        assert enabled.status_code in (200, 303)
+        assert 'data-testid="nav-seek"' in (await _get("/hub/")).text
+        assert (await _get("/hub/seek")).status_code == 200
+
+    async def test_switching_ena_off_hides_it(self, app_db, person) -> None:
+        await _post("/hub/auth/profile/features", {"feature": "ena"})
+
+        page = (await _get("/hub/datasets/new")).text
+        assert 'data-testid="btn-import-ena"' not in page
+
+    async def test_an_unknown_feature_is_refused(self, app_db, person) -> None:
+        refused = await _post("/hub/auth/profile/features", {"feature": "ftp", "enabled": "on"})
+
+        assert refused.status_code == 400
+
+    async def test_the_profile_page_lists_every_integration_with_its_state(
+        self, app_db, person
+    ) -> None:
+        page = (await _get("/hub/auth/profile")).text
+
+        for feature in FEATURES:
+            assert f'data-testid="feature-{feature}"' in page
+        assert 'data-testid="feature-ena-on"' in page
+        assert 'data-testid="feature-pride-off"' in page
+
+
+@pytest.mark.asyncio
+class TestSramGroupsPlayNoPart:
+    async def test_a_group_named_after_a_feature_grants_nothing(
+        self, app_db, session: AsyncSession
+    ) -> None:
+        tenant = make_tenant(slug="t-groups")
+        session.add(tenant)
+        await session.flush()
+        user = make_user(tenant=tenant, keycloak_id="kc-groups", email="groups@example.org")
+        session.add(user)
+        await session.flush()
         await record_memberships(
-            session, user.id, [PREFIX + "tudelft:cropxr:ena", PREFIX + "tudelft:metaseed:seek"]
+            session, user.id, [PREFIX + "tudelft:cropxr:ena", PREFIX + "tudelft:x:metaseed-seek"]
         )
         await session.commit()
 
-        assert 'data-testid="nav-seek"' in (await _get("/hub/")).text
-        assert (await _get("/hub/seek")).status_code == 200
+        assert await features_of(session, user.id) == set()
+
+    async def test_switching_off_and_on_round_trips(self, app_db, person, session) -> None:
+        user, _, _ = person
+        await set_feature(session, user.id, "pride", enabled=True)
+        await set_feature(session, user.id, "ena", enabled=False)
+        await session.commit()
+
+        assert await features_of(session, user.id) == {"pride"}

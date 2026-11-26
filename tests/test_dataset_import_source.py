@@ -32,7 +32,7 @@ ALL_FEATURES = {"ena", "pride", "brapi", "metabolights", "seek", "dcat"}
 
 def _csrf_request() -> Mock:
     request = Mock()
-    # As remember_features would leave it for a person in every feature group.
+    # As remember_features would leave it for a person with every integration switched on.
     request.state.features = set(ALL_FEATURES)
     request.cookies = {CSRF_TOKEN_COOKIE: _CSRF}
     request.headers = {"X-CSRF-Token": _CSRF}

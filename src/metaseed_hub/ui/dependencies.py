@@ -330,7 +330,7 @@ async def remember_features(request: Request) -> None:
     """Keep the person's repository features and admin standing on the request.
 
     Every hub route depends on this. A signed-out request reads nothing and
-    touches no database; a signed-in one reads the membership snapshot once.
+    touches no database; a signed-in one reads the switched-on integrations once.
     The rule is :mod:`metaseed_hub.features`. The cookie is read as
     :func:`require_user` reads it, by calling the reader, so whatever stands
     in for the reader stands in here too.
