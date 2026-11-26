@@ -49,6 +49,10 @@
         <div class="alert alert-error" data-testid="unpublish-refused">{{ unpublish_error }}</div>
         {% endif %}
         <div class="header-right">
+            {# Who may edit and re-publish this specification: the same Share
+               button as datasets and drafts. #}
+            {% set share_url = "/hub/sharing/spec/" ~ spec_record.id %}
+            {% include "partials/share_button.html" %}
             <a href="/hub/spec-builder" class="btn">Back to List</a>
             <form method="post" action="/hub/spec-builder/spec/{{ spec_record.id }}/unpublish"
                   style="display:inline"
@@ -77,9 +81,6 @@
         <aside class="spec-view-sidebar">
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="entities" onclick="showSidebarTab(this)" data-testid="tab-entities">Entities</button>
-                <button class="sidebar-tab" data-tab="sharing" onclick="showSidebarTab(this)" data-testid="tab-sharing">
-                    Sharing <span class="tab-badge" id="sharing-count"></span>
-                </button>
                 <button class="sidebar-tab" data-tab="comments" onclick="showSidebarTab(this)" data-testid="tab-comments">Comments</button>
             </div>
             <div class="sidebar-tab-content active" data-tab="entities">
@@ -109,14 +110,6 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-            </div>
-            <div class="sidebar-tab-content" data-tab="sharing">
-                {# The same panel as datasets and drafts: who may edit and re-publish
-                   this specification. #}
-                <div id="members-panel"
-                     hx-get="/hub/sharing/spec/{{ spec_record.id }}/members"
-                     hx-trigger="load" hx-swap="innerHTML">
-                </div>
             </div>
             <div class="sidebar-tab-content" data-tab="comments">
                 {# Everyone who can see this release can discuss it; the thread

@@ -62,7 +62,7 @@ async def test_the_overview_lists_every_entity_as_a_link_into_the_editor(
     assert 'data-testid="entity-count-Sample">2<' in overview
 
 
-async def test_the_sharing_badge_leaves_the_viewer_out(
+async def test_the_share_button_leaves_the_viewer_out(
     ena_dataset, app_db, session: AsyncSession
 ) -> None:
     """The owner's own row is a membership like any other, and counting it
@@ -76,7 +76,7 @@ async def test_the_sharing_badge_leaves_the_viewer_out(
     await session.commit()
 
     panel = _get(f"/hub/sharing/dataset/{ena_dataset.id}/members")
-    assert 'data-testid="sharing-count">0<' in panel
+    assert 'data-testid="share-summary">Private<' in panel
 
 
 def _graph_container(html: str) -> str:

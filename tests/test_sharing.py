@@ -338,19 +338,33 @@ class TestEveryPageLoadsTheOnePanel:
         )
 
     @pytest.mark.parametrize("template,expected", PAGES)
-    def test_sharing_is_a_tab_of_the_sidebar(self, template: str, expected: str) -> None:
-        """Sharing sat in a different place on each page: a main-area tab, a
-        sidebar tab, a block above the body. Now it is a sidebar tab everywhere,
-        so the home page can say where it is and be right."""
+    def test_sharing_is_a_share_button_with_a_dialog(self, template: str, expected: str) -> None:
+        """Sharing was a sidebar tab, a different one on each page, with a
+        bare count. It is one Share button in the page header now, saying who
+        has access, and the panel opens in a dialog (261126)."""
         import pathlib as _pathlib
 
         markup = (_pathlib.Path("src/metaseed_hub/ui/templates") / template).read_text()
-        panel = markup.index(expected)
-        aside_open = markup.rfind("<aside", 0, panel)
-        aside_close = markup.find("</aside>", panel)
-        assert aside_open != -1 and aside_close != -1, f"{template}: panel is not in an <aside>"
-        sidebar = markup[aside_open:aside_close]
-        assert 'data-tab="sharing"' in sidebar and 'id="sharing-count"' in sidebar
+        assert '{% include "partials/share_button.html" %}' in markup, (
+            f"{template} has no Share button"
+        )
+        assert 'data-tab="sharing"' not in markup, f"{template} still has a Sharing tab"
+        button = markup.index("partials/share_button.html")
+        aside_open = markup.rfind("<aside", 0, button)
+        aside_close = markup.rfind("</aside>", 0, button)
+        assert aside_open == -1 or aside_close > aside_open, (
+            f"{template}: the Share button is inside the sidebar"
+        )
+
+    def test_the_share_button_opens_the_panel_in_a_dialog(self) -> None:
+        import pathlib as _pathlib
+
+        button = _pathlib.Path(
+            "src/metaseed_hub/ui/templates/partials/share_button.html"
+        ).read_text()
+        assert 'data-testid="share-button"' in button
+        assert '<dialog id="share-dialog"' in button and 'id="members-panel"' in button
+        assert "showModal()" in button
 
     def test_the_dataset_overview_is_one_partial_without_sharing(self) -> None:
         import pathlib as _pathlib
@@ -361,18 +375,19 @@ class TestEveryPageLoadsTheOnePanel:
         )
         assert "sharing" not in (root / "partials/dataset_overview.html").read_text().lower()
 
-    def test_the_panel_updates_the_tab_count_on_every_swap(self) -> None:
+    def test_the_panel_updates_the_share_button_on_every_swap(self) -> None:
         import pathlib as _pathlib
 
         panel = _pathlib.Path("src/metaseed_hub/ui/templates/partials/members_panel.html")
         markup = panel.read_text()
-        assert 'id="sharing-count"' in markup and 'hx-swap-oob="true"' in markup
+        assert 'id="share-summary"' in markup and 'hx-swap-oob="true"' in markup
+        assert "sharing-count" not in markup
 
     def test_the_home_page_says_where_sharing_is(self) -> None:
         import pathlib as _pathlib
 
         home = _pathlib.Path("src/metaseed_hub/ui/templates/overview_home.html").read_text()
-        assert "tab in the sidebar" in home
+        assert "<strong>Share</strong>" in home and "tab in the sidebar" not in home
         assert "right panel" not in home and "Curator" not in home
 
     def test_no_page_points_at_the_routes_that_were_removed(self) -> None:
@@ -493,3 +508,22 @@ def test_there_is_one_role_vocabulary() -> None:
 
     for name in ("DatasetRole", "SpecRole", "SpecDraftRole"):
         assert not hasattr(models, name), f"{name} is back; use sharing.Role"
+
+
+class TestTheAccessSummary:
+    """What the Share button says: who has access besides the viewer."""
+
+    def test_nobody_else_is_private(self) -> None:
+        from metaseed_hub.ui.routes.sharing import access_summary
+
+        assert access_summary(0, []) == "Private"
+
+    def test_people_are_counted_and_collaborations_named(self) -> None:
+        from metaseed_hub.ui.routes.sharing import access_summary
+
+        assert access_summary(1, []) == "1 person"
+        assert access_summary(2, []) == "2 people"
+        assert access_summary(2, ["tudelft:cropxr"]) == "2 people · tudelft:cropxr"
+        assert access_summary(0, ["tudelft:cropxr", "wur:breeding"]) == (
+            "tudelft:cropxr · wur:breeding"
+        )

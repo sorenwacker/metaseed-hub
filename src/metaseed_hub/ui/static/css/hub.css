@@ -8101,3 +8101,52 @@ td.row-actions .btn-icon {
 .integration-list li {
     padding: var(--space-xs) 0;
 }
+
+/* Share button and dialog: one for datasets, drafts and published
+   specifications (partials/share_button.html). */
+.nav-share {
+    margin-left: var(--space-md);
+}
+
+.share-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.share-summary {
+    font-size: 0.75rem;
+    padding: 1px 6px;
+    background: var(--clr-parchment);
+    color: var(--clr-ink-light);
+    border-radius: var(--radius-sm);
+}
+
+.share-summary:empty {
+    display: none;
+}
+
+.share-dialog {
+    width: min(560px, calc(100vw - 2 * var(--space-md)));
+    max-height: 80vh;
+    padding: var(--space-lg);
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    color: var(--clr-ink);
+}
+
+.share-dialog::backdrop {
+    background: rgb(0 0 0 / 0.3);
+}
+
+.share-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-md);
+}
+
+.share-dialog-header h3 {
+    margin: 0;
+    font-family: var(--font-display);
+}

@@ -45,6 +45,8 @@
             <a href="/hub/spec-builder/{{ draft_id }}/export/doc/xlsx" class="btn btn-sm" download title="The model as an Excel workbook: Entities, Fields and Rules sheets">XLSX</a>
         </div>
         <div class="toolbar-right">
+            {% set share_url = "/hub/sharing/draft/" ~ draft_id %}
+            {% include "partials/share_button.html" %}
             <form method="post" action="/hub/spec-builder/{{ draft_id }}/reset"
                   class="inline-form"
                   onsubmit="return confirm('Clear all entities and start fresh?')">
@@ -101,10 +103,6 @@
                 <button class="sidebar-tab" data-tab="comments" onclick="switchSidebarTab('comments')">
                     Comments
                 </button>
-                <button class="sidebar-tab" data-tab="sharing" onclick="switchSidebarTab('sharing')">
-                    Sharing
-                    <span class="tab-badge" id="sharing-count"></span>
-                </button>
             </div>
 
             <!-- Sidebar scrollable content -->
@@ -155,17 +153,6 @@
                             <textarea name="content" placeholder="Add a comment..." class="form-input" rows="2" required></textarea>
                             <button type="submit" class="btn btn-sm btn-primary">Post</button>
                         </form>
-                    </div>
-                </div>
-
-                <!-- Sharing -->
-                <div id="sharing-panel" class="sidebar-tab-content" data-tab="sharing">
-                    <div class="sharing-section">
-                        <p class="sharing-hint">Share this specification draft.</p>
-                        <div id="members-panel"
-                             hx-get="/hub/sharing/draft/{{ draft_id }}/members"
-                             hx-trigger="load" hx-swap="innerHTML">
-                        </div>
                     </div>
                 </div>
             </div>

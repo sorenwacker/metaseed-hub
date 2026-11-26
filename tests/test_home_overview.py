@@ -50,7 +50,7 @@ def test_the_signed_in_home_says_where_to_click() -> None:
 
     assert "Access tokens" in home, "the API key lives on the profile page"
     assert "/hub/auth/profile" in home
-    assert "Sharing" in home
+    assert "<strong>Share</strong>" in home
     assert "claude mcp add" in home
 
 
