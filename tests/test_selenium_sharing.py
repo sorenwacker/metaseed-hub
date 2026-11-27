@@ -203,3 +203,28 @@ def test_the_share_form_shows_its_text_in_full(driver) -> None:
         )
         fit = driver.execute_script(_TEXT_FITS, control)
         assert fit["needed"] <= fit["room"], f"{selector}: {fit}"
+
+
+def test_the_share_dialog_opens_in_the_middle_of_the_window(driver) -> None:
+    """Reported (261127): the dialog sat squeezed into the top-left corner.
+    The stylesheet's reset sets margin 0 on every element, which overrides the
+    browser's centring of a modal dialog."""
+    from tests.test_selenium_graph import _dataset_with_example_data
+
+    dataset_id = _dataset_with_example_data(driver)
+    driver.get(f"{BASE}/hub/datasets/{dataset_id}")
+    WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-testid="share-button"]'))
+    ).click()
+    dialog = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, '[data-testid="share-dialog"]'))
+    )
+
+    box = driver.execute_script(
+        "const r = arguments[0].getBoundingClientRect();"
+        "return {left: r.left, right: window.innerWidth - r.right, top: r.top, width: r.width};",
+        dialog,
+    )
+    assert abs(box["left"] - box["right"]) <= 2, f"not centred horizontally: {box}"
+    assert box["top"] >= 40, f"pressed against the top: {box}"
+    assert box["width"] >= 480, f"too narrow to read: {box}"
