@@ -1,9 +1,9 @@
 """Dataset version history and diff routes."""
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import Request
+from fastapi import Form, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -21,6 +21,7 @@ from metaseed_hub.ui.helpers.ids import is_uuid
 from metaseed_hub.ui.helpers.tree import count_entities_by_type
 from metaseed_hub.ui.render import render_template
 from metaseed_hub.ui.security import csrf_error_response, validate_csrf_or_error
+from metaseed_hub.ui.services.timeline import editing_sessions
 
 from ._router import router
 
@@ -161,8 +162,13 @@ async def get_dataset_versions(
     dataset_id: str,
     session: DbSession,
     user: CurrentUser,
+    named: bool = False,
 ) -> Response:
-    """Get version history for a dataset with diffs."""
+    """The dataset's timeline: saves grouped into editing sessions.
+
+    With ``named`` only the versions someone gave a name are listed, without
+    sessions. See docs/datasets/versions.md, *The timeline*.
+    """
     dataset = await get_dataset_for_user(dataset_id, session, user)
 
     result = await session.execute(
@@ -173,34 +179,76 @@ async def get_dataset_versions(
     )
     versions = list(result.scalars().all())
 
-    # Calculate diffs between consecutive versions
-    versions_with_diffs: list[dict[str, Any]] = []
+    # Each version is summarised against the one before it (next in the list,
+    # which is newest first); the first against an empty dataset.
+    items: dict[str, dict[str, Any]] = {}
     for i, version in enumerate(versions):
-        version_data: dict[str, Any] = {
+        previous = versions[i + 1].data if i < len(versions) - 1 else {}
+        items[version.id] = {
             "version": version,
-            "diff": None,
-            # A version records the state *after* a save, so the most recent one
-            # holds what the dataset already contains. Restoring it can only be a
+            "diff": _calculate_diff(previous, version.data),
+            # A version records the state *after* a save, so the most recent
+            # one holds what the dataset already contains; restoring it is a
             # no-op, so the list marks it instead of offering the control.
             "is_current": version.data == dataset.data,
         }
-        # Compare with previous version (next in list since sorted desc)
-        if i < len(versions) - 1:
-            prev_version = versions[i + 1]
-            version_data["diff"] = _calculate_diff(prev_version.data, version.data)
-        elif i == len(versions) - 1:
-            # First version - compare with empty
-            version_data["diff"] = _calculate_diff({}, version.data)
-
-        versions_with_diffs.append(version_data)
 
     return render_template(
         request=request,
         name="partials/dataset_versions.html",
         context={
-            "versions": versions_with_diffs,
             "dataset_id": dataset_id,
+            "named": named,
+            "has_versions": bool(versions),
+            "named_items": [items[v.id] for v in versions if v.name],
+            "sessions": [
+                {"session": s, "items": [items[v.id] for v in s.versions]}
+                for s in editing_sessions(versions)
+            ],
         },
+    )
+
+
+@router.post("/{dataset_id}/versions/{version_id}/name", response_class=HTMLResponse)
+async def name_dataset_version(
+    request: Request,
+    dataset_id: str,
+    version_id: str,
+    session: DbSession,
+    user: CurrentUser,
+    name: Annotated[str, Form()] = "",
+    note: Annotated[str, Form()] = "",
+) -> Response:
+    """Give a version a name and note, or remove them with an empty name.
+
+    Naming changes nothing else: the version's data and number stay as they
+    are, and no new version is recorded. Editors and the owner only.
+    """
+    try:
+        validate_csrf_or_error(request)
+    except Exception:
+        return csrf_error_response()
+    if not is_uuid(version_id):
+        return HTMLResponse("<div class='error'>Version not found</div>", status_code=404)
+    await get_dataset_for_editor(dataset_id, session, user)
+
+    version = (
+        await session.execute(
+            select(DatasetVersion).where(
+                DatasetVersion.id == version_id, DatasetVersion.dataset_id == dataset_id
+            )
+        )
+    ).scalar_one_or_none()
+    if not version:
+        return HTMLResponse("<div class='error'>Version not found</div>", status_code=404)
+
+    name = name.strip()[:200]
+    version.name = name or None
+    version.note = (note.strip() or None) if name else None
+    await session.commit()
+
+    return await get_dataset_versions(
+        request=request, dataset_id=dataset_id, session=session, user=user, named=False
     )
 
 

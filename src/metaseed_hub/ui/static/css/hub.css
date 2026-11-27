@@ -8153,3 +8153,72 @@ td.row-actions .btn-icon {
     margin: 0;
     font-family: var(--font-display);
 }
+
+/* Dataset timeline: editing sessions and named versions (docs/datasets/versions.md). */
+.timeline-filter {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-sm);
+}
+
+.timeline-session {
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+}
+
+.timeline-session > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+}
+
+.timeline-session-author {
+    font-weight: 600;
+}
+
+.timeline-session-time,
+.timeline-session-count,
+.version-spec {
+    color: var(--color-text-muted);
+    font-size: 0.875em;
+}
+
+.timeline-session-named,
+.version-name {
+    font-weight: 600;
+    color: var(--clr-primary);
+}
+
+.timeline-session[open] > summary {
+    border-bottom: 1px solid var(--clr-border);
+}
+
+.version-named {
+    border-left: 3px solid var(--clr-primary);
+}
+
+.version-note {
+    color: var(--color-text-muted);
+    font-size: 0.875em;
+}
+
+.version-name-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    padding: var(--space-xs) 0;
+}
+
+.version-name-form[hidden] {
+    display: none;
+}
+
+.version-name-hint {
+    color: var(--color-text-muted);
+    font-size: 0.8125em;
+    align-self: center;
+}
