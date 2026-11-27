@@ -453,6 +453,9 @@ async def auth_set_feature(
     """Switch one repository integration on or off for the signed-in user.
 
     A checkbox posts ``enabled`` only when ticked, so its absence means off.
+    From the page the switch is an htmx request, answered with the
+    integrations section alone so the page does not reload; a plain form post
+    is redirected back to the profile.
     """
     from metaseed_hub.features import FEATURES, set_feature
     from metaseed_hub.ui.dependencies import (
@@ -474,6 +477,22 @@ async def auth_set_feature(
     _, db_user = await ensure_tenant_and_user(session, user)
     await set_feature(session, db_user.id, feature, enabled=enabled is not None)
     await session.commit()
+    if request.headers.get("HX-Request") == "true":
+        from metaseed_hub.ui.helpers import get_or_create_csrf_token
+        from metaseed_hub.ui.render import render_template
+
+        integrations = await _integrations(session, db_user.id)
+        return render_template(
+            request=request,
+            name="partials/integrations.html",
+            context={
+                "integrations": integrations,
+                "csrf_token": get_or_create_csrf_token(request),
+                # Says what changed and that open pages need a reload: the
+                # header and other pages are not part of this swap.
+                "saved": next(i for i in integrations if i["key"] == feature),
+            },
+        )
     return RedirectResponse(url="/hub/auth/profile#integrations", status_code=303)
 
 

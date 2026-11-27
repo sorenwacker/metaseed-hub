@@ -191,3 +191,50 @@ class TestSramGroupsPlayNoPart:
         await session.commit()
 
         assert await features_of(session, user.id) == {"pride"}
+
+
+@pytest.mark.asyncio
+class TestSwitchingWithoutAReload:
+    """A switch reloaded the whole profile page and threw the view back to the
+    top; from the page it is an htmx request now, answered with the section
+    alone (261127)."""
+
+    async def _switch(self, data: dict[str, str]) -> httpx.Response:
+        with _signed_in():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=_app()), base_url="https://test"
+            ) as client:
+                page = await client.get("/hub/datasets/new")
+                csrf = page.cookies[CSRF_TOKEN_COOKIE]
+                return await client.post(
+                    "/hub/auth/profile/features",
+                    data=data,
+                    cookies=page.cookies,
+                    headers={"X-CSRF-Token": csrf, "Origin": "https://test", "HX-Request": "true"},
+                )
+
+    async def test_an_htmx_switch_answers_with_the_section_alone(self, app_db, person) -> None:
+        response = await self._switch({"feature": "seek", "enabled": "on"})
+
+        assert response.status_code == 200
+        assert 'id="integrations"' in response.text
+        assert 'data-testid="feature-seek-on"' in response.text
+        assert "<html" not in response.text.lower()
+
+    async def test_a_switch_says_to_reload_open_pages(self, app_db, person) -> None:
+        response = await self._switch({"feature": "seek", "enabled": "on"})
+
+        notice = response.text[response.text.index('data-testid="integrations-saved"') :]
+        assert "FAIRDOM-SEEK switched on" in notice[:300]
+        assert "reload" in notice[:300].lower()
+
+    async def test_the_page_itself_shows_no_notice(self, app_db, person) -> None:
+        assert 'data-testid="integrations-saved"' not in (await _get("/hub/auth/profile")).text
+
+    async def test_the_profile_page_switches_by_htmx(self, app_db, person) -> None:
+        page = (await _get("/hub/auth/profile")).text
+        section = page[page.index('id="integrations"') :]
+
+        assert 'hx-post="/hub/auth/profile/features"' in section
+        assert 'hx-target="#integrations"' in section
+        assert "this.form.submit()" not in section
