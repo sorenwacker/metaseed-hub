@@ -8127,6 +8127,9 @@ td.row-actions .btn-icon {
 }
 
 .share-dialog {
+    /* The reset at the top sets margin 0 on every element, which overrides
+       the browser's centring of a modal dialog and pins it top-left. */
+    margin: auto;
     width: min(560px, calc(100vw - 2 * var(--space-md)));
     max-height: 80vh;
     padding: var(--space-lg);

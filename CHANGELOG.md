@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The spec builder's diagram follows field edits without a reload: adding, changing, moving or removing a field redraws that entity's box and its relationship lines, and the other entities keep their positions. Needs metaseed 0.74.0, which ships the updated diagram script.
 - Switching an integration on the profile page no longer reloads the page and jumps to the top. The switch is saved in place, and a note says which integration changed and that open pages show it after a reload.
+- The Share dialog opens in the middle of the window. The stylesheet's reset pinned it to the top-left corner.
 
 ## [0.84.0] - 261126
 
