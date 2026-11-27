@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.85.0] - 261127
 
 ### Changed
 - Sharing is a **Share** button at the top of the sidebar of every dataset, draft and published specification, instead of a sidebar tab. The button says who has access besides you (**Private**, **2 people**, **2 people · tudelft:cropxr**) and opens the sharing panel in a dialog.
