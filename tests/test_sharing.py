@@ -339,9 +339,9 @@ class TestEveryPageLoadsTheOnePanel:
 
     @pytest.mark.parametrize("template,expected", PAGES)
     def test_sharing_is_a_share_button_with_a_dialog(self, template: str, expected: str) -> None:
-        """Sharing was a sidebar tab, a different one on each page, with a
-        bare count. It is one Share button in the page header now, saying who
-        has access, and the panel opens in a dialog (261126)."""
+        """Sharing was a sidebar tab with a bare count. It is one Share button
+        at the top of the sidebar now, saying who has access, and the panel
+        opens in a dialog (261126)."""
         import pathlib as _pathlib
 
         markup = (_pathlib.Path("src/metaseed_hub/ui/templates") / template).read_text()
@@ -352,9 +352,13 @@ class TestEveryPageLoadsTheOnePanel:
         button = markup.index("partials/share_button.html")
         aside_open = markup.rfind("<aside", 0, button)
         aside_close = markup.rfind("</aside>", 0, button)
-        assert aside_open == -1 or aside_close > aside_open, (
-            f"{template}: the Share button is inside the sidebar"
+        assert aside_open != -1 and aside_close < aside_open, (
+            f"{template}: the Share button is not in the sidebar"
         )
+        assert (
+            button < markup.find("sidebar-tabs", aside_open)
+            or "sidebar-tabs" not in markup[aside_open:]
+        ), f"{template}: the Share button is below the sidebar tabs"
 
     def test_the_share_button_opens_the_panel_in_a_dialog(self) -> None:
         import pathlib as _pathlib
