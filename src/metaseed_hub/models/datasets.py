@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -104,6 +105,12 @@ class DatasetVersion(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    #: A name given to mark this version, e.g. "Submitted to ENA"; None if unnamed.
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The specification the data was saved under; None for versions saved before 0.86.
+    spec_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    spec_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
     dataset: Mapped["Dataset"] = relationship("Dataset", back_populates="versions")

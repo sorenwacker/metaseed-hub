@@ -304,6 +304,8 @@ async def record_version(
         version_number=(result.scalar() or 0) + 1,
         data=data,
         created_by_id=created_by_id,
+        spec_name=dataset.profile,
+        spec_version=dataset.version,
     )
     session.add(version)
     return version
