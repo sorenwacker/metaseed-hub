@@ -1260,25 +1260,22 @@ wheels = [
 
 [[package]]
 name = "metaseed"
-version = "0.71.0"
+version = "0.74.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastapi" },
     { name = "httpx" },
-    { name = "jinja2" },
     { name = "mcp" },
     { name = "openpyxl" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "regex" },
     { name = "typer" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/d7/b75a131524df62461575098974c0eeb414e9e7e65b92a4b8727bf006dd87/metaseed-0.71.0.tar.gz", hash = "sha256:c41af29aed2e24dfa7a4c1d827ff07bb30d4ec5af8fd64634c383f0778de81f0", size = 991551, upload-time = "2026-10-29T15:17:20.137Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/73/8bbc2f12aa4c2401e64420edea3feca11c13d15ef5a6a8892f8ef456c13f/metaseed-0.74.0.tar.gz", hash = "sha256:da7cb016219b8dc5022cf818cb6106183912e2980ed274a2f41f51713f6fb8ea", size = 997867, upload-time = "2026-11-27T11:25:17.427Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/40/2519ac0f9ad4fb8351c44177895912c1e86d384ad36e662ff8386a303183/metaseed-0.71.0-py3-none-any.whl", hash = "sha256:cc19fc51227e5459c08eaf28349773b9c83d153d3c1dfa2eb4144f7c215442a7", size = 1187725, upload-time = "2026-10-29T15:17:18.208Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/4f/cb4fe989bf082ff4bbd31a00aaf3b1bf2475b8e21c009c11d9c169218cad/metaseed-0.74.0-py3-none-any.whl", hash = "sha256:44e955cd3d181bd2e1aa0f84326f1248df8c942dc68d154420cb411b612040ea", size = 1197259, upload-time = "2026-11-27T11:25:15.396Z" },
 ]
 
 [package.optional-dependencies]
@@ -1348,7 +1345,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
     { name = "mcp", specifier = ">=1.30,<2" },
-    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.71.0,<1" },
+    { name = "metaseed", extras = ["dcat", "seek"], specifier = ">=0.74.0,<1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
