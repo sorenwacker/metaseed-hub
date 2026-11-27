@@ -82,8 +82,28 @@ def _login(driver) -> None:
     WebDriverWait(driver, 45).until(lambda d: "/hub" in d.current_url)
 
 
+def _switch_on(driver, *integrations: str) -> None:
+    """Switch integrations on from the profile page, as a user does.
+
+    Integrations are off until each user switches them on (0.84.0), so a test
+    that uses an import or export button switches its integration on first.
+    """
+    driver.get(f"{BASE}/hub/auth/profile")
+    for key in integrations:
+        WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, f'[data-testid="feature-{key}"]'))
+        )
+        off = driver.find_elements(By.CSS_SELECTOR, f'[data-testid="feature-{key}-off"]')
+        if off:
+            off[0].click()
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, f'[data-testid="feature-{key}-on"]'))
+        )
+
+
 def test_pride_adapter_exports_are_usable_end_to_end(driver) -> None:
     _login(driver)
+    _switch_on(driver, "pride")
 
     # Create a PRIDE dataset with the example loaded (so the export has content)
     # by driving the profile-picker UI the way a user does.
