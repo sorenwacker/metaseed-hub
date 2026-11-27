@@ -34,7 +34,7 @@ The editor has three areas:
 
 | Area | Contents |
 |------|----------|
-| Left sidebar | **+ &lt;Entity&gt;** buttons for entity types not yet added, the dataset actions, and the entity tree. **Share** is in the page header |
+| Left sidebar | **+ &lt;Entity&gt;** buttons for entity types not yet added, **Share** under the dataset's name, the dataset actions, and the entity tree |
 | Center | The [entity overview](entities.md#the-entity-overview) with **History** and **Comments** tabs when no entity is selected; otherwise the form for the selected entity |
 
 From the sidebar you can also **Validate** the dataset, open the **Graph** view, **Import** into the dataset and **Export** it. **Delete** stands alone at the foot of the sidebar, apart from the routine actions.

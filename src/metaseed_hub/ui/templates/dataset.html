@@ -10,10 +10,6 @@
 <a href="/hub/" class="nav-item">Datasets</a>
 <span class="nav-sep">/</span>
 <span class="nav-item active">{{ dataset.name }}</span>
-<span class="nav-share">
-    {% set share_url = "/hub/sharing/dataset/" ~ dataset.id %}
-    {% include "partials/share_button.html" %}
-</span>
 {% endblock %}
 
 {% block content %}
@@ -31,6 +27,10 @@
         <div class="sidebar-section">
             <h2 class="sidebar-dataset-name">{{ dataset.name }}</h2>
             <span class="profile-badge">{{ dataset.profile }} {{ dataset.version }}</span>
+            <div class="sidebar-share">
+                {% set share_url = "/hub/sharing/dataset/" ~ dataset.id %}
+                {% include "partials/share_button.html" %}
+            </div>
         </div>
 
         <!-- Actions -->

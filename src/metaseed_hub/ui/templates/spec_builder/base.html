@@ -45,8 +45,6 @@
             <a href="/hub/spec-builder/{{ draft_id }}/export/doc/xlsx" class="btn btn-sm" download title="The model as an Excel workbook: Entities, Fields and Rules sheets">XLSX</a>
         </div>
         <div class="toolbar-right">
-            {% set share_url = "/hub/sharing/draft/" ~ draft_id %}
-            {% include "partials/share_button.html" %}
             <form method="post" action="/hub/spec-builder/{{ draft_id }}/reset"
                   class="inline-form"
                   onsubmit="return confirm('Clear all entities and start fresh?')">
@@ -89,6 +87,10 @@
             </button>
 
             <!-- Sidebar tabs -->
+            <div class="sidebar-share">
+                {% set share_url = "/hub/sharing/draft/" ~ draft_id %}
+                {% include "partials/share_button.html" %}
+            </div>
             <div class="sidebar-tabs">
                 <button class="sidebar-tab active" data-tab="metadata" onclick="switchSidebarTab('metadata')">
                     Profile
