@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions  # noqa: E402
 from selenium.webdriver.support.ui import WebDriverWait  # noqa: E402
 
 from metaseed_hub.ui.services.repository_import import MAX_IDENTIFIERS  # noqa: E402
-from tests.test_selenium_export import BASE, _login, driver  # noqa: F401, E402
+from tests.test_selenium_export import BASE, _login, _switch_on, driver  # noqa: F401, E402
 
 pytestmark = pytest.mark.selenium
 
@@ -32,6 +32,7 @@ def _visible(browser, test_id: str):
 
 def test_the_tab_opens_and_a_repository_button_sends_the_list(driver) -> None:  # noqa: F811
     _login(driver)
+    _switch_on(driver, "ena")
     driver.get(f"{BASE}/hub/datasets/new")
 
     _visible(driver, "tab-repository").click()
@@ -82,6 +83,7 @@ def test_an_import_runs_as_a_job_the_panel_follows(driver) -> None:  # noqa: F81
 
     _remove_outright(names=(ENA_TITLE, f"{ENA_TITLE} (PRJDA51199)"))
     _login(driver)
+    _switch_on(driver, "ena")
     driver.get(f"{BASE}/hub/datasets/new")
     _visible(driver, "tab-repository").click()
     _visible(driver, "import-identifiers").send_keys("PRJDA51199")
