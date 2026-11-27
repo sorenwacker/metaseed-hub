@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- The History tab of a dataset groups saves into editing sessions: saves by one person no more than 30 minutes apart form one row with their count and time span. A version can be given a name and a note (editors and the owner), and **Named only** lists those. Each new version records the specification name and version it was saved under.
+
 ## [0.85.0] - 261127
 
 ### Changed
